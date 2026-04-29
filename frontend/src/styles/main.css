@@ -260,6 +260,17 @@ select {
   font-weight: 800;
 }
 
+.tags-select__create {
+  border-top: 1px solid #ebe6da;
+  border-radius: 0;
+  color: #1f6f50;
+  font-weight: 800;
+}
+
+.tags-select__create:hover {
+  background: #edf7ef;
+}
+
 .tags-select__option:disabled {
   cursor: not-allowed;
   opacity: 0.45;

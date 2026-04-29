@@ -16,17 +16,24 @@ const props = withDefaults(
     placeholder?: string;
     searchPlaceholder?: string;
     emptyText?: string;
+    allowCreate?: boolean;
+    creating?: boolean;
+    createLabel?: string;
   }>(),
   {
     max: 0,
     placeholder: '搜索或选择',
     searchPlaceholder: '搜索',
-    emptyText: '没有匹配项'
+    emptyText: '没有匹配项',
+    allowCreate: false,
+    creating: false,
+    createLabel: '添加「{name}」'
   }
 );
 
 const emit = defineEmits<{
   'update:modelValue': [value: string[]];
+  create: [name: string];
 }>();
 
 const root = ref<HTMLElement | null>(null);
@@ -55,6 +62,13 @@ const filteredRows = computed(() => {
   if (!keyword) return optionRows.value;
   return optionRows.value.filter((option) => option.label.toLowerCase().includes(keyword));
 });
+const createName = computed(() => search.value.trim());
+const hasExactMatch = computed(() => {
+  const keyword = createName.value.toLowerCase();
+  return optionRows.value.some((option) => option.label.toLowerCase() === keyword);
+});
+const canCreate = computed(() => props.allowCreate && createName.value !== '' && !hasExactMatch.value && !maxReached.value);
+const createText = computed(() => props.createLabel.replace('{name}', createName.value));
 
 async function openDropdown() {
   isOpen.value = true;
@@ -94,6 +108,12 @@ function remove(value: string) {
     'update:modelValue',
     props.modelValue.filter((item) => item !== value)
   );
+}
+
+function createOption() {
+  if (!canCreate.value || props.creating) return;
+  emit('create', createName.value);
+  search.value = '';
 }
 
 function onRootKeydown(event: KeyboardEvent) {
@@ -172,7 +192,17 @@ onBeforeUnmount(() => {
           <span>{{ option.label }}</span>
           <span v-if="selectedValues.has(option.value)" class="tags-select__state">已选</span>
         </button>
-        <p v-if="!filteredRows.length" class="tags-select__empty">{{ emptyText }}</p>
+        <button
+          v-if="canCreate"
+          type="button"
+          class="tags-select__option tags-select__create"
+          :disabled="creating"
+          @click="createOption"
+        >
+          <span>{{ createText }}</span>
+          <span v-if="creating" class="tags-select__state">添加中</span>
+        </button>
+        <p v-if="!filteredRows.length && !canCreate" class="tags-select__empty">{{ emptyText }}</p>
       </div>
     </div>
   </div>

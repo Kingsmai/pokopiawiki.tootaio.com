@@ -61,6 +61,7 @@ const recipeRows = ref<Recipe[]>([]);
 const habitatRows = ref<Habitat[]>([]);
 const busy = ref(false);
 const message = ref('');
+const creatingSelect = ref('');
 
 const configForm = ref({ id: 0, name: '', subcategory: '' });
 const pokemonForm = ref({ id: '', name: '', environmentId: '', skillIds: [] as string[], favoriteThingIds: [] as string[] });
@@ -119,6 +120,28 @@ async function loadOptions() {
 
 async function loadConfig() {
   configRows.value = (await api.config(activeConfigType.value)) as EditableConfig[];
+}
+
+async function createTagsOption(selectKey: string, type: ConfigType, name: string, values: string[], max = 0) {
+  const cleanName = name.trim();
+  if (!cleanName || (max > 0 && values.length >= max)) return;
+
+  creatingSelect.value = selectKey;
+  try {
+    await run(async () => {
+      const created = await api.createConfig(type, { name: cleanName, subcategory: null });
+      await loadOptions();
+      const value = String(created.id);
+      if (!values.includes(value)) {
+        values.push(value);
+      }
+      if (activeConfigType.value === type) {
+        await loadConfig();
+      }
+    });
+  } finally {
+    creatingSelect.value = '';
+  }
 }
 
 async function loadPokemon() {
@@ -496,7 +519,10 @@ onMounted(() => {
             v-model="pokemonForm.skillIds"
             :options="options.skills"
             :max="2"
+            allow-create
+            :creating="creatingSelect === 'pokemon-skills'"
             placeholder="搜索特长"
+            @create="createTagsOption('pokemon-skills', 'skills', $event, pokemonForm.skillIds, 2)"
           />
         </div>
         <div class="field">
@@ -506,7 +532,10 @@ onMounted(() => {
             v-model="pokemonForm.favoriteThingIds"
             :options="options.favoriteThings"
             :max="6"
+            allow-create
+            :creating="creatingSelect === 'pokemon-things'"
             placeholder="搜索喜欢的东西"
+            @create="createTagsOption('pokemon-things', 'favorite-things', $event, pokemonForm.favoriteThingIds, 6)"
           />
         </div>
         <div class="form-actions">
@@ -565,12 +594,23 @@ onMounted(() => {
             id="item-methods"
             v-model="itemForm.acquisitionMethodIds"
             :options="options.acquisitionMethods"
+            allow-create
+            :creating="creatingSelect === 'item-methods'"
             placeholder="搜索入手方式"
+            @create="createTagsOption('item-methods', 'acquisition-methods', $event, itemForm.acquisitionMethodIds)"
           />
         </div>
         <div class="field">
           <label for="item-tags">标签</label>
-          <TagsSelect id="item-tags" v-model="itemForm.tagIds" :options="options.itemTags" placeholder="搜索标签" />
+          <TagsSelect
+            id="item-tags"
+            v-model="itemForm.tagIds"
+            :options="options.itemTags"
+            allow-create
+            :creating="creatingSelect === 'item-tags'"
+            placeholder="搜索标签"
+            @create="createTagsOption('item-tags', 'favorite-things', $event, itemForm.tagIds)"
+          />
         </div>
         <div class="form-actions">
           <button type="submit" class="link-button" :disabled="busy">保存</button>
@@ -602,7 +642,10 @@ onMounted(() => {
             id="recipe-methods"
             v-model="recipeForm.acquisitionMethodIds"
             :options="options.acquisitionMethods"
+            allow-create
+            :creating="creatingSelect === 'recipe-methods'"
             placeholder="搜索入手方式"
+            @create="createTagsOption('recipe-methods', 'acquisition-methods', $event, recipeForm.acquisitionMethodIds)"
           />
         </div>
         <div class="field">
@@ -660,7 +703,15 @@ onMounted(() => {
               <option value="">Pokemon</option>
               <option v-for="item in pokemonRows" :key="item.id" :value="String(item.id)">#{{ item.id }} {{ item.name }}</option>
             </select>
-            <TagsSelect :id="`appearance-maps-${index}`" v-model="row.mapIds" :options="options.maps" placeholder="搜索地图" />
+            <TagsSelect
+              :id="`appearance-maps-${index}`"
+              v-model="row.mapIds"
+              :options="options.maps"
+              allow-create
+              :creating="creatingSelect === `appearance-maps-${index}`"
+              placeholder="搜索地图"
+              @create="createTagsOption(`appearance-maps-${index}`, 'maps', $event, row.mapIds)"
+            />
             <TagsSelect :id="`appearance-times-${index}`" v-model="row.timeOfDays" :options="timeOfDayOptions" placeholder="搜索时间" />
             <TagsSelect :id="`appearance-weathers-${index}`" v-model="row.weathers" :options="weatherOptions" placeholder="搜索天气" />
             <input v-model.number="row.rarity" type="number" min="1" max="3" />

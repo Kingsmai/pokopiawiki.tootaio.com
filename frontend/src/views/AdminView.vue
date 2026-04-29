@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import TagsSelect from '../components/TagsSelect.vue';
 import {
   api,
   type ConfigType,
@@ -37,6 +38,8 @@ const tabs: Array<{ key: AdminTab; label: string }> = [
 
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
+const timeOfDayOptions = timeOfDays.map((name) => ({ id: name, name }));
+const weatherOptions = weathers.map((name) => ({ id: name, name }));
 
 const configTypes: Array<{ key: ConfigType; label: string; hasSubcategory?: boolean }> = [
   { key: 'skills', label: '特长', hasSubcategory: true },
@@ -488,17 +491,23 @@ onMounted(() => {
         </div>
         <div class="field">
           <label for="pokemon-skills">特长</label>
-          <select id="pokemon-skills" v-model="pokemonForm.skillIds" multiple @change="pokemonForm.skillIds = pokemonForm.skillIds.slice(0, 2)">
-            <option v-for="item in options.skills" :key="item.id" :value="String(item.id)">
-              {{ item.name }}{{ item.subcategory ? ` · ${item.subcategory}` : '' }}
-            </option>
-          </select>
+          <TagsSelect
+            id="pokemon-skills"
+            v-model="pokemonForm.skillIds"
+            :options="options.skills"
+            :max="2"
+            placeholder="搜索特长"
+          />
         </div>
         <div class="field">
           <label for="pokemon-things">喜欢的东西</label>
-          <select id="pokemon-things" v-model="pokemonForm.favoriteThingIds" multiple @change="pokemonForm.favoriteThingIds = pokemonForm.favoriteThingIds.slice(0, 6)">
-            <option v-for="item in options.favoriteThings" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-          </select>
+          <TagsSelect
+            id="pokemon-things"
+            v-model="pokemonForm.favoriteThingIds"
+            :options="options.favoriteThings"
+            :max="6"
+            placeholder="搜索喜欢的东西"
+          />
         </div>
         <div class="form-actions">
           <button type="submit" class="link-button" :disabled="busy">保存</button>
@@ -552,15 +561,16 @@ onMounted(() => {
         </div>
         <div class="field">
           <label for="item-methods">入手方式</label>
-          <select id="item-methods" v-model="itemForm.acquisitionMethodIds" multiple>
-            <option v-for="item in options.acquisitionMethods" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-          </select>
+          <TagsSelect
+            id="item-methods"
+            v-model="itemForm.acquisitionMethodIds"
+            :options="options.acquisitionMethods"
+            placeholder="搜索入手方式"
+          />
         </div>
         <div class="field">
           <label for="item-tags">标签</label>
-          <select id="item-tags" v-model="itemForm.tagIds" multiple>
-            <option v-for="item in options.itemTags" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-          </select>
+          <TagsSelect id="item-tags" v-model="itemForm.tagIds" :options="options.itemTags" placeholder="搜索标签" />
         </div>
         <div class="form-actions">
           <button type="submit" class="link-button" :disabled="busy">保存</button>
@@ -588,9 +598,12 @@ onMounted(() => {
         <div class="field"><label for="recipe-name">名称</label><input id="recipe-name" v-model="recipeForm.name" /></div>
         <div class="field">
           <label for="recipe-methods">入手方式</label>
-          <select id="recipe-methods" v-model="recipeForm.acquisitionMethodIds" multiple>
-            <option v-for="item in options.acquisitionMethods" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-          </select>
+          <TagsSelect
+            id="recipe-methods"
+            v-model="recipeForm.acquisitionMethodIds"
+            :options="options.acquisitionMethods"
+            placeholder="搜索入手方式"
+          />
         </div>
         <div class="field">
           <label>需要材料</label>
@@ -647,15 +660,9 @@ onMounted(() => {
               <option value="">Pokemon</option>
               <option v-for="item in pokemonRows" :key="item.id" :value="String(item.id)">#{{ item.id }} {{ item.name }}</option>
             </select>
-            <select v-model="row.mapIds" multiple>
-              <option v-for="item in options.maps" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-            </select>
-            <select v-model="row.timeOfDays" multiple>
-              <option v-for="item in timeOfDays" :key="item">{{ item }}</option>
-            </select>
-            <select v-model="row.weathers" multiple>
-              <option v-for="item in weathers" :key="item">{{ item }}</option>
-            </select>
+            <TagsSelect :id="`appearance-maps-${index}`" v-model="row.mapIds" :options="options.maps" placeholder="搜索地图" />
+            <TagsSelect :id="`appearance-times-${index}`" v-model="row.timeOfDays" :options="timeOfDayOptions" placeholder="搜索时间" />
+            <TagsSelect :id="`appearance-weathers-${index}`" v-model="row.weathers" :options="weatherOptions" placeholder="搜索天气" />
             <input v-model.number="row.rarity" type="number" min="1" max="3" />
             <button type="button" @click="habitatForm.pokemonAppearances.splice(index, 1)">删除</button>
           </div>

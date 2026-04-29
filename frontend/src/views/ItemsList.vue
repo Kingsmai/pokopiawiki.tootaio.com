@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import EntityChips from '../components/EntityChips.vue';
+import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Item, type Options, type Recipe } from '../services/api';
 
 const tab = ref<'items' | 'recipes'>('items');
@@ -76,9 +77,7 @@ watch([tab, itemQuery], loadItems);
 
       <div class="field">
         <label for="tags">标签</label>
-        <select id="tags" v-model="tagIds" multiple>
-          <option v-for="item in options.itemTags" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-        </select>
+        <TagsSelect id="tags" v-model="tagIds" :options="options.itemTags" placeholder="搜索标签" />
       </div>
     </div>
 

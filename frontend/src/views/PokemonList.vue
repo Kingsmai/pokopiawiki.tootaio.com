@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import EntityChips from '../components/EntityChips.vue';
+import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Options, type Pokemon } from '../services/api';
 
 const options = ref<Options | null>(null);
@@ -63,11 +64,7 @@ watch(query, loadPokemon);
 
       <div class="field">
         <label for="skills">特长</label>
-        <select id="skills" v-model="skillIds" multiple>
-          <option v-for="item in options.skills" :key="item.id" :value="String(item.id)">
-            {{ item.name }}{{ item.subcategory ? ` · ${item.subcategory}` : '' }}
-          </option>
-        </select>
+        <TagsSelect id="skills" v-model="skillIds" :options="options.skills" placeholder="搜索特长" />
         <div class="segmented" aria-label="特长匹配方式">
           <button :class="{ active: skillMode === 'any' }" type="button" @click="skillMode = 'any'">任意</button>
           <button :class="{ active: skillMode === 'all' }" type="button" @click="skillMode = 'all'">全部</button>
@@ -76,11 +73,7 @@ watch(query, loadPokemon);
 
       <div class="field">
         <label for="favorite-things">喜欢的东西</label>
-        <select id="favorite-things" v-model="favoriteThingIds" multiple>
-          <option v-for="item in options.favoriteThings" :key="item.id" :value="String(item.id)">
-            {{ item.name }}
-          </option>
-        </select>
+        <TagsSelect id="favorite-things" v-model="favoriteThingIds" :options="options.favoriteThings" placeholder="搜索喜欢的东西" />
         <div class="segmented" aria-label="喜欢的东西匹配方式">
           <button :class="{ active: favoriteThingMode === 'any' }" type="button" @click="favoriteThingMode = 'any'">
             任意

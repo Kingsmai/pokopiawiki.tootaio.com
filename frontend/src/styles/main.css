@@ -283,6 +283,76 @@ select {
   font-weight: 800;
 }
 
+.admin-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.form-actions,
+.row-actions,
+.check-row,
+.inline-row,
+.appearance-row {
+  display: flex;
+  gap: 8px;
+}
+
+.form-actions,
+.check-row {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.row-actions {
+  flex: 0 0 auto;
+}
+
+.row-actions button,
+.plain-button,
+.inline-row button,
+.appearance-row button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #c7c0b2;
+  border-radius: 8px;
+  background: #fffdfa;
+  color: #4e5c52;
+  cursor: pointer;
+}
+
+.plain-button {
+  width: fit-content;
+}
+
+.inline-row {
+  align-items: center;
+}
+
+.inline-row select {
+  flex: 1;
+}
+
+.inline-row input {
+  width: 90px;
+}
+
+.appearance-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.2fr) minmax(120px, 1fr) repeat(3, minmax(80px, 0.7fr)) auto;
+  align-items: center;
+}
+
+.appearance-row input {
+  min-width: 64px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 @media (max-width: 760px) {
   .topbar {
     align-items: start;
@@ -295,7 +365,12 @@ select {
   }
 
   .toolbar,
-  .detail-grid {
+  .detail-grid,
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .appearance-row {
     grid-template-columns: 1fr;
   }
 }

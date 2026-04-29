@@ -79,7 +79,57 @@ export interface Options {
   favoriteThings: NamedEntity[];
   itemCategories: NamedEntity[];
   itemUsages: NamedEntity[];
+  acquisitionMethods: NamedEntity[];
   itemTags: NamedEntity[];
+  maps: NamedEntity[];
+}
+
+export type ConfigType =
+  | 'skills'
+  | 'environments'
+  | 'favorite-things'
+  | 'item-categories'
+  | 'item-usages'
+  | 'acquisition-methods'
+  | 'item-tags'
+  | 'maps';
+
+export interface PokemonPayload {
+  id: number;
+  name: string;
+  environmentId: number;
+  skillIds: number[];
+  favoriteThingIds: number[];
+}
+
+export interface ItemPayload {
+  name: string;
+  categoryId: number;
+  usageId: number;
+  recipeId: number | null;
+  dyeable: boolean;
+  dualDyeable: boolean;
+  patternEditable: boolean;
+  acquisitionMethodIds: number[];
+  tagIds: number[];
+}
+
+export interface RecipePayload {
+  name: string;
+  acquisitionMethodIds: number[];
+  materials: Array<{ itemId: number; quantity: number }>;
+}
+
+export interface HabitatPayload {
+  name: string;
+  recipeItems: Array<{ itemId: number; quantity: number }>;
+  pokemonAppearances: Array<{
+    pokemonId: number;
+    mapId: number;
+    timeOfDay: string;
+    weather: string;
+    rarity: number;
+  }>;
 }
 
 export function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -105,16 +155,63 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function sendJson<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function deleteJson(path: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'DELETE'
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with ${response.status}`);
+  }
+}
+
 export const api = {
   options: () => getJson<Options>('/api/options'),
+  config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
+  createConfig: (type: ConfigType, payload: { name: string; subcategory?: string | null }) =>
+    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
+  updateConfig: (type: ConfigType, id: number, payload: { name: string; subcategory?: string | null }) =>
+    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
+  deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
   pokemon: (params: Record<string, string | number | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),
   pokemonDetail: (id: string | number) => getJson<PokemonDetail>(`/api/pokemon/${id}`),
+  createPokemon: (payload: PokemonPayload) => sendJson<PokemonDetail>('/api/pokemon', 'POST', payload),
+  updatePokemon: (id: string | number, payload: PokemonPayload) =>
+    sendJson<PokemonDetail>(`/api/pokemon/${id}`, 'PUT', payload),
+  deletePokemon: (id: string | number) => deleteJson(`/api/pokemon/${id}`),
   habitats: () => getJson<Habitat[]>('/api/habitats'),
   habitatDetail: (id: string | number) => getJson<HabitatDetail>(`/api/habitats/${id}`),
+  createHabitat: (payload: HabitatPayload) => sendJson<HabitatDetail>('/api/habitats', 'POST', payload),
+  updateHabitat: (id: string | number, payload: HabitatPayload) =>
+    sendJson<HabitatDetail>(`/api/habitats/${id}`, 'PUT', payload),
+  deleteHabitat: (id: string | number) => deleteJson(`/api/habitats/${id}`),
   items: (params: Record<string, string | number | undefined>) =>
     getJson<Item[]>(`/api/items${buildQuery(params)}`),
   itemDetail: (id: string | number) => getJson<ItemDetail>(`/api/items/${id}`),
+  createItem: (payload: ItemPayload) => sendJson<ItemDetail>('/api/items', 'POST', payload),
+  updateItem: (id: string | number, payload: ItemPayload) => sendJson<ItemDetail>(`/api/items/${id}`, 'PUT', payload),
+  deleteItem: (id: string | number) => deleteJson(`/api/items/${id}`),
   recipes: () => getJson<Recipe[]>('/api/recipes'),
-  recipeDetail: (id: string | number) => getJson<RecipeDetail>(`/api/recipes/${id}`)
+  recipeDetail: (id: string | number) => getJson<RecipeDetail>(`/api/recipes/${id}`),
+  createRecipe: (payload: RecipePayload) => sendJson<RecipeDetail>('/api/recipes', 'POST', payload),
+  updateRecipe: (id: string | number, payload: RecipePayload) =>
+    sendJson<RecipeDetail>(`/api/recipes/${id}`, 'PUT', payload),
+  deleteRecipe: (id: string | number) => deleteJson(`/api/recipes/${id}`)
 };

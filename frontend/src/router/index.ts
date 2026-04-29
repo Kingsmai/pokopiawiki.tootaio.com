@@ -6,6 +6,7 @@ import HabitatDetail from '../views/HabitatDetail.vue';
 import ItemsList from '../views/ItemsList.vue';
 import ItemDetail from '../views/ItemDetail.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
+import AdminView from '../views/AdminView.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -17,7 +18,8 @@ export const router = createRouter({
     { path: '/habitats/:id', component: HabitatDetail },
     { path: '/items', component: ItemsList },
     { path: '/items/:id', component: ItemDetail },
-    { path: '/recipes/:id', component: RecipeDetail }
+    { path: '/recipes/:id', component: RecipeDetail },
+    { path: '/admin', component: AdminView }
   ],
   scrollBehavior: () => ({ top: 0 })
 });

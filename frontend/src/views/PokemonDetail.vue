@@ -37,7 +37,7 @@ onMounted(async () => {
       <section class="detail-section">
         <h2>栖息地</h2>
         <ul class="row-list">
-          <li v-for="habitat in pokemon.habitats" :key="`${habitat.id}-${habitat.map.id}-${habitat.time_of_day}`">
+          <li v-for="habitat in pokemon.habitats" :key="`${habitat.id}-${habitat.map.id}-${habitat.time_of_day}-${habitat.weather}`">
             <RouterLink :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
             <span>{{ habitat.time_of_day }} · {{ habitat.weather }} · {{ habitat.rarity }} 星 · {{ habitat.map.name }}</span>
           </li>

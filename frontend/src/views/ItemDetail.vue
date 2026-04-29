@@ -30,7 +30,7 @@ onMounted(async () => {
     <div class="page-header">
       <div>
         <h1 class="page-title">{{ item.name }}</h1>
-        <p class="page-subtitle">{{ item.category.name }} · {{ item.usage.name }}</p>
+        <p class="page-subtitle">{{ item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name }}</p>
       </div>
       <RouterLink class="link-button" to="/items">返回列表</RouterLink>
     </div>

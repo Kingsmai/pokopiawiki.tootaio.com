@@ -32,7 +32,7 @@ onMounted(async () => {
       <section class="detail-section">
         <h2>可能出现的宝可梦</h2>
         <ul class="row-list">
-          <li v-for="item in habitat.pokemon" :key="`${item.id}-${item.map.id}-${item.time_of_day}`">
+          <li v-for="item in habitat.pokemon" :key="`${item.id}-${item.map.id}-${item.time_of_day}-${item.weather}`">
             <RouterLink :to="`/pokemon/${item.id}`">{{ item.name }}</RouterLink>
             <span>{{ item.time_of_day }} · {{ item.weather }} · {{ item.rarity }} 星 · {{ item.map.name }}</span>
           </li>

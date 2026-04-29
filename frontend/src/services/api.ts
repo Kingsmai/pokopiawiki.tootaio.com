@@ -48,7 +48,7 @@ export interface Item {
   id: number;
   name: string;
   category: NamedEntity;
-  usage: NamedEntity;
+  usage: NamedEntity | null;
   customization: {
     dyeable: boolean;
     dualDyeable: boolean;
@@ -91,7 +91,6 @@ export type ConfigType =
   | 'item-categories'
   | 'item-usages'
   | 'acquisition-methods'
-  | 'item-tags'
   | 'maps';
 
 export interface PokemonPayload {
@@ -105,7 +104,7 @@ export interface PokemonPayload {
 export interface ItemPayload {
   name: string;
   categoryId: number;
-  usageId: number;
+  usageId: number | null;
   recipeId: number | null;
   dyeable: boolean;
   dualDyeable: boolean;
@@ -125,9 +124,9 @@ export interface HabitatPayload {
   recipeItems: Array<{ itemId: number; quantity: number }>;
   pokemonAppearances: Array<{
     pokemonId: number;
-    mapId: number;
-    timeOfDay: string;
-    weather: string;
+    mapIds: number[];
+    timeOfDays: string[];
+    weathers: string[];
     rarity: number;
   }>;
 }
@@ -145,11 +144,24 @@ export function buildQuery(params: Record<string, string | number | undefined>):
   return query ? `?${query}` : '';
 }
 
+async function getErrorMessage(response: Response): Promise<string> {
+  try {
+    const data = (await response.json()) as { message?: unknown };
+    if (typeof data.message === 'string' && data.message.trim() !== '') {
+      return data.message;
+    }
+  } catch {
+    // Ignore invalid or empty error bodies and use the status fallback.
+  }
+
+  return `请求失败（${response.status}）`;
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`);
 
   if (!response.ok) {
-    throw new Error(`Request failed with ${response.status}`);
+    throw new Error(await getErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
@@ -165,7 +177,7 @@ async function sendJson<T>(path: string, method: 'POST' | 'PUT', body: unknown):
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with ${response.status}`);
+    throw new Error(await getErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
@@ -177,7 +189,7 @@ async function deleteJson(path: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with ${response.status}`);
+    throw new Error(await getErrorMessage(response));
   }
 }
 

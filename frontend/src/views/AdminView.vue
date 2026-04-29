@@ -4,6 +4,7 @@ import {
   api,
   type ConfigType,
   type Habitat,
+  type HabitatDetail,
   type HabitatPayload,
   type Item,
   type ItemPayload,
@@ -18,6 +19,13 @@ import {
 
 type AdminTab = 'config' | 'pokemon' | 'items' | 'recipes' | 'habitats';
 type EditableConfig = (NamedEntity | Skill) & { subcategory?: string | null };
+type HabitatAppearanceForm = {
+  pokemonId: string;
+  mapIds: string[];
+  timeOfDays: string[];
+  weathers: string[];
+  rarity: number;
+};
 
 const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'config', label: '系统配置' },
@@ -27,6 +35,9 @@ const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'habitats', label: '栖息地' }
 ];
 
+const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
+const weathers = ['晴天', '阴天', '雨天'];
+
 const configTypes: Array<{ key: ConfigType; label: string; hasSubcategory?: boolean }> = [
   { key: 'skills', label: '特长', hasSubcategory: true },
   { key: 'environments', label: '喜欢的环境' },
@@ -34,7 +45,6 @@ const configTypes: Array<{ key: ConfigType; label: string; hasSubcategory?: bool
   { key: 'item-categories', label: '物品 / 材料单分类' },
   { key: 'item-usages', label: '物品 / 材料单用途' },
   { key: 'acquisition-methods', label: '入手方式' },
-  { key: 'item-tags', label: '物品标签' },
   { key: 'maps', label: '地图' }
 ];
 
@@ -73,7 +83,7 @@ const habitatForm = ref({
   id: 0,
   name: '',
   recipeItems: [] as Array<{ itemId: string; quantity: number }>,
-  pokemonAppearances: [] as Array<{ pokemonId: string; mapId: string; timeOfDay: string; weather: string; rarity: number }>
+  pokemonAppearances: [] as HabitatAppearanceForm[]
 });
 
 const selectedConfig = computed(() => configTypes.find((item) => item.key === activeConfigType.value) ?? configTypes[0]);
@@ -93,8 +103,8 @@ async function run(action: () => Promise<void>) {
   message.value = '';
   try {
     await action();
-  } catch {
-    message.value = '操作失败';
+  } catch (error) {
+    message.value = error instanceof Error && error.message ? error.message : '操作失败';
   } finally {
     busy.value = false;
   }
@@ -235,7 +245,7 @@ async function editItem(item: Item) {
       id: detail.id,
       name: detail.name,
       categoryId: String(detail.category.id),
-      usageId: String(detail.usage.id),
+      usageId: detail.usage ? String(detail.usage.id) : '',
       recipeId: detail.recipe ? String(detail.recipe.id) : '',
       dyeable: detail.customization.dyeable,
       dualDyeable: detail.customization.dualDyeable,
@@ -251,7 +261,7 @@ async function saveItem() {
     const payload: ItemPayload = {
       name: itemForm.value.name,
       categoryId: Number(itemForm.value.categoryId),
-      usageId: Number(itemForm.value.usageId),
+      usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
       recipeId: itemForm.value.recipeId ? Number(itemForm.value.recipeId) : null,
       dyeable: itemForm.value.dyeable,
       dualDyeable: itemForm.value.dualDyeable,
@@ -331,11 +341,34 @@ function addHabitatRecipeItem() {
 function addPokemonAppearance() {
   habitatForm.value.pokemonAppearances.push({
     pokemonId: '',
-    mapId: '',
-    timeOfDay: '早晨',
-    weather: '晴天',
+    mapIds: [],
+    timeOfDays: ['早晨'],
+    weathers: ['晴天'],
     rarity: 1
   });
+}
+
+function groupPokemonAppearances(detail: HabitatDetail): HabitatAppearanceForm[] {
+  const rows = new Map<string, HabitatAppearanceForm>();
+
+  detail.pokemon.forEach((pokemon) => {
+    const key = `${pokemon.id}:${pokemon.rarity}`;
+    const row = rows.get(key) ?? {
+      pokemonId: String(pokemon.id),
+      mapIds: [],
+      timeOfDays: [],
+      weathers: [],
+      rarity: pokemon.rarity
+    };
+
+    const mapId = String(pokemon.map.id);
+    if (!row.mapIds.includes(mapId)) row.mapIds.push(mapId);
+    if (!row.timeOfDays.includes(pokemon.time_of_day)) row.timeOfDays.push(pokemon.time_of_day);
+    if (!row.weathers.includes(pokemon.weather)) row.weathers.push(pokemon.weather);
+    rows.set(key, row);
+  });
+
+  return [...rows.values()];
 }
 
 async function editHabitat(item: Habitat) {
@@ -345,13 +378,7 @@ async function editHabitat(item: Habitat) {
       id: detail.id,
       name: detail.name,
       recipeItems: detail.recipe.map((recipeItem) => ({ itemId: String(recipeItem.id), quantity: recipeItem.quantity })),
-      pokemonAppearances: detail.pokemon.map((pokemon) => ({
-        pokemonId: String(pokemon.id),
-        mapId: String(pokemon.map.id),
-        timeOfDay: pokemon.time_of_day,
-        weather: pokemon.weather,
-        rarity: pokemon.rarity
-      }))
+      pokemonAppearances: groupPokemonAppearances(detail)
     };
   });
 }
@@ -364,12 +391,12 @@ async function saveHabitat() {
       pokemonAppearances: habitatForm.value.pokemonAppearances
         .map((item) => ({
           pokemonId: Number(item.pokemonId),
-          mapId: Number(item.mapId),
-          timeOfDay: item.timeOfDay,
-          weather: item.weather,
+          mapIds: toIds(item.mapIds),
+          timeOfDays: item.timeOfDays.filter((entry) => timeOfDays.includes(entry)),
+          weathers: item.weathers.filter((entry) => weathers.includes(entry)),
           rarity: Number(item.rarity)
         }))
-        .filter((item) => item.pokemonId > 0 && item.mapId > 0)
+        .filter((item) => item.pokemonId > 0 && item.mapIds.length > 0 && item.timeOfDays.length > 0 && item.weathers.length > 0)
     };
     if (habitatForm.value.id) {
       await api.updateHabitat(habitatForm.value.id, payload);
@@ -411,7 +438,7 @@ onMounted(() => {
     <p v-if="message" class="status">{{ message }}</p>
 
     <section v-if="activeTab === 'config'" class="admin-layout">
-      <div class="detail-section">
+      <form class="detail-section" @submit.prevent="saveConfig">
         <h2>系统配置</h2>
         <div class="field">
           <label for="config-type">类型</label>
@@ -428,10 +455,10 @@ onMounted(() => {
           <input id="config-subcategory" v-model="configForm.subcategory" />
         </div>
         <div class="form-actions">
-          <button type="button" class="link-button" :disabled="busy" @click="saveConfig">保存</button>
+          <button type="submit" class="link-button" :disabled="busy">保存</button>
           <button type="button" class="plain-button" @click="resetConfigForm">新建</button>
         </div>
-      </div>
+      </form>
 
       <div class="detail-section">
         <h2>{{ selectedConfig.label }}</h2>
@@ -507,7 +534,7 @@ onMounted(() => {
         <div class="field">
           <label for="item-usage">用途</label>
           <select id="item-usage" v-model="itemForm.usageId">
-            <option value="">请选择</option>
+            <option value="">无</option>
             <option v-for="item in options.itemUsages" :key="item.id" :value="item.id">{{ item.name }}</option>
           </select>
         </div>
@@ -620,20 +647,14 @@ onMounted(() => {
               <option value="">Pokemon</option>
               <option v-for="item in pokemonRows" :key="item.id" :value="String(item.id)">#{{ item.id }} {{ item.name }}</option>
             </select>
-            <select v-model="row.mapId">
-              <option value="">地图</option>
+            <select v-model="row.mapIds" multiple>
               <option v-for="item in options.maps" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
             </select>
-            <select v-model="row.timeOfDay">
-              <option>早晨</option>
-              <option>中午</option>
-              <option>傍晚</option>
-              <option>晚上</option>
+            <select v-model="row.timeOfDays" multiple>
+              <option v-for="item in timeOfDays" :key="item">{{ item }}</option>
             </select>
-            <select v-model="row.weather">
-              <option>晴天</option>
-              <option>阴天</option>
-              <option>雨天</option>
+            <select v-model="row.weathers" multiple>
+              <option v-for="item in weathers" :key="item">{{ item }}</option>
             </select>
             <input v-model.number="row.rarity" type="number" min="1" max="3" />
             <button type="button" @click="habitatForm.pokemonAppearances.splice(index, 1)">删除</button>

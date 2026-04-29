@@ -1,11 +1,12 @@
 import { parseIdList, parseMatchMode, sqlForRelationFilter } from './filter.ts';
 import { pool, query, queryOne } from './db.ts';
+import type { PoolClient } from 'pg';
 
 type QueryValue = string | string[] | undefined;
 
 type QueryParams = Record<string, QueryValue>;
 
-type DbClient = Awaited<ReturnType<typeof pool.connect>>;
+type DbClient = PoolClient;
 
 type ConfigType =
   | 'skills'
@@ -14,7 +15,6 @@ type ConfigType =
   | 'item-categories'
   | 'item-usages'
   | 'acquisition-methods'
-  | 'item-tags'
   | 'maps';
 
 type ConfigDefinition = {
@@ -40,7 +40,7 @@ type PokemonPayload = {
 type ItemPayload = {
   name: string;
   categoryId: number;
-  usageId: number;
+  usageId: number | null;
   recipeId: number | null;
   dyeable: boolean;
   dualDyeable: boolean;
@@ -67,6 +67,11 @@ type HabitatPayload = {
   }>;
 };
 
+type ValidationError = Error & { statusCode: number };
+
+const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
+const weathers = ['晴天', '阴天', '雨天'];
+
 const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   skills: { table: 'skills', select: 'id, name, subcategory', order: 'name, subcategory', hasSubcategory: true },
   environments: { table: 'environments', select: 'id, name', order: 'name' },
@@ -74,7 +79,6 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'item-categories': { table: 'item_categories', select: 'id, name', order: 'name' },
   'item-usages': { table: 'item_usages', select: 'id, name', order: 'name' },
   'acquisition-methods': { table: 'acquisition_methods', select: 'id, name', order: 'name' },
-  'item-tags': { table: 'item_tags', select: 'id, name', order: 'name' },
   maps: { table: 'maps', select: 'id, name', order: 'name' }
 };
 
@@ -86,17 +90,23 @@ function optionSelect(tableName: string): Promise<Array<{ id: number; name: stri
   return query(`SELECT id, name FROM ${tableName} ORDER BY name`);
 }
 
-function requirePositiveInteger(value: unknown, fieldName: string): number {
+function validationError(message: string): ValidationError {
+  const error = new Error(message) as ValidationError;
+  error.statusCode = 400;
+  return error;
+}
+
+function requirePositiveInteger(value: unknown, message: string): number {
   const numberValue = Number(value);
   if (!Number.isInteger(numberValue) || numberValue <= 0) {
-    throw new Error(`${fieldName} is required`);
+    throw validationError(message);
   }
   return numberValue;
 }
 
-function cleanName(value: unknown): string {
+function cleanName(value: unknown, message = '请输入名称'): string {
   if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error('Name is required');
+    throw validationError(message);
   }
   return value.trim();
 }
@@ -106,6 +116,10 @@ function cleanIds(value: unknown): number[] {
     return [];
   }
   return [...new Set(value.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0))];
+}
+
+function cleanIdValues(value: unknown): number[] {
+  return cleanIds(Array.isArray(value) ? value : [value]);
 }
 
 function cleanQuantities(value: unknown): IdQuantity[] {
@@ -122,6 +136,11 @@ function cleanQuantities(value: unknown): IdQuantity[] {
       };
     })
     .filter((item) => Number.isInteger(item.itemId) && item.itemId > 0 && Number.isInteger(item.quantity) && item.quantity > 0);
+}
+
+function cleanOptions(value: unknown, allowedValues: string[]): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  return [...new Set(values.map((item) => String(item ?? '')).filter((item) => allowedValues.includes(item)))];
 }
 
 async function withTransaction<T>(callback: (client: DbClient) => Promise<T>): Promise<T> {
@@ -169,7 +188,6 @@ export async function getOptions() {
     itemCategories,
     itemUsages,
     acquisitionMethods,
-    itemTags,
     maps
   ] = await Promise.all([
     query<{ id: number; name: string; subcategory: string | null }>(
@@ -180,7 +198,6 @@ export async function getOptions() {
     optionSelect('item_categories'),
     optionSelect('item_usages'),
     optionSelect('acquisition_methods'),
-    optionSelect('item_tags'),
     optionSelect('maps')
   ]);
 
@@ -191,7 +208,7 @@ export async function getOptions() {
     itemCategories,
     itemUsages,
     acquisitionMethods,
-    itemTags,
+    itemTags: favoriteThings,
     maps
   };
 }
@@ -321,16 +338,16 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   const favoriteThingIds = cleanIds(payload.favoriteThingIds);
 
   if (skillIds.length > 2) {
-    throw new Error('Pokemon can have at most 2 skills');
+    throw validationError('特长最多选择 2 个');
   }
   if (favoriteThingIds.length > 6) {
-    throw new Error('Pokemon can have at most 6 favorite things');
+    throw validationError('喜欢的东西最多选择 6 个');
   }
 
   return {
-    id: requirePositiveInteger(payload.id, 'Pokemon ID'),
-    name: cleanName(payload.name),
-    environmentId: requirePositiveInteger(payload.environmentId, 'Environment'),
+    id: requirePositiveInteger(payload.id, '请输入 Pokemon ID'),
+    name: cleanName(payload.name, '请输入 Pokemon 名字'),
+    environmentId: requirePositiveInteger(payload.environmentId, '请选择喜欢的环境'),
     skillIds,
     favoriteThingIds
   };
@@ -457,33 +474,39 @@ export async function getHabitat(id: number) {
 
 function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
   const appearances = Array.isArray(payload.pokemonAppearances) ? payload.pokemonAppearances : [];
+  const pokemonAppearances = new Map<string, HabitatPayload['pokemonAppearances'][number]>();
+
+  for (const item of appearances) {
+    const row = item as Record<string, unknown>;
+    const pokemonId = Number(row.pokemonId);
+    const mapIds = cleanIdValues(row.mapIds ?? row.mapId);
+    const selectedTimeOfDays = cleanOptions(row.timeOfDays ?? row.timeOfDay, timeOfDays);
+    const selectedWeathers = cleanOptions(row.weathers ?? row.weather, weathers);
+    const rarity = Number(row.rarity);
+
+    if (!Number.isInteger(pokemonId) || pokemonId <= 0 || !Number.isInteger(rarity) || rarity < 1 || rarity > 3) {
+      continue;
+    }
+
+    for (const mapId of mapIds) {
+      for (const timeOfDay of selectedTimeOfDays) {
+        for (const weather of selectedWeathers) {
+          pokemonAppearances.set(`${pokemonId}:${mapId}:${timeOfDay}:${weather}`, {
+            pokemonId,
+            mapId,
+            timeOfDay,
+            weather,
+            rarity
+          });
+        }
+      }
+    }
+  }
 
   return {
-    name: cleanName(payload.name),
+    name: cleanName(payload.name, '请输入栖息地名字'),
     recipeItems: cleanQuantities(payload.recipeItems),
-    pokemonAppearances: appearances
-      .map((item) => {
-        const row = item as Record<string, unknown>;
-        return {
-          pokemonId: Number(row.pokemonId),
-          mapId: Number(row.mapId),
-          timeOfDay: String(row.timeOfDay ?? ''),
-          weather: String(row.weather ?? ''),
-          rarity: Number(row.rarity)
-        };
-      })
-      .filter(
-        (item) =>
-          Number.isInteger(item.pokemonId) &&
-          item.pokemonId > 0 &&
-          Number.isInteger(item.mapId) &&
-          item.mapId > 0 &&
-          ['早晨', '中午', '傍晚', '晚上'].includes(item.timeOfDay) &&
-          ['晴天', '阴天', '雨天'].includes(item.weather) &&
-          Number.isInteger(item.rarity) &&
-          item.rarity >= 1 &&
-          item.rarity <= 3
-      )
+    pokemonAppearances: [...pokemonAppearances.values()]
   };
 }
 
@@ -548,7 +571,7 @@ const itemProjection = `
     i.id,
     i.name,
     json_build_object('id', c.id, 'name', c.name) AS category,
-    json_build_object('id', u.id, 'name', u.name) AS usage,
+    CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'name', u.name) END AS usage,
     json_build_object(
       'dyeable', i.dyeable,
       'dualDyeable', i.dual_dyeable,
@@ -556,13 +579,13 @@ const itemProjection = `
     ) AS customization,
     COALESCE((
       SELECT json_agg(json_build_object('id', t.id, 'name', t.name) ORDER BY t.name)
-      FROM item_item_tags iit
-      JOIN item_tags t ON t.id = iit.item_tag_id
-      WHERE iit.item_id = i.id
+      FROM item_favorite_things ift
+      JOIN favorite_things t ON t.id = ift.favorite_thing_id
+      WHERE ift.item_id = i.id
     ), '[]'::json) AS tags
   FROM items i
   JOIN item_categories c ON c.id = i.category_id
-  JOIN item_usages u ON u.id = i.usage_id
+  LEFT JOIN item_usages u ON u.id = i.usage_id
 `;
 
 export async function listItems(paramsQuery: QueryParams) {
@@ -591,9 +614,9 @@ export async function listItems(paramsQuery: QueryParams) {
   const tagFilter = sqlForRelationFilter(
     tagIds,
     'any',
-    'item_item_tags',
+    'item_favorite_things',
     'item_id',
-    'item_tag_id',
+    'favorite_thing_id',
     'i.id',
     params
   );
@@ -663,12 +686,15 @@ export async function getItem(id: number) {
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
   const recipeId = payload.recipeId === null || payload.recipeId === '' || payload.recipeId === undefined
     ? null
-    : requirePositiveInteger(payload.recipeId, 'Recipe');
+    : requirePositiveInteger(payload.recipeId, '请选择材料单');
+  const usageId = payload.usageId === null || payload.usageId === '' || payload.usageId === undefined
+    ? null
+    : requirePositiveInteger(payload.usageId, '请选择用途');
 
   return {
-    name: cleanName(payload.name),
-    categoryId: requirePositiveInteger(payload.categoryId, 'Category'),
-    usageId: requirePositiveInteger(payload.usageId, 'Usage'),
+    name: cleanName(payload.name, '请输入物品名字'),
+    categoryId: requirePositiveInteger(payload.categoryId, '请选择分类'),
+    usageId,
     recipeId,
     dyeable: Boolean(payload.dyeable),
     dualDyeable: Boolean(payload.dualDyeable),
@@ -680,7 +706,7 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
 
 async function replaceItemRelations(client: DbClient, itemId: number, payload: ItemPayload): Promise<void> {
   await client.query('DELETE FROM item_acquisition_methods WHERE item_id = $1', [itemId]);
-  await client.query('DELETE FROM item_item_tags WHERE item_id = $1', [itemId]);
+  await client.query('DELETE FROM item_favorite_things WHERE item_id = $1', [itemId]);
 
   for (const methodId of payload.acquisitionMethodIds) {
     await client.query('INSERT INTO item_acquisition_methods (item_id, acquisition_method_id) VALUES ($1, $2)', [
@@ -690,7 +716,10 @@ async function replaceItemRelations(client: DbClient, itemId: number, payload: I
   }
 
   for (const tagId of payload.tagIds) {
-    await client.query('INSERT INTO item_item_tags (item_id, item_tag_id) VALUES ($1, $2)', [itemId, tagId]);
+    await client.query('INSERT INTO item_favorite_things (item_id, favorite_thing_id) VALUES ($1, $2)', [
+      itemId,
+      tagId
+    ]);
   }
 }
 
@@ -805,7 +834,7 @@ export async function getRecipe(id: number) {
 
 function cleanRecipePayload(payload: Record<string, unknown>): RecipePayload {
   return {
-    name: cleanName(payload.name),
+    name: cleanName(payload.name, '请输入材料单名字'),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     materials: cleanQuantities(payload.materials)
   };

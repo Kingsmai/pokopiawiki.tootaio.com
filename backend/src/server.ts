@@ -35,6 +35,7 @@ const app = Fastify({
 });
 
 await app.register(cors, {
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   origin: process.env.FRONTEND_ORIGIN ?? true
 });
 
@@ -42,15 +43,15 @@ app.setErrorHandler(async (error, _request, reply) => {
   const pgError = error as Error & { code?: string; constraint?: string; detail?: string; statusCode?: number };
 
   if (pgError.code === '23503') {
-    return reply.code(409).send({ message: 'Referenced data is missing or this item is in use' });
+    return reply.code(409).send({ message: '引用的数据不存在，或当前记录正在被使用' });
   }
 
   if (pgError.code === '23505') {
-    return reply.code(409).send({ message: 'A record with the same value already exists' });
+    return reply.code(409).send({ message: '同名或相同 ID 的记录已存在' });
   }
 
   if (pgError.code === '23514') {
-    return reply.code(400).send({ message: 'Invalid field value' });
+    return reply.code(400).send({ message: '字段值不合法' });
   }
 
   if (pgError.statusCode && pgError.statusCode < 500) {
@@ -58,7 +59,7 @@ app.setErrorHandler(async (error, _request, reply) => {
   }
 
   app.log.error(error);
-  return reply.code(500).send({ message: 'Server error' });
+  return reply.code(500).send({ message: '服务器错误' });
 });
 
 app.get('/health', async () => ({ ok: true }));

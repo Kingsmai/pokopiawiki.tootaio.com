@@ -86,7 +86,7 @@ watch([tab, itemQuery], loadItems);
     <div v-else-if="tab === 'items'" class="grid">
       <RouterLink v-for="item in items" :key="item.id" class="entity-card" :to="`/items/${item.id}`">
         <h2>{{ item.name }}</h2>
-        <p class="meta-line">{{ item.category.name }} · {{ item.usage.name }}</p>
+        <p class="meta-line">{{ item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name }}</p>
         <EntityChips :items="item.tags" />
       </RouterLink>
     </div>

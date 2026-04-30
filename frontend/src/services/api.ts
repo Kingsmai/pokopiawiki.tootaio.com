@@ -7,10 +7,6 @@ export interface NamedEntity {
   name: string;
 }
 
-export interface Skill extends NamedEntity {
-  subcategory: string | null;
-}
-
 export interface UserSummary {
   id: number;
   displayName: string;
@@ -27,7 +23,7 @@ export interface Pokemon extends EditInfo {
   id: number;
   name: string;
   environment: NamedEntity;
-  skills: Skill[];
+  skills: NamedEntity[];
   favorite_things: NamedEntity[];
 }
 
@@ -89,7 +85,7 @@ export interface RecipeDetail extends Recipe {
 }
 
 export interface Options {
-  skills: Skill[];
+  skills: NamedEntity[];
   environments: NamedEntity[];
   favoriteThings: NamedEntity[];
   itemCategories: NamedEntity[];
@@ -283,11 +279,11 @@ export const api = {
   me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
-  config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
-  createConfig: (type: ConfigType, payload: { name: string; subcategory?: string | null }) =>
-    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
-  updateConfig: (type: ConfigType, id: number, payload: { name: string; subcategory?: string | null }) =>
-    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
+  config: (type: ConfigType) => getJson<NamedEntity[]>(`/api/admin/config/${type}`),
+  createConfig: (type: ConfigType, payload: { name: string }) =>
+    sendJson<NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
+  updateConfig: (type: ConfigType, id: number, payload: { name: string }) =>
+    sendJson<NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
   pokemon: (params: Record<string, string | number | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),

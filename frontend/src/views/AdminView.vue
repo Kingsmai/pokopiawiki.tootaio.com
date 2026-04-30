@@ -12,12 +12,11 @@ import {
   type Item,
   type NamedEntity,
   type Pokemon,
-  type Recipe,
-  type Skill
+  type Recipe
 } from '../services/api';
 
 type AdminTab = 'config' | 'pokemon' | 'items' | 'recipes' | 'habitats';
-type EditableConfig = (NamedEntity | Skill) & { subcategory?: string | null };
+type EditableConfig = NamedEntity;
 
 const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'config', label: '系统配置' },
@@ -27,8 +26,8 @@ const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'habitats', label: '栖息地' }
 ];
 
-const configTypes: Array<{ key: ConfigType; label: string; hasSubcategory?: boolean }> = [
-  { key: 'skills', label: '特长', hasSubcategory: true },
+const configTypes: Array<{ key: ConfigType; label: string }> = [
+  { key: 'skills', label: '特长' },
   { key: 'environments', label: '喜欢的环境' },
   { key: 'favorite-things', label: '喜欢的东西 / 标签' },
   { key: 'item-categories', label: '物品分类' },
@@ -48,7 +47,7 @@ const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
 const message = ref('');
-const configForm = ref({ id: 0, name: '', subcategory: '' });
+const configForm = ref({ id: 0, name: '' });
 
 const selectedConfig = computed(() => configTypes.find((item) => item.key === activeConfigType.value) ?? configTypes[0]);
 const configTabs = computed<TabOption[]>(() => configTypes.map((item) => ({ value: item.key, label: item.label })));
@@ -87,18 +86,17 @@ async function loadConfig() {
 }
 
 function resetConfigForm() {
-  configForm.value = { id: 0, name: '', subcategory: '' };
+  configForm.value = { id: 0, name: '' };
 }
 
 function editConfig(item: EditableConfig) {
-  configForm.value = { id: item.id, name: item.name, subcategory: item.subcategory ?? '' };
+  configForm.value = { id: item.id, name: item.name };
 }
 
 async function saveConfig() {
   await run(async () => {
     const payload = {
-      name: configForm.value.name,
-      subcategory: selectedConfig.value.hasSubcategory ? configForm.value.subcategory || null : null
+      name: configForm.value.name
     };
 
     if (configForm.value.id) {
@@ -247,10 +245,6 @@ onMounted(() => {
           <label for="config-name">名称</label>
           <input id="config-name" v-model="configForm.name" required />
         </div>
-        <div v-if="selectedConfig.hasSubcategory" class="field">
-          <label for="config-subcategory">二级分类</label>
-          <input id="config-subcategory" v-model="configForm.subcategory" />
-        </div>
         <div class="form-actions">
           <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
           <button type="button" class="plain-button" :disabled="busy" @click="resetConfigForm">新建</button>
@@ -260,7 +254,7 @@ onMounted(() => {
       <h3 class="section-subtitle">{{ selectedConfig.label }}</h3>
       <ul v-if="configRows.length" class="row-list">
         <li v-for="item in configRows" :key="item.id">
-          <span>{{ item.name }}<span v-if="item.subcategory"> · {{ item.subcategory }}</span></span>
+          <span>{{ item.name }}</span>
           <span class="row-actions">
             <button type="button" @click="editConfig(item)">编辑</button>
             <button type="button" @click="removeConfig(item.id)">删除</button>

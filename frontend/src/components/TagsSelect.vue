@@ -5,7 +5,6 @@ export type TagsSelectOption = {
   id: number | string;
   name: string;
   label?: string;
-  subcategory?: string | null;
 };
 
 type OptionRow = {
@@ -56,7 +55,7 @@ const activeIndex = ref(-1);
 const optionRows = computed(() =>
   props.options.map((option, index) => ({
     value: String(option.id),
-    label: option.label ?? (option.subcategory ? `${option.name} · ${option.subcategory}` : option.name),
+    label: option.label ?? option.name,
     id: `${props.id}-option-${index}`
   }))
 );

@@ -19,9 +19,7 @@ type ConfigType =
 
 type ConfigDefinition = {
   table: string;
-  select: string;
   order: string;
-  hasSubcategory?: boolean;
 };
 
 type IdQuantity = {
@@ -73,13 +71,13 @@ const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 
 const configDefinitions: Record<ConfigType, ConfigDefinition> = {
-  skills: { table: 'skills', select: 'id, name, subcategory', order: 'name, subcategory', hasSubcategory: true },
-  environments: { table: 'environments', select: 'id, name', order: 'name' },
-  'favorite-things': { table: 'favorite_things', select: 'id, name', order: 'name' },
-  'item-categories': { table: 'item_categories', select: 'id, name', order: 'name' },
-  'item-usages': { table: 'item_usages', select: 'id, name', order: 'name' },
-  'acquisition-methods': { table: 'acquisition_methods', select: 'id, name', order: 'name' },
-  maps: { table: 'maps', select: 'id, name', order: 'name' }
+  skills: { table: 'skills', order: 'name' },
+  environments: { table: 'environments', order: 'name' },
+  'favorite-things': { table: 'favorite_things', order: 'name' },
+  'item-categories': { table: 'item_categories', order: 'name' },
+  'item-usages': { table: 'item_usages', order: 'name' },
+  'acquisition-methods': { table: 'acquisition_methods', order: 'name' },
+  maps: { table: 'maps', order: 'name' }
 };
 
 function asString(value: QueryValue): string | undefined {
@@ -110,10 +108,6 @@ function auditJoins(entityAlias: string, createdAlias = 'created_user', updatedA
     LEFT JOIN users ${createdAlias} ON ${createdAlias}.id = ${entityAlias}.created_by_user_id
     LEFT JOIN users ${updatedAlias} ON ${updatedAlias}.id = ${entityAlias}.updated_by_user_id
   `;
-}
-
-function configSelect(definition: ConfigDefinition): string {
-  return definition.hasSubcategory ? 'c.id, c.name, c.subcategory' : 'c.id, c.name';
 }
 
 function configOrder(definition: ConfigDefinition): string {
@@ -215,7 +209,7 @@ const pokemonProjection = `
     ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
     json_build_object('id', e.id, 'name', e.name) AS environment,
     COALESCE((
-      SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'subcategory', s.subcategory) ORDER BY s.name, s.subcategory)
+      SELECT json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name)
       FROM pokemon_skills ps
       JOIN skills s ON s.id = ps.skill_id
       WHERE ps.pokemon_id = p.id
@@ -241,9 +235,7 @@ export async function getOptions() {
     acquisitionMethods,
     maps
   ] = await Promise.all([
-    query<{ id: number; name: string; subcategory: string | null }>(
-      'SELECT id, name, subcategory FROM skills ORDER BY name, subcategory'
-    ),
+    optionSelect('skills'),
     optionSelect('environments'),
     optionSelect('favorite_things'),
     optionSelect('item_categories'),
@@ -272,7 +264,7 @@ export async function listConfig(type: ConfigType) {
   const definition = configDefinitions[type];
   return query(
     `
-      SELECT ${configSelect(definition)}, ${auditSelect('c')}
+      SELECT c.id, c.name, ${auditSelect('c')}
       FROM ${definition.table} c
       ${auditJoins('c')}
       ORDER BY ${configOrder(definition)}
@@ -284,7 +276,7 @@ async function getConfigById(type: ConfigType, id: number) {
   const definition = configDefinitions[type];
   return queryOne(
     `
-      SELECT ${configSelect(definition)}, ${auditSelect('c')}
+      SELECT c.id, c.name, ${auditSelect('c')}
       FROM ${definition.table} c
       ${auditJoins('c')}
       WHERE c.id = $1
@@ -296,26 +288,16 @@ async function getConfigById(type: ConfigType, id: number) {
 export async function createConfig(type: ConfigType, payload: Record<string, unknown>, userId: number) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
-  const subcategory = typeof payload.subcategory === 'string' && payload.subcategory.trim() ? payload.subcategory.trim() : null;
 
   const id = await withTransaction(async (client) => {
-    const result = definition.hasSubcategory
-      ? await client.query<{ id: number }>(
-          `
-            INSERT INTO ${definition.table} (name, subcategory, created_by_user_id, updated_by_user_id)
-            VALUES ($1, $2, $3, $3)
-            RETURNING id
-          `,
-          [name, subcategory, userId]
-        )
-      : await client.query<{ id: number }>(
-          `
-            INSERT INTO ${definition.table} (name, created_by_user_id, updated_by_user_id)
-            VALUES ($1, $2, $2)
-            RETURNING id
-          `,
-          [name, userId]
-        );
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO ${definition.table} (name, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $2)
+        RETURNING id
+      `,
+      [name, userId]
+    );
 
     const createdId = result.rows[0].id;
     await recordEditLog(client, type, createdId, 'create', userId);
@@ -328,26 +310,16 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
 export async function updateConfig(type: ConfigType, id: number, payload: Record<string, unknown>, userId: number) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
-  const subcategory = typeof payload.subcategory === 'string' && payload.subcategory.trim() ? payload.subcategory.trim() : null;
 
   const updated = await withTransaction(async (client) => {
-    const result = definition.hasSubcategory
-      ? await client.query(
-          `
-            UPDATE ${definition.table}
-            SET name = $1, subcategory = $2, updated_by_user_id = $3, updated_at = now()
-            WHERE id = $4
-          `,
-          [name, subcategory, userId, id]
-        )
-      : await client.query(
-          `
-            UPDATE ${definition.table}
-            SET name = $1, updated_by_user_id = $2, updated_at = now()
-            WHERE id = $3
-          `,
-          [name, userId, id]
-        );
+    const result = await client.query(
+      `
+        UPDATE ${definition.table}
+        SET name = $1, updated_by_user_id = $2, updated_at = now()
+        WHERE id = $3
+      `,
+      [name, userId, id]
+    );
 
     if (result.rowCount === 0) {
       return false;

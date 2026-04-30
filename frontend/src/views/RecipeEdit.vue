@@ -81,7 +81,7 @@ async function createMultiOption(selectKey: string, type: ConfigType, name: stri
   creatingSelect.value = selectKey;
   message.value = '';
   try {
-    const created = await api.createConfig(type, { name: cleanName, subcategory: null });
+    const created = await api.createConfig(type, { name: cleanName });
     await loadOptions();
     const value = String(created.id);
     if (!values.includes(value)) {

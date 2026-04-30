@@ -6,10 +6,12 @@ import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { api, type PokemonDetail } from '../services/api';
 
 const route = useRoute();
 const pokemon = ref<PokemonDetail | null>(null);
+const itemCategoryTab = ref('');
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 
@@ -75,6 +77,28 @@ const habitatRows = computed<HabitatRow[]>(() => {
   }));
 });
 const skillDropRows = computed(() => pokemon.value?.skills.filter((skill) => skill.itemDrop) ?? []);
+const itemCategoryTabs = computed<TabOption[]>(() => {
+  const categories = new Map<string, string>();
+
+  pokemon.value?.favoriteThingItems.forEach((item) => {
+    categories.set(String(item.category.id), item.category.name);
+  });
+
+  const tabs = [...categories.entries()]
+    .sort(([, nameA], [, nameB]) => nameA.localeCompare(nameB))
+    .map(([value, label]) => ({ value, label }));
+
+  return tabs.length > 1 ? [{ value: '', label: '全部' }, ...tabs] : [];
+});
+const favoriteThingItems = computed(() => {
+  const items = pokemon.value?.favoriteThingItems ?? [];
+
+  if (!itemCategoryTab.value) {
+    return items;
+  }
+
+  return items.filter((item) => String(item.category.id) === itemCategoryTab.value);
+});
 
 onMounted(async () => {
   pokemon.value = await api.pokemonDetail(String(route.params.id));
@@ -166,6 +190,26 @@ onMounted(async () => {
 
       <DetailSection title="喜欢的东西">
         <EntityChips :items="pokemon.favorite_things" />
+      </DetailSection>
+
+      <DetailSection title="喜欢的东西关联物品">
+        <template v-if="pokemon.favoriteThingItems.length">
+          <Tabs
+            v-if="itemCategoryTabs.length"
+            id="pokemon-favorite-items"
+            v-model="itemCategoryTab"
+            :tabs="itemCategoryTabs"
+            label="关联物品分类"
+          />
+          <ul v-if="favoriteThingItems.length" class="row-list">
+            <li v-for="item in favoriteThingItems" :key="item.id">
+              <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
+              <EntityChips :items="item.tags" />
+            </li>
+          </ul>
+          <p v-else class="meta-line">无</p>
+        </template>
+        <p v-else class="meta-line">无</p>
       </DetailSection>
 
       <DetailSection title="栖息地">

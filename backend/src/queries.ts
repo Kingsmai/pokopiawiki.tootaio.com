@@ -439,7 +439,7 @@ export async function getPokemon(id: number) {
     return null;
   }
 
-  const [habitats, itemDrops] = await Promise.all([
+  const [habitats, itemDrops, favoriteThingItems] = await Promise.all([
     query(
       `
         SELECT
@@ -468,6 +468,24 @@ export async function getPokemon(id: number) {
         ORDER BY psid.skill_id, i.name
       `,
       [id]
+    ),
+    query(
+      `
+        SELECT
+          i.id,
+          i.name,
+          json_build_object('id', c.id, 'name', c.name) AS category,
+          json_agg(json_build_object('id', ft.id, 'name', ft.name) ORDER BY ft.name) AS tags
+        FROM pokemon_favorite_things pft
+        JOIN item_favorite_things ift ON ift.favorite_thing_id = pft.favorite_thing_id
+        JOIN favorite_things ft ON ft.id = pft.favorite_thing_id
+        JOIN items i ON i.id = ift.item_id
+        JOIN item_categories c ON c.id = i.category_id
+        WHERE pft.pokemon_id = $1
+        GROUP BY i.id, i.name, c.id, c.name
+        ORDER BY c.name, i.name
+      `,
+      [id]
     )
   ]);
 
@@ -483,7 +501,7 @@ export async function getPokemon(id: number) {
       }))
     : [];
 
-  return { ...pokemon, skills, habitats };
+  return { ...pokemon, skills, habitats, favoriteThingItems };
 }
 
 function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {

@@ -33,6 +33,7 @@ export interface Pokemon extends EditInfo {
 
 export interface PokemonDetail extends Pokemon {
   skills: Array<Skill & { itemDrop: NamedEntity | null }>;
+  favoriteThingItems: Array<NamedEntity & { category: NamedEntity; tags: NamedEntity[] }>;
   habitats: Array<{
     id: number;
     name: string;

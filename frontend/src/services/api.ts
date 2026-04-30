@@ -1,4 +1,6 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const authTokenKey = 'pokopia_auth_token';
+const authChangeEvent = 'pokopia-auth-change';
 
 export interface NamedEntity {
   id: number;
@@ -85,6 +87,27 @@ export interface Options {
   maps: NamedEntity[];
 }
 
+export interface AuthUser {
+  id: number;
+  email: string;
+  displayName: string;
+  emailVerified: boolean;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface RegisterPayload extends LoginPayload {
+  displayName: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
 export type ConfigType =
   | 'skills'
   | 'environments'
@@ -144,6 +167,38 @@ export function buildQuery(params: Record<string, string | number | undefined>):
   return query ? `?${query}` : '';
 }
 
+export function getAuthToken(): string | null {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+
+  return localStorage.getItem(authTokenKey);
+}
+
+export function setAuthToken(token: string | null): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  if (token) {
+    localStorage.setItem(authTokenKey, token);
+  } else {
+    localStorage.removeItem(authTokenKey);
+  }
+
+  window.dispatchEvent(new Event(authChangeEvent));
+}
+
+export function onAuthTokenChange(callback: () => void): () => void {
+  window.addEventListener(authChangeEvent, callback);
+  return () => window.removeEventListener(authChangeEvent, callback);
+}
+
+function authHeaders(): HeadersInit {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function getErrorMessage(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as { message?: unknown };
@@ -158,7 +213,9 @@ async function getErrorMessage(response: Response): Promise<string> {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`);
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: authHeaders()
+  });
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
@@ -171,7 +228,8 @@ async function sendJson<T>(path: string, method: 'POST' | 'PUT', body: unknown):
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method,
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...authHeaders()
     },
     body: JSON.stringify(body)
   });
@@ -183,9 +241,21 @@ async function sendJson<T>(path: string, method: 'POST' | 'PUT', body: unknown):
   return response.json() as Promise<T>;
 }
 
+async function postEmpty(path: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'POST',
+    headers: authHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+}
+
 async function deleteJson(path: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: authHeaders()
   });
 
   if (!response.ok) {
@@ -194,6 +264,12 @@ async function deleteJson(path: string): Promise<void> {
 }
 
 export const api = {
+  register: (payload: RegisterPayload) => sendJson<{ message: string }>('/api/auth/register', 'POST', payload),
+  verifyEmail: (token: string) =>
+    sendJson<{ message: string; user: AuthUser }>('/api/auth/verify-email', 'POST', { token }),
+  login: (payload: LoginPayload) => sendJson<AuthResponse>('/api/auth/login', 'POST', payload),
+  me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
+  logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
   config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
   createConfig: (type: ConfigType, payload: { name: string; subcategory?: string | null }) =>

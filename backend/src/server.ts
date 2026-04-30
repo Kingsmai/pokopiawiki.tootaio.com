@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
+import { getUserBySessionToken, loginUser, logoutSession, registerUser, verifyEmail } from './auth.ts';
 import { initializeDatabase, pool } from './db.ts';
 import {
   createConfig,
@@ -35,6 +36,7 @@ const app = Fastify({
 });
 
 await app.register(cors, {
+  allowedHeaders: ['Authorization', 'Content-Type'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   origin: process.env.FRONTEND_ORIGIN ?? true
 });
@@ -63,6 +65,39 @@ app.setErrorHandler(async (error, _request, reply) => {
 });
 
 app.get('/health', async () => ({ ok: true }));
+
+function getBearerToken(authorization: string | undefined): string | null {
+  const [scheme, token] = authorization?.split(' ') ?? [];
+  return scheme === 'Bearer' && token ? token : null;
+}
+
+app.post('/api/auth/register', async (request, reply) =>
+  reply.code(201).send(await registerUser(request.body as Record<string, unknown>))
+);
+
+app.post('/api/auth/verify-email', async (request) => verifyEmail(request.body as Record<string, unknown>));
+
+app.post('/api/auth/login', async (request) => loginUser(request.body as Record<string, unknown>));
+
+app.get('/api/auth/me', async (request, reply) => {
+  const token = getBearerToken(request.headers.authorization);
+  const user = token ? await getUserBySessionToken(token) : null;
+
+  if (!user) {
+    return reply.code(401).send({ message: '请先登录' });
+  }
+
+  return { user };
+});
+
+app.post('/api/auth/logout', async (request, reply) => {
+  const token = getBearerToken(request.headers.authorization);
+  if (token) {
+    await logoutSession(token);
+  }
+
+  return reply.code(204).send();
+});
 
 app.get('/api/options', async () => getOptions());
 

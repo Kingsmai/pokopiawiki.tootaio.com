@@ -7,6 +7,9 @@ import ItemsList from '../views/ItemsList.vue';
 import ItemDetail from '../views/ItemDetail.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import AdminView from '../views/AdminView.vue';
+import LoginView from '../views/LoginView.vue';
+import RegisterView from '../views/RegisterView.vue';
+import VerifyEmailView from '../views/VerifyEmailView.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -19,7 +22,10 @@ export const router = createRouter({
     { path: '/items', component: ItemsList },
     { path: '/items/:id', component: ItemDetail },
     { path: '/recipes/:id', component: RecipeDetail },
-    { path: '/admin', component: AdminView }
+    { path: '/admin', component: AdminView },
+    { path: '/login', component: LoginView },
+    { path: '/register', component: RegisterView },
+    { path: '/verify-email', component: VerifyEmailView }
   ],
   scrollBehavior: () => ({ top: 0 })
 });

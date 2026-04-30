@@ -90,6 +90,10 @@ const habitatForm = ref({
 });
 
 const selectedConfig = computed(() => configTypes.find((item) => item.key === activeConfigType.value) ?? configTypes[0]);
+const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
+const pokemonSelectOptions = computed(() =>
+  pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.id} ${pokemon.name}` }))
+);
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -503,10 +507,14 @@ onMounted(() => {
         <div class="field"><label for="pokemon-name">名字</label><input id="pokemon-name" v-model="pokemonForm.name" /></div>
         <div class="field">
           <label for="pokemon-environment">喜欢的环境</label>
-          <select id="pokemon-environment" v-model="pokemonForm.environmentId">
-            <option value="">请选择</option>
-            <option v-for="item in options.environments" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
+          <TagsSelect
+            id="pokemon-environment"
+            v-model="pokemonForm.environmentId"
+            :options="options.environments"
+            :multiple="false"
+            placeholder="请选择"
+            search-placeholder="搜索喜欢的环境"
+          />
         </div>
         <div class="field">
           <label for="pokemon-skills">特长</label>
@@ -560,17 +568,25 @@ onMounted(() => {
         <div class="field"><label for="item-name">名称</label><input id="item-name" v-model="itemForm.name" /></div>
         <div class="field">
           <label for="item-category">分类</label>
-          <select id="item-category" v-model="itemForm.categoryId">
-            <option value="">请选择</option>
-            <option v-for="item in options.itemCategories" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
+          <TagsSelect
+            id="item-category"
+            v-model="itemForm.categoryId"
+            :options="options.itemCategories"
+            :multiple="false"
+            placeholder="请选择"
+            search-placeholder="搜索分类"
+          />
         </div>
         <div class="field">
           <label for="item-usage">用途</label>
-          <select id="item-usage" v-model="itemForm.usageId">
-            <option value="">无</option>
-            <option v-for="item in options.itemUsages" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
+          <TagsSelect
+            id="item-usage"
+            v-model="itemForm.usageId"
+            :options="options.itemUsages"
+            :multiple="false"
+            placeholder="无"
+            search-placeholder="搜索用途"
+          />
         </div>
         <div class="check-row">
           <label><input v-model="itemForm.dyeable" type="checkbox" /> 可染色</label>
@@ -626,10 +642,14 @@ onMounted(() => {
         <h2>材料单</h2>
         <div class="field">
           <label for="recipe-item">物品</label>
-          <select id="recipe-item" v-model="recipeForm.itemId">
-            <option value="">请选择</option>
-            <option v-for="item in itemRows" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-          </select>
+          <TagsSelect
+            id="recipe-item"
+            v-model="recipeForm.itemId"
+            :options="itemSelectOptions"
+            :multiple="false"
+            placeholder="请选择"
+            search-placeholder="搜索物品"
+          />
         </div>
         <div class="field">
           <label for="recipe-methods">入手方式</label>
@@ -646,10 +666,14 @@ onMounted(() => {
         <div class="field">
           <label>需要材料</label>
           <div v-for="(row, index) in recipeForm.materials" :key="index" class="inline-row">
-            <select v-model="row.itemId">
-              <option value="">请选择</option>
-              <option v-for="item in itemRows" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-            </select>
+            <TagsSelect
+              :id="`recipe-material-${index}`"
+              v-model="row.itemId"
+              :options="itemSelectOptions"
+              :multiple="false"
+              placeholder="请选择"
+              search-placeholder="搜索物品"
+            />
             <input v-model.number="row.quantity" type="number" min="1" />
             <button type="button" @click="recipeForm.materials.splice(index, 1)">删除</button>
           </div>
@@ -682,10 +706,14 @@ onMounted(() => {
         <div class="field">
           <label>配方</label>
           <div v-for="(row, index) in habitatForm.recipeItems" :key="index" class="inline-row">
-            <select v-model="row.itemId">
-              <option value="">请选择</option>
-              <option v-for="item in itemRows" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-            </select>
+            <TagsSelect
+              :id="`habitat-recipe-item-${index}`"
+              v-model="row.itemId"
+              :options="itemSelectOptions"
+              :multiple="false"
+              placeholder="请选择"
+              search-placeholder="搜索物品"
+            />
             <input v-model.number="row.quantity" type="number" min="1" />
             <button type="button" @click="habitatForm.recipeItems.splice(index, 1)">删除</button>
           </div>
@@ -694,10 +722,14 @@ onMounted(() => {
         <div class="field">
           <label>可出现的宝可梦</label>
           <div v-for="(row, index) in habitatForm.pokemonAppearances" :key="index" class="appearance-row">
-            <select v-model="row.pokemonId">
-              <option value="">Pokemon</option>
-              <option v-for="item in pokemonRows" :key="item.id" :value="String(item.id)">#{{ item.id }} {{ item.name }}</option>
-            </select>
+            <TagsSelect
+              :id="`appearance-pokemon-${index}`"
+              v-model="row.pokemonId"
+              :options="pokemonSelectOptions"
+              :multiple="false"
+              placeholder="Pokemon"
+              search-placeholder="搜索 Pokemon"
+            />
             <TagsSelect
               :id="`appearance-maps-${index}`"
               v-model="row.mapIds"

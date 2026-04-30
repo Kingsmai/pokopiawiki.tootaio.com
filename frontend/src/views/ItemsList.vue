@@ -61,18 +61,26 @@ watch([tab, itemQuery], loadItems);
 
       <div class="field">
         <label for="category">分类</label>
-        <select id="category" v-model="categoryId">
-          <option value="">全部</option>
-          <option v-for="item in options.itemCategories" :key="item.id" :value="item.id">{{ item.name }}</option>
-        </select>
+        <TagsSelect
+          id="category"
+          v-model="categoryId"
+          :options="options.itemCategories"
+          :multiple="false"
+          placeholder="全部"
+          search-placeholder="搜索分类"
+        />
       </div>
 
       <div class="field">
         <label for="usage">用途</label>
-        <select id="usage" v-model="usageId">
-          <option value="">全部</option>
-          <option v-for="item in options.itemUsages" :key="item.id" :value="item.id">{{ item.name }}</option>
-        </select>
+        <TagsSelect
+          id="usage"
+          v-model="usageId"
+          :options="options.itemUsages"
+          :multiple="false"
+          placeholder="全部"
+          search-placeholder="搜索用途"
+        />
       </div>
 
       <div class="field">

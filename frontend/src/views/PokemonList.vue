@@ -54,12 +54,14 @@ watch(query, loadPokemon);
 
       <div class="field">
         <label for="environment">喜欢的环境</label>
-        <select id="environment" v-model="environmentId">
-          <option value="">全部</option>
-          <option v-for="item in options.environments" :key="item.id" :value="item.id">
-            {{ item.name }}
-          </option>
-        </select>
+        <TagsSelect
+          id="environment"
+          v-model="environmentId"
+          :options="options.environments"
+          :multiple="false"
+          placeholder="全部"
+          search-placeholder="搜索喜欢的环境"
+        />
       </div>
 
       <div class="field">

@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 export type TagsSelectOption = {
   id: number | string;
   name: string;
+  label?: string;
   subcategory?: string | null;
 };
+
+type OptionRow = {
+  value: string;
+  label: string;
+  id: string;
+};
+
+type CandidateRow = { type: 'option'; id: string; value: string; label: string } | { type: 'create'; id: string };
 
 const props = withDefaults(
   defineProps<{
     id: string;
-    modelValue: string[];
+    modelValue: string[] | string;
     options: TagsSelectOption[];
+    multiple?: boolean;
     max?: number;
     placeholder?: string;
     searchPlaceholder?: string;
@@ -21,6 +31,7 @@ const props = withDefaults(
     createLabel?: string;
   }>(),
   {
+    multiple: true,
     max: 0,
     placeholder: '搜索或选择',
     searchPlaceholder: '搜索',
@@ -32,7 +43,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string[]];
+  'update:modelValue': [value: string[] | string];
   create: [name: string];
 }>();
 
@@ -40,19 +51,25 @@ const root = ref<HTMLElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const isOpen = ref(false);
 const search = ref('');
+const activeIndex = ref(-1);
 
 const optionRows = computed(() =>
-  props.options.map((option) => ({
+  props.options.map((option, index) => ({
     value: String(option.id),
-    label: option.subcategory ? `${option.name} · ${option.subcategory}` : option.name
+    label: option.label ?? (option.subcategory ? `${option.name} · ${option.subcategory}` : option.name),
+    id: `${props.id}-option-${index}`
   }))
 );
 
-const selectedValues = computed(() => new Set(props.modelValue));
-const maxReached = computed(() => props.max > 0 && props.modelValue.length >= props.max);
+const modelValues = computed(() => {
+  if (Array.isArray(props.modelValue)) return props.modelValue;
+  return props.modelValue ? [props.modelValue] : [];
+});
+const selectedValues = computed(() => new Set(modelValues.value));
+const maxReached = computed(() => props.multiple && props.max > 0 && modelValues.value.length >= props.max);
 
 const selectedRows = computed(() =>
-  props.modelValue
+  modelValues.value
     .map((value) => optionRows.value.find((option) => option.value === value))
     .filter((option) => option !== undefined)
 );
@@ -69,16 +86,55 @@ const hasExactMatch = computed(() => {
 });
 const canCreate = computed(() => props.allowCreate && createName.value !== '' && !hasExactMatch.value && !maxReached.value);
 const createText = computed(() => props.createLabel.replace('{name}', createName.value));
+const optionsListId = computed(() => `${props.id}-options`);
+const createOptionId = computed(() => `${props.id}-create`);
+const candidateRows = computed<CandidateRow[]>(() => {
+  const rows: CandidateRow[] = filteredRows.value
+    .filter((option) => isSearchSelectable(option.value))
+    .map((option) => ({ type: 'option', id: option.id, value: option.value, label: option.label }));
+
+  if (canCreate.value) {
+    rows.push({ type: 'create', id: createOptionId.value });
+  }
+
+  return rows;
+});
+const activeCandidate = computed(() => candidateRows.value[activeIndex.value]);
+const activeDescendant = computed(() => activeCandidate.value?.id);
+
+function setDefaultActiveIndex() {
+  const keyword = createName.value.toLowerCase();
+  const exactIndex = keyword
+    ? candidateRows.value.findIndex((candidate) => candidate.type === 'option' && candidate.label.toLowerCase() === keyword)
+    : -1;
+  activeIndex.value = exactIndex >= 0 ? exactIndex : candidateRows.value.length ? 0 : -1;
+}
+
+function clampActiveIndex() {
+  if (!candidateRows.value.length) {
+    activeIndex.value = -1;
+    return;
+  }
+
+  if (activeIndex.value < 0) {
+    activeIndex.value = 0;
+    return;
+  }
+
+  activeIndex.value = Math.min(activeIndex.value, candidateRows.value.length - 1);
+}
 
 async function openDropdown() {
   isOpen.value = true;
   await nextTick();
+  setDefaultActiveIndex();
   searchInput.value?.focus();
 }
 
 function closeDropdown() {
   isOpen.value = false;
   search.value = '';
+  activeIndex.value = -1;
 }
 
 function toggleDropdown() {
@@ -89,31 +145,68 @@ function toggleDropdown() {
   }
 }
 
-function toggle(value: string) {
+function updateValue(values: string[]) {
+  emit('update:modelValue', props.multiple ? values : (values[0] ?? ''));
+}
+
+function selectOption(value: string) {
+  if (!props.multiple) {
+    updateValue([value]);
+    closeDropdown();
+    return;
+  }
+
   if (selectedValues.value.has(value)) {
-    emit(
-      'update:modelValue',
-      props.modelValue.filter((item) => item !== value)
-    );
+    updateValue(modelValues.value.filter((item) => item !== value));
     return;
   }
 
   if (!maxReached.value) {
-    emit('update:modelValue', [...props.modelValue, value]);
+    updateValue([...modelValues.value, value]);
+    search.value = '';
+    setDefaultActiveIndex();
   }
 }
 
 function remove(value: string) {
-  emit(
-    'update:modelValue',
-    props.modelValue.filter((item) => item !== value)
-  );
+  updateValue(modelValues.value.filter((item) => item !== value));
 }
 
 function createOption() {
   if (!canCreate.value || props.creating) return;
   emit('create', createName.value);
   search.value = '';
+}
+
+function isSearchSelectable(value: string) {
+  return !props.multiple || (!selectedValues.value.has(value) && !maxReached.value);
+}
+
+function isActiveOption(option: OptionRow) {
+  const candidate = activeCandidate.value;
+  return candidate?.type === 'option' && candidate.value === option.value;
+}
+
+function isCreateActive() {
+  return activeCandidate.value?.type === 'create';
+}
+
+function moveActive(delta: number) {
+  if (!candidateRows.value.length) return;
+  const nextIndex = activeIndex.value < 0 ? 0 : activeIndex.value + delta;
+  activeIndex.value = (nextIndex + candidateRows.value.length) % candidateRows.value.length;
+}
+
+function commitSearch() {
+  const candidate = activeCandidate.value;
+  if (candidate?.type === 'option') {
+    selectOption(candidate.value);
+    return;
+  }
+
+  if (candidate?.type === 'create') {
+    createOption();
+  }
 }
 
 function onRootKeydown(event: KeyboardEvent) {
@@ -135,10 +228,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown);
 });
+
+watch(search, setDefaultActiveIndex);
+watch(candidateRows, clampActiveIndex);
 </script>
 
 <template>
-  <div ref="root" class="tags-select" @keydown="onRootKeydown">
+  <div ref="root" class="tags-select" :class="{ 'tags-select--single': !multiple }" @keydown="onRootKeydown">
     <button
       :id="id"
       type="button"
@@ -175,19 +271,27 @@ onBeforeUnmount(() => {
         class="tags-select__search"
         type="search"
         :placeholder="searchPlaceholder"
+        :aria-activedescendant="activeDescendant"
+        :aria-controls="optionsListId"
+        aria-autocomplete="list"
+        role="combobox"
+        @keydown.enter.stop.prevent="commitSearch"
+        @keydown.down.stop.prevent="moveActive(1)"
+        @keydown.up.stop.prevent="moveActive(-1)"
       />
 
-      <div class="tags-select__options" role="listbox" aria-multiselectable="true">
+      <div :id="optionsListId" class="tags-select__options" role="listbox" :aria-multiselectable="multiple ? 'true' : undefined">
         <button
           v-for="option in filteredRows"
           :key="option.value"
           type="button"
           class="tags-select__option"
-          :class="{ selected: selectedValues.has(option.value) }"
+          :id="option.id"
+          :class="{ selected: selectedValues.has(option.value), active: isActiveOption(option) }"
           role="option"
           :aria-selected="selectedValues.has(option.value)"
           :disabled="!selectedValues.has(option.value) && maxReached"
-          @click="toggle(option.value)"
+          @click="selectOption(option.value)"
         >
           <span>{{ option.label }}</span>
           <span v-if="selectedValues.has(option.value)" class="tags-select__state">已选</span>
@@ -196,6 +300,8 @@ onBeforeUnmount(() => {
           v-if="canCreate"
           type="button"
           class="tags-select__option tags-select__create"
+          :id="createOptionId"
+          :class="{ active: isCreateActive() }"
           :disabled="creating"
           @click="createOption"
         >

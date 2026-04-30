@@ -72,6 +72,7 @@ const selectedRows = computed(() =>
     .map((value) => optionRows.value.find((option) => option.value === value))
     .filter((option) => option !== undefined)
 );
+const selectedLabel = computed(() => selectedRows.value[0]?.label ?? '');
 
 const filteredRows = computed(() => {
   const keyword = search.value.trim().toLowerCase();
@@ -244,20 +245,23 @@ watch(candidateRows, clampActiveIndex);
       @click="toggleDropdown"
     >
       <span v-if="selectedRows.length" class="tags-select__selected">
-        <span v-for="option in selectedRows" :key="option.value" class="tags-select__tag">
-          <span>{{ option.label }}</span>
-          <span
-            class="tags-select__remove"
-            role="button"
-            tabindex="0"
-            :aria-label="`移除${option.label}`"
-            @click.stop="remove(option.value)"
-            @keydown.enter.stop.prevent="remove(option.value)"
-            @keydown.space.stop.prevent="remove(option.value)"
-          >
-            ×
+        <template v-if="multiple">
+          <span v-for="option in selectedRows" :key="option.value" class="tags-select__tag">
+            <span>{{ option.label }}</span>
+            <span
+              class="tags-select__remove"
+              role="button"
+              tabindex="0"
+              :aria-label="`移除${option.label}`"
+              @click.stop="remove(option.value)"
+              @keydown.enter.stop.prevent="remove(option.value)"
+              @keydown.space.stop.prevent="remove(option.value)"
+            >
+              ×
+            </span>
           </span>
-        </span>
+        </template>
+        <span v-else class="tags-select__single-value">{{ selectedLabel }}</span>
       </span>
       <span v-else class="tags-select__placeholder">{{ placeholder }}</span>
       <span class="tags-select__arrow" aria-hidden="true">⌄</span>

@@ -299,7 +299,7 @@ svg {
 .link-button,
 .plain-button,
 .row-actions button,
-.inline-row button,
+.inline-row > button,
 .appearance-row__delete {
   --btn-bg: var(--surface);
   --btn-fg: var(--ink);
@@ -332,7 +332,7 @@ svg {
 .link-button:hover,
 .plain-button:hover,
 .row-actions button:hover,
-.inline-row button:hover,
+.inline-row > button:hover,
 .appearance-row__delete:hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 0 var(--line-strong);
@@ -343,7 +343,7 @@ svg {
 .link-button:active,
 .plain-button:active,
 .row-actions button:active,
-.inline-row button:active,
+.inline-row > button:active,
 .appearance-row__delete:active {
   transform: translateY(2px);
   box-shadow: 0 1px 0 var(--line-strong);
@@ -369,7 +369,7 @@ svg {
 .ui-button--ghost,
 .plain-button,
 .row-actions button,
-.inline-row button,
+.inline-row > button,
 .appearance-row__delete {
   --btn-bg: var(--surface);
   --btn-border: var(--line);
@@ -444,6 +444,8 @@ button:disabled,
 
 .tags-select {
   position: relative;
+  width: 100%;
+  min-width: 0;
 }
 
 .tags-select__trigger {
@@ -469,9 +471,27 @@ button:disabled,
 
 .tags-select__selected {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
+}
+
+.tags-select--single .tags-select__trigger {
+  padding: 10px 12px;
+}
+
+.tags-select--single .tags-select__selected {
+  align-items: center;
+}
+
+.tags-select__single-value {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tags-select__tag {
@@ -1164,7 +1184,7 @@ button:disabled,
 }
 
 .row-actions button,
-.inline-row button,
+.inline-row > button,
 .appearance-row__delete {
   min-height: 34px;
   padding: 6px 10px;
@@ -1175,16 +1195,16 @@ button:disabled,
   align-items: center;
 }
 
-.inline-row .tags-select {
-  flex: 1;
-  min-width: 180px;
+.inline-row > .tags-select {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 
-.inline-row select {
+.inline-row > select {
   flex: 1;
 }
 
-.inline-row input {
+.inline-row > input {
   width: 90px;
 }
 
@@ -1232,7 +1252,7 @@ button:disabled,
   background: var(--surface-soft);
 }
 
-.appearance-row input {
+.appearance-row__rarity input {
   min-width: 64px;
 }
 
@@ -1451,8 +1471,8 @@ button:disabled,
     flex-direction: column;
   }
 
-  .inline-row input,
-  .inline-row .tags-select {
+  .inline-row > input,
+  .inline-row > .tags-select {
     width: 100%;
   }
 

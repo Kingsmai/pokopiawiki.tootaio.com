@@ -961,7 +961,17 @@ export async function deleteItem(id: number, userId: number) {
   });
 }
 
-export async function listRecipes() {
+export async function listRecipes(paramsQuery: QueryParams = {}) {
+  const params: unknown[] = [];
+  const conditions: string[] = [];
+  const categoryId = Number(asString(paramsQuery.categoryId));
+
+  if (Number.isInteger(categoryId) && categoryId > 0) {
+    params.push(categoryId);
+    conditions.push(`result_item.category_id = $${params.length}`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   return query(`
     SELECT
       r.id,
@@ -976,8 +986,9 @@ export async function listRecipes() {
     FROM recipes r
     JOIN items result_item ON result_item.id = r.item_id
     ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
+    ${whereClause}
     ORDER BY result_item.name
-  `);
+  `, params);
 }
 
 export async function getRecipe(id: number) {

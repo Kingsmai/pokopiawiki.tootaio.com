@@ -627,7 +627,7 @@ button:disabled,
   gap: 8px;
 }
 
-.tabs button {
+.tabs > button {
   min-height: 42px;
   padding: 9px 13px;
   border: 2px solid var(--line);
@@ -638,11 +638,100 @@ button:disabled,
   cursor: pointer;
 }
 
-.tabs button.active {
+.tabs > button.active {
   border-color: var(--line-strong);
   background: var(--pokemon-yellow);
   color: #172036;
   box-shadow: 0 2px 0 var(--line-strong);
+}
+
+.tabs--component {
+  display: grid;
+  gap: 14px;
+}
+
+.tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 2px solid var(--line);
+}
+
+.tab-button {
+  min-height: 42px;
+  padding: 9px 13px;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--radius-control) var(--radius-control) 0 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.tab-button[aria-selected="true"] {
+  border-color: var(--pokemon-yellow);
+  background: var(--surface);
+  color: var(--pokemon-blue-deep);
+}
+
+.skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+.skeleton-line,
+.skeleton-box {
+  display: block;
+  background: linear-gradient(90deg, var(--line), var(--surface), var(--line));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 999px;
+}
+
+.skeleton-box {
+  height: 128px;
+  border-radius: var(--radius-card);
+}
+
+.tab-list--skeleton {
+  padding-bottom: 0;
+}
+
+.skeleton-tab {
+  border-radius: var(--radius-control) var(--radius-control) 0 0;
+}
+
+.filter-panel--skeleton {
+  pointer-events: none;
+}
+
+.entity-card--skeleton {
+  pointer-events: none;
+}
+
+.skeleton-entity-mark {
+  border-radius: var(--radius-control);
+  box-shadow: 0 3px 0 var(--line);
+}
+
+.skeleton-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skeleton-chip {
+  height: 28px;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .entity-grid,

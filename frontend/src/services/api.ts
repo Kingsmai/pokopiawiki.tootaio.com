@@ -308,7 +308,8 @@ export const api = {
   createItem: (payload: ItemPayload) => sendJson<ItemDetail>('/api/items', 'POST', payload),
   updateItem: (id: string | number, payload: ItemPayload) => sendJson<ItemDetail>(`/api/items/${id}`, 'PUT', payload),
   deleteItem: (id: string | number) => deleteJson(`/api/items/${id}`),
-  recipes: () => getJson<Recipe[]>('/api/recipes'),
+  recipes: (params: Record<string, string | number | undefined> = {}) =>
+    getJson<Recipe[]>(`/api/recipes${buildQuery(params)}`),
   recipeDetail: (id: string | number) => getJson<RecipeDetail>(`/api/recipes/${id}`),
   createRecipe: (payload: RecipePayload) => sendJson<RecipeDetail>('/api/recipes', 'POST', payload),
   updateRecipe: (id: string | number, payload: RecipePayload) =>

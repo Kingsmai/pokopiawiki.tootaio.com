@@ -248,7 +248,7 @@ app.delete('/api/items/:id', async (request, reply) => {
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 
-app.get('/api/recipes', async () => listRecipes());
+app.get('/api/recipes', async (request) => listRecipes(request.query as Record<string, string | string[] | undefined>));
 
 app.get('/api/recipes/:id', async (request, reply) => {
   const { id } = request.params as { id: string };

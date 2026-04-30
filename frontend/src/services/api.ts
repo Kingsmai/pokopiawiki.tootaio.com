@@ -71,6 +71,7 @@ export interface Recipe {
 
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];
+  item: NamedEntity;
 }
 
 export interface Options {
@@ -105,7 +106,6 @@ export interface ItemPayload {
   name: string;
   categoryId: number;
   usageId: number | null;
-  recipeId: number | null;
   dyeable: boolean;
   dualDyeable: boolean;
   patternEditable: boolean;
@@ -114,7 +114,7 @@ export interface ItemPayload {
 }
 
 export interface RecipePayload {
-  name: string;
+  itemId: number;
   acquisitionMethodIds: number[];
   materials: Array<{ itemId: number; quantity: number }>;
 }

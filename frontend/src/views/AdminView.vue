@@ -70,7 +70,6 @@ const itemForm = ref({
   name: '',
   categoryId: '',
   usageId: '',
-  recipeId: '',
   dyeable: false,
   dualDyeable: false,
   patternEditable: false,
@@ -79,7 +78,7 @@ const itemForm = ref({
 });
 const recipeForm = ref({
   id: 0,
-  name: '',
+  itemId: '',
   acquisitionMethodIds: [] as string[],
   materials: [] as Array<{ itemId: string; quantity: number }>
 });
@@ -255,7 +254,6 @@ function resetItemForm() {
     name: '',
     categoryId: '',
     usageId: '',
-    recipeId: '',
     dyeable: false,
     dualDyeable: false,
     patternEditable: false,
@@ -272,7 +270,6 @@ async function editItem(item: Item) {
       name: detail.name,
       categoryId: String(detail.category.id),
       usageId: detail.usage ? String(detail.usage.id) : '',
-      recipeId: detail.recipe ? String(detail.recipe.id) : '',
       dyeable: detail.customization.dyeable,
       dualDyeable: detail.customization.dualDyeable,
       patternEditable: detail.customization.patternEditable,
@@ -288,7 +285,6 @@ async function saveItem() {
       name: itemForm.value.name,
       categoryId: Number(itemForm.value.categoryId),
       usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
-      recipeId: itemForm.value.recipeId ? Number(itemForm.value.recipeId) : null,
       dyeable: itemForm.value.dyeable,
       dualDyeable: itemForm.value.dualDyeable,
       patternEditable: itemForm.value.patternEditable,
@@ -313,7 +309,7 @@ async function removeItem(id: number) {
 }
 
 function resetRecipeForm() {
-  recipeForm.value = { id: 0, name: '', acquisitionMethodIds: [], materials: [] };
+  recipeForm.value = { id: 0, itemId: '', acquisitionMethodIds: [], materials: [] };
 }
 
 function addRecipeMaterial() {
@@ -325,7 +321,7 @@ async function editRecipe(item: Recipe) {
     const detail = await api.recipeDetail(item.id);
     recipeForm.value = {
       id: detail.id,
-      name: detail.name,
+      itemId: String(detail.item.id),
       acquisitionMethodIds: detail.acquisition_methods.map((method) => String(method.id)),
       materials: detail.materials.map((material) => ({ itemId: String(material.id), quantity: material.quantity }))
     };
@@ -335,7 +331,7 @@ async function editRecipe(item: Recipe) {
 async function saveRecipe() {
   await run(async () => {
     const payload: RecipePayload = {
-      name: recipeForm.value.name,
+      itemId: Number(recipeForm.value.itemId),
       acquisitionMethodIds: toIds(recipeForm.value.acquisitionMethodIds),
       materials: toQuantityRows(recipeForm.value.materials)
     };
@@ -345,7 +341,7 @@ async function saveRecipe() {
       await api.createRecipe(payload);
     }
     resetRecipeForm();
-    await loadRecipes();
+    await Promise.all([loadRecipes(), loadItems()]);
   });
 }
 
@@ -576,13 +572,6 @@ onMounted(() => {
             <option v-for="item in options.itemUsages" :key="item.id" :value="item.id">{{ item.name }}</option>
           </select>
         </div>
-        <div class="field">
-          <label for="item-recipe">材料单</label>
-          <select id="item-recipe" v-model="itemForm.recipeId">
-            <option value="">无</option>
-            <option v-for="item in recipeRows" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
-        </div>
         <div class="check-row">
           <label><input v-model="itemForm.dyeable" type="checkbox" /> 可染色</label>
           <label><input v-model="itemForm.dualDyeable" type="checkbox" /> 可双区染色</label>
@@ -635,7 +624,13 @@ onMounted(() => {
     <section v-if="activeTab === 'recipes' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveRecipe">
         <h2>材料单</h2>
-        <div class="field"><label for="recipe-name">名称</label><input id="recipe-name" v-model="recipeForm.name" /></div>
+        <div class="field">
+          <label for="recipe-item">物品</label>
+          <select id="recipe-item" v-model="recipeForm.itemId">
+            <option value="">请选择</option>
+            <option v-for="item in itemRows" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
+          </select>
+        </div>
         <div class="field">
           <label for="recipe-methods">入手方式</label>
           <TagsSelect

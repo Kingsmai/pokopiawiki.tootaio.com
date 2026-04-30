@@ -41,7 +41,6 @@ type ItemPayload = {
   name: string;
   categoryId: number;
   usageId: number | null;
-  recipeId: number | null;
   dyeable: boolean;
   dualDyeable: boolean;
   patternEditable: boolean;
@@ -50,7 +49,7 @@ type ItemPayload = {
 };
 
 type RecipePayload = {
-  name: string;
+  itemId: number;
   acquisitionMethodIds: number[];
   materials: IdQuantity[];
 };
@@ -649,7 +648,7 @@ export async function getItem(id: number) {
       `
         SELECT
           r.id,
-          r.name,
+          result_item.name,
           COALESCE((
             SELECT json_agg(json_build_object('id', am.id, 'name', am.name) ORDER BY am.name)
             FROM recipe_acquisition_methods ram
@@ -661,10 +660,11 @@ export async function getItem(id: number) {
             FROM recipe_materials rm
             JOIN items mi ON mi.id = rm.item_id
             WHERE rm.recipe_id = r.id
-          ), '[]'::json) AS materials
-        FROM items i
-        JOIN recipes r ON r.id = i.recipe_id
-        WHERE i.id = $1
+          ), '[]'::json) AS materials,
+          json_build_object('id', result_item.id, 'name', result_item.name) AS item
+        FROM recipes r
+        JOIN items result_item ON result_item.id = r.item_id
+        WHERE r.item_id = $1
       `,
       [id]
     ),
@@ -684,9 +684,6 @@ export async function getItem(id: number) {
 }
 
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
-  const recipeId = payload.recipeId === null || payload.recipeId === '' || payload.recipeId === undefined
-    ? null
-    : requirePositiveInteger(payload.recipeId, '请选择材料单');
   const usageId = payload.usageId === null || payload.usageId === '' || payload.usageId === undefined
     ? null
     : requirePositiveInteger(payload.usageId, '请选择用途');
@@ -695,7 +692,6 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     name: cleanName(payload.name, '请输入物品名字'),
     categoryId: requirePositiveInteger(payload.categoryId, '请选择分类'),
     usageId,
-    recipeId,
     dyeable: Boolean(payload.dyeable),
     dualDyeable: Boolean(payload.dualDyeable),
     patternEditable: Boolean(payload.patternEditable),
@@ -729,15 +725,14 @@ export async function createItem(payload: Record<string, unknown>) {
   const id = await withTransaction(async (client) => {
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO items (name, category_id, usage_id, recipe_id, dyeable, dual_dyeable, pattern_editable)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO items (name, category_id, usage_id, dyeable, dual_dyeable, pattern_editable)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
       `,
       [
         cleanPayload.name,
         cleanPayload.categoryId,
         cleanPayload.usageId,
-        cleanPayload.recipeId,
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable
@@ -760,17 +755,15 @@ export async function updateItem(id: number, payload: Record<string, unknown>) {
         SET name = $1,
             category_id = $2,
             usage_id = $3,
-            recipe_id = $4,
-            dyeable = $5,
-            dual_dyeable = $6,
-            pattern_editable = $7
-        WHERE id = $8
+            dyeable = $4,
+            dual_dyeable = $5,
+            pattern_editable = $6
+        WHERE id = $7
       `,
       [
         cleanPayload.name,
         cleanPayload.categoryId,
         cleanPayload.usageId,
-        cleanPayload.recipeId,
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
@@ -795,7 +788,7 @@ export async function listRecipes() {
   return query(`
     SELECT
       r.id,
-      r.name,
+      result_item.name,
       COALESCE((
         SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', rm.quantity) ORDER BY i.name)
         FROM recipe_materials rm
@@ -803,7 +796,8 @@ export async function listRecipes() {
         WHERE rm.recipe_id = r.id
       ), '[]'::json) AS materials
     FROM recipes r
-    ORDER BY r.name
+    JOIN items result_item ON result_item.id = r.item_id
+    ORDER BY result_item.name
   `);
 }
 
@@ -812,7 +806,7 @@ export async function getRecipe(id: number) {
     `
       SELECT
         r.id,
-        r.name,
+        result_item.name,
         COALESCE((
           SELECT json_agg(json_build_object('id', am.id, 'name', am.name) ORDER BY am.name)
           FROM recipe_acquisition_methods ram
@@ -824,8 +818,10 @@ export async function getRecipe(id: number) {
           FROM recipe_materials rm
           JOIN items i ON i.id = rm.item_id
           WHERE rm.recipe_id = r.id
-        ), '[]'::json) AS materials
+        ), '[]'::json) AS materials,
+        json_build_object('id', result_item.id, 'name', result_item.name) AS item
       FROM recipes r
+      JOIN items result_item ON result_item.id = r.item_id
       WHERE r.id = $1
     `,
     [id]
@@ -834,7 +830,7 @@ export async function getRecipe(id: number) {
 
 function cleanRecipePayload(payload: Record<string, unknown>): RecipePayload {
   return {
-    name: cleanName(payload.name, '请输入材料单名字'),
+    itemId: requirePositiveInteger(payload.itemId, '请选择物品'),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     materials: cleanQuantities(payload.materials)
   };
@@ -860,12 +856,20 @@ async function replaceRecipeRelations(client: DbClient, recipeId: number, payloa
   }
 }
 
+async function ensureItemExists(client: DbClient, itemId: number): Promise<void> {
+  const result = await client.query('SELECT 1 FROM items WHERE id = $1', [itemId]);
+  if (result.rowCount === 0) {
+    throw validationError('请选择物品');
+  }
+}
+
 export async function createRecipe(payload: Record<string, unknown>) {
   const cleanPayload = cleanRecipePayload(payload);
 
   const id = await withTransaction(async (client) => {
-    const result = await client.query<{ id: number }>('INSERT INTO recipes (name) VALUES ($1) RETURNING id', [
-      cleanPayload.name
+    await ensureItemExists(client, cleanPayload.itemId);
+    const result = await client.query<{ id: number }>('INSERT INTO recipes (item_id) VALUES ($1) RETURNING id', [
+      cleanPayload.itemId
     ]);
     const recipeId = result.rows[0].id;
     await replaceRecipeRelations(client, recipeId, cleanPayload);
@@ -878,7 +882,8 @@ export async function updateRecipe(id: number, payload: Record<string, unknown>)
   const cleanPayload = cleanRecipePayload(payload);
 
   const updated = await withTransaction(async (client) => {
-    const result = await client.query('UPDATE recipes SET name = $1 WHERE id = $2', [cleanPayload.name, id]);
+    await ensureItemExists(client, cleanPayload.itemId);
+    const result = await client.query('UPDATE recipes SET item_id = $1 WHERE id = $2', [cleanPayload.itemId, id]);
     if (result.rowCount === 0) {
       return false;
     }

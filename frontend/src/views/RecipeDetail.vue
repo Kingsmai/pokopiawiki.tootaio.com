@@ -50,7 +50,7 @@ onMounted(async () => {
         <EditMeta :entity="recipe" />
       </template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">返回列表</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/recipes">返回列表</RouterLink>
       </template>
     </PageHeader>
 

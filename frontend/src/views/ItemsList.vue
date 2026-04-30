@@ -8,22 +8,16 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
-import { api, type Item, type Options, type Recipe } from '../services/api';
+import { api, type Item, type Options } from '../services/api';
 
-const tab = ref<'items' | 'recipes'>('items');
 const options = ref<Options | null>(null);
 const items = ref<Item[]>([]);
-const recipes = ref<Recipe[]>([]);
 const loading = ref(true);
 const search = ref('');
 const categoryId = ref('');
 const usageId = ref('');
 const tagIds = ref<string[]>([]);
 
-const itemTypeTabs: TabOption[] = [
-  { value: 'items', label: '物品' },
-  { value: 'recipes', label: '材料单' }
-];
 const categorySkeletonWidths = ['64px', '92px', '78px', '104px', '86px'];
 const filterSkeletonWidths = ['52px', '48px', '48px'];
 const skeletonCardCount = 6;
@@ -40,17 +34,9 @@ const itemQuery = computed(() => ({
   tagIds: tagIds.value.join(',')
 }));
 
-const recipeQuery = computed(() => ({
-  categoryId: categoryId.value
-}));
-
 async function loadItems() {
   loading.value = true;
-  if (tab.value === 'items') {
-    items.value = await api.items(itemQuery.value);
-  } else {
-    recipes.value = await api.recipes(recipeQuery.value);
-  }
+  items.value = await api.items(itemQuery.value);
   loading.value = false;
 }
 
@@ -59,16 +45,14 @@ onMounted(async () => {
   await loadItems();
 });
 
-watch([tab, itemQuery, recipeQuery], loadItems);
+watch(itemQuery, loadItems);
 </script>
 
 <template>
   <section class="page-stack">
-    <PageHeader title="物品 / 材料单" subtitle="按分类、用途、标签查看物品，并浏览材料单。">
+    <PageHeader title="物品" subtitle="按分类、用途、标签查看物品。">
       <template #kicker>Bag</template>
     </PageHeader>
-
-    <Tabs id="item-type" v-model="tab" :tabs="itemTypeTabs" label="物品和材料单" />
 
     <Tabs v-if="options" id="item-category" v-model="categoryId" :tabs="categoryTabs" label="分类" />
     <div v-else class="tabs tabs--component" aria-hidden="true">
@@ -84,7 +68,7 @@ watch([tab, itemQuery, recipeQuery], loadItems);
       </div>
     </div>
 
-    <FilterPanel v-if="tab === 'items' && options">
+    <FilterPanel v-if="options">
       <div class="field">
         <label for="item-search">搜索</label>
         <input id="item-search" v-model="search" type="search" placeholder="名称" />
@@ -107,7 +91,7 @@ watch([tab, itemQuery, recipeQuery], loadItems);
         <TagsSelect id="tags" v-model="tagIds" :options="options.itemTags" placeholder="搜索标签" />
       </div>
     </FilterPanel>
-    <FilterPanel v-else-if="tab === 'items'" class="filter-panel--skeleton" aria-hidden="true">
+    <FilterPanel v-else class="filter-panel--skeleton" aria-hidden="true">
       <div v-for="(width, index) in filterSkeletonWidths" :key="index" class="field">
         <Skeleton :width="width" />
         <Skeleton variant="box" height="44px" />
@@ -115,15 +99,15 @@ watch([tab, itemQuery, recipeQuery], loadItems);
     </FilterPanel>
 
     <div v-if="loading" class="entity-grid" aria-busy="true" aria-label="正在加载列表">
-      <article v-for="index in skeletonCardCount" :key="`${tab}-skeleton-${index}`" class="entity-card entity-card--skeleton">
+      <article v-for="index in skeletonCardCount" :key="`item-skeleton-${index}`" class="entity-card entity-card--skeleton">
         <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
           <Skeleton width="72%" height="24px" />
-          <Skeleton v-if="tab === 'items'" width="52%" />
+          <Skeleton width="52%" />
           <Skeleton width="64%" />
           <div class="skeleton-chip-row">
             <Skeleton
-              v-for="chipIndex in tab === 'items' ? 3 : 2"
+              v-for="chipIndex in 3"
               :key="chipIndex"
               :width="chipIndex === 1 ? '74px' : '58px'"
               class="skeleton-chip"
@@ -132,7 +116,7 @@ watch([tab, itemQuery, recipeQuery], loadItems);
         </div>
       </article>
     </div>
-    <div v-else-if="tab === 'items'" class="entity-grid">
+    <div v-else class="entity-grid">
       <EntityCard
         v-for="item in items"
         :key="item.id"
@@ -143,13 +127,6 @@ watch([tab, itemQuery, recipeQuery], loadItems);
       >
         <EditMeta :entity="item" />
         <EntityChips :items="item.tags" />
-      </EntityCard>
-    </div>
-
-    <div v-else class="entity-grid">
-      <EntityCard v-for="item in recipes" :key="item.id" :title="item.name" :to="`/recipes/${item.id}`" marker="▦">
-        <EditMeta :entity="item" />
-        <EntityChips :items="item.materials" />
       </EntityCard>
     </div>
   </section>

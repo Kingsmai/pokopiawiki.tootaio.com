@@ -7,7 +7,8 @@ import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser } fro
 const navItems = [
   { label: 'Pokemon', to: '/pokemon' },
   { label: '栖息地', to: '/habitats' },
-  { label: '物品 / 材料单', to: '/items' },
+  { label: '物品', to: '/items' },
+  { label: '材料单', to: '/recipes' },
   { label: '管理', to: '/admin' }
 ];
 

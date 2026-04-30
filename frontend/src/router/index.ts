@@ -5,6 +5,7 @@ import HabitatList from '../views/HabitatList.vue';
 import HabitatDetail from '../views/HabitatDetail.vue';
 import ItemsList from '../views/ItemsList.vue';
 import ItemDetail from '../views/ItemDetail.vue';
+import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import AdminView from '../views/AdminView.vue';
 import LoginView from '../views/LoginView.vue';
@@ -22,6 +23,7 @@ export const router = createRouter({
     { path: '/habitats/:id', component: HabitatDetail },
     { path: '/items', component: ItemsList },
     { path: '/items/:id', component: ItemDetail },
+    { path: '/recipes', component: RecipeList },
     { path: '/recipes/:id', component: RecipeDetail },
     { path: '/admin', component: AdminView },
     { path: '/login', component: LoginView },

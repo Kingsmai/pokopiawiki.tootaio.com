@@ -119,7 +119,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="detail-grid" aria-hidden="true">
+    <div class="detail-grid detail-grid--stack" aria-hidden="true">
       <section class="detail-section skeleton-detail-section">
         <div class="detail-section__header">
           <Skeleton width="56px" height="24px" />
@@ -174,7 +174,7 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <div class="detail-grid">
+    <div class="detail-grid detail-grid--stack">
       <DetailSection title="特长">
         <EntityChips :items="pokemon.skills" />
       </DetailSection>
@@ -192,7 +192,7 @@ onMounted(async () => {
         <EntityChips :items="pokemon.favorite_things" />
       </DetailSection>
 
-      <DetailSection title="喜欢的东西关联物品">
+      <DetailSection title="关联物品">
         <template v-if="pokemon.favoriteThingItems.length">
           <Tabs
             v-if="itemCategoryTabs.length"

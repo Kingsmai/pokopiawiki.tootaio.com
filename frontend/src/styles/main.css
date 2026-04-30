@@ -913,6 +913,10 @@ button:disabled,
   gap: 16px;
 }
 
+.detail-grid--stack {
+  grid-template-columns: 1fr;
+}
+
 .habitat-detail-stack {
   display: grid;
   gap: 16px;

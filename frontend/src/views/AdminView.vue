@@ -12,11 +12,12 @@ import {
   type Item,
   type NamedEntity,
   type Pokemon,
-  type Recipe
+  type Recipe,
+  type Skill
 } from '../services/api';
 
 type AdminTab = 'config' | 'pokemon' | 'items' | 'recipes' | 'habitats';
-type EditableConfig = NamedEntity;
+type EditableConfig = (NamedEntity | Skill) & { hasItemDrop?: boolean };
 
 const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'config', label: '系统配置' },
@@ -26,8 +27,8 @@ const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'habitats', label: '栖息地' }
 ];
 
-const configTypes: Array<{ key: ConfigType; label: string }> = [
-  { key: 'skills', label: '特长' },
+const configTypes: Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean }> = [
+  { key: 'skills', label: '特长', supportsItemDrop: true },
   { key: 'environments', label: '喜欢的环境' },
   { key: 'favorite-things', label: '喜欢的东西 / 标签' },
   { key: 'item-categories', label: '物品分类' },
@@ -47,7 +48,7 @@ const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
 const message = ref('');
-const configForm = ref({ id: 0, name: '' });
+const configForm = ref({ id: 0, name: '', hasItemDrop: false });
 
 const selectedConfig = computed(() => configTypes.find((item) => item.key === activeConfigType.value) ?? configTypes[0]);
 const configTabs = computed<TabOption[]>(() => configTypes.map((item) => ({ value: item.key, label: item.label })));
@@ -86,17 +87,18 @@ async function loadConfig() {
 }
 
 function resetConfigForm() {
-  configForm.value = { id: 0, name: '' };
+  configForm.value = { id: 0, name: '', hasItemDrop: false };
 }
 
 function editConfig(item: EditableConfig) {
-  configForm.value = { id: item.id, name: item.name };
+  configForm.value = { id: item.id, name: item.name, hasItemDrop: item.hasItemDrop === true };
 }
 
 async function saveConfig() {
   await run(async () => {
     const payload = {
-      name: configForm.value.name
+      name: configForm.value.name,
+      hasItemDrop: selectedConfig.value.supportsItemDrop ? configForm.value.hasItemDrop : undefined
     };
 
     if (configForm.value.id) {
@@ -245,6 +247,12 @@ onMounted(() => {
           <label for="config-name">名称</label>
           <input id="config-name" v-model="configForm.name" required />
         </div>
+        <div v-if="selectedConfig.supportsItemDrop" class="check-row">
+          <label>
+            <input v-model="configForm.hasItemDrop" type="checkbox" />
+            有掉落物
+          </label>
+        </div>
         <div class="form-actions">
           <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
           <button type="button" class="plain-button" :disabled="busy" @click="resetConfigForm">新建</button>
@@ -254,7 +262,7 @@ onMounted(() => {
       <h3 class="section-subtitle">{{ selectedConfig.label }}</h3>
       <ul v-if="configRows.length" class="row-list">
         <li v-for="item in configRows" :key="item.id">
-          <span>{{ item.name }}</span>
+          <span>{{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">有掉落物</span></span>
           <span class="row-actions">
             <button type="button" @click="editConfig(item)">编辑</button>
             <button type="button" @click="removeConfig(item.id)">删除</button>

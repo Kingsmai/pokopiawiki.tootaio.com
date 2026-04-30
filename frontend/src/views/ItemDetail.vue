@@ -118,12 +118,23 @@ onMounted(async () => {
       </DetailSection>
 
       <DetailSection title="相关栖息地">
-        <ul class="row-list">
+        <ul v-if="item.relatedHabitats.length" class="row-list">
           <li v-for="habitat in item.relatedHabitats" :key="habitat.id">
             <RouterLink :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
             <span>× {{ habitat.quantity }}</span>
           </li>
         </ul>
+        <p v-else class="meta-line">无</p>
+      </DetailSection>
+
+      <DetailSection title="Pokemon 掉落">
+        <ul v-if="item.droppedByPokemon.length" class="row-list">
+          <li v-for="entry in item.droppedByPokemon" :key="`${entry.pokemon.id}-${entry.skill.id}`">
+            <RouterLink :to="`/pokemon/${entry.pokemon.id}`">#{{ entry.pokemon.id }} {{ entry.pokemon.name }}</RouterLink>
+            <span>{{ entry.skill.name }}掉落物</span>
+          </li>
+        </ul>
+        <p v-else class="meta-line">无</p>
       </DetailSection>
     </div>
   </section>

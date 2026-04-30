@@ -7,6 +7,10 @@ export interface NamedEntity {
   name: string;
 }
 
+export interface Skill extends NamedEntity {
+  hasItemDrop: boolean;
+}
+
 export interface UserSummary {
   id: number;
   displayName: string;
@@ -23,11 +27,12 @@ export interface Pokemon extends EditInfo {
   id: number;
   name: string;
   environment: NamedEntity;
-  skills: NamedEntity[];
+  skills: Skill[];
   favorite_things: NamedEntity[];
 }
 
 export interface PokemonDetail extends Pokemon {
+  skills: Array<Skill & { itemDrop: NamedEntity | null }>;
   habitats: Array<{
     id: number;
     name: string;
@@ -71,6 +76,10 @@ export interface ItemDetail extends Item {
   acquisitionMethods: NamedEntity[];
   recipe: RecipeDetail | null;
   relatedHabitats: Array<NamedEntity & { quantity: number }>;
+  droppedByPokemon: Array<{
+    pokemon: NamedEntity;
+    skill: NamedEntity;
+  }>;
 }
 
 export interface Recipe extends EditInfo {
@@ -85,7 +94,7 @@ export interface RecipeDetail extends Recipe {
 }
 
 export interface Options {
-  skills: NamedEntity[];
+  skills: Skill[];
   environments: NamedEntity[];
   favoriteThings: NamedEntity[];
   itemCategories: NamedEntity[];
@@ -131,6 +140,7 @@ export interface PokemonPayload {
   environmentId: number;
   skillIds: number[];
   favoriteThingIds: number[];
+  skillItemDrops: Array<{ skillId: number; itemId: number }>;
 }
 
 export interface ItemPayload {
@@ -279,11 +289,11 @@ export const api = {
   me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
-  config: (type: ConfigType) => getJson<NamedEntity[]>(`/api/admin/config/${type}`),
-  createConfig: (type: ConfigType, payload: { name: string }) =>
-    sendJson<NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
-  updateConfig: (type: ConfigType, id: number, payload: { name: string }) =>
-    sendJson<NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
+  config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
+  createConfig: (type: ConfigType, payload: { name: string; hasItemDrop?: boolean }) =>
+    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
+  updateConfig: (type: ConfigType, id: number, payload: { name: string; hasItemDrop?: boolean }) =>
+    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
   pokemon: (params: Record<string, string | number | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),

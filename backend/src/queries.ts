@@ -20,11 +20,17 @@ type ConfigType =
 type ConfigDefinition = {
   table: string;
   order: string;
+  hasItemDrop?: boolean;
 };
 
 type IdQuantity = {
   itemId: number;
   quantity: number;
+};
+
+type SkillItemDrop = {
+  skillId: number;
+  itemId: number;
 };
 
 type PokemonPayload = {
@@ -33,6 +39,7 @@ type PokemonPayload = {
   environmentId: number;
   skillIds: number[];
   favoriteThingIds: number[];
+  skillItemDrops: SkillItemDrop[];
 };
 
 type ItemPayload = {
@@ -71,7 +78,7 @@ const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 
 const configDefinitions: Record<ConfigType, ConfigDefinition> = {
-  skills: { table: 'skills', order: 'name' },
+  skills: { table: 'skills', order: 'name', hasItemDrop: true },
   environments: { table: 'environments', order: 'name' },
   'favorite-things': { table: 'favorite_things', order: 'name' },
   'item-categories': { table: 'item_categories', order: 'name' },
@@ -86,6 +93,10 @@ function asString(value: QueryValue): string | undefined {
 
 function optionSelect(tableName: string): Promise<Array<{ id: number; name: string }>> {
   return query(`SELECT id, name FROM ${tableName} ORDER BY name`);
+}
+
+function skillOptions(): Promise<Array<{ id: number; name: string; hasItemDrop: boolean }>> {
+  return query('SELECT id, name, has_item_drop AS "hasItemDrop" FROM skills ORDER BY name');
 }
 
 function auditSelect(entityAlias: string, createdAlias = 'created_user', updatedAlias = 'updated_user'): string {
@@ -115,6 +126,10 @@ function configOrder(definition: ConfigDefinition): string {
     .split(', ')
     .map((column) => `c.${column}`)
     .join(', ');
+}
+
+function configSelect(definition: ConfigDefinition): string {
+  return definition.hasItemDrop ? 'c.id, c.name, c.has_item_drop AS "hasItemDrop"' : 'c.id, c.name';
 }
 
 function validationError(message: string): ValidationError {
@@ -209,7 +224,7 @@ const pokemonProjection = `
     ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
     json_build_object('id', e.id, 'name', e.name) AS environment,
     COALESCE((
-      SELECT json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name)
+      SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'hasItemDrop', s.has_item_drop) ORDER BY s.name)
       FROM pokemon_skills ps
       JOIN skills s ON s.id = ps.skill_id
       WHERE ps.pokemon_id = p.id
@@ -235,7 +250,7 @@ export async function getOptions() {
     acquisitionMethods,
     maps
   ] = await Promise.all([
-    optionSelect('skills'),
+    skillOptions(),
     optionSelect('environments'),
     optionSelect('favorite_things'),
     optionSelect('item_categories'),
@@ -264,7 +279,7 @@ export async function listConfig(type: ConfigType) {
   const definition = configDefinitions[type];
   return query(
     `
-      SELECT c.id, c.name, ${auditSelect('c')}
+      SELECT ${configSelect(definition)}, ${auditSelect('c')}
       FROM ${definition.table} c
       ${auditJoins('c')}
       ORDER BY ${configOrder(definition)}
@@ -276,7 +291,7 @@ async function getConfigById(type: ConfigType, id: number) {
   const definition = configDefinitions[type];
   return queryOne(
     `
-      SELECT c.id, c.name, ${auditSelect('c')}
+      SELECT ${configSelect(definition)}, ${auditSelect('c')}
       FROM ${definition.table} c
       ${auditJoins('c')}
       WHERE c.id = $1
@@ -288,16 +303,26 @@ async function getConfigById(type: ConfigType, id: number) {
 export async function createConfig(type: ConfigType, payload: Record<string, unknown>, userId: number) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
+  const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
 
   const id = await withTransaction(async (client) => {
-    const result = await client.query<{ id: number }>(
-      `
-        INSERT INTO ${definition.table} (name, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $2)
-        RETURNING id
-      `,
-      [name, userId]
-    );
+    const result = definition.hasItemDrop
+      ? await client.query<{ id: number }>(
+          `
+            INSERT INTO ${definition.table} (name, has_item_drop, created_by_user_id, updated_by_user_id)
+            VALUES ($1, $2, $3, $3)
+            RETURNING id
+          `,
+          [name, hasItemDrop, userId]
+        )
+      : await client.query<{ id: number }>(
+          `
+            INSERT INTO ${definition.table} (name, created_by_user_id, updated_by_user_id)
+            VALUES ($1, $2, $2)
+            RETURNING id
+          `,
+          [name, userId]
+        );
 
     const createdId = result.rows[0].id;
     await recordEditLog(client, type, createdId, 'create', userId);
@@ -310,19 +335,33 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
 export async function updateConfig(type: ConfigType, id: number, payload: Record<string, unknown>, userId: number) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
+  const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
 
   const updated = await withTransaction(async (client) => {
-    const result = await client.query(
-      `
-        UPDATE ${definition.table}
-        SET name = $1, updated_by_user_id = $2, updated_at = now()
-        WHERE id = $3
-      `,
-      [name, userId, id]
-    );
+    const result = definition.hasItemDrop
+      ? await client.query(
+          `
+            UPDATE ${definition.table}
+            SET name = $1, has_item_drop = $2, updated_by_user_id = $3, updated_at = now()
+            WHERE id = $4
+          `,
+          [name, hasItemDrop, userId, id]
+        )
+      : await client.query(
+          `
+            UPDATE ${definition.table}
+            SET name = $1, updated_by_user_id = $2, updated_at = now()
+            WHERE id = $3
+          `,
+          [name, userId, id]
+        );
 
     if (result.rowCount === 0) {
       return false;
+    }
+
+    if (definition.hasItemDrop && !hasItemDrop) {
+      await client.query('DELETE FROM pokemon_skill_item_drops WHERE skill_id = $1', [id]);
     }
 
     await recordEditLog(client, type, id, 'update', userId);
@@ -399,30 +438,58 @@ export async function getPokemon(id: number) {
     return null;
   }
 
-  const habitats = await query(
-    `
-      SELECT
-        h.id,
-        h.name,
-        hp.time_of_day,
-        hp.weather,
-        hp.rarity,
-        json_build_object('id', m.id, 'name', m.name) AS map
-      FROM habitat_pokemon hp
-      JOIN habitats h ON h.id = hp.habitat_id
-      JOIN maps m ON m.id = hp.map_id
-      WHERE hp.pokemon_id = $1
-      ORDER BY h.name, hp.rarity, m.name
-    `,
-    [id]
-  );
+  const [habitats, itemDrops] = await Promise.all([
+    query(
+      `
+        SELECT
+          h.id,
+          h.name,
+          hp.time_of_day,
+          hp.weather,
+          hp.rarity,
+          json_build_object('id', m.id, 'name', m.name) AS map
+        FROM habitat_pokemon hp
+        JOIN habitats h ON h.id = hp.habitat_id
+        JOIN maps m ON m.id = hp.map_id
+        WHERE hp.pokemon_id = $1
+        ORDER BY h.name, hp.rarity, m.name
+      `,
+      [id]
+    ),
+    query<{ skillId: number; id: number; name: string }>(
+      `
+        SELECT psid.skill_id AS "skillId", i.id, i.name
+        FROM pokemon_skill_item_drops psid
+        JOIN skills s ON s.id = psid.skill_id
+        JOIN items i ON i.id = psid.item_id
+        WHERE psid.pokemon_id = $1
+          AND s.has_item_drop = true
+        ORDER BY psid.skill_id, i.name
+      `,
+      [id]
+    )
+  ]);
 
-  return { ...pokemon, habitats };
+  const dropsBySkill = itemDrops.reduce((itemsBySkill, item) => {
+    itemsBySkill.set(item.skillId, { id: item.id, name: item.name });
+    return itemsBySkill;
+  }, new Map<number, { id: number; name: string }>());
+
+  const skills = Array.isArray(pokemon.skills)
+    ? pokemon.skills.map((skill: { id: number; name: string }) => ({
+        ...skill,
+        itemDrop: dropsBySkill.get(skill.id) ?? null
+      }))
+    : [];
+
+  return { ...pokemon, skills, habitats };
 }
 
 function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   const skillIds = cleanIds(payload.skillIds);
   const favoriteThingIds = cleanIds(payload.favoriteThingIds);
+  const selectedSkillIds = new Set(skillIds);
+  const skillItemDrops = new Map<string, SkillItemDrop>();
 
   if (skillIds.length > 2) {
     throw validationError('特长最多选择 2 个');
@@ -431,16 +498,36 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
     throw validationError('喜欢的东西最多选择 6 个');
   }
 
+  if (Array.isArray(payload.skillItemDrops)) {
+    for (const item of payload.skillItemDrops) {
+      const row = item as Record<string, unknown>;
+      const skillId = Number(row.skillId);
+      const itemId = Number(row.itemId);
+
+      if (!Number.isInteger(itemId) || itemId <= 0) {
+        continue;
+      }
+
+      if (!Number.isInteger(skillId) || skillId <= 0 || !selectedSkillIds.has(skillId)) {
+        throw validationError('掉落物品必须关联已选择的特长');
+      }
+
+      skillItemDrops.set(String(skillId), { skillId, itemId });
+    }
+  }
+
   return {
     id: requirePositiveInteger(payload.id, '请输入 Pokemon ID'),
     name: cleanName(payload.name, '请输入 Pokemon 名字'),
     environmentId: requirePositiveInteger(payload.environmentId, '请选择喜欢的环境'),
     skillIds,
-    favoriteThingIds
+    favoriteThingIds,
+    skillItemDrops: [...skillItemDrops.values()]
   };
 }
 
 async function replacePokemonRelations(client: DbClient, pokemonId: number, payload: PokemonPayload): Promise<void> {
+  await client.query('DELETE FROM pokemon_skill_item_drops WHERE pokemon_id = $1', [pokemonId]);
   await client.query('DELETE FROM pokemon_skills WHERE pokemon_id = $1', [pokemonId]);
   await client.query('DELETE FROM pokemon_favorite_things WHERE pokemon_id = $1', [pokemonId]);
 
@@ -453,6 +540,25 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
       pokemonId,
       favoriteThingId
     ]);
+  }
+
+  if (payload.skillItemDrops.length > 0) {
+    const allowedDrops = await client.query<{ id: number }>(
+      'SELECT id FROM skills WHERE id = ANY($1::integer[]) AND has_item_drop = true',
+      [payload.skillItemDrops.map((drop) => drop.skillId)]
+    );
+    const allowedDropSkillIds = new Set(allowedDrops.rows.map((row) => row.id));
+
+    if (payload.skillItemDrops.some((drop) => !allowedDropSkillIds.has(drop.skillId))) {
+      throw validationError('该特长不能配置掉落物');
+    }
+  }
+
+  for (const drop of payload.skillItemDrops) {
+    await client.query(
+      'INSERT INTO pokemon_skill_item_drops (pokemon_id, skill_id, item_id) VALUES ($1, $2, $3)',
+      [pokemonId, drop.skillId, drop.itemId]
+    );
   }
 }
 
@@ -758,7 +864,7 @@ export async function getItem(id: number) {
     return null;
   }
 
-  const [acquisitionMethods, recipe, relatedHabitats] = await Promise.all([
+  const [acquisitionMethods, recipe, relatedHabitats, droppedByPokemon] = await Promise.all([
     query(
       `
         SELECT am.id, am.name
@@ -804,10 +910,24 @@ export async function getItem(id: number) {
         ORDER BY h.name
       `,
       [id]
+    ),
+    query(
+      `
+        SELECT
+          json_build_object('id', p.id, 'name', p.name) AS pokemon,
+          json_build_object('id', s.id, 'name', s.name) AS skill
+        FROM pokemon_skill_item_drops psid
+        JOIN pokemon p ON p.id = psid.pokemon_id
+        JOIN skills s ON s.id = psid.skill_id
+        WHERE psid.item_id = $1
+          AND s.has_item_drop = true
+        ORDER BY p.id, s.name
+      `,
+      [id]
     )
   ]);
 
-  return { ...item, acquisitionMethods, recipe, relatedHabitats };
+  return { ...item, acquisitionMethods, recipe, relatedHabitats, droppedByPokemon };
 }
 
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {

@@ -854,6 +854,20 @@ button:disabled,
   font-weight: 750;
 }
 
+.config-flag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-left: 8px;
+  padding: 3px 7px;
+  border: 1px solid rgba(42, 117, 187, 0.24);
+  border-radius: var(--radius-small);
+  background: var(--surface-soft);
+  color: var(--pokemon-blue-deep);
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -942,6 +956,14 @@ button:disabled,
 
 .row-list li:last-child {
   border-bottom: 0;
+}
+
+.skill-drop-summary li {
+  align-items: flex-start;
+}
+
+.skill-drop-summary .chips {
+  justify-content: flex-end;
 }
 
 .appearance-list li {
@@ -1164,6 +1186,24 @@ button:disabled,
 
 .inline-row input {
   width: 90px;
+}
+
+.skill-drop-list {
+  display: grid;
+  gap: 10px;
+}
+
+.skill-drop-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.skill-drop-row label {
+  margin: 0;
 }
 
 .check-row label {

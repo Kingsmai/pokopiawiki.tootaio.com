@@ -74,6 +74,7 @@ const habitatRows = computed<HabitatRow[]>(() => {
     maps: [...row.maps].sort((a, b) => a.localeCompare(b))
   }));
 });
+const skillDropRows = computed(() => pokemon.value?.skills.filter((skill) => skill.itemDrop) ?? []);
 
 onMounted(async () => {
   pokemon.value = await api.pokemonDetail(String(route.params.id));
@@ -152,6 +153,15 @@ onMounted(async () => {
     <div class="detail-grid">
       <DetailSection title="特长">
         <EntityChips :items="pokemon.skills" />
+      </DetailSection>
+
+      <DetailSection v-if="skillDropRows.length" title="特长掉落物">
+        <ul class="row-list skill-drop-summary">
+          <li v-for="skill in skillDropRows" :key="skill.id">
+            <span>{{ skill.name }}掉落物</span>
+            <RouterLink v-if="skill.itemDrop" :to="`/items/${skill.itemDrop.id}`">{{ skill.itemDrop.name }}</RouterLink>
+          </li>
+        </ul>
       </DetailSection>
 
       <DetailSection title="喜欢的东西">

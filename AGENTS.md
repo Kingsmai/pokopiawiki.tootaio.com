@@ -14,12 +14,23 @@
 For any non-trivial task:
 
 1. **Read `DESIGN.md`**
-2. **Produce a short plan (no code)**
-3. Wait for approval
-4. Implement in small steps
-5. Run lightweight validation when practical (lint/typecheck). Do not run tests in WSL.
+2. For UI, component, layout, or styling tasks, **also read `DesignGuidelines.html`**
+3. **Produce a short plan (no code)**
+4. Wait for approval
+5. Implement in small steps
+6. Run lightweight validation when practical (lint/typecheck). Do not run tests in WSL.
 
 Do NOT skip planning.
+
+---
+
+## UI Design Guidelines
+
+* Use `DesignGuidelines.html` as the reference for UI design, visual style, and component behavior.
+* Prefer reusing existing components that already match the guidelines.
+* If a needed component does not exist, create the smallest necessary component based on `DesignGuidelines.html`.
+* Existing components may be upgraded to match `DesignGuidelines.html`, but only when directly related to the task.
+* Do not introduce broad UI rewrites, new design systems, or extra abstraction layers unless explicitly required.
 
 ---
 

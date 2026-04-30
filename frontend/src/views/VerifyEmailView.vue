@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
+import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import { api } from '../services/api';
 
@@ -37,11 +38,15 @@ onMounted(async () => {
         <template #kicker>Trainer Pass</template>
       </PageHeader>
 
-      <StatusMessage v-if="busy" :duration="0">正在验证邮箱</StatusMessage>
+      <div v-if="busy" class="skeleton-auth-state" aria-busy="true" aria-label="正在验证邮箱">
+        <Skeleton width="62%" />
+        <Skeleton width="84%" />
+        <Skeleton variant="box" width="110px" height="44px" />
+      </div>
       <StatusMessage v-else-if="message" variant="success">{{ message }}</StatusMessage>
       <StatusMessage v-else variant="danger">{{ errorMessage }}</StatusMessage>
 
-      <RouterLink class="ui-button ui-button--primary" to="/login">去登录</RouterLink>
+      <RouterLink v-if="!busy" class="ui-button ui-button--primary" to="/login">去登录</RouterLink>
     </div>
   </section>
 </template>

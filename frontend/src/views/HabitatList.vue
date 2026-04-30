@@ -4,11 +4,12 @@ import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
 import PageHeader from '../components/PageHeader.vue';
-import StatusMessage from '../components/StatusMessage.vue';
+import Skeleton from '../components/Skeleton.vue';
 import { api, type Habitat } from '../services/api';
 
 const habitats = ref<Habitat[]>([]);
 const loading = ref(true);
+const skeletonCardCount = 6;
 
 onMounted(async () => {
   habitats.value = await api.habitats();
@@ -22,7 +23,21 @@ onMounted(async () => {
       <template #kicker>Habitats</template>
     </PageHeader>
 
-    <StatusMessage v-if="loading" :duration="0">加载中</StatusMessage>
+    <div v-if="loading" class="entity-grid" aria-busy="true" aria-label="正在加载栖息地列表">
+      <article v-for="index in skeletonCardCount" :key="index" class="entity-card entity-card--skeleton">
+        <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
+        <div class="entity-card__content">
+          <Skeleton width="68%" height="24px" />
+          <Skeleton width="66%" />
+          <div class="skeleton-chip-row">
+            <Skeleton v-for="chipIndex in 3" :key="`recipe-${chipIndex}`" width="70px" class="skeleton-chip" />
+          </div>
+          <div class="skeleton-chip-row">
+            <Skeleton v-for="chipIndex in 2" :key="`pokemon-${chipIndex}`" width="82px" class="skeleton-chip" />
+          </div>
+        </div>
+      </article>
+    </div>
     <div v-else class="entity-grid">
       <EntityCard v-for="item in habitats" :key="item.id" :title="item.name" :to="`/habitats/${item.id}`" marker="◎">
         <EditMeta :entity="item" />

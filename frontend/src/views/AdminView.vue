@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import PageHeader from '../components/PageHeader.vue';
+import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import {
@@ -64,6 +65,7 @@ const recipeRows = ref<Recipe[]>([]);
 const habitatRows = ref<Habitat[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
+const contentLoading = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
 
@@ -99,6 +101,7 @@ const pokemonSelectOptions = computed(() =>
   pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.id} ${pokemon.name}` }))
 );
 const canEdit = computed(() => currentUser.value?.emailVerified === true);
+const showAdminSkeleton = computed(() => busy.value && !message.value && (!currentUser.value || contentLoading.value));
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -168,18 +171,29 @@ async function loadHabitats() {
   habitatRows.value = await api.habitats();
 }
 
-async function loadCurrentTab() {
-  await loadOptions();
-  if (activeTab.value === 'config') await loadConfig();
-  if (activeTab.value === 'pokemon') await loadPokemon();
-  if (activeTab.value === 'items') {
-    await Promise.all([loadItems(), loadRecipes()]);
+async function loadCurrentTab(showSkeleton = false) {
+  const shouldShowSkeleton = showSkeleton || !options.value;
+  if (shouldShowSkeleton) {
+    contentLoading.value = true;
   }
-  if (activeTab.value === 'recipes') {
-    await Promise.all([loadRecipes(), loadItems()]);
-  }
-  if (activeTab.value === 'habitats') {
-    await Promise.all([loadHabitats(), loadPokemon(), loadItems()]);
+
+  try {
+    await loadOptions();
+    if (activeTab.value === 'config') await loadConfig();
+    if (activeTab.value === 'pokemon') await loadPokemon();
+    if (activeTab.value === 'items') {
+      await Promise.all([loadItems(), loadRecipes()]);
+    }
+    if (activeTab.value === 'recipes') {
+      await Promise.all([loadRecipes(), loadItems()]);
+    }
+    if (activeTab.value === 'habitats') {
+      await Promise.all([loadHabitats(), loadPokemon(), loadItems()]);
+    }
+  } finally {
+    if (shouldShowSkeleton) {
+      contentLoading.value = false;
+    }
   }
 }
 
@@ -190,7 +204,7 @@ function setTab(tab: AdminTab) {
   }
 
   activeTab.value = tab;
-  void run(loadCurrentTab);
+  void run(() => loadCurrentTab(true));
 }
 
 async function loadAdmin() {
@@ -202,7 +216,7 @@ async function loadAdmin() {
     return;
   }
 
-  await loadCurrentTab();
+  await loadCurrentTab(true);
 }
 
 function resetConfigForm() {
@@ -482,7 +496,36 @@ onMounted(() => {
 
     <StatusMessage v-if="message" variant="warning">{{ message }}</StatusMessage>
 
-    <section v-if="canEdit && activeTab === 'config'" class="admin-layout">
+    <section v-if="showAdminSkeleton" class="admin-layout" aria-busy="true" aria-label="正在加载管理内容">
+      <div class="detail-section skeleton-detail-section" aria-hidden="true">
+        <h2><Skeleton width="96px" height="24px" /></h2>
+        <div class="skeleton-form-stack">
+          <div v-for="index in 5" :key="index" class="field">
+            <Skeleton :width="index === 1 ? '52px' : '72px'" />
+            <Skeleton variant="box" height="44px" />
+          </div>
+          <div class="form-actions">
+            <Skeleton variant="box" width="64px" height="42px" />
+            <Skeleton variant="box" width="64px" height="42px" />
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section skeleton-detail-section" aria-hidden="true">
+        <h2><Skeleton width="120px" height="24px" /></h2>
+        <ul class="row-list skeleton-row-list">
+          <li v-for="index in 6" :key="index">
+            <Skeleton :width="index % 2 === 0 ? '180px' : '132px'" />
+            <span class="row-actions">
+              <Skeleton variant="box" width="50px" height="34px" />
+              <Skeleton variant="box" width="50px" height="34px" />
+            </span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'config'" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveConfig">
         <h2>系统配置</h2>
         <div class="field">
@@ -519,7 +562,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="canEdit && activeTab === 'pokemon' && options" class="admin-layout">
+    <section v-else-if="canEdit && activeTab === 'pokemon' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="savePokemon">
         <h2>Pokemon</h2>
         <div class="field"><label for="pokemon-id">ID</label><input id="pokemon-id" v-model="pokemonForm.id" type="number" /></div>
@@ -581,7 +624,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="canEdit && activeTab === 'items' && options" class="admin-layout">
+    <section v-else-if="canEdit && activeTab === 'items' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveItem">
         <h2>物品</h2>
         <div class="field"><label for="item-name">名称</label><input id="item-name" v-model="itemForm.name" /></div>
@@ -656,7 +699,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="canEdit && activeTab === 'recipes' && options" class="admin-layout">
+    <section v-else-if="canEdit && activeTab === 'recipes' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveRecipe">
         <h2>材料单</h2>
         <div class="field">
@@ -718,7 +761,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="canEdit && activeTab === 'habitats' && options" class="admin-layout">
+    <section v-else-if="canEdit && activeTab === 'habitats' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveHabitat">
         <h2>栖息地</h2>
         <div class="field"><label for="habitat-name">名称</label><input id="habitat-name" v-model="habitatForm.name" /></div>

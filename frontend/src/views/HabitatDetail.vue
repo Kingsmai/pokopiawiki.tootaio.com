@@ -5,7 +5,7 @@ import DetailSection from '../components/DetailSection.vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
-import StatusMessage from '../components/StatusMessage.vue';
+import Skeleton from '../components/Skeleton.vue';
 import { api, type HabitatDetail } from '../services/api';
 
 const route = useRoute();
@@ -81,7 +81,51 @@ onMounted(async () => {
 </script>
 
 <template>
-  <StatusMessage v-if="!habitat" :duration="0">加载中</StatusMessage>
+  <section v-if="!habitat" class="page-stack" aria-busy="true" aria-label="正在加载栖息地详情">
+    <div class="page-header page-header--skeleton" aria-hidden="true">
+      <div class="page-header__copy">
+        <Skeleton width="132px" />
+        <Skeleton width="240px" height="46px" />
+        <Skeleton width="120px" />
+        <Skeleton width="300px" />
+      </div>
+      <div class="page-header__actions">
+        <Skeleton variant="box" width="88px" height="36px" />
+      </div>
+    </div>
+
+    <div class="detail-grid" aria-hidden="true">
+      <section class="detail-section skeleton-detail-section">
+        <div class="detail-section__header">
+          <Skeleton width="92px" height="24px" />
+        </div>
+        <div class="detail-section__body">
+          <div class="skeleton-chip-row">
+            <Skeleton v-for="index in 4" :key="index" width="76px" class="skeleton-chip" />
+          </div>
+        </div>
+      </section>
+
+      <section class="detail-section skeleton-detail-section">
+        <div class="detail-section__header">
+          <Skeleton width="148px" height="24px" />
+        </div>
+        <div class="detail-section__body">
+          <ul class="row-list appearance-list skeleton-row-list">
+            <li v-for="index in 3" :key="index" class="skeleton-appearance-row">
+              <Skeleton width="104px" />
+              <div class="skeleton-summary">
+                <div v-for="line in 4" :key="line">
+                  <Skeleton width="56px" />
+                  <Skeleton :width="line === 4 ? '72%' : '46%'" />
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </section>
   <section v-else class="page-stack">
     <PageHeader :title="habitat.name" subtitle="栖息地详情">
       <template #kicker>Habitat Detail</template>

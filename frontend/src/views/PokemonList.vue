@@ -5,7 +5,7 @@ import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
 import PageHeader from '../components/PageHeader.vue';
-import StatusMessage from '../components/StatusMessage.vue';
+import Skeleton from '../components/Skeleton.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Options, type Pokemon } from '../services/api';
 
@@ -18,6 +18,8 @@ const skillIds = ref<string[]>([]);
 const skillMode = ref<'any' | 'all'>('any');
 const favoriteThingIds = ref<string[]>([]);
 const favoriteThingMode = ref<'any' | 'all'>('any');
+const filterSkeletonWidths = ['52px', '92px', '48px', '72px'];
+const skeletonCardCount = 6;
 
 const query = computed(() => ({
   search: search.value,
@@ -88,8 +90,33 @@ watch(query, loadPokemon);
         </div>
       </div>
     </FilterPanel>
+    <FilterPanel v-else class="filter-panel--skeleton" aria-hidden="true">
+      <div v-for="(width, index) in filterSkeletonWidths" :key="index" class="field">
+        <Skeleton :width="width" />
+        <Skeleton variant="box" height="44px" />
+        <div v-if="index > 1" class="segmented">
+          <Skeleton variant="box" width="52px" height="34px" />
+          <Skeleton variant="box" width="52px" height="34px" />
+        </div>
+      </div>
+    </FilterPanel>
 
-    <StatusMessage v-if="loading" :duration="0">加载中</StatusMessage>
+    <div v-if="loading" class="entity-grid" aria-busy="true" aria-label="正在加载 Pokemon 列表">
+      <article v-for="index in skeletonCardCount" :key="index" class="entity-card entity-card--skeleton">
+        <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
+        <div class="entity-card__content">
+          <Skeleton width="76%" height="24px" />
+          <Skeleton width="58%" />
+          <Skeleton width="68%" />
+          <div class="skeleton-chip-row">
+            <Skeleton v-for="chipIndex in 2" :key="`skills-${chipIndex}`" width="64px" class="skeleton-chip" />
+          </div>
+          <div class="skeleton-chip-row">
+            <Skeleton v-for="chipIndex in 3" :key="`things-${chipIndex}`" width="72px" class="skeleton-chip" />
+          </div>
+        </div>
+      </article>
+    </div>
     <div v-else class="entity-grid">
       <EntityCard
         v-for="item in pokemon"

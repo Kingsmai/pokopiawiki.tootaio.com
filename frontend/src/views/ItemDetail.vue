@@ -5,7 +5,7 @@ import DetailSection from '../components/DetailSection.vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
-import StatusMessage from '../components/StatusMessage.vue';
+import Skeleton from '../components/Skeleton.vue';
 import { api, type ItemDetail } from '../services/api';
 
 const route = useRoute();
@@ -29,7 +29,58 @@ onMounted(async () => {
 </script>
 
 <template>
-  <StatusMessage v-if="!item" :duration="0">加载中</StatusMessage>
+  <section v-if="!item" class="page-stack" aria-busy="true" aria-label="正在加载物品详情">
+    <div class="page-header page-header--skeleton" aria-hidden="true">
+      <div class="page-header__copy">
+        <Skeleton width="96px" />
+        <Skeleton width="260px" height="46px" />
+        <Skeleton width="220px" />
+        <Skeleton width="300px" />
+      </div>
+      <div class="page-header__actions">
+        <Skeleton variant="box" width="88px" height="36px" />
+      </div>
+    </div>
+
+    <div class="detail-grid" aria-hidden="true">
+      <section v-for="index in 3" :key="`chips-${index}`" class="detail-section skeleton-detail-section">
+        <div class="detail-section__header">
+          <Skeleton :width="index === 2 ? '68px' : '92px'" height="24px" />
+        </div>
+        <div class="detail-section__body">
+          <div class="skeleton-chip-row">
+            <Skeleton v-for="chipIndex in 3" :key="chipIndex" width="82px" class="skeleton-chip" />
+          </div>
+        </div>
+      </section>
+
+      <section class="detail-section skeleton-detail-section">
+        <div class="detail-section__header">
+          <Skeleton width="112px" height="24px" />
+        </div>
+        <div class="detail-section__body">
+          <Skeleton width="45%" />
+          <div class="skeleton-chip-row">
+            <Skeleton v-for="index in 3" :key="index" width="76px" class="skeleton-chip" />
+          </div>
+        </div>
+      </section>
+
+      <section class="detail-section skeleton-detail-section">
+        <div class="detail-section__header">
+          <Skeleton width="108px" height="24px" />
+        </div>
+        <div class="detail-section__body">
+          <ul class="row-list skeleton-row-list">
+            <li v-for="index in 3" :key="index">
+              <Skeleton width="120px" />
+              <Skeleton width="44px" />
+            </li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </section>
   <section v-else class="page-stack">
     <PageHeader :title="item.name" :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name">
       <template #kicker>Item Detail</template>

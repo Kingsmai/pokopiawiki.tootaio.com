@@ -300,7 +300,7 @@ svg {
 .plain-button,
 .row-actions button,
 .inline-row button,
-.appearance-row button {
+.appearance-row__delete {
   --btn-bg: var(--surface);
   --btn-fg: var(--ink);
   --btn-border: var(--line-strong);
@@ -333,7 +333,7 @@ svg {
 .plain-button:hover,
 .row-actions button:hover,
 .inline-row button:hover,
-.appearance-row button:hover {
+.appearance-row__delete:hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 0 var(--line-strong);
 }
@@ -344,7 +344,7 @@ svg {
 .plain-button:active,
 .row-actions button:active,
 .inline-row button:active,
-.appearance-row button:active {
+.appearance-row__delete:active {
   transform: translateY(2px);
   box-shadow: 0 1px 0 var(--line-strong);
 }
@@ -370,7 +370,7 @@ svg {
 .plain-button,
 .row-actions button,
 .inline-row button,
-.appearance-row button {
+.appearance-row__delete {
   --btn-bg: var(--surface);
   --btn-border: var(--line);
   box-shadow: none;
@@ -1165,7 +1165,7 @@ button:disabled,
 
 .row-actions button,
 .inline-row button,
-.appearance-row button {
+.appearance-row__delete {
   min-height: 34px;
   padding: 6px 10px;
   font-size: 14px;
@@ -1225,6 +1225,7 @@ button:disabled,
 .appearance-row {
   display: grid;
   grid-template-columns: 1fr;
+  gap: 12px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -1233,6 +1234,134 @@ button:disabled,
 
 .appearance-row input {
   min-width: 64px;
+}
+
+.appearance-row__main {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.2fr) minmax(240px, 1fr) minmax(180px, 0.9fr) 82px max-content;
+  gap: 12px;
+  align-items: start;
+}
+
+.appearance-row__pokemon,
+.appearance-row__maps,
+.appearance-row__rarity,
+.appearance-row__main .switch-group {
+  min-width: 0;
+  width: 100%;
+}
+
+.appearance-row__rarity input {
+  width: 100%;
+}
+
+.appearance-row__delete {
+  align-self: end;
+  justify-self: end;
+  min-height: 32px;
+  padding: 5px 9px;
+  font-size: 13px;
+}
+
+.appearance-row .tags-select,
+.appearance-row .tags-select__trigger {
+  width: 100%;
+}
+
+.switch-group {
+  min-width: 0;
+  min-inline-size: 0;
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.switch-group legend {
+  padding: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.switch-group__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.switch-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  color: var(--ink-soft);
+  font-weight: 850;
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch-control--stacked {
+  min-width: 62px;
+  align-items: center;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.switch-control__label {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.switch-control input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  min-width: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.switch-track {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 0.16s ease;
+}
+
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+  transition: transform 0.16s ease;
+}
+
+.switch-control input:focus-visible + .switch-track {
+  box-shadow: 0 0 0 4px rgba(42, 117, 187, 0.16);
+}
+
+.switch-control input:checked + .switch-track {
+  background: var(--pokemon-blue);
+}
+
+.switch-control input:checked + .switch-track::after {
+  transform: translateX(20px);
 }
 
 @media (max-width: 900px) {
@@ -1270,6 +1399,10 @@ button:disabled,
   .detail-grid,
   .admin-layout {
     grid-template-columns: 1fr;
+  }
+
+  .appearance-row__main {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1321,5 +1454,9 @@ button:disabled,
   .inline-row input,
   .inline-row .tags-select {
     width: 100%;
+  }
+
+  .appearance-row__main {
+    grid-template-columns: 1fr;
   }
 }

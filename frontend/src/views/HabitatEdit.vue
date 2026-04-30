@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import SwitchGroup from '../components/SwitchGroup.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import {
   api,
@@ -40,8 +41,8 @@ const habitatForm = ref({
 
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
-const timeOfDayOptions = timeOfDays.map((name) => ({ id: name, name }));
-const weatherOptions = weathers.map((name) => ({ id: name, name }));
+const timeOfDayOptions = timeOfDays.map((value) => ({ value, label: value }));
+const weatherOptions = weathers.map((value) => ({ value, label: value }));
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
 const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
@@ -220,27 +221,41 @@ onMounted(() => {
       <div class="field">
         <label>可出现的 Pokemon</label>
         <div v-for="(row, index) in habitatForm.pokemonAppearances" :key="index" class="appearance-row">
-          <TagsSelect
-            :id="`appearance-pokemon-${index}`"
-            v-model="row.pokemonId"
-            :options="pokemonSelectOptions"
-            :multiple="false"
-            placeholder="Pokemon"
-            search-placeholder="搜索 Pokemon"
-          />
-          <TagsSelect
-            :id="`appearance-maps-${index}`"
-            v-model="row.mapIds"
-            :options="options.maps"
-            allow-create
-            :creating="creatingSelect === `appearance-maps-${index}`"
-            placeholder="搜索地图"
-            @create="createMultiOption(`appearance-maps-${index}`, 'maps', $event, row.mapIds)"
-          />
-          <TagsSelect :id="`appearance-times-${index}`" v-model="row.timeOfDays" :options="timeOfDayOptions" placeholder="搜索时间" />
-          <TagsSelect :id="`appearance-weathers-${index}`" v-model="row.weathers" :options="weatherOptions" placeholder="搜索天气" />
-          <input v-model.number="row.rarity" aria-label="稀有度" type="number" min="1" max="3" />
-          <button type="button" @click="habitatForm.pokemonAppearances.splice(index, 1)">删除</button>
+          <div class="appearance-row__main">
+            <div class="field appearance-row__pokemon">
+              <label :for="`appearance-pokemon-${index}`">Pokemon</label>
+              <TagsSelect
+                :id="`appearance-pokemon-${index}`"
+                v-model="row.pokemonId"
+                :options="pokemonSelectOptions"
+                :multiple="false"
+                placeholder="Pokemon"
+                search-placeholder="搜索 Pokemon"
+              />
+            </div>
+            <SwitchGroup :id="`appearance-times-${index}`" v-model="row.timeOfDays" label="时间" :options="timeOfDayOptions" />
+            <SwitchGroup :id="`appearance-weathers-${index}`" v-model="row.weathers" label="天气" :options="weatherOptions" />
+
+            <div class="field appearance-row__rarity">
+              <label :for="`appearance-rarity-${index}`">稀有度</label>
+              <input :id="`appearance-rarity-${index}`" v-model.number="row.rarity" type="number" min="1" max="3" />
+            </div>
+
+            <button type="button" class="appearance-row__delete" @click="habitatForm.pokemonAppearances.splice(index, 1)">删除</button>
+          </div>
+
+          <div class="field appearance-row__maps">
+            <label :for="`appearance-maps-${index}`">地图</label>
+            <TagsSelect
+              :id="`appearance-maps-${index}`"
+              v-model="row.mapIds"
+              :options="options.maps"
+              allow-create
+              :creating="creatingSelect === `appearance-maps-${index}`"
+              placeholder="搜索地图"
+              @create="createMultiOption(`appearance-maps-${index}`, 'maps', $event, row.mapIds)"
+            />
+          </div>
         </div>
         <button type="button" class="plain-button" @click="addPokemonAppearance">添加 Pokemon</button>
       </div>

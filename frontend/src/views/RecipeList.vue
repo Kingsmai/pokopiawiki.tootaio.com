@@ -43,6 +43,9 @@ watch(recipeQuery, loadRecipes);
   <section class="page-stack">
     <PageHeader title="材料单" subtitle="按分类浏览材料单和需要材料。">
       <template #kicker>Recipes</template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/recipes/new">新增</RouterLink>
+      </template>
     </PageHeader>
 
     <Tabs v-if="options" id="recipe-category" v-model="categoryId" :tabs="categoryTabs" label="分类" />

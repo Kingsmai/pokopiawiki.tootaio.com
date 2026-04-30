@@ -88,6 +88,7 @@ onMounted(async () => {
         <EditMeta :entity="item" />
       </template>
       <template #actions>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">编辑</RouterLink>
         <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">返回列表</RouterLink>
       </template>
     </PageHeader>

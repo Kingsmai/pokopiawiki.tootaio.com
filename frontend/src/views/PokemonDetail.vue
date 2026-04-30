@@ -144,6 +144,7 @@ onMounted(async () => {
         <EditMeta :entity="pokemon" />
       </template>
       <template #actions>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">编辑</RouterLink>
         <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">返回列表</RouterLink>
       </template>
     </PageHeader>

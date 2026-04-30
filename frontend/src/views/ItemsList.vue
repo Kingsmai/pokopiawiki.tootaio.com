@@ -52,6 +52,9 @@ watch(itemQuery, loadItems);
   <section class="page-stack">
     <PageHeader title="物品" subtitle="按分类、用途、标签查看物品。">
       <template #kicker>Bag</template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/items/new">新增</RouterLink>
+      </template>
     </PageHeader>
 
     <Tabs v-if="options" id="item-category" v-model="categoryId" :tabs="categoryTabs" label="分类" />

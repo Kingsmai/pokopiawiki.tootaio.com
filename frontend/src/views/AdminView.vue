@@ -3,34 +3,21 @@ import { computed, onMounted, ref } from 'vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
-import TagsSelect from '../components/TagsSelect.vue';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
 import {
   api,
   type AuthUser,
   type ConfigType,
   type Habitat,
-  type HabitatDetail,
-  type HabitatPayload,
   type Item,
-  type ItemPayload,
   type NamedEntity,
-  type Options,
   type Pokemon,
-  type PokemonPayload,
   type Recipe,
-  type RecipePayload,
   type Skill
 } from '../services/api';
 
 type AdminTab = 'config' | 'pokemon' | 'items' | 'recipes' | 'habitats';
 type EditableConfig = (NamedEntity | Skill) & { subcategory?: string | null };
-type HabitatAppearanceForm = {
-  pokemonId: string;
-  mapIds: string[];
-  timeOfDays: string[];
-  weathers: string[];
-  rarity: number;
-};
 
 const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'config', label: '系统配置' },
@@ -40,24 +27,18 @@ const tabs: Array<{ key: AdminTab; label: string }> = [
   { key: 'habitats', label: '栖息地' }
 ];
 
-const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
-const weathers = ['晴天', '阴天', '雨天'];
-const timeOfDayOptions = timeOfDays.map((name) => ({ id: name, name }));
-const weatherOptions = weathers.map((name) => ({ id: name, name }));
-
 const configTypes: Array<{ key: ConfigType; label: string; hasSubcategory?: boolean }> = [
   { key: 'skills', label: '特长', hasSubcategory: true },
   { key: 'environments', label: '喜欢的环境' },
-  { key: 'favorite-things', label: '喜欢的东西' },
-  { key: 'item-categories', label: '物品 / 材料单分类' },
-  { key: 'item-usages', label: '物品 / 材料单用途' },
+  { key: 'favorite-things', label: '喜欢的东西 / 标签' },
+  { key: 'item-categories', label: '物品分类' },
+  { key: 'item-usages', label: '物品用途' },
   { key: 'acquisition-methods', label: '入手方式' },
   { key: 'maps', label: '地图' }
 ];
 
 const activeTab = ref<AdminTab>('config');
 const activeConfigType = ref<ConfigType>('skills');
-const options = ref<Options | null>(null);
 const configRows = ref<EditableConfig[]>([]);
 const pokemonRows = ref<Pokemon[]>([]);
 const itemRows = ref<Item[]>([]);
@@ -67,50 +48,26 @@ const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
 const message = ref('');
-const creatingSelect = ref('');
-
 const configForm = ref({ id: 0, name: '', subcategory: '' });
-const pokemonForm = ref({ id: '', name: '', environmentId: '', skillIds: [] as string[], favoriteThingIds: [] as string[] });
-const itemForm = ref({
-  id: 0,
-  name: '',
-  categoryId: '',
-  usageId: '',
-  dyeable: false,
-  dualDyeable: false,
-  patternEditable: false,
-  acquisitionMethodIds: [] as string[],
-  tagIds: [] as string[]
-});
-const recipeForm = ref({
-  id: 0,
-  itemId: '',
-  acquisitionMethodIds: [] as string[],
-  materials: [] as Array<{ itemId: string; quantity: number }>
-});
-const habitatForm = ref({
-  id: 0,
-  name: '',
-  recipeItems: [] as Array<{ itemId: string; quantity: number }>,
-  pokemonAppearances: [] as HabitatAppearanceForm[]
-});
 
 const selectedConfig = computed(() => configTypes.find((item) => item.key === activeConfigType.value) ?? configTypes[0]);
-const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
-const pokemonSelectOptions = computed(() =>
-  pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.id} ${pokemon.name}` }))
-);
+const configTabs = computed<TabOption[]>(() => configTypes.map((item) => ({ value: item.key, label: item.label })));
+const activeConfigTab = computed({
+  get: () => activeConfigType.value,
+  set: (value: string) => {
+    const nextConfig = configTypes.find((item) => item.key === value);
+    if (!nextConfig || nextConfig.key === activeConfigType.value) return;
+
+    activeConfigType.value = nextConfig.key;
+    resetConfigForm();
+    void run(loadConfig);
+  }
+});
 const canEdit = computed(() => currentUser.value?.emailVerified === true);
 const showAdminSkeleton = computed(() => busy.value && !message.value && (!currentUser.value || contentLoading.value));
 
-function toIds(values: string[]): number[] {
-  return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
-}
-
-function toQuantityRows(rows: Array<{ itemId: string; quantity: number }>) {
-  return rows
-    .map((item) => ({ itemId: Number(item.itemId), quantity: Number(item.quantity) }))
-    .filter((item) => Number.isInteger(item.itemId) && item.itemId > 0 && Number.isInteger(item.quantity) && item.quantity > 0);
+function errorText(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 async function run(action: () => Promise<void>) {
@@ -119,40 +76,40 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (error) {
-    message.value = error instanceof Error && error.message ? error.message : '操作失败';
+    message.value = errorText(error, '操作失败');
   } finally {
     busy.value = false;
   }
-}
-
-async function loadOptions() {
-  options.value = await api.options();
 }
 
 async function loadConfig() {
   configRows.value = (await api.config(activeConfigType.value)) as EditableConfig[];
 }
 
-async function createTagsOption(selectKey: string, type: ConfigType, name: string, values: string[], max = 0) {
-  const cleanName = name.trim();
-  if (!cleanName || (max > 0 && values.length >= max)) return;
+function resetConfigForm() {
+  configForm.value = { id: 0, name: '', subcategory: '' };
+}
 
-  creatingSelect.value = selectKey;
-  try {
-    await run(async () => {
-      const created = await api.createConfig(type, { name: cleanName, subcategory: null });
-      await loadOptions();
-      const value = String(created.id);
-      if (!values.includes(value)) {
-        values.push(value);
-      }
-      if (activeConfigType.value === type) {
-        await loadConfig();
-      }
-    });
-  } finally {
-    creatingSelect.value = '';
-  }
+function editConfig(item: EditableConfig) {
+  configForm.value = { id: item.id, name: item.name, subcategory: item.subcategory ?? '' };
+}
+
+async function saveConfig() {
+  await run(async () => {
+    const payload = {
+      name: configForm.value.name,
+      subcategory: selectedConfig.value.hasSubcategory ? configForm.value.subcategory || null : null
+    };
+
+    if (configForm.value.id) {
+      await api.updateConfig(activeConfigType.value, configForm.value.id, payload);
+    } else {
+      await api.createConfig(activeConfigType.value, payload);
+    }
+
+    resetConfigForm();
+    await loadConfig();
+  });
 }
 
 async function loadPokemon() {
@@ -172,26 +129,18 @@ async function loadHabitats() {
 }
 
 async function loadCurrentTab(showSkeleton = false) {
-  const shouldShowSkeleton = showSkeleton || !options.value;
-  if (shouldShowSkeleton) {
+  if (showSkeleton) {
     contentLoading.value = true;
   }
 
   try {
-    await loadOptions();
     if (activeTab.value === 'config') await loadConfig();
     if (activeTab.value === 'pokemon') await loadPokemon();
-    if (activeTab.value === 'items') {
-      await Promise.all([loadItems(), loadRecipes()]);
-    }
-    if (activeTab.value === 'recipes') {
-      await Promise.all([loadRecipes(), loadItems()]);
-    }
-    if (activeTab.value === 'habitats') {
-      await Promise.all([loadHabitats(), loadPokemon(), loadItems()]);
-    }
+    if (activeTab.value === 'items') await loadItems();
+    if (activeTab.value === 'recipes') await loadRecipes();
+    if (activeTab.value === 'habitats') await loadHabitats();
   } finally {
-    if (shouldShowSkeleton) {
+    if (showSkeleton) {
       contentLoading.value = false;
     }
   }
@@ -219,65 +168,13 @@ async function loadAdmin() {
   await loadCurrentTab(true);
 }
 
-function resetConfigForm() {
-  configForm.value = { id: 0, name: '', subcategory: '' };
-}
-
-function editConfig(item: EditableConfig) {
-  configForm.value = { id: item.id, name: item.name, subcategory: item.subcategory ?? '' };
-}
-
-async function saveConfig() {
-  await run(async () => {
-    const payload = { name: configForm.value.name, subcategory: configForm.value.subcategory || null };
-    if (configForm.value.id) {
-      await api.updateConfig(activeConfigType.value, configForm.value.id, payload);
-    } else {
-      await api.createConfig(activeConfigType.value, payload);
-    }
-    resetConfigForm();
-    await loadCurrentTab();
-  });
-}
-
 async function removeConfig(id: number) {
   await run(async () => {
     await api.deleteConfig(activeConfigType.value, id);
-    await loadCurrentTab();
-  });
-}
-
-function resetPokemonForm() {
-  pokemonForm.value = { id: '', name: '', environmentId: '', skillIds: [], favoriteThingIds: [] };
-}
-
-function editPokemon(item: Pokemon) {
-  pokemonForm.value = {
-    id: String(item.id),
-    name: item.name,
-    environmentId: String(item.environment.id),
-    skillIds: item.skills.map((skill) => String(skill.id)),
-    favoriteThingIds: item.favorite_things.map((thing) => String(thing.id))
-  };
-}
-
-async function savePokemon() {
-  await run(async () => {
-    const payload: PokemonPayload = {
-      id: Number(pokemonForm.value.id),
-      name: pokemonForm.value.name,
-      environmentId: Number(pokemonForm.value.environmentId),
-      skillIds: toIds(pokemonForm.value.skillIds.slice(0, 2)),
-      favoriteThingIds: toIds(pokemonForm.value.favoriteThingIds.slice(0, 6))
-    };
-    const exists = pokemonRows.value.some((item) => item.id === payload.id);
-    if (exists) {
-      await api.updatePokemon(payload.id, payload);
-    } else {
-      await api.createPokemon(payload);
+    if (configForm.value.id === id) {
+      resetConfigForm();
     }
-    resetPokemonForm();
-    await loadPokemon();
+    await loadConfig();
   });
 }
 
@@ -288,59 +185,6 @@ async function removePokemon(id: number) {
   });
 }
 
-function resetItemForm() {
-  itemForm.value = {
-    id: 0,
-    name: '',
-    categoryId: '',
-    usageId: '',
-    dyeable: false,
-    dualDyeable: false,
-    patternEditable: false,
-    acquisitionMethodIds: [],
-    tagIds: []
-  };
-}
-
-async function editItem(item: Item) {
-  await run(async () => {
-    const detail = await api.itemDetail(item.id);
-    itemForm.value = {
-      id: detail.id,
-      name: detail.name,
-      categoryId: String(detail.category.id),
-      usageId: detail.usage ? String(detail.usage.id) : '',
-      dyeable: detail.customization.dyeable,
-      dualDyeable: detail.customization.dualDyeable,
-      patternEditable: detail.customization.patternEditable,
-      acquisitionMethodIds: detail.acquisitionMethods.map((method) => String(method.id)),
-      tagIds: detail.tags.map((tag) => String(tag.id))
-    };
-  });
-}
-
-async function saveItem() {
-  await run(async () => {
-    const payload: ItemPayload = {
-      name: itemForm.value.name,
-      categoryId: Number(itemForm.value.categoryId),
-      usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
-      dyeable: itemForm.value.dyeable,
-      dualDyeable: itemForm.value.dualDyeable,
-      patternEditable: itemForm.value.patternEditable,
-      acquisitionMethodIds: toIds(itemForm.value.acquisitionMethodIds),
-      tagIds: toIds(itemForm.value.tagIds)
-    };
-    if (itemForm.value.id) {
-      await api.updateItem(itemForm.value.id, payload);
-    } else {
-      await api.createItem(payload);
-    }
-    resetItemForm();
-    await loadItems();
-  });
-}
-
 async function removeItem(id: number) {
   await run(async () => {
     await api.deleteItem(id);
@@ -348,125 +192,10 @@ async function removeItem(id: number) {
   });
 }
 
-function resetRecipeForm() {
-  recipeForm.value = { id: 0, itemId: '', acquisitionMethodIds: [], materials: [] };
-}
-
-function addRecipeMaterial() {
-  recipeForm.value.materials.push({ itemId: '', quantity: 1 });
-}
-
-async function editRecipe(item: Recipe) {
-  await run(async () => {
-    const detail = await api.recipeDetail(item.id);
-    recipeForm.value = {
-      id: detail.id,
-      itemId: String(detail.item.id),
-      acquisitionMethodIds: detail.acquisition_methods.map((method) => String(method.id)),
-      materials: detail.materials.map((material) => ({ itemId: String(material.id), quantity: material.quantity }))
-    };
-  });
-}
-
-async function saveRecipe() {
-  await run(async () => {
-    const payload: RecipePayload = {
-      itemId: Number(recipeForm.value.itemId),
-      acquisitionMethodIds: toIds(recipeForm.value.acquisitionMethodIds),
-      materials: toQuantityRows(recipeForm.value.materials)
-    };
-    if (recipeForm.value.id) {
-      await api.updateRecipe(recipeForm.value.id, payload);
-    } else {
-      await api.createRecipe(payload);
-    }
-    resetRecipeForm();
-    await Promise.all([loadRecipes(), loadItems()]);
-  });
-}
-
 async function removeRecipe(id: number) {
   await run(async () => {
     await api.deleteRecipe(id);
     await loadRecipes();
-  });
-}
-
-function resetHabitatForm() {
-  habitatForm.value = { id: 0, name: '', recipeItems: [], pokemonAppearances: [] };
-}
-
-function addHabitatRecipeItem() {
-  habitatForm.value.recipeItems.push({ itemId: '', quantity: 1 });
-}
-
-function addPokemonAppearance() {
-  habitatForm.value.pokemonAppearances.push({
-    pokemonId: '',
-    mapIds: [],
-    timeOfDays: ['早晨'],
-    weathers: ['晴天'],
-    rarity: 1
-  });
-}
-
-function groupPokemonAppearances(detail: HabitatDetail): HabitatAppearanceForm[] {
-  const rows = new Map<string, HabitatAppearanceForm>();
-
-  detail.pokemon.forEach((pokemon) => {
-    const key = `${pokemon.id}:${pokemon.rarity}`;
-    const row = rows.get(key) ?? {
-      pokemonId: String(pokemon.id),
-      mapIds: [],
-      timeOfDays: [],
-      weathers: [],
-      rarity: pokemon.rarity
-    };
-
-    const mapId = String(pokemon.map.id);
-    if (!row.mapIds.includes(mapId)) row.mapIds.push(mapId);
-    if (!row.timeOfDays.includes(pokemon.time_of_day)) row.timeOfDays.push(pokemon.time_of_day);
-    if (!row.weathers.includes(pokemon.weather)) row.weathers.push(pokemon.weather);
-    rows.set(key, row);
-  });
-
-  return [...rows.values()];
-}
-
-async function editHabitat(item: Habitat) {
-  await run(async () => {
-    const detail = await api.habitatDetail(item.id);
-    habitatForm.value = {
-      id: detail.id,
-      name: detail.name,
-      recipeItems: detail.recipe.map((recipeItem) => ({ itemId: String(recipeItem.id), quantity: recipeItem.quantity })),
-      pokemonAppearances: groupPokemonAppearances(detail)
-    };
-  });
-}
-
-async function saveHabitat() {
-  await run(async () => {
-    const payload: HabitatPayload = {
-      name: habitatForm.value.name,
-      recipeItems: toQuantityRows(habitatForm.value.recipeItems),
-      pokemonAppearances: habitatForm.value.pokemonAppearances
-        .map((item) => ({
-          pokemonId: Number(item.pokemonId),
-          mapIds: toIds(item.mapIds),
-          timeOfDays: item.timeOfDays.filter((entry) => timeOfDays.includes(entry)),
-          weathers: item.weathers.filter((entry) => weathers.includes(entry)),
-          rarity: Number(item.rarity)
-        }))
-        .filter((item) => item.pokemonId > 0 && item.mapIds.length > 0 && item.timeOfDays.length > 0 && item.weathers.length > 0)
-    };
-    if (habitatForm.value.id) {
-      await api.updateHabitat(habitatForm.value.id, payload);
-    } else {
-      await api.createHabitat(payload);
-    }
-    resetHabitatForm();
-    await loadHabitats();
   });
 }
 
@@ -484,7 +213,7 @@ onMounted(() => {
 
 <template>
   <section class="page-stack">
-    <PageHeader title="管理" subtitle="维护 Wiki 数据和系统配置。">
+    <PageHeader title="管理" subtitle="维护系统配置，查看并删除 Wiki 数据记录。">
       <template #kicker>Admin</template>
     </PageHeader>
 
@@ -496,336 +225,101 @@ onMounted(() => {
 
     <StatusMessage v-if="message" variant="warning">{{ message }}</StatusMessage>
 
-    <section v-if="showAdminSkeleton" class="admin-layout" aria-busy="true" aria-label="正在加载管理内容">
-      <div class="detail-section skeleton-detail-section" aria-hidden="true">
-        <h2><Skeleton width="96px" height="24px" /></h2>
-        <div class="skeleton-form-stack">
-          <div v-for="index in 5" :key="index" class="field">
-            <Skeleton :width="index === 1 ? '52px' : '72px'" />
-            <Skeleton variant="box" height="44px" />
-          </div>
-          <div class="form-actions">
-            <Skeleton variant="box" width="64px" height="42px" />
-            <Skeleton variant="box" width="64px" height="42px" />
-          </div>
-        </div>
-      </div>
-
-      <div class="detail-section skeleton-detail-section" aria-hidden="true">
-        <h2><Skeleton width="120px" height="24px" /></h2>
-        <ul class="row-list skeleton-row-list">
-          <li v-for="index in 6" :key="index">
-            <Skeleton :width="index % 2 === 0 ? '180px' : '132px'" />
-            <span class="row-actions">
-              <Skeleton variant="box" width="50px" height="34px" />
-              <Skeleton variant="box" width="50px" height="34px" />
-            </span>
-          </li>
-        </ul>
-      </div>
+    <section v-if="showAdminSkeleton" class="detail-section skeleton-detail-section" aria-busy="true" aria-label="正在加载管理列表">
+      <h2><Skeleton width="120px" height="24px" /></h2>
+      <ul class="row-list skeleton-row-list">
+        <li v-for="index in 6" :key="index">
+          <Skeleton :width="index % 2 === 0 ? '180px' : '132px'" />
+          <span class="row-actions">
+            <Skeleton variant="box" width="50px" height="34px" />
+          </span>
+        </li>
+      </ul>
     </section>
 
-    <section v-else-if="canEdit && activeTab === 'config'" class="admin-layout">
-      <form class="detail-section" @submit.prevent="saveConfig">
-        <h2>系统配置</h2>
-        <div class="field">
-          <label for="config-type">类型</label>
-          <select id="config-type" v-model="activeConfigType" @change="run(loadConfig)">
-            <option v-for="item in configTypes" :key="item.key" :value="item.key">{{ item.label }}</option>
-          </select>
-        </div>
+    <section v-else-if="canEdit && activeTab === 'config'" class="detail-section">
+      <h2>系统配置</h2>
+      <Tabs id="admin-config-type" v-model="activeConfigTab" :tabs="configTabs" label="系统配置类型" />
+
+      <form class="detail-section__body" @submit.prevent="saveConfig">
+        <h3 class="section-subtitle">{{ configForm.id ? `编辑${selectedConfig.label}` : `新增${selectedConfig.label}` }}</h3>
         <div class="field">
           <label for="config-name">名称</label>
-          <input id="config-name" v-model="configForm.name" />
+          <input id="config-name" v-model="configForm.name" required />
         </div>
         <div v-if="selectedConfig.hasSubcategory" class="field">
           <label for="config-subcategory">二级分类</label>
           <input id="config-subcategory" v-model="configForm.subcategory" />
         </div>
         <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">保存</button>
-          <button type="button" class="plain-button" @click="resetConfigForm">新建</button>
+          <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
+          <button type="button" class="plain-button" :disabled="busy" @click="resetConfigForm">新建</button>
         </div>
       </form>
 
-      <div class="detail-section">
-        <h2>{{ selectedConfig.label }}</h2>
-        <ul class="row-list">
-          <li v-for="item in configRows" :key="item.id">
-            <span>{{ item.name }}<span v-if="item.subcategory"> · {{ item.subcategory }}</span></span>
-            <span class="row-actions">
-              <button type="button" @click="editConfig(item)">编辑</button>
-              <button type="button" @click="removeConfig(item.id)">删除</button>
-            </span>
-          </li>
-        </ul>
-      </div>
+      <h3 class="section-subtitle">{{ selectedConfig.label }}</h3>
+      <ul v-if="configRows.length" class="row-list">
+        <li v-for="item in configRows" :key="item.id">
+          <span>{{ item.name }}<span v-if="item.subcategory"> · {{ item.subcategory }}</span></span>
+          <span class="row-actions">
+            <button type="button" @click="editConfig(item)">编辑</button>
+            <button type="button" @click="removeConfig(item.id)">删除</button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">暂无记录</p>
     </section>
 
-    <section v-else-if="canEdit && activeTab === 'pokemon' && options" class="admin-layout">
-      <form class="detail-section" @submit.prevent="savePokemon">
-        <h2>Pokemon</h2>
-        <div class="field"><label for="pokemon-id">ID</label><input id="pokemon-id" v-model="pokemonForm.id" type="number" /></div>
-        <div class="field"><label for="pokemon-name">名字</label><input id="pokemon-name" v-model="pokemonForm.name" /></div>
-        <div class="field">
-          <label for="pokemon-environment">喜欢的环境</label>
-          <TagsSelect
-            id="pokemon-environment"
-            v-model="pokemonForm.environmentId"
-            :options="options.environments"
-            :multiple="false"
-            placeholder="请选择"
-            search-placeholder="搜索喜欢的环境"
-          />
-        </div>
-        <div class="field">
-          <label for="pokemon-skills">特长</label>
-          <TagsSelect
-            id="pokemon-skills"
-            v-model="pokemonForm.skillIds"
-            :options="options.skills"
-            :max="2"
-            allow-create
-            :creating="creatingSelect === 'pokemon-skills'"
-            placeholder="搜索特长"
-            @create="createTagsOption('pokemon-skills', 'skills', $event, pokemonForm.skillIds, 2)"
-          />
-        </div>
-        <div class="field">
-          <label for="pokemon-things">喜欢的东西</label>
-          <TagsSelect
-            id="pokemon-things"
-            v-model="pokemonForm.favoriteThingIds"
-            :options="options.favoriteThings"
-            :max="6"
-            allow-create
-            :creating="creatingSelect === 'pokemon-things'"
-            placeholder="搜索喜欢的东西"
-            @create="createTagsOption('pokemon-things', 'favorite-things', $event, pokemonForm.favoriteThingIds, 6)"
-          />
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">保存</button>
-          <button type="button" class="plain-button" @click="resetPokemonForm">新建</button>
-        </div>
-      </form>
-
-      <div class="detail-section">
-        <h2>Pokemon 列表</h2>
-        <ul class="row-list">
-          <li v-for="item in pokemonRows" :key="item.id">
-            <span>#{{ item.id }} {{ item.name }}</span>
-            <span class="row-actions">
-              <button type="button" @click="editPokemon(item)">编辑</button>
-              <button type="button" @click="removePokemon(item.id)">删除</button>
-            </span>
-          </li>
-        </ul>
-      </div>
+    <section v-else-if="canEdit && activeTab === 'pokemon'" class="detail-section">
+      <h2>Pokemon 列表</h2>
+      <ul v-if="pokemonRows.length" class="row-list">
+        <li v-for="item in pokemonRows" :key="item.id">
+          <RouterLink :to="`/pokemon/${item.id}`">#{{ item.id }} {{ item.name }}</RouterLink>
+          <span class="row-actions">
+            <button type="button" @click="removePokemon(item.id)">删除</button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">暂无记录</p>
     </section>
 
-    <section v-else-if="canEdit && activeTab === 'items' && options" class="admin-layout">
-      <form class="detail-section" @submit.prevent="saveItem">
-        <h2>物品</h2>
-        <div class="field"><label for="item-name">名称</label><input id="item-name" v-model="itemForm.name" /></div>
-        <div class="field">
-          <label for="item-category">分类</label>
-          <TagsSelect
-            id="item-category"
-            v-model="itemForm.categoryId"
-            :options="options.itemCategories"
-            :multiple="false"
-            placeholder="请选择"
-            search-placeholder="搜索分类"
-          />
-        </div>
-        <div class="field">
-          <label for="item-usage">用途</label>
-          <TagsSelect
-            id="item-usage"
-            v-model="itemForm.usageId"
-            :options="options.itemUsages"
-            :multiple="false"
-            placeholder="无"
-            search-placeholder="搜索用途"
-          />
-        </div>
-        <div class="check-row">
-          <label><input v-model="itemForm.dyeable" type="checkbox" /> 可染色</label>
-          <label><input v-model="itemForm.dualDyeable" type="checkbox" /> 可双区染色</label>
-          <label><input v-model="itemForm.patternEditable" type="checkbox" /> 可改花纹</label>
-        </div>
-        <div class="field">
-          <label for="item-methods">入手方式</label>
-          <TagsSelect
-            id="item-methods"
-            v-model="itemForm.acquisitionMethodIds"
-            :options="options.acquisitionMethods"
-            allow-create
-            :creating="creatingSelect === 'item-methods'"
-            placeholder="搜索入手方式"
-            @create="createTagsOption('item-methods', 'acquisition-methods', $event, itemForm.acquisitionMethodIds)"
-          />
-        </div>
-        <div class="field">
-          <label for="item-tags">标签</label>
-          <TagsSelect
-            id="item-tags"
-            v-model="itemForm.tagIds"
-            :options="options.itemTags"
-            allow-create
-            :creating="creatingSelect === 'item-tags'"
-            placeholder="搜索标签"
-            @create="createTagsOption('item-tags', 'favorite-things', $event, itemForm.tagIds)"
-          />
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">保存</button>
-          <button type="button" class="plain-button" @click="resetItemForm">新建</button>
-        </div>
-      </form>
-
-      <div class="detail-section">
-        <h2>物品列表</h2>
-        <ul class="row-list">
-          <li v-for="item in itemRows" :key="item.id">
-            <span>{{ item.name }}</span>
-            <span class="row-actions">
-              <button type="button" @click="editItem(item)">编辑</button>
-              <button type="button" @click="removeItem(item.id)">删除</button>
-            </span>
-          </li>
-        </ul>
-      </div>
+    <section v-else-if="canEdit && activeTab === 'items'" class="detail-section">
+      <h2>物品列表</h2>
+      <ul v-if="itemRows.length" class="row-list">
+        <li v-for="item in itemRows" :key="item.id">
+          <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
+          <span class="row-actions">
+            <button type="button" @click="removeItem(item.id)">删除</button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">暂无记录</p>
     </section>
 
-    <section v-else-if="canEdit && activeTab === 'recipes' && options" class="admin-layout">
-      <form class="detail-section" @submit.prevent="saveRecipe">
-        <h2>材料单</h2>
-        <div class="field">
-          <label for="recipe-item">物品</label>
-          <TagsSelect
-            id="recipe-item"
-            v-model="recipeForm.itemId"
-            :options="itemSelectOptions"
-            :multiple="false"
-            placeholder="请选择"
-            search-placeholder="搜索物品"
-          />
-        </div>
-        <div class="field">
-          <label for="recipe-methods">入手方式</label>
-          <TagsSelect
-            id="recipe-methods"
-            v-model="recipeForm.acquisitionMethodIds"
-            :options="options.acquisitionMethods"
-            allow-create
-            :creating="creatingSelect === 'recipe-methods'"
-            placeholder="搜索入手方式"
-            @create="createTagsOption('recipe-methods', 'acquisition-methods', $event, recipeForm.acquisitionMethodIds)"
-          />
-        </div>
-        <div class="field">
-          <label>需要材料</label>
-          <div v-for="(row, index) in recipeForm.materials" :key="index" class="inline-row">
-            <TagsSelect
-              :id="`recipe-material-${index}`"
-              v-model="row.itemId"
-              :options="itemSelectOptions"
-              :multiple="false"
-              placeholder="请选择"
-              search-placeholder="搜索物品"
-            />
-            <input v-model.number="row.quantity" type="number" min="1" />
-            <button type="button" @click="recipeForm.materials.splice(index, 1)">删除</button>
-          </div>
-          <button type="button" class="plain-button" @click="addRecipeMaterial">添加材料</button>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">保存</button>
-          <button type="button" class="plain-button" @click="resetRecipeForm">新建</button>
-        </div>
-      </form>
-
-      <div class="detail-section">
-        <h2>材料单列表</h2>
-        <ul class="row-list">
-          <li v-for="item in recipeRows" :key="item.id">
-            <span>{{ item.name }}</span>
-            <span class="row-actions">
-              <button type="button" @click="editRecipe(item)">编辑</button>
-              <button type="button" @click="removeRecipe(item.id)">删除</button>
-            </span>
-          </li>
-        </ul>
-      </div>
+    <section v-else-if="canEdit && activeTab === 'recipes'" class="detail-section">
+      <h2>材料单列表</h2>
+      <ul v-if="recipeRows.length" class="row-list">
+        <li v-for="item in recipeRows" :key="item.id">
+          <RouterLink :to="`/recipes/${item.id}`">{{ item.name }}</RouterLink>
+          <span class="row-actions">
+            <button type="button" @click="removeRecipe(item.id)">删除</button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">暂无记录</p>
     </section>
 
-    <section v-else-if="canEdit && activeTab === 'habitats' && options" class="admin-layout">
-      <form class="detail-section" @submit.prevent="saveHabitat">
-        <h2>栖息地</h2>
-        <div class="field"><label for="habitat-name">名称</label><input id="habitat-name" v-model="habitatForm.name" /></div>
-        <div class="field">
-          <label>配方</label>
-          <div v-for="(row, index) in habitatForm.recipeItems" :key="index" class="inline-row">
-            <TagsSelect
-              :id="`habitat-recipe-item-${index}`"
-              v-model="row.itemId"
-              :options="itemSelectOptions"
-              :multiple="false"
-              placeholder="请选择"
-              search-placeholder="搜索物品"
-            />
-            <input v-model.number="row.quantity" type="number" min="1" />
-            <button type="button" @click="habitatForm.recipeItems.splice(index, 1)">删除</button>
-          </div>
-          <button type="button" class="plain-button" @click="addHabitatRecipeItem">添加物品</button>
-        </div>
-        <div class="field">
-          <label>可出现的宝可梦</label>
-          <div v-for="(row, index) in habitatForm.pokemonAppearances" :key="index" class="appearance-row">
-            <TagsSelect
-              :id="`appearance-pokemon-${index}`"
-              v-model="row.pokemonId"
-              :options="pokemonSelectOptions"
-              :multiple="false"
-              placeholder="Pokemon"
-              search-placeholder="搜索 Pokemon"
-            />
-            <TagsSelect
-              :id="`appearance-maps-${index}`"
-              v-model="row.mapIds"
-              :options="options.maps"
-              allow-create
-              :creating="creatingSelect === `appearance-maps-${index}`"
-              placeholder="搜索地图"
-              @create="createTagsOption(`appearance-maps-${index}`, 'maps', $event, row.mapIds)"
-            />
-            <TagsSelect :id="`appearance-times-${index}`" v-model="row.timeOfDays" :options="timeOfDayOptions" placeholder="搜索时间" />
-            <TagsSelect :id="`appearance-weathers-${index}`" v-model="row.weathers" :options="weatherOptions" placeholder="搜索天气" />
-            <input v-model.number="row.rarity" type="number" min="1" max="3" />
-            <button type="button" @click="habitatForm.pokemonAppearances.splice(index, 1)">删除</button>
-          </div>
-          <button type="button" class="plain-button" @click="addPokemonAppearance">添加 Pokemon</button>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">保存</button>
-          <button type="button" class="plain-button" @click="resetHabitatForm">新建</button>
-        </div>
-      </form>
-
-      <div class="detail-section">
-        <h2>栖息地列表</h2>
-        <ul class="row-list">
-          <li v-for="item in habitatRows" :key="item.id">
-            <span>{{ item.name }}</span>
-            <span class="row-actions">
-              <button type="button" @click="editHabitat(item)">编辑</button>
-              <button type="button" @click="removeHabitat(item.id)">删除</button>
-            </span>
-          </li>
-        </ul>
-      </div>
+    <section v-else-if="canEdit && activeTab === 'habitats'" class="detail-section">
+      <h2>栖息地列表</h2>
+      <ul v-if="habitatRows.length" class="row-list">
+        <li v-for="item in habitatRows" :key="item.id">
+          <RouterLink :to="`/habitats/${item.id}`">{{ item.name }}</RouterLink>
+          <span class="row-actions">
+            <button type="button" @click="removeHabitat(item.id)">删除</button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">暂无记录</p>
     </section>
   </section>
 </template>

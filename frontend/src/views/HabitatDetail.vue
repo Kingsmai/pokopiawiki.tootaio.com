@@ -133,6 +133,7 @@ onMounted(async () => {
         <EditMeta :entity="habitat" />
       </template>
       <template #actions>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">编辑</RouterLink>
         <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">返回列表</RouterLink>
       </template>
     </PageHeader>

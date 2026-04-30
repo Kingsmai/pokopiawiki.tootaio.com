@@ -21,6 +21,9 @@ onMounted(async () => {
   <section class="page-stack">
     <PageHeader title="栖息地" subtitle="查看配方和可能出现的宝可梦。">
       <template #kicker>Habitats</template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/habitats/new">新增</RouterLink>
+      </template>
     </PageHeader>
 
     <div v-if="loading" class="entity-grid" aria-busy="true" aria-label="正在加载栖息地列表">

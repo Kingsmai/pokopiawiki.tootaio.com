@@ -48,6 +48,9 @@ watch(query, loadPokemon);
   <section class="page-stack">
     <PageHeader title="Pokemon" subtitle="搜索宝可梦，并按特长、环境、喜欢的东西筛选。">
       <template #kicker>Pokédex</template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">新增</RouterLink>
+      </template>
     </PageHeader>
 
     <FilterPanel v-if="options">

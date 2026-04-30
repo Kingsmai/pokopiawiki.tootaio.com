@@ -23,6 +23,21 @@ export interface EditInfo {
   updatedBy: UserSummary | null;
 }
 
+export type EditHistoryAction = 'create' | 'update' | 'delete';
+
+export interface EditChange {
+  label: string;
+  before: string;
+  after: string;
+}
+
+export interface EditHistoryEntry {
+  action: EditHistoryAction;
+  changes: EditChange[];
+  createdAt: string;
+  user: UserSummary | null;
+}
+
 export interface Pokemon extends EditInfo {
   id: number;
   name: string;
@@ -34,6 +49,7 @@ export interface Pokemon extends EditInfo {
 export interface PokemonDetail extends Pokemon {
   skills: Array<Skill & { itemDrop: NamedEntity | null }>;
   favoriteThingItems: Array<NamedEntity & { category: NamedEntity; tags: NamedEntity[] }>;
+  editHistory: EditHistoryEntry[];
   habitats: Array<{
     id: number;
     name: string;
@@ -52,6 +68,7 @@ export interface Habitat extends EditInfo {
 }
 
 export interface HabitatDetail extends Habitat {
+  editHistory: EditHistoryEntry[];
   pokemon: Array<NamedEntity & {
     time_of_day: string;
     weather: string;
@@ -96,6 +113,7 @@ export interface ItemDetail extends Item {
   recipe: RecipeDetail | null;
   relatedRecipes: RecipeUsage[];
   relatedHabitats: HabitatUsage[];
+  editHistory: EditHistoryEntry[];
   droppedByPokemon: Array<{
     pokemon: NamedEntity;
     skill: NamedEntity;
@@ -110,6 +128,7 @@ export interface Recipe extends EditInfo {
 
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];
+  editHistory: EditHistoryEntry[];
   item: NamedEntity;
 }
 

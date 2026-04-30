@@ -74,6 +74,42 @@ type HabitatPayload = {
 
 type ValidationError = Error & { statusCode: number };
 type EditAction = 'create' | 'update' | 'delete';
+type EditChange = {
+  label: string;
+  before: string;
+  after: string;
+};
+type EditHistoryEntry = {
+  action: EditAction;
+  changes: EditChange[];
+  createdAt: Date;
+  user: { id: number; displayName: string } | null;
+};
+type PokemonChangeSource = {
+  name: string;
+  environment: { name: string };
+  skills: Array<{ name: string; itemDrop?: { name: string } | null }>;
+  favorite_things: Array<{ name: string }>;
+};
+type ItemChangeSource = {
+  name: string;
+  category: { name: string };
+  usage: { name: string } | null;
+  customization: { dyeable: boolean; dualDyeable: boolean; patternEditable: boolean };
+  noRecipe: boolean;
+  acquisitionMethods: Array<{ name: string }>;
+  tags: Array<{ name: string }>;
+};
+type HabitatChangeSource = {
+  name: string;
+  recipe: Array<{ name: string; quantity: number }>;
+  pokemon: Array<{ name: string; time_of_day: string; weather: string; rarity: number; map: { name: string } }>;
+};
+type RecipeChangeSource = {
+  item: { name: string };
+  acquisition_methods: Array<{ name: string }>;
+  materials: Array<{ name: string; quantity: number }>;
+};
 
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
@@ -207,14 +243,228 @@ async function recordEditLog(
   entityType: string,
   entityId: number,
   action: EditAction,
-  userId: number
+  userId: number,
+  changes: EditChange[] = []
 ): Promise<void> {
   await client.query(
     `
-      INSERT INTO wiki_edit_logs (entity_type, entity_id, action, user_id)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO wiki_edit_logs (entity_type, entity_id, action, user_id, changes)
+      VALUES ($1, $2, $3, $4, $5::jsonb)
     `,
-    [entityType, entityId, action, userId]
+    [entityType, entityId, action, userId, JSON.stringify(changes)]
+  );
+}
+
+function displayValue(value: string | null | undefined): string {
+  const cleanValue = value?.trim() ?? '';
+  return cleanValue === '' ? '无' : cleanValue;
+}
+
+function pushChange(changes: EditChange[], label: string, before: string | null | undefined, after: string | null | undefined): void {
+  const beforeValue = displayValue(before);
+  const afterValue = displayValue(after);
+
+  if (beforeValue !== afterValue) {
+    changes.push({ label, before: beforeValue, after: afterValue });
+  }
+}
+
+function boolValue(value: boolean): string {
+  return value ? '是' : '否';
+}
+
+function namedListValue(items: Array<{ name: string }> | null | undefined): string {
+  if (!items?.length) {
+    return '无';
+  }
+
+  return [...new Set(items.map((item) => item.name))]
+    .sort((a, b) => a.localeCompare(b))
+    .join(' / ');
+}
+
+function quantityListValue(items: Array<{ name: string; quantity: number }> | null | undefined): string {
+  if (!items?.length) {
+    return '无';
+  }
+
+  return items
+    .map((item) => ({ name: item.name, value: `${item.name} x${item.quantity}` }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((item) => item.value)
+    .join(' / ');
+}
+
+function skillDropListValue(skills: Array<{ name: string; itemDrop?: { name: string } | null }> | null | undefined): string {
+  const rows = skills
+    ?.filter((skill) => skill.itemDrop)
+    .map((skill) => `${skill.name}：${skill.itemDrop?.name}`)
+    .sort((a, b) => a.localeCompare(b)) ?? [];
+
+  return rows.length ? rows.join(' / ') : '无';
+}
+
+function appearanceListValue(
+  rows: Array<{ name: string; time_of_day: string; weather: string; rarity: number; map: { name: string } }> | null | undefined
+): string {
+  if (!rows?.length) {
+    return '无';
+  }
+
+  return rows
+    .map((row) => `${row.name}：${row.time_of_day} / ${row.weather} / ${row.rarity} 星 / ${row.map.name}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join(' / ');
+}
+
+async function entityNameMap(client: DbClient, tableName: string, ids: number[]): Promise<Map<number, string>> {
+  const uniqueIds = [...new Set(ids)].filter((id) => Number.isInteger(id) && id > 0);
+  if (!uniqueIds.length) {
+    return new Map();
+  }
+
+  const result = await client.query<{ id: number; name: string }>(
+    `SELECT id, name FROM ${tableName} WHERE id = ANY($1::integer[])`,
+    [uniqueIds]
+  );
+
+  return new Map(result.rows.map((row) => [row.id, row.name]));
+}
+
+function namesFromIds(ids: number[], namesById: Map<number, string>): string {
+  const names = [...new Set(ids)]
+    .map((id) => namesById.get(id))
+    .filter((name): name is string => Boolean(name))
+    .sort((a, b) => a.localeCompare(b));
+
+  return names.length ? names.join(' / ') : '无';
+}
+
+async function quantityPayloadValue(client: DbClient, rows: IdQuantity[]): Promise<string> {
+  const namesById = await entityNameMap(client, 'items', rows.map((row) => row.itemId));
+  return quantityListValue(
+    rows
+      .map((row) => {
+        const name = namesById.get(row.itemId);
+        return name ? { name, quantity: row.quantity } : null;
+      })
+      .filter((row): row is { name: string; quantity: number } => row !== null)
+  );
+}
+
+async function pokemonEditChanges(
+  client: DbClient,
+  before: PokemonChangeSource,
+  after: PokemonPayload
+): Promise<EditChange[]> {
+  const changes: EditChange[] = [];
+  const environmentNames = await entityNameMap(client, 'environments', [after.environmentId]);
+  const skillNames = await entityNameMap(client, 'skills', after.skillIds);
+  const favoriteThingNames = await entityNameMap(client, 'favorite_things', after.favoriteThingIds);
+  const dropSkillNames = await entityNameMap(client, 'skills', after.skillItemDrops.map((drop) => drop.skillId));
+  const dropItemNames = await entityNameMap(client, 'items', after.skillItemDrops.map((drop) => drop.itemId));
+  const afterDrops = after.skillItemDrops
+    .map((drop) => {
+      const skillName = dropSkillNames.get(drop.skillId);
+      const itemName = dropItemNames.get(drop.itemId);
+      return skillName && itemName ? `${skillName}：${itemName}` : null;
+    })
+    .filter((drop): drop is string => drop !== null)
+    .sort((a, b) => a.localeCompare(b))
+    .join(' / ');
+
+  pushChange(changes, '名字', before.name, after.name);
+  pushChange(changes, '喜欢的环境', before.environment.name, environmentNames.get(after.environmentId));
+  pushChange(changes, '特长', namedListValue(before.skills), namesFromIds(after.skillIds, skillNames));
+  pushChange(changes, '喜欢的东西', namedListValue(before.favorite_things), namesFromIds(after.favoriteThingIds, favoriteThingNames));
+  pushChange(changes, '特长掉落物', skillDropListValue(before.skills), afterDrops);
+
+  return changes;
+}
+
+async function itemEditChanges(
+  client: DbClient,
+  before: ItemChangeSource,
+  after: ItemPayload
+): Promise<EditChange[]> {
+  const changes: EditChange[] = [];
+  const categoryNames = await entityNameMap(client, 'item_categories', [after.categoryId]);
+  const usageNames = await entityNameMap(client, 'item_usages', after.usageId ? [after.usageId] : []);
+  const methodNames = await entityNameMap(client, 'acquisition_methods', after.acquisitionMethodIds);
+  const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
+
+  pushChange(changes, '名称', before.name, after.name);
+  pushChange(changes, '分类', before.category.name, categoryNames.get(after.categoryId));
+  pushChange(changes, '用途', before.usage?.name, after.usageId ? usageNames.get(after.usageId) : null);
+  pushChange(changes, '可染色', boolValue(before.customization.dyeable), boolValue(after.dyeable));
+  pushChange(changes, '可双区染色', boolValue(before.customization.dualDyeable), boolValue(after.dualDyeable));
+  pushChange(changes, '可改花纹', boolValue(before.customization.patternEditable), boolValue(after.patternEditable));
+  pushChange(changes, '无材料单', boolValue(before.noRecipe), boolValue(after.noRecipe));
+  pushChange(changes, '入手方式', namedListValue(before.acquisitionMethods), namesFromIds(after.acquisitionMethodIds, methodNames));
+  pushChange(changes, '标签', namedListValue(before.tags), namesFromIds(after.tagIds, tagNames));
+
+  return changes;
+}
+
+async function habitatEditChanges(
+  client: DbClient,
+  before: HabitatChangeSource,
+  after: HabitatPayload
+): Promise<EditChange[]> {
+  const changes: EditChange[] = [];
+  const pokemonNames = await entityNameMap(client, 'pokemon', after.pokemonAppearances.map((row) => row.pokemonId));
+  const mapNames = await entityNameMap(client, 'maps', after.pokemonAppearances.map((row) => row.mapId));
+  const afterAppearances = after.pokemonAppearances
+    .map((row) => {
+      const pokemonName = pokemonNames.get(row.pokemonId);
+      const mapName = mapNames.get(row.mapId);
+      return pokemonName && mapName ? `${pokemonName}：${row.timeOfDay} / ${row.weather} / ${row.rarity} 星 / ${mapName}` : null;
+    })
+    .filter((row): row is string => row !== null)
+    .sort((a, b) => a.localeCompare(b))
+    .join(' / ');
+
+  pushChange(changes, '名称', before.name, after.name);
+  pushChange(changes, '配方', quantityListValue(before.recipe), await quantityPayloadValue(client, after.recipeItems));
+  pushChange(changes, '可能出现的宝可梦', appearanceListValue(before.pokemon), afterAppearances);
+
+  return changes;
+}
+
+async function recipeEditChanges(
+  client: DbClient,
+  before: RecipeChangeSource,
+  after: RecipePayload
+): Promise<EditChange[]> {
+  const changes: EditChange[] = [];
+  const itemNames = await entityNameMap(client, 'items', [after.itemId]);
+  const methodNames = await entityNameMap(client, 'acquisition_methods', after.acquisitionMethodIds);
+
+  pushChange(changes, '物品', before.item.name, itemNames.get(after.itemId));
+  pushChange(changes, '入手方式', namedListValue(before.acquisition_methods), namesFromIds(after.acquisitionMethodIds, methodNames));
+  pushChange(changes, '需要材料', quantityListValue(before.materials), await quantityPayloadValue(client, after.materials));
+
+  return changes;
+}
+
+function getEditHistory(entityType: string, entityId: number): Promise<EditHistoryEntry[]> {
+  return query(
+    `
+      SELECT
+        l.action,
+        COALESCE(l.changes, '[]'::jsonb) AS changes,
+        l.created_at AS "createdAt",
+        CASE
+          WHEN u.id IS NULL THEN NULL
+          ELSE json_build_object('id', u.id, 'displayName', u.display_name)
+        END AS user
+      FROM wiki_edit_logs l
+      LEFT JOIN users u ON u.id = l.user_id
+      WHERE l.entity_type = $1
+        AND l.entity_id = $2
+      ORDER BY l.created_at DESC, l.id DESC
+    `,
+    [entityType, entityId]
   );
 }
 
@@ -439,7 +689,7 @@ export async function getPokemon(id: number) {
     return null;
   }
 
-  const [habitats, itemDrops, favoriteThingItems] = await Promise.all([
+  const [habitats, itemDrops, favoriteThingItems, editHistory] = await Promise.all([
     query(
       `
         SELECT
@@ -486,7 +736,8 @@ export async function getPokemon(id: number) {
         ORDER BY c.name, i.name
       `,
       [id]
-    )
+    ),
+    getEditHistory('pokemon', id)
   ]);
 
   const dropsBySkill = itemDrops.reduce((itemsBySkill, item) => {
@@ -501,7 +752,7 @@ export async function getPokemon(id: number) {
       }))
     : [];
 
-  return { ...pokemon, skills, habitats, favoriteThingItems };
+  return { ...pokemon, skills, habitats, favoriteThingItems, editHistory };
 }
 
 function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
@@ -601,6 +852,7 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
 
 export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanPokemonPayload({ ...payload, id });
+  const before = await getPokemon(id);
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
@@ -615,7 +867,8 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
       return false;
     }
     await replacePokemonRelations(client, id, cleanPayload);
-    await recordEditLog(client, 'pokemon', id, 'update', userId);
+    const changes = before ? await pokemonEditChanges(client, before as unknown as PokemonChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'pokemon', id, 'update', userId, changes);
     return true;
   });
   return updated ? getPokemon(id) : null;
@@ -681,25 +934,28 @@ export async function getHabitat(id: number) {
     return null;
   }
 
-  const pokemon = await query(
-    `
-      SELECT
-        p.id,
-        p.name,
-        hp.time_of_day,
-        hp.weather,
-        hp.rarity,
-        json_build_object('id', m.id, 'name', m.name) AS map
-      FROM habitat_pokemon hp
-      JOIN pokemon p ON p.id = hp.pokemon_id
-      JOIN maps m ON m.id = hp.map_id
-      WHERE hp.habitat_id = $1
-      ORDER BY hp.rarity, p.id, m.name
-    `,
-    [id]
-  );
+  const [pokemon, editHistory] = await Promise.all([
+    query(
+      `
+        SELECT
+          p.id,
+          p.name,
+          hp.time_of_day,
+          hp.weather,
+          hp.rarity,
+          json_build_object('id', m.id, 'name', m.name) AS map
+        FROM habitat_pokemon hp
+        JOIN pokemon p ON p.id = hp.pokemon_id
+        JOIN maps m ON m.id = hp.map_id
+        WHERE hp.habitat_id = $1
+        ORDER BY hp.rarity, p.id, m.name
+      `,
+      [id]
+    ),
+    getEditHistory('habitats', id)
+  ]);
 
-  return { ...habitat, pokemon };
+  return { ...habitat, pokemon, editHistory };
 }
 
 function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
@@ -785,6 +1041,7 @@ export async function createHabitat(payload: Record<string, unknown>, userId: nu
 
 export async function updateHabitat(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanHabitatPayload(payload);
+  const before = await getHabitat(id);
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
@@ -795,7 +1052,8 @@ export async function updateHabitat(id: number, payload: Record<string, unknown>
       return false;
     }
     await replaceHabitatRelations(client, id, cleanPayload);
-    await recordEditLog(client, 'habitats', id, 'update', userId);
+    const changes = before ? await habitatEditChanges(client, before as unknown as HabitatChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'habitats', id, 'update', userId, changes);
     return true;
   });
   return updated ? getHabitat(id) : null;
@@ -903,7 +1161,7 @@ export async function getItem(id: number) {
     return null;
   }
 
-  const [acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon] = await Promise.all([
+  const [acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory] = await Promise.all([
     query(
       `
         SELECT am.id, am.name
@@ -990,10 +1248,11 @@ export async function getItem(id: number) {
         ORDER BY p.id, s.name
       `,
       [id]
-    )
+    ),
+    getEditHistory('items', id)
   ]);
 
-  return { ...item, acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon };
+  return { ...item, acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory };
 }
 
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
@@ -1085,6 +1344,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
 
 export async function updateItem(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanItemPayload(payload);
+  const before = await getItem(id);
 
   const updated = await withTransaction(async (client) => {
     await ensureItemCanDisableRecipe(client, id, cleanPayload.noRecipe);
@@ -1118,7 +1378,8 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
       return false;
     }
     await replaceItemRelations(client, id, cleanPayload);
-    await recordEditLog(client, 'items', id, 'update', userId);
+    const changes = before ? await itemEditChanges(client, before as unknown as ItemChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'items', id, 'update', userId, changes);
     return true;
   });
   return updated ? getItem(id) : null;
@@ -1167,7 +1428,7 @@ export async function listRecipes(paramsQuery: QueryParams = {}) {
 }
 
 export async function getRecipe(id: number) {
-  return queryOne(
+  const recipe = await queryOne(
     `
       SELECT
         r.id,
@@ -1193,6 +1454,13 @@ export async function getRecipe(id: number) {
     `,
     [id]
   );
+
+  if (!recipe) {
+    return null;
+  }
+
+  const editHistory = await getEditHistory('recipes', id);
+  return { ...recipe, editHistory };
 }
 
 function cleanRecipePayload(payload: Record<string, unknown>): RecipePayload {
@@ -1257,6 +1525,7 @@ export async function createRecipe(payload: Record<string, unknown>, userId: num
 
 export async function updateRecipe(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanRecipePayload(payload);
+  const before = await getRecipe(id);
 
   const updated = await withTransaction(async (client) => {
     await ensureItemCanHaveRecipe(client, cleanPayload.itemId);
@@ -1268,7 +1537,8 @@ export async function updateRecipe(id: number, payload: Record<string, unknown>,
       return false;
     }
     await replaceRecipeRelations(client, id, cleanPayload);
-    await recordEditLog(client, 'recipes', id, 'update', userId);
+    const changes = before ? await recipeEditChanges(client, before as unknown as RecipeChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'recipes', id, 'update', userId, changes);
     return true;
   });
   return updated ? getRecipe(id) : null;

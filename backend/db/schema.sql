@@ -262,8 +262,11 @@ CREATE TABLE IF NOT EXISTS wiki_edit_logs (
   entity_id integer NOT NULL,
   action text NOT NULL CHECK (action IN ('create', 'update', 'delete')),
   user_id integer REFERENCES users(id) ON DELETE SET NULL,
+  changes jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE wiki_edit_logs ADD COLUMN IF NOT EXISTS changes jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS wiki_edit_logs_entity_idx
   ON wiki_edit_logs(entity_type, entity_id, created_at DESC);

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
-import EditMeta from '../components/EditMeta.vue';
+import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -84,74 +84,75 @@ onMounted(async () => {
   <section v-else class="page-stack">
     <PageHeader :title="item.name" :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name">
       <template #kicker>Item Detail</template>
-      <template #meta>
-        <EditMeta :entity="item" />
-      </template>
       <template #actions>
         <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">编辑</RouterLink>
         <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">返回列表</RouterLink>
       </template>
     </PageHeader>
 
-    <div class="detail-grid">
-      <DetailSection title="入手方式">
-        <EntityChips :items="item.acquisitionMethods" />
-      </DetailSection>
+    <div class="detail-with-sidebar">
+      <div class="detail-grid">
+        <DetailSection title="入手方式">
+          <EntityChips :items="item.acquisitionMethods" />
+        </DetailSection>
 
-      <DetailSection title="自定义">
-        <div v-if="customization.length" class="chips">
-          <span v-for="entry in customization" :key="entry" class="chip">{{ entry }}</span>
-        </div>
-        <p v-else class="meta-line">无</p>
-      </DetailSection>
+        <DetailSection title="自定义">
+          <div v-if="customization.length" class="chips">
+            <span v-for="entry in customization" :key="entry" class="chip">{{ entry }}</span>
+          </div>
+          <p v-else class="meta-line">无</p>
+        </DetailSection>
 
-      <DetailSection title="标签">
-        <EntityChips :items="item.tags" />
-      </DetailSection>
+        <DetailSection title="标签">
+          <EntityChips :items="item.tags" />
+        </DetailSection>
 
-      <DetailSection title="材料单信息">
-        <template v-if="item.recipe">
-          <RouterLink :to="`/recipes/${item.recipe.id}`">{{ item.recipe.name }}</RouterLink>
-          <EntityChips :items="item.recipe.materials" />
-        </template>
-        <p v-else-if="item.noRecipe" class="meta-line">无材料单</p>
-        <template v-else>
-          <p class="meta-line">无</p>
-          <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/new?itemId=${item.id}`">
-            创建材料单
-          </RouterLink>
-        </template>
-      </DetailSection>
+        <DetailSection title="材料单信息">
+          <template v-if="item.recipe">
+            <RouterLink :to="`/recipes/${item.recipe.id}`">{{ item.recipe.name }}</RouterLink>
+            <EntityChips :items="item.recipe.materials" />
+          </template>
+          <p v-else-if="item.noRecipe" class="meta-line">无材料单</p>
+          <template v-else>
+            <p class="meta-line">无</p>
+            <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/new?itemId=${item.id}`">
+              创建材料单
+            </RouterLink>
+          </template>
+        </DetailSection>
 
-      <DetailSection title="相关材料单">
-        <ul v-if="item.relatedRecipes.length" class="row-list">
-          <li v-for="recipe in item.relatedRecipes" :key="recipe.id">
-            <RouterLink :to="`/recipes/${recipe.id}`">{{ recipe.name }}</RouterLink>
-            <EntityChips :items="recipe.materials" />
-          </li>
-        </ul>
-        <p v-else class="meta-line">无</p>
-      </DetailSection>
+        <DetailSection title="相关材料单">
+          <ul v-if="item.relatedRecipes.length" class="row-list">
+            <li v-for="recipe in item.relatedRecipes" :key="recipe.id">
+              <RouterLink :to="`/recipes/${recipe.id}`">{{ recipe.name }}</RouterLink>
+              <EntityChips :items="recipe.materials" />
+            </li>
+          </ul>
+          <p v-else class="meta-line">无</p>
+        </DetailSection>
 
-      <DetailSection title="相关栖息地">
-        <ul v-if="item.relatedHabitats.length" class="row-list">
-          <li v-for="habitat in item.relatedHabitats" :key="habitat.id">
-            <RouterLink :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
-            <EntityChips :items="habitat.recipe" />
-          </li>
-        </ul>
-        <p v-else class="meta-line">无</p>
-      </DetailSection>
+        <DetailSection title="相关栖息地">
+          <ul v-if="item.relatedHabitats.length" class="row-list">
+            <li v-for="habitat in item.relatedHabitats" :key="habitat.id">
+              <RouterLink :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
+              <EntityChips :items="habitat.recipe" />
+            </li>
+          </ul>
+          <p v-else class="meta-line">无</p>
+        </DetailSection>
 
-      <DetailSection title="Pokemon 掉落">
-        <ul v-if="item.droppedByPokemon.length" class="row-list">
-          <li v-for="entry in item.droppedByPokemon" :key="`${entry.pokemon.id}-${entry.skill.id}`">
-            <RouterLink :to="`/pokemon/${entry.pokemon.id}`">#{{ entry.pokemon.id }} {{ entry.pokemon.name }}</RouterLink>
-            <span>{{ entry.skill.name }}掉落物</span>
-          </li>
-        </ul>
-        <p v-else class="meta-line">无</p>
-      </DetailSection>
+        <DetailSection title="Pokemon 掉落">
+          <ul v-if="item.droppedByPokemon.length" class="row-list">
+            <li v-for="entry in item.droppedByPokemon" :key="`${entry.pokemon.id}-${entry.skill.id}`">
+              <RouterLink :to="`/pokemon/${entry.pokemon.id}`">#{{ entry.pokemon.id }} {{ entry.pokemon.name }}</RouterLink>
+              <span>{{ entry.skill.name }}掉落物</span>
+            </li>
+          </ul>
+          <p v-else class="meta-line">无</p>
+        </DetailSection>
+      </div>
+
+      <EditHistoryPanel :entity="item" :history="item.editHistory" />
     </div>
   </section>
 </template>

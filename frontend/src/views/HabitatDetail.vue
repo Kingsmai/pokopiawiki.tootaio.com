@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
-import EditMeta from '../components/EditMeta.vue';
+import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -129,45 +129,46 @@ onMounted(async () => {
   <section v-else class="page-stack">
     <PageHeader :title="habitat.name" subtitle="栖息地详情">
       <template #kicker>Habitat Detail</template>
-      <template #meta>
-        <EditMeta :entity="habitat" />
-      </template>
       <template #actions>
         <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">编辑</RouterLink>
         <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">返回列表</RouterLink>
       </template>
     </PageHeader>
 
-    <div class="habitat-detail-stack">
-      <DetailSection title="配方列表">
-        <EntityChips :items="habitat.recipe" />
-      </DetailSection>
+    <div class="detail-with-sidebar">
+      <div class="habitat-detail-stack">
+        <DetailSection title="配方列表">
+          <EntityChips :items="habitat.recipe" />
+        </DetailSection>
 
-      <DetailSection title="可能出现的宝可梦">
-        <ul class="row-list appearance-list">
-          <li v-for="item in pokemonRows" :key="`${item.id}-${item.rarity}`">
-            <RouterLink class="appearance-name" :to="`/pokemon/${item.id}`">{{ item.name }}</RouterLink>
-            <dl class="appearance-summary">
-              <div>
-                <dt>时段</dt>
-                <dd>{{ item.timeOfDays.join(' / ') }}</dd>
-              </div>
-              <div>
-                <dt>天气</dt>
-                <dd>{{ item.weathers.join(' / ') }}</dd>
-              </div>
-              <div>
-                <dt>稀有度</dt>
-                <dd>{{ item.rarity }} 星</dd>
-              </div>
-              <div>
-                <dt>出现地图</dt>
-                <dd>{{ item.maps.join(' / ') }}</dd>
-              </div>
-            </dl>
-          </li>
-        </ul>
-      </DetailSection>
+        <DetailSection title="可能出现的宝可梦">
+          <ul class="row-list appearance-list">
+            <li v-for="item in pokemonRows" :key="`${item.id}-${item.rarity}`">
+              <RouterLink class="appearance-name" :to="`/pokemon/${item.id}`">{{ item.name }}</RouterLink>
+              <dl class="appearance-summary">
+                <div>
+                  <dt>时段</dt>
+                  <dd>{{ item.timeOfDays.join(' / ') }}</dd>
+                </div>
+                <div>
+                  <dt>天气</dt>
+                  <dd>{{ item.weathers.join(' / ') }}</dd>
+                </div>
+                <div>
+                  <dt>稀有度</dt>
+                  <dd>{{ item.rarity }} 星</dd>
+                </div>
+                <div>
+                  <dt>出现地图</dt>
+                  <dd>{{ item.maps.join(' / ') }}</dd>
+                </div>
+              </dl>
+            </li>
+          </ul>
+        </DetailSection>
+      </div>
+
+      <EditHistoryPanel :entity="habitat" :history="habitat.editHistory" />
     </div>
   </section>
 </template>

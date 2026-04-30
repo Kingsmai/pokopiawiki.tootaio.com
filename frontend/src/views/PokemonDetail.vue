@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
-import EditMeta from '../components/EditMeta.vue';
+import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -165,78 +165,79 @@ onMounted(async () => {
   <section v-else class="page-stack">
     <PageHeader :title="`#${pokemon.id} ${pokemon.name}`" :subtitle="`喜欢的环境：${pokemon.environment.name}`">
       <template #kicker>Pokédex Detail</template>
-      <template #meta>
-        <EditMeta :entity="pokemon" />
-      </template>
       <template #actions>
         <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">编辑</RouterLink>
         <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">返回列表</RouterLink>
       </template>
     </PageHeader>
 
-    <div class="detail-grid detail-grid--stack">
-      <DetailSection title="特长">
-        <EntityChips :items="pokemon.skills" />
-      </DetailSection>
+    <div class="detail-with-sidebar">
+      <div class="detail-grid detail-grid--stack">
+        <DetailSection title="特长">
+          <EntityChips :items="pokemon.skills" />
+        </DetailSection>
 
-      <DetailSection v-if="skillDropRows.length" title="特长掉落物">
-        <ul class="row-list skill-drop-summary">
-          <li v-for="skill in skillDropRows" :key="skill.id">
-            <span>{{ skill.name }}掉落物</span>
-            <RouterLink v-if="skill.itemDrop" :to="`/items/${skill.itemDrop.id}`">{{ skill.itemDrop.name }}</RouterLink>
-          </li>
-        </ul>
-      </DetailSection>
-
-      <DetailSection title="喜欢的东西">
-        <EntityChips :items="pokemon.favorite_things" />
-      </DetailSection>
-
-      <DetailSection title="关联物品">
-        <template v-if="pokemon.favoriteThingItems.length">
-          <Tabs
-            v-if="itemCategoryTabs.length"
-            id="pokemon-favorite-items"
-            v-model="itemCategoryTab"
-            :tabs="itemCategoryTabs"
-            label="关联物品分类"
-          />
-          <ul v-if="favoriteThingItems.length" class="row-list">
-            <li v-for="item in favoriteThingItems" :key="item.id">
-              <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
-              <EntityChips :items="item.tags" />
+        <DetailSection v-if="skillDropRows.length" title="特长掉落物">
+          <ul class="row-list skill-drop-summary">
+            <li v-for="skill in skillDropRows" :key="skill.id">
+              <span>{{ skill.name }}掉落物</span>
+              <RouterLink v-if="skill.itemDrop" :to="`/items/${skill.itemDrop.id}`">{{ skill.itemDrop.name }}</RouterLink>
             </li>
           </ul>
-          <p v-else class="meta-line">无</p>
-        </template>
-        <p v-else class="meta-line">无</p>
-      </DetailSection>
+        </DetailSection>
 
-      <DetailSection title="栖息地">
-        <ul class="row-list appearance-list">
-          <li v-for="habitat in habitatRows" :key="`${habitat.id}-${habitat.rarity}`">
-            <RouterLink class="appearance-name" :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
-            <dl class="appearance-summary">
-              <div>
-                <dt>时段</dt>
-                <dd>{{ habitat.timeOfDays.join(' / ') }}</dd>
-              </div>
-              <div>
-                <dt>天气</dt>
-                <dd>{{ habitat.weathers.join(' / ') }}</dd>
-              </div>
-              <div>
-                <dt>稀有度</dt>
-                <dd>{{ habitat.rarity }} 星</dd>
-              </div>
-              <div>
-                <dt>出现地图</dt>
-                <dd>{{ habitat.maps.join(' / ') }}</dd>
-              </div>
-            </dl>
-          </li>
-        </ul>
-      </DetailSection>
+        <DetailSection title="喜欢的东西">
+          <EntityChips :items="pokemon.favorite_things" />
+        </DetailSection>
+
+        <DetailSection title="关联物品">
+          <template v-if="pokemon.favoriteThingItems.length">
+            <Tabs
+              v-if="itemCategoryTabs.length"
+              id="pokemon-favorite-items"
+              v-model="itemCategoryTab"
+              :tabs="itemCategoryTabs"
+              label="关联物品分类"
+            />
+            <ul v-if="favoriteThingItems.length" class="row-list">
+              <li v-for="item in favoriteThingItems" :key="item.id">
+                <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
+                <EntityChips :items="item.tags" />
+              </li>
+            </ul>
+            <p v-else class="meta-line">无</p>
+          </template>
+          <p v-else class="meta-line">无</p>
+        </DetailSection>
+
+        <DetailSection title="栖息地">
+          <ul class="row-list appearance-list">
+            <li v-for="habitat in habitatRows" :key="`${habitat.id}-${habitat.rarity}`">
+              <RouterLink class="appearance-name" :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
+              <dl class="appearance-summary">
+                <div>
+                  <dt>时段</dt>
+                  <dd>{{ habitat.timeOfDays.join(' / ') }}</dd>
+                </div>
+                <div>
+                  <dt>天气</dt>
+                  <dd>{{ habitat.weathers.join(' / ') }}</dd>
+                </div>
+                <div>
+                  <dt>稀有度</dt>
+                  <dd>{{ habitat.rarity }} 星</dd>
+                </div>
+                <div>
+                  <dt>出现地图</dt>
+                  <dd>{{ habitat.maps.join(' / ') }}</dd>
+                </div>
+              </dl>
+            </li>
+          </ul>
+        </DetailSection>
+      </div>
+
+      <EditHistoryPanel :entity="pokemon" :history="pokemon.editHistory" />
     </div>
   </section>
 </template>

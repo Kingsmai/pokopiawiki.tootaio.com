@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
-import EditMeta from '../components/EditMeta.vue';
+import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -46,23 +46,24 @@ onMounted(async () => {
   <section v-else class="page-stack">
     <PageHeader :title="recipe.name" subtitle="材料单详情">
       <template #kicker>Recipe Detail</template>
-      <template #meta>
-        <EditMeta :entity="recipe" />
-      </template>
       <template #actions>
         <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">编辑</RouterLink>
         <RouterLink class="ui-button ui-button--blue ui-button--small" to="/recipes">返回列表</RouterLink>
       </template>
     </PageHeader>
 
-    <div class="detail-grid">
-      <DetailSection title="入手方式">
-        <EntityChips :items="recipe.acquisition_methods" />
-      </DetailSection>
+    <div class="detail-with-sidebar">
+      <div class="detail-grid">
+        <DetailSection title="入手方式">
+          <EntityChips :items="recipe.acquisition_methods" />
+        </DetailSection>
 
-      <DetailSection title="需要材料">
-        <EntityChips :items="recipe.materials" />
-      </DetailSection>
+        <DetailSection title="需要材料">
+          <EntityChips :items="recipe.materials" />
+        </DetailSection>
+      </div>
+
+      <EditHistoryPanel :entity="recipe" :history="recipe.editHistory" />
     </div>
   </section>
 </template>

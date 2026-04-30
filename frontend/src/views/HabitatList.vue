@@ -2,6 +2,9 @@
 import { onMounted, ref } from 'vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
+import EntityCard from '../components/EntityCard.vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api, type Habitat } from '../services/api';
 
 const habitats = ref<Habitat[]>([]);
@@ -14,22 +17,18 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">栖息地</h1>
-        <p class="page-subtitle">查看配方和可能出现的宝可梦。</p>
-      </div>
-    </div>
+  <section class="page-stack">
+    <PageHeader title="栖息地" subtitle="查看配方和可能出现的宝可梦。">
+      <template #kicker>Habitats</template>
+    </PageHeader>
 
-    <p v-if="loading" class="status">加载中</p>
-    <div v-else class="grid">
-      <RouterLink v-for="item in habitats" :key="item.id" class="entity-card" :to="`/habitats/${item.id}`">
-        <h2>{{ item.name }}</h2>
+    <StatusMessage v-if="loading" :duration="0">加载中</StatusMessage>
+    <div v-else class="entity-grid">
+      <EntityCard v-for="item in habitats" :key="item.id" :title="item.name" :to="`/habitats/${item.id}`" marker="◎">
         <EditMeta :entity="item" />
         <EntityChips :items="item.recipe" />
         <EntityChips :items="item.pokemon ?? []" />
-      </RouterLink>
+      </EntityCard>
     </div>
   </section>
 </template>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import {
   api,
@@ -467,13 +469,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <section>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">管理</h1>
-        <p class="page-subtitle">维护 Wiki 数据和系统配置。</p>
-      </div>
-    </div>
+  <section class="page-stack">
+    <PageHeader title="管理" subtitle="维护 Wiki 数据和系统配置。">
+      <template #kicker>Admin</template>
+    </PageHeader>
 
     <div v-if="canEdit" class="tabs" role="tablist" aria-label="管理模块">
       <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" type="button" @click="setTab(tab.key)">
@@ -481,7 +480,7 @@ onMounted(() => {
       </button>
     </div>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <StatusMessage v-if="message" variant="warning">{{ message }}</StatusMessage>
 
     <section v-if="canEdit && activeTab === 'config'" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveConfig">

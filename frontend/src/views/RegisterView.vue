@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api } from '../services/api';
 
 const email = ref('');
@@ -32,12 +34,9 @@ async function submitRegister() {
 <template>
   <section class="auth-page">
     <div class="auth-panel">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">注册</h1>
-          <p class="page-subtitle">创建账号后需要完成邮箱验证</p>
-        </div>
-      </div>
+      <PageHeader title="注册" subtitle="创建账号后需要完成邮箱验证">
+        <template #kicker>Trainer Pass</template>
+      </PageHeader>
 
       <form class="auth-form" @submit.prevent="submitRegister">
         <div class="field">
@@ -62,10 +61,10 @@ async function submitRegister() {
           />
         </div>
 
-        <p v-if="message" class="auth-message">{{ message }}</p>
-        <p v-if="errorMessage" class="auth-message error">{{ errorMessage }}</p>
+        <StatusMessage v-if="message" variant="success">{{ message }}</StatusMessage>
+        <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
 
-        <button class="primary-button" :disabled="busy" type="submit">
+        <button class="ui-button ui-button--primary" :disabled="busy" type="submit">
           {{ busy ? '发送中' : '发送验证邮件' }}
         </button>
       </form>

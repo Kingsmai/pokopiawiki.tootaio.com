@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import DetailSection from '../components/DetailSection.vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api, type HabitatDetail } from '../services/api';
 
 const route = useRoute();
@@ -78,25 +81,24 @@ onMounted(async () => {
 </script>
 
 <template>
-  <p v-if="!habitat" class="status">加载中</p>
-  <section v-else>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">{{ habitat.name }}</h1>
-        <p class="page-subtitle">栖息地详情</p>
+  <StatusMessage v-if="!habitat" :duration="0">加载中</StatusMessage>
+  <section v-else class="page-stack">
+    <PageHeader :title="habitat.name" subtitle="栖息地详情">
+      <template #kicker>Habitat Detail</template>
+      <template #meta>
         <EditMeta :entity="habitat" />
-      </div>
-      <RouterLink class="link-button" to="/habitats">返回列表</RouterLink>
-    </div>
+      </template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">返回列表</RouterLink>
+      </template>
+    </PageHeader>
 
     <div class="detail-grid">
-      <section class="detail-section">
-        <h2>配方列表</h2>
+      <DetailSection title="配方列表">
         <EntityChips :items="habitat.recipe" />
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>可能出现的宝可梦</h2>
+      <DetailSection title="可能出现的宝可梦">
         <ul class="row-list appearance-list">
           <li v-for="item in pokemonRows" :key="`${item.id}-${item.rarity}`">
             <RouterLink class="appearance-name" :to="`/pokemon/${item.id}`">{{ item.name }}</RouterLink>
@@ -120,7 +122,7 @@ onMounted(async () => {
             </dl>
           </li>
         </ul>
-      </section>
+      </DetailSection>
     </div>
   </section>
 </template>

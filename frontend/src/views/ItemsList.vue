@@ -2,6 +2,10 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
+import EntityCard from '../components/EntityCard.vue';
+import FilterPanel from '../components/FilterPanel.vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Item, type Options, type Recipe } from '../services/api';
 
@@ -41,20 +45,17 @@ watch([tab, itemQuery], loadItems);
 </script>
 
 <template>
-  <section>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">物品 / 材料单</h1>
-        <p class="page-subtitle">按分类、用途、标签查看物品，并浏览材料单。</p>
-      </div>
-    </div>
+  <section class="page-stack">
+    <PageHeader title="物品 / 材料单" subtitle="按分类、用途、标签查看物品，并浏览材料单。">
+      <template #kicker>Bag</template>
+    </PageHeader>
 
     <div class="tabs" role="tablist" aria-label="物品和材料单">
       <button :class="{ active: tab === 'items' }" type="button" @click="tab = 'items'">物品</button>
       <button :class="{ active: tab === 'recipes' }" type="button" @click="tab = 'recipes'">材料单</button>
     </div>
 
-    <div v-if="tab === 'items' && options" class="toolbar">
+    <FilterPanel v-if="tab === 'items' && options">
       <div class="field">
         <label for="item-search">搜索</label>
         <input id="item-search" v-model="search" type="search" placeholder="名称" />
@@ -88,24 +89,28 @@ watch([tab, itemQuery], loadItems);
         <label for="tags">标签</label>
         <TagsSelect id="tags" v-model="tagIds" :options="options.itemTags" placeholder="搜索标签" />
       </div>
-    </div>
+    </FilterPanel>
 
-    <p v-if="loading" class="status">加载中</p>
-    <div v-else-if="tab === 'items'" class="grid">
-      <RouterLink v-for="item in items" :key="item.id" class="entity-card" :to="`/items/${item.id}`">
-        <h2>{{ item.name }}</h2>
-        <p class="meta-line">{{ item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name }}</p>
+    <StatusMessage v-if="loading" :duration="0">加载中</StatusMessage>
+    <div v-else-if="tab === 'items'" class="entity-grid">
+      <EntityCard
+        v-for="item in items"
+        :key="item.id"
+        :title="item.name"
+        :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name"
+        :to="`/items/${item.id}`"
+        marker="＋"
+      >
         <EditMeta :entity="item" />
         <EntityChips :items="item.tags" />
-      </RouterLink>
+      </EntityCard>
     </div>
 
-    <div v-else class="grid">
-      <RouterLink v-for="item in recipes" :key="item.id" class="entity-card" :to="`/recipes/${item.id}`">
-        <h2>{{ item.name }}</h2>
+    <div v-else class="entity-grid">
+      <EntityCard v-for="item in recipes" :key="item.id" :title="item.name" :to="`/recipes/${item.id}`" marker="▦">
         <EditMeta :entity="item" />
         <EntityChips :items="item.materials" />
-      </RouterLink>
+      </EntityCard>
     </div>
   </section>
 </template>

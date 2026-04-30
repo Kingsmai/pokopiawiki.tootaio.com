@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api, setAuthToken } from '../services/api';
 
 const route = useRoute();
@@ -37,12 +39,9 @@ async function submitLogin() {
 <template>
   <section class="auth-page">
     <div class="auth-panel">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">登录</h1>
-          <p class="page-subtitle">使用已验证邮箱进入 Pokopia Wiki</p>
-        </div>
-      </div>
+      <PageHeader title="登录" subtitle="使用已验证邮箱进入 Pokopia Wiki">
+        <template #kicker>Trainer Pass</template>
+      </PageHeader>
 
       <form class="auth-form" @submit.prevent="submitLogin">
         <div class="field">
@@ -55,9 +54,9 @@ async function submitLogin() {
           <input id="login-password" v-model="password" autocomplete="current-password" required type="password" />
         </div>
 
-        <p v-if="errorMessage" class="auth-message error">{{ errorMessage }}</p>
+        <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
 
-        <button class="primary-button" :disabled="busy" type="submit">
+        <button class="ui-button ui-button--primary" :disabled="busy" type="submit">
           {{ busy ? '登录中' : '登录' }}
         </button>
       </form>

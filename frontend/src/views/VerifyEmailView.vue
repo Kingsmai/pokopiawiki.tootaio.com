@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api } from '../services/api';
 
 const route = useRoute();
@@ -31,18 +33,15 @@ onMounted(async () => {
 <template>
   <section class="auth-page">
     <div class="auth-panel">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">邮箱验证</h1>
-          <p class="page-subtitle">完成验证后即可登录</p>
-        </div>
-      </div>
+      <PageHeader title="邮箱验证" subtitle="完成验证后即可登录">
+        <template #kicker>Trainer Pass</template>
+      </PageHeader>
 
-      <p v-if="busy" class="auth-message">正在验证邮箱</p>
-      <p v-else-if="message" class="auth-message">{{ message }}</p>
-      <p v-else class="auth-message error">{{ errorMessage }}</p>
+      <StatusMessage v-if="busy" :duration="0">正在验证邮箱</StatusMessage>
+      <StatusMessage v-else-if="message" variant="success">{{ message }}</StatusMessage>
+      <StatusMessage v-else variant="danger">{{ errorMessage }}</StatusMessage>
 
-      <RouterLink class="primary-button" to="/login">去登录</RouterLink>
+      <RouterLink class="ui-button ui-button--primary" to="/login">去登录</RouterLink>
     </div>
   </section>
 </template>

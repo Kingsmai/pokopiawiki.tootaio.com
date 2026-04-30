@@ -2,6 +2,10 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
+import EntityCard from '../components/EntityCard.vue';
+import FilterPanel from '../components/FilterPanel.vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Options, type Pokemon } from '../services/api';
 
@@ -39,15 +43,12 @@ watch(query, loadPokemon);
 </script>
 
 <template>
-  <section>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Pokemon</h1>
-        <p class="page-subtitle">搜索宝可梦，并按特长、环境、喜欢的东西筛选。</p>
-      </div>
-    </div>
+  <section class="page-stack">
+    <PageHeader title="Pokemon" subtitle="搜索宝可梦，并按特长、环境、喜欢的东西筛选。">
+      <template #kicker>Pokédex</template>
+    </PageHeader>
 
-    <div v-if="options" class="toolbar">
+    <FilterPanel v-if="options">
       <div class="field">
         <label for="pokemon-search">搜索</label>
         <input id="pokemon-search" v-model="search" type="search" placeholder="名字" />
@@ -86,17 +87,21 @@ watch(query, loadPokemon);
           </button>
         </div>
       </div>
-    </div>
+    </FilterPanel>
 
-    <p v-if="loading" class="status">加载中</p>
-    <div v-else class="grid">
-      <RouterLink v-for="item in pokemon" :key="item.id" class="entity-card" :to="`/pokemon/${item.id}`">
-        <h2>#{{ item.id }} {{ item.name }}</h2>
-        <p class="meta-line">喜欢的环境：{{ item.environment.name }}</p>
+    <StatusMessage v-if="loading" :duration="0">加载中</StatusMessage>
+    <div v-else class="entity-grid">
+      <EntityCard
+        v-for="item in pokemon"
+        :key="item.id"
+        :title="`#${item.id} ${item.name}`"
+        :subtitle="`喜欢的环境：${item.environment.name}`"
+        :to="`/pokemon/${item.id}`"
+      >
         <EditMeta :entity="item" />
         <EntityChips :items="item.skills" />
         <EntityChips :items="item.favorite_things" />
-      </RouterLink>
+      </EntityCard>
     </div>
   </section>
 </template>

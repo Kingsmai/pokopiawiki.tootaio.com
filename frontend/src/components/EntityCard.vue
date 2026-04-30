@@ -1,0 +1,36 @@
+<script setup lang="ts">
+import PokeBallMark from './PokeBallMark.vue';
+
+defineProps<{
+  title: string;
+  subtitle?: string;
+  to?: string;
+  marker?: string;
+}>();
+</script>
+
+<template>
+  <RouterLink v-if="to" class="entity-card entity-card--link" :to="to">
+    <span class="entity-card__mark">
+      <PokeBallMark v-if="!marker" size="30px" />
+      <span v-else>{{ marker }}</span>
+    </span>
+    <div class="entity-card__content">
+      <span class="entity-card__title">{{ title }}</span>
+      <span v-if="subtitle" class="entity-card__subtitle">{{ subtitle }}</span>
+      <slot></slot>
+    </div>
+  </RouterLink>
+
+  <article v-else class="entity-card">
+    <span class="entity-card__mark">
+      <PokeBallMark v-if="!marker" size="30px" />
+      <span v-else>{{ marker }}</span>
+    </span>
+    <div class="entity-card__content">
+      <span class="entity-card__title">{{ title }}</span>
+      <span v-if="subtitle" class="entity-card__subtitle">{{ subtitle }}</span>
+      <slot></slot>
+    </div>
+  </article>
+</template>

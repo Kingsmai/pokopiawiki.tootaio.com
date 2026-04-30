@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import DetailSection from '../components/DetailSection.vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api, type PokemonDetail } from '../services/api';
 
 const route = useRoute();
@@ -78,30 +81,28 @@ onMounted(async () => {
 </script>
 
 <template>
-  <p v-if="!pokemon" class="status">加载中</p>
-  <section v-else>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">#{{ pokemon.id }} {{ pokemon.name }}</h1>
-        <p class="page-subtitle">喜欢的环境：{{ pokemon.environment.name }}</p>
+  <StatusMessage v-if="!pokemon" :duration="0">加载中</StatusMessage>
+  <section v-else class="page-stack">
+    <PageHeader :title="`#${pokemon.id} ${pokemon.name}`" :subtitle="`喜欢的环境：${pokemon.environment.name}`">
+      <template #kicker>Pokédex Detail</template>
+      <template #meta>
         <EditMeta :entity="pokemon" />
-      </div>
-      <RouterLink class="link-button" to="/pokemon">返回列表</RouterLink>
-    </div>
+      </template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">返回列表</RouterLink>
+      </template>
+    </PageHeader>
 
     <div class="detail-grid">
-      <section class="detail-section">
-        <h2>特长</h2>
+      <DetailSection title="特长">
         <EntityChips :items="pokemon.skills" />
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>喜欢的东西</h2>
+      <DetailSection title="喜欢的东西">
         <EntityChips :items="pokemon.favorite_things" />
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>栖息地</h2>
+      <DetailSection title="栖息地">
         <ul class="row-list appearance-list">
           <li v-for="habitat in habitatRows" :key="`${habitat.id}-${habitat.rarity}`">
             <RouterLink class="appearance-name" :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
@@ -125,7 +126,7 @@ onMounted(async () => {
             </dl>
           </li>
         </ul>
-      </section>
+      </DetailSection>
     </div>
   </section>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import AppShell from './components/AppShell.vue';
 import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser } from './services/api';
 
 const navItems = [
@@ -54,31 +55,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="topbar-main">
-        <RouterLink class="brand" to="/pokemon">Pokopia Wiki</RouterLink>
-        <nav class="nav-tabs" aria-label="主导航">
-          <RouterLink v-for="item in navItems" :key="item.to" :to="item.to">
-            {{ item.label }}
-          </RouterLink>
-        </nav>
-      </div>
-
-      <div class="auth-actions">
-        <template v-if="currentUser">
-          <span class="auth-user">{{ currentUser.displayName || currentUser.email }}</span>
-          <button class="plain-button" type="button" @click="logout">退出</button>
-        </template>
-        <template v-else>
-          <RouterLink to="/login">登录</RouterLink>
-          <RouterLink to="/register">注册</RouterLink>
-        </template>
-      </div>
-    </header>
-
-    <main class="page">
-      <RouterView />
-    </main>
-  </div>
+  <AppShell :current-user="currentUser" :nav-items="navItems" @logout="logout">
+    <RouterView />
+  </AppShell>
 </template>

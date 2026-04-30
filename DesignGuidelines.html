@@ -1,0 +1,4142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pokémon UI Library Design Guidelines v3</title>
+  <meta name="description" content="面向已获授权 Pokémon 项目的完整 UI 库设计规范，覆盖品牌元素、视觉令牌、控件、导航、反馈、数据展示、专属产品组件与页面模板。" />
+  <style>
+    :root {
+      color-scheme: light;
+
+      --pokemon-yellow: #ffcb05;
+      --pokemon-yellow-2: #ffe46b;
+      --pokemon-blue: #2a75bb;
+      --pokemon-blue-deep: #003a70;
+      --pokemon-red: #ee1515;
+      --pokemon-red-deep: #cc0000;
+      --pokeball-black: #202124;
+      --pokeball-white: #f7f8fb;
+
+      --type-normal: #a8a77a;
+      --type-fire: #ee8130;
+      --type-water: #6390f0;
+      --type-electric: #f7d02c;
+      --type-grass: #7ac74c;
+      --type-ice: #96d9d6;
+      --type-fighting: #c22e28;
+      --type-poison: #a33ea1;
+      --type-ground: #e2bf65;
+      --type-flying: #a98ff3;
+      --type-psychic: #f95587;
+      --type-bug: #a6b91a;
+      --type-rock: #b6a136;
+      --type-ghost: #735797;
+      --type-dragon: #6f35fc;
+      --type-dark: #705746;
+      --type-steel: #b7b7ce;
+      --type-fairy: #d685ad;
+      --type-stellar: #35c4f0;
+
+      --bg: #f2f5fa;
+      --bg-alt: #eaf1fb;
+      --surface: #ffffff;
+      --surface-raised: #ffffff;
+      --surface-soft: #f8fafd;
+      --ink: #151923;
+      --ink-soft: #354052;
+      --muted: #687487;
+      --line: #d8deea;
+      --line-strong: #1f2a3b;
+      --focus: #0b63ce;
+      --success: #2eb872;
+      --warning: #ffb800;
+      --danger: #df2f2f;
+
+      --radius-card: 8px;
+      --radius-control: 8px;
+      --radius-small: 6px;
+      --shadow-raised: 0 14px 32px rgba(23, 35, 54, .13);
+      --shadow-control: 0 3px 0 var(--line-strong);
+      --shadow-soft: 0 8px 22px rgba(23, 35, 54, .09);
+      --container: 1240px;
+
+      --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font-display: "Arial Rounded MT Bold", "Nunito", "Avenir Next Rounded", var(--font-sans);
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    [data-theme="night"] {
+      color-scheme: dark;
+      --bg: #101722;
+      --bg-alt: #151f2e;
+      --surface: #182233;
+      --surface-raised: #1d2a3f;
+      --surface-soft: #121c2c;
+      --ink: #f5f8ff;
+      --ink-soft: #dce6f5;
+      --muted: #a8b5c7;
+      --line: #334158;
+      --line-strong: #f5f8ff;
+      --shadow-raised: 0 16px 36px rgba(0, 0, 0, .34);
+      --shadow-soft: 0 8px 24px rgba(0, 0, 0, .28);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      background:
+        linear-gradient(90deg, rgba(42, 117, 187, .08) 1px, transparent 1px) 0 0 / 32px 32px,
+        linear-gradient(rgba(42, 117, 187, .08) 1px, transparent 1px) 0 0 / 32px 32px,
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 100%);
+      overflow-x: hidden;
+    }
+
+    body.lock-scroll {
+      overflow: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+    }
+
+    code {
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--pokemon-blue-deep);
+      font-family: var(--font-mono);
+      font-size: .88em;
+    }
+
+    [data-theme="night"] code {
+      color: var(--pokemon-yellow);
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    img,
+    svg {
+      display: block;
+      max-width: 100%;
+    }
+
+    :focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+    }
+
+    .container {
+      width: min(100%, var(--container));
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid rgba(31, 42, 59, .12);
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      backdrop-filter: blur(18px);
+    }
+
+    .top-nav {
+      min-height: 70px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 22px;
+    }
+
+    .brand-lockup {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 220px;
+    }
+
+    .pokemon-word {
+      display: inline-block;
+      color: var(--pokemon-yellow);
+      font-family: var(--font-display);
+      font-size: 1.75rem;
+      font-weight: 900;
+      line-height: .9;
+      -webkit-text-stroke: 2px var(--pokemon-blue-deep);
+      text-shadow: 2px 3px 0 var(--pokemon-blue);
+    }
+
+    .brand-subtitle {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 10px;
+      border-radius: var(--radius-control);
+      color: var(--ink-soft);
+      font-size: .9rem;
+      font-weight: 800;
+    }
+
+    .nav-links a:hover {
+      background: rgba(255, 203, 5, .22);
+      color: var(--ink);
+    }
+
+    .nav-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pokeball {
+      position: relative;
+      width: var(--ball-size, 44px);
+      height: var(--ball-size, 44px);
+      flex: 0 0 auto;
+      border: calc(var(--ball-size, 44px) * .07) solid var(--pokeball-black);
+      border-radius: 50%;
+      background:
+        linear-gradient(to bottom, var(--pokemon-red) 0 45%, var(--pokeball-black) 45% 55%, var(--pokeball-white) 55% 100%);
+      box-shadow: inset 0 4px 0 rgba(255,255,255,.45), 0 3px 0 rgba(0,0,0,.18);
+    }
+
+    .pokeball::after {
+      content: "";
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: calc(var(--ball-size, 44px) * .34);
+      height: calc(var(--ball-size, 44px) * .34);
+      transform: translate(-50%, -50%);
+      border: calc(var(--ball-size, 44px) * .055) solid var(--pokeball-black);
+      border-radius: 50%;
+      background: var(--pokeball-white);
+      box-shadow: inset 0 0 0 calc(var(--ball-size, 44px) * .055) #dfe5ef;
+    }
+
+    .section {
+      padding: 58px 0;
+    }
+
+    .section.band {
+      background: color-mix(in srgb, var(--surface) 72%, transparent);
+      border-top: 1px solid rgba(31, 42, 59, .08);
+      border-bottom: 1px solid rgba(31, 42, 59, .08);
+    }
+
+    .section-header {
+      display: grid;
+      gap: 10px;
+      max-width: 860px;
+      margin-bottom: 24px;
+    }
+
+    .section-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      color: var(--pokemon-blue);
+      font-size: .82rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .section-kicker::before {
+      content: "";
+      width: 18px;
+      height: 18px;
+      border: 3px solid var(--line-strong);
+      border-radius: 50%;
+      background:
+        linear-gradient(to bottom, var(--pokemon-red) 0 44%, var(--line-strong) 44% 56%, var(--surface) 56% 100%);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      margin: 0;
+      font-family: var(--font-display);
+      line-height: 1.08;
+    }
+
+    h1 {
+      max-width: 820px;
+      font-size: 4.9rem;
+      font-weight: 950;
+    }
+
+    h2 {
+      font-size: 2.85rem;
+      font-weight: 950;
+    }
+
+    h3 {
+      font-size: 1.35rem;
+      font-weight: 950;
+    }
+
+    h4 {
+      font-size: 1rem;
+      font-weight: 950;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      color: var(--ink-soft);
+      font-size: 1.08rem;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .hero {
+      min-height: calc(100vh - 70px);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 460px;
+      align-items: center;
+      gap: 44px;
+      padding-top: 34px;
+      padding-bottom: 38px;
+    }
+
+    .hero-copy {
+      margin-top: 20px;
+      color: var(--ink-soft);
+      font-size: 1.18rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .quick-index {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 30px;
+      max-width: 720px;
+    }
+
+    .quick-index a {
+      min-height: 74px;
+      display: grid;
+      align-content: center;
+      gap: 2px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      transition: transform .16s ease, border-color .16s ease;
+    }
+
+    .quick-index a:hover {
+      transform: translateY(-2px);
+      border-color: var(--pokemon-blue);
+    }
+
+    .quick-index strong {
+      font-family: var(--font-display);
+      line-height: 1.1;
+    }
+
+    .quick-index span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+
+    .pokedex-shell {
+      position: relative;
+      border: 4px solid #7b0f16;
+      border-radius: var(--radius-card);
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.15) 0 18%, transparent 18% 100%),
+        linear-gradient(180deg, #f43c3c 0%, #d81724 100%);
+      box-shadow: 0 9px 0 #7b0f16, var(--shadow-raised);
+      overflow: hidden;
+    }
+
+    .pokedex-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 18px;
+      border-bottom: 4px solid #7b0f16;
+    }
+
+    .pokedex-lights {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lens {
+      width: 44px;
+      height: 44px;
+      border: 4px solid #ffffff;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 32% 28%, #ffffff 0 12%, transparent 14%),
+        #45b8ff;
+      box-shadow: 0 0 0 3px #172036, inset 0 -8px 0 rgba(0,0,0,.18);
+    }
+
+    .signal {
+      width: 15px;
+      height: 15px;
+      border: 2px solid #172036;
+      border-radius: 50%;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,.42);
+    }
+
+    .signal.red {
+      background: #ff3f4a;
+    }
+
+    .signal.yellow {
+      background: var(--pokemon-yellow);
+    }
+
+    .signal.green {
+      background: #38d678;
+    }
+
+    .pokedex-code {
+      padding: 7px 10px;
+      border: 2px solid #172036;
+      border-radius: var(--radius-small);
+      background: #172036;
+      color: #ffffff;
+      font-family: var(--font-mono);
+      font-size: .82rem;
+      font-weight: 800;
+    }
+
+    .pokedex-body {
+      padding: 18px;
+    }
+
+    .pokedex-screen {
+      min-height: 456px;
+      padding: 16px;
+      border: 4px solid #172036;
+      border-radius: var(--radius-card);
+      background:
+        linear-gradient(90deg, rgba(42,117,187,.08) 1px, transparent 1px) 0 0 / 18px 18px,
+        linear-gradient(rgba(42,117,187,.08) 1px, transparent 1px) 0 0 / 18px 18px,
+        #eef9ff;
+      color: #172036;
+    }
+
+    .screen-topline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .dex-number {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 9px;
+      border: 2px solid #172036;
+      border-radius: var(--radius-small);
+      background: #172036;
+      color: #ffffff;
+      font-family: var(--font-mono);
+      font-size: .78rem;
+      font-weight: 900;
+    }
+
+    .sprite-stage {
+      min-height: 184px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 12px;
+      border: 2px solid rgba(23,32,54,.18);
+      border-radius: var(--radius-card);
+      background:
+        linear-gradient(135deg, rgba(255,203,5,.24), rgba(42,117,187,.12)),
+        #ffffff;
+    }
+
+    .pikachu-face {
+      position: relative;
+      width: 138px;
+      height: 122px;
+      border: 4px solid #4a3216;
+      border-radius: 50% 50% 44% 44%;
+      background:
+        radial-gradient(circle at 32% 48%, #281b12 0 7px, transparent 8px),
+        radial-gradient(circle at 68% 48%, #281b12 0 7px, transparent 8px),
+        radial-gradient(circle at 21% 66%, #ee1515 0 13px, transparent 14px),
+        radial-gradient(circle at 79% 66%, #ee1515 0 13px, transparent 14px),
+        radial-gradient(ellipse at 50% 66%, #4a3216 0 4px, transparent 5px),
+        var(--pokemon-yellow);
+      box-shadow: inset 0 8px 0 rgba(255,255,255,.28), 0 8px 0 rgba(0,0,0,.12);
+    }
+
+    .pikachu-face::before,
+    .pikachu-face::after {
+      content: "";
+      position: absolute;
+      top: -66px;
+      width: 38px;
+      height: 92px;
+      border: 4px solid #4a3216;
+      border-bottom: 0;
+      border-radius: 70% 70% 18% 18%;
+      background:
+        linear-gradient(to bottom, #4a3216 0 31%, var(--pokemon-yellow) 32% 100%);
+      transform-origin: bottom center;
+      z-index: -1;
+    }
+
+    .pikachu-face::before {
+      left: 16px;
+      transform: rotate(-24deg);
+    }
+
+    .pikachu-face::after {
+      right: 16px;
+      transform: rotate(24deg);
+    }
+
+    .dex-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .dex-title-row h3 {
+      color: #172036;
+      font-size: 1.55rem;
+    }
+
+    .stat-list {
+      display: grid;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: 44px 1fr 36px;
+      align-items: center;
+      gap: 8px;
+      font-size: .78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .stat-track {
+      height: 12px;
+      overflow: hidden;
+      border: 2px solid #172036;
+      border-radius: 999px;
+      background: #ffffff;
+    }
+
+    .stat-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--pokemon-blue);
+    }
+
+    .pokedex-controls {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .dpad {
+      width: 74px;
+      height: 74px;
+      position: relative;
+    }
+
+    .dpad::before,
+    .dpad::after {
+      content: "";
+      position: absolute;
+      inset: 50% auto auto 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 7px;
+      background: #172036;
+    }
+
+    .dpad::before {
+      width: 24px;
+      height: 74px;
+    }
+
+    .dpad::after {
+      width: 74px;
+      height: 24px;
+    }
+
+    .screen-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      --btn-bg: var(--surface);
+      --btn-fg: var(--ink);
+      --btn-border: var(--line-strong);
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border: 2px solid var(--btn-border);
+      border-radius: var(--radius-control);
+      background: var(--btn-bg);
+      color: var(--btn-fg);
+      box-shadow: var(--shadow-control);
+      font-weight: 900;
+      line-height: 1.1;
+      cursor: pointer;
+      transition: transform .14s ease, box-shadow .14s ease, background .14s ease, border-color .14s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 0 var(--line-strong);
+    }
+
+    .btn:active,
+    .btn.is-active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 var(--line-strong);
+    }
+
+    .btn.primary {
+      --btn-bg: var(--pokemon-yellow);
+      --btn-fg: #172036;
+    }
+
+    .btn.blue {
+      --btn-bg: var(--pokemon-blue);
+      --btn-fg: #ffffff;
+    }
+
+    .btn.red {
+      --btn-bg: var(--pokemon-red);
+      --btn-fg: #ffffff;
+    }
+
+    .btn.ghost {
+      --btn-bg: transparent;
+      --btn-border: var(--line);
+      box-shadow: none;
+    }
+
+    .btn.small {
+      min-height: 36px;
+      padding: 7px 10px;
+      font-size: .86rem;
+      box-shadow: 0 2px 0 var(--line-strong);
+    }
+
+    .btn.large {
+      min-height: 54px;
+      padding: 13px 18px;
+      font-size: 1.05rem;
+    }
+
+    .btn:disabled,
+    .btn.disabled {
+      opacity: .48;
+      transform: none;
+      box-shadow: 0 2px 0 var(--line);
+      cursor: not-allowed;
+    }
+
+    .icon {
+      width: 1.05em;
+      height: 1.05em;
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      font-weight: 950;
+      line-height: 1;
+    }
+
+    .icon-btn {
+      width: 44px;
+      min-width: 44px;
+      padding: 0;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid.four {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .grid.six {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .card.padded {
+      padding: 18px;
+    }
+
+    .card.strong {
+      border: 2px solid var(--line-strong);
+      box-shadow: var(--shadow-control);
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .card-title h3,
+    .card-title h4 {
+      min-width: 0;
+    }
+
+    .rule-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .rule-list li {
+      position: relative;
+      padding-left: 28px;
+      color: var(--ink-soft);
+    }
+
+    .rule-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: .32em;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--line-strong);
+      border-radius: 50%;
+      background:
+        linear-gradient(to bottom, var(--pokemon-red) 0 45%, var(--line-strong) 45% 55%, var(--surface) 55% 100%);
+    }
+
+    .token-swatch {
+      min-height: 148px;
+      display: grid;
+      align-content: space-between;
+      gap: 16px;
+      padding: 14px;
+      border: 1px solid rgba(31, 42, 59, .22);
+      border-radius: var(--radius-card);
+      color: #ffffff;
+      background: var(--swatch);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .token-swatch.light-text {
+      color: #172036;
+    }
+
+    .token-swatch strong {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      line-height: 1.1;
+    }
+
+    .token-swatch span {
+      opacity: .92;
+      font-size: .86rem;
+    }
+
+    .token-swatch code {
+      width: fit-content;
+      border-color: rgba(31,42,59,.2);
+      background: rgba(255,255,255,.86);
+      color: #172036;
+    }
+
+    .type-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .type-chip {
+      --type-bg: var(--type-normal);
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border: 1px solid rgba(0,0,0,.18);
+      border-radius: 999px;
+      background: var(--type-bg);
+      color: #ffffff;
+      font-size: .78rem;
+      font-weight: 950;
+      line-height: 1;
+      text-shadow: 0 1px 0 rgba(0,0,0,.22);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .type-chip::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border: 2px solid rgba(255,255,255,.85);
+      border-radius: 50%;
+      background: rgba(255,255,255,.24);
+      flex: 0 0 auto;
+    }
+
+    .type-chip.type-image-chip {
+      --type-badge-height: 20px;
+      width: auto;
+      max-width: 100%;
+      height: var(--type-badge-height);
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      color: inherit;
+      line-height: 0;
+      text-shadow: none;
+      justify-self: start;
+    }
+
+    .type-chip.type-image-chip::before {
+      content: none;
+      display: none;
+    }
+
+    .type-chip.type-image-chip img {
+      width: auto;
+      max-width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 0 rgba(31, 42, 59, .18));
+    }
+
+    .type-grid .type-image-chip {
+      --type-badge-height: 25px;
+      justify-self: center;
+    }
+
+    .data-table .type-image-chip,
+    .dex-mini-card .type-image-chip {
+      --type-badge-height: 28px;
+    }
+
+    .screen-topline .type-image-chip,
+    .pokemon-card .type-image-chip,
+    .suggestion-item .type-image-chip,
+    .type-toggle .type-image-chip,
+    .evolution-node .type-image-chip,
+    .move-card .type-image-chip,
+    .weakness-cell .type-image-chip,
+    .team-slot .type-image-chip,
+    .event-card .type-image-chip {
+      --type-badge-height: 30px;
+    }
+
+    .type-toggle .type-image-chip,
+    .weakness-cell .type-image-chip {
+      justify-self: center;
+    }
+
+    .type-toggle .type-image-chip,
+    .suggestion-item .type-image-chip,
+    .weakness-cell .type-image-chip,
+    .team-slot .type-image-chip,
+    .event-card .type-image-chip,
+    .move-card .type-image-chip {
+      width: var(--type-badge-height);
+    }
+
+    .type-toggle .type-image-chip img,
+    .suggestion-item .type-image-chip img,
+    .weakness-cell .type-image-chip img,
+    .team-slot .type-image-chip img,
+    .event-card .type-image-chip img,
+    .move-card .type-image-chip img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .small-type-grid {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .small-type-grid .type-image-chip {
+      --type-badge-height: 34px;
+      justify-self: center;
+    }
+
+    .type-normal { --type-bg: var(--type-normal); }
+    .type-fire { --type-bg: var(--type-fire); }
+    .type-water { --type-bg: var(--type-water); }
+    .type-electric { --type-bg: var(--type-electric); color: #172036; text-shadow: none; }
+    .type-grass { --type-bg: var(--type-grass); }
+    .type-ice { --type-bg: var(--type-ice); color: #172036; text-shadow: none; }
+    .type-fighting { --type-bg: var(--type-fighting); }
+    .type-poison { --type-bg: var(--type-poison); }
+    .type-ground { --type-bg: var(--type-ground); color: #172036; text-shadow: none; }
+    .type-flying { --type-bg: var(--type-flying); }
+    .type-psychic { --type-bg: var(--type-psychic); }
+    .type-bug { --type-bg: var(--type-bug); color: #172036; text-shadow: none; }
+    .type-rock { --type-bg: var(--type-rock); }
+    .type-ghost { --type-bg: var(--type-ghost); }
+    .type-dragon { --type-bg: var(--type-dragon); }
+    .type-dark { --type-bg: var(--type-dark); }
+    .type-steel { --type-bg: var(--type-steel); color: #172036; text-shadow: none; }
+    .type-fairy { --type-bg: var(--type-fairy); color: #172036; text-shadow: none; }
+    .type-stellar { --type-bg: var(--type-stellar); color: #172036; text-shadow: none; }
+
+    .foundation-card {
+      min-height: 196px;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .number-mark {
+      width: 42px;
+      height: 42px;
+      display: inline-grid;
+      place-items: center;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      background: var(--pokemon-yellow);
+      box-shadow: 0 3px 0 var(--line-strong);
+      color: #172036;
+      font-family: var(--font-display);
+      font-weight: 950;
+    }
+
+    .asset-showcase {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .brand-panel {
+      min-height: 320px;
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      gap: 18px;
+      padding: 28px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background:
+        linear-gradient(90deg, rgba(31,42,59,.08) 1px, transparent 1px) 0 0 / 28px 28px,
+        linear-gradient(rgba(31,42,59,.08) 1px, transparent 1px) 0 0 / 28px 28px,
+        var(--surface);
+      box-shadow: var(--shadow-control);
+    }
+
+    .brand-panel .pokemon-word {
+      font-size: 4rem;
+      -webkit-text-stroke-width: 3px;
+      text-shadow: 3px 5px 0 var(--pokemon-blue);
+    }
+
+    .asset-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .asset-tile {
+      min-height: 154px;
+      display: grid;
+      place-items: center;
+      gap: 10px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      text-align: center;
+    }
+
+    .asset-tile strong {
+      font-family: var(--font-display);
+    }
+
+    .gym-badge {
+      width: 68px;
+      height: 68px;
+      display: grid;
+      place-items: center;
+      border: 3px solid var(--line-strong);
+      background: var(--pokemon-blue);
+      color: #ffffff;
+      box-shadow: 0 4px 0 var(--line-strong);
+      clip-path: polygon(50% 0, 64% 23%, 91% 19%, 80% 45%, 100% 63%, 71% 67%, 69% 96%, 50% 75%, 31% 96%, 29% 67%, 0 63%, 20% 45%, 9% 19%, 36% 23%);
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      font-weight: 950;
+    }
+
+    .trainer-pass {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 14px;
+      align-items: center;
+      width: min(100%, 360px);
+      padding: 14px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background:
+        linear-gradient(90deg, var(--pokemon-blue) 0 26%, transparent 26% 100%),
+        var(--pokemon-yellow);
+      box-shadow: 0 4px 0 var(--line-strong);
+      color: #172036;
+      text-align: left;
+    }
+
+    .trainer-avatar {
+      width: 64px;
+      height: 64px;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--pokemon-blue);
+      font-family: var(--font-display);
+      font-size: 1.65rem;
+      font-weight: 950;
+    }
+
+    .trainer-pass span {
+      display: block;
+      font-size: .82rem;
+      font-weight: 800;
+    }
+
+    .trainer-pass strong {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+    }
+
+    .demo-surface {
+      display: grid;
+      gap: 14px;
+      padding: 16px;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface-soft);
+    }
+
+    .control-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .control-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field label,
+    .field-label {
+      color: var(--ink-soft);
+      font-size: .86rem;
+      font-weight: 850;
+    }
+
+    .input,
+    .select,
+    .textarea {
+      width: 100%;
+      min-height: 44px;
+      border: 2px solid var(--line);
+      border-radius: var(--radius-control);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 10px 12px;
+      transition: border-color .14s ease, box-shadow .14s ease;
+    }
+
+    .textarea {
+      min-height: 98px;
+      resize: vertical;
+    }
+
+    .input:focus,
+    .select:focus,
+    .textarea:focus {
+      border-color: var(--pokemon-blue);
+      box-shadow: 0 0 0 4px rgba(42, 117, 187, .16);
+      outline: none;
+    }
+
+    .input.is-valid {
+      border-color: var(--success);
+    }
+
+    .input.is-error {
+      border-color: var(--danger);
+    }
+
+    .field-note {
+      color: var(--muted);
+      font-size: .8rem;
+    }
+
+    .field-note.error {
+      color: var(--danger);
+      font-weight: 800;
+    }
+
+    .search-field {
+      position: relative;
+    }
+
+    .search-field .input {
+      padding-left: 42px;
+    }
+
+    .search-field::before {
+      content: "⌕";
+      position: absolute;
+      left: 14px;
+      top: 34px;
+      color: var(--muted);
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+
+    .input-group {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: stretch;
+    }
+
+    .input-addon {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      border: 2px solid var(--line);
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-weight: 850;
+    }
+
+    .input-addon:first-child {
+      border-radius: var(--radius-control) 0 0 var(--radius-control);
+      border-right: 0;
+    }
+
+    .input-addon:last-child {
+      border-radius: 0 var(--radius-control) var(--radius-control) 0;
+      border-left: 0;
+    }
+
+    .input-group .input {
+      border-radius: 0;
+    }
+
+    .check-control,
+    .radio-control,
+    .switch-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 36px;
+      color: var(--ink-soft);
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .check-control input,
+    .radio-control input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--pokemon-blue);
+    }
+
+    .switch-control input {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+    }
+
+    .switch-track {
+      width: 48px;
+      height: 28px;
+      position: relative;
+      border: 2px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--line);
+      transition: background .16s ease;
+    }
+
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 0 2px 0 rgba(0,0,0,.2);
+      transition: transform .16s ease;
+    }
+
+    .switch-control input:checked + .switch-track {
+      background: var(--pokemon-blue);
+    }
+
+    .switch-control input:checked + .switch-track::after {
+      transform: translateX(20px);
+    }
+
+    .range-wrap {
+      display: grid;
+      grid-template-columns: 1fr 44px;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--pokemon-blue);
+    }
+
+    .range-value {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      background: var(--pokemon-yellow);
+      color: #172036;
+      font-weight: 950;
+    }
+
+    .stepper {
+      display: inline-grid;
+      grid-template-columns: 38px 54px 38px;
+      align-items: center;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .stepper button {
+      min-height: 38px;
+      background: var(--pokemon-yellow);
+      color: #172036;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .stepper output {
+      display: grid;
+      place-items: center;
+      min-height: 38px;
+      border-left: 2px solid var(--line-strong);
+      border-right: 2px solid var(--line-strong);
+      font-weight: 900;
+    }
+
+    .segmented {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      border: 2px solid var(--line);
+      border-radius: var(--radius-control);
+      background: var(--surface-soft);
+    }
+
+    .segmented button {
+      min-height: 34px;
+      padding: 6px 11px;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--ink-soft);
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .segmented button[aria-pressed="true"] {
+      background: var(--pokemon-blue);
+      color: #ffffff;
+    }
+
+    .tabs {
+      display: grid;
+      gap: 14px;
+    }
+
+    .tab-list {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .tab-button {
+      min-height: 42px;
+      padding: 9px 13px;
+      border-radius: var(--radius-control) var(--radius-control) 0 0;
+      background: transparent;
+      color: var(--ink-soft);
+      font-weight: 900;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+    }
+
+    .tab-button[aria-selected="true"] {
+      background: var(--surface);
+      color: var(--pokemon-blue-deep);
+      border-color: var(--pokemon-yellow);
+    }
+
+    [data-theme="night"] .tab-button[aria-selected="true"] {
+      color: var(--pokemon-yellow);
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.is-active {
+      display: block;
+    }
+
+    .pokemon-card {
+      display: grid;
+      grid-template-rows: 188px auto;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: var(--shadow-control);
+    }
+
+    .pokemon-card-media {
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background:
+        linear-gradient(90deg, rgba(31,42,59,.07) 1px, transparent 1px) 0 0 / 18px 18px,
+        linear-gradient(rgba(31,42,59,.07) 1px, transparent 1px) 0 0 / 18px 18px,
+        linear-gradient(135deg, rgba(255,203,5,.34), rgba(99,144,240,.18)),
+        var(--surface-soft);
+    }
+
+    .pokemon-card-body {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-top: 2px solid var(--line-strong);
+    }
+
+    .pokemon-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .pokemon-name {
+      display: grid;
+      gap: 4px;
+    }
+
+    .pokemon-name strong {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      line-height: 1.1;
+    }
+
+    .hp-pill {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      border: 2px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--pokemon-yellow);
+      color: #172036;
+      font-family: var(--font-mono);
+      font-size: .78rem;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .avatar-symbol {
+      width: 108px;
+      height: 108px;
+      display: grid;
+      place-items: center;
+      border: 3px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--pokemon-yellow);
+      box-shadow: 0 6px 0 rgba(31,42,59,.22);
+      color: #172036;
+      font-family: var(--font-display);
+      font-size: 2.7rem;
+      font-weight: 950;
+    }
+
+    .progress {
+      display: grid;
+      gap: 6px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 850;
+    }
+
+    .progress-track {
+      height: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-soft);
+    }
+
+    .progress-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--pokemon-blue);
+    }
+
+    .list-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+    }
+
+    .mini-ball {
+      --ball-size: 30px;
+    }
+
+    .data-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+    }
+
+    .data-table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .data-table th {
+      background: var(--pokemon-blue-deep);
+      color: #ffffff;
+      font-size: .82rem;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--ink-soft);
+      font-size: .78rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .status-badge::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status, var(--muted));
+    }
+
+    .status-badge.success { --status: var(--success); }
+    .status-badge.warning { --status: var(--warning); }
+    .status-badge.danger { --status: var(--danger); }
+    .status-badge.info { --status: var(--pokemon-blue); }
+
+    .alert {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--alert-line, var(--line));
+      border-left: 6px solid var(--alert-accent, var(--pokemon-blue));
+      border-radius: var(--radius-card);
+      background: var(--alert-bg, var(--surface));
+    }
+
+    .alert-icon {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--alert-accent, var(--pokemon-blue));
+      color: #ffffff;
+      font-weight: 950;
+    }
+
+    .alert.success {
+      --alert-accent: var(--success);
+      --alert-line: color-mix(in srgb, var(--success) 38%, var(--line));
+      --alert-bg: color-mix(in srgb, var(--success) 10%, var(--surface));
+    }
+
+    .alert.warning {
+      --alert-accent: var(--warning);
+      --alert-line: color-mix(in srgb, var(--warning) 42%, var(--line));
+      --alert-bg: color-mix(in srgb, var(--warning) 12%, var(--surface));
+    }
+
+    .alert.danger {
+      --alert-accent: var(--danger);
+      --alert-line: color-mix(in srgb, var(--danger) 38%, var(--line));
+      --alert-bg: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    }
+
+    .toast-stack {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 70;
+      display: grid;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast {
+      width: min(360px, calc(100vw - 36px));
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      box-shadow: var(--shadow-raised);
+      transform: translateY(14px);
+      opacity: 0;
+      transition: transform .2s ease, opacity .2s ease;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 65;
+      display: none;
+      place-items: center;
+      padding: 22px;
+      background: rgba(8, 13, 22, .56);
+    }
+
+    .modal-backdrop.is-open {
+      display: grid;
+    }
+
+    .modal {
+      width: min(560px, 100%);
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      box-shadow: var(--shadow-raised);
+      overflow: hidden;
+    }
+
+    .modal-header,
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--surface-soft);
+    }
+
+    .modal-header {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-footer {
+      border-top: 1px solid var(--line);
+      justify-content: flex-end;
+    }
+
+    .modal-body {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .tooltip-demo {
+      position: relative;
+      display: inline-flex;
+      width: fit-content;
+    }
+
+    .tooltip-bubble {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 9px);
+      transform: translateX(-50%) translateY(4px);
+      min-width: 190px;
+      padding: 8px 10px;
+      border-radius: var(--radius-small);
+      background: #172036;
+      color: #ffffff;
+      font-size: .82rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .14s ease, transform .14s ease;
+    }
+
+    .tooltip-demo:hover .tooltip-bubble,
+    .tooltip-demo:focus-within .tooltip-bubble {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .chip-tooltip {
+      position: fixed;
+      z-index: 120;
+      max-width: min(240px, calc(100vw - 24px));
+      padding: 7px 9px;
+      border-radius: var(--radius-small);
+      background: #172036;
+      color: #ffffff;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .22);
+      font-size: .78rem;
+      font-weight: 850;
+      line-height: 1.25;
+      text-align: center;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -6px);
+      transition: opacity .12s ease, transform .12s ease;
+    }
+
+    .chip-tooltip.is-visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .breadcrumb {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .9rem;
+      font-weight: 800;
+    }
+
+    .breadcrumb a {
+      color: var(--pokemon-blue);
+    }
+
+    .breadcrumb span:not(:last-child)::after {
+      content: "/";
+      margin-left: 8px;
+      color: var(--line-strong);
+    }
+
+    .side-nav-demo {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      min-height: 350px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .side-rail {
+      display: grid;
+      align-content: start;
+      gap: 4px;
+      padding: 12px;
+      border-right: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+
+    .side-rail a {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: var(--radius-control);
+      color: var(--ink-soft);
+      font-weight: 850;
+    }
+
+    .side-rail a.is-active {
+      background: var(--pokemon-blue);
+      color: #ffffff;
+    }
+
+    .nav-preview {
+      display: grid;
+      align-content: start;
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .pagination {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .page-link {
+      min-width: 38px;
+      min-height: 38px;
+      display: inline-grid;
+      place-items: center;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      background: var(--surface);
+      color: var(--ink-soft);
+      font-weight: 850;
+    }
+
+    .page-link.is-active {
+      border-color: var(--line-strong);
+      background: var(--pokemon-yellow);
+      color: #172036;
+    }
+
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      width: min(100%, 420px);
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .bottom-nav a {
+      min-height: 54px;
+      display: grid;
+      place-items: center;
+      gap: 3px;
+      border-radius: var(--radius-control);
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 850;
+    }
+
+    .bottom-nav a.is-active {
+      background: rgba(255, 203, 5, .25);
+      color: var(--pokemon-blue-deep);
+    }
+
+    .template-grid {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 16px;
+    }
+
+    .template-panel {
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      box-shadow: var(--shadow-control);
+      overflow: hidden;
+    }
+
+    .template-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border-bottom: 2px solid var(--line-strong);
+      background: var(--pokemon-blue-deep);
+      color: #ffffff;
+    }
+
+    .template-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .dex-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .dex-mini-card {
+      min-height: 112px;
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface-soft);
+      text-align: center;
+    }
+
+    .detail-layout {
+      display: grid;
+      grid-template-columns: 172px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .detail-art {
+      min-height: 188px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: linear-gradient(135deg, rgba(255,203,5,.28), rgba(42,117,187,.12));
+    }
+
+    .battle-hud {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: #172036;
+      color: #ffffff;
+    }
+
+    .hud-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hp-track {
+      height: 14px;
+      overflow: hidden;
+      border: 2px solid #ffffff;
+      border-radius: 999px;
+      background: rgba(255,255,255,.16);
+    }
+
+    .hp-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2eb872, #a6e44d);
+    }
+
+    .inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .item-slot {
+      min-height: 96px;
+      display: grid;
+      place-items: center;
+      gap: 5px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface-soft);
+      text-align: center;
+      font-size: .8rem;
+      font-weight: 850;
+    }
+
+    .empty-state {
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      gap: 12px;
+      padding: 26px;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface-soft);
+      text-align: center;
+    }
+
+    .skeleton {
+      display: grid;
+      gap: 10px;
+    }
+
+    .skeleton-line {
+      height: 14px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--line), var(--surface), var(--line));
+      background-size: 200% 100%;
+      animation: shimmer 1.4s linear infinite;
+    }
+
+    .skeleton-box {
+      height: 128px;
+      border-radius: var(--radius-card);
+      background: linear-gradient(90deg, var(--line), var(--surface), var(--line));
+      background-size: 200% 100%;
+      animation: shimmer 1.4s linear infinite;
+    }
+
+    @keyframes shimmer {
+      to { background-position: -200% 0; }
+    }
+
+    .autocomplete {
+      position: relative;
+    }
+
+    .suggestion-list {
+      position: absolute;
+      z-index: 18;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      display: none;
+      gap: 6px;
+      max-height: 300px;
+      margin: 0;
+      padding: 8px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      box-shadow: var(--shadow-raised);
+      list-style: none;
+      overflow: auto;
+    }
+
+    .suggestion-list.is-open {
+      display: grid;
+    }
+
+    .autocomplete.demo-open .suggestion-list {
+      position: static;
+      margin-top: 6px;
+    }
+
+    .suggestion-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 54px;
+      padding: 8px;
+      border-radius: var(--radius-control);
+      cursor: pointer;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item.is-active {
+      background: rgba(255, 203, 5, .2);
+    }
+
+    .suggestion-item strong {
+      display: block;
+      line-height: 1.1;
+    }
+
+    .filter-summary {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+    }
+
+    .type-filter-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .type-toggle {
+      display: grid;
+      place-items: center;
+      min-height: 42px;
+      padding: 7px;
+      border: 2px solid var(--line);
+      border-radius: var(--radius-control);
+      background: var(--surface);
+      cursor: pointer;
+    }
+
+    .type-toggle[aria-pressed="true"] {
+      border-color: var(--line-strong);
+      background: rgba(255, 203, 5, .24);
+      box-shadow: 0 2px 0 var(--line-strong);
+    }
+
+    .evolution-chain {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: center;
+      gap: 14px;
+    }
+
+    .evolution-node {
+      display: grid;
+      justify-items: center;
+      gap: 8px;
+      min-height: 190px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      text-align: center;
+    }
+
+    .evolution-node:not(:last-child) {
+      position: relative;
+    }
+
+    .evolution-node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -22px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--pokemon-blue);
+      font-size: 1.55rem;
+      font-weight: 950;
+    }
+
+    .evolution-sprite {
+      width: 82px;
+      height: 82px;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--line-strong);
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(255,203,5,.35), rgba(42,117,187,.16)), var(--surface);
+      color: #172036;
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      font-weight: 950;
+    }
+
+    .move-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .move-card {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+    }
+
+    .move-head,
+    .move-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .move-category {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--ink-soft);
+      font-size: .75rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .weakness-matrix {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .weakness-cell {
+      display: grid;
+      justify-items: center;
+      gap: 6px;
+      min-height: 78px;
+      padding: 9px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+    }
+
+    .multiplier {
+      min-width: 42px;
+      min-height: 26px;
+      display: inline-grid;
+      place-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--ink-soft);
+      font-family: var(--font-mono);
+      font-size: .76rem;
+      font-weight: 950;
+    }
+
+    .multiplier.high {
+      background: rgba(223, 47, 47, .14);
+      color: var(--danger);
+    }
+
+    .multiplier.low {
+      background: rgba(46, 184, 114, .15);
+      color: var(--success);
+    }
+
+    .team-slots {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .team-slot {
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 8px;
+      min-height: 148px;
+      padding: 12px;
+      border: 2px dashed var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface-soft);
+      color: var(--ink);
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .team-slot.is-filled {
+      border-style: solid;
+      border-color: var(--line-strong);
+      background: var(--surface);
+      box-shadow: var(--shadow-control);
+    }
+
+    .team-slot.is-selected {
+      background: rgba(255, 203, 5, .22);
+    }
+
+    .compare-table {
+      display: grid;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .compare-row {
+      display: grid;
+      grid-template-columns: 112px repeat(3, minmax(0, 1fr));
+      min-height: 46px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .compare-row:last-child {
+      border-bottom: 0;
+    }
+
+    .compare-row > * {
+      display: grid;
+      align-items: center;
+      padding: 9px 10px;
+      border-right: 1px solid var(--line);
+    }
+
+    .compare-row > *:last-child {
+      border-right: 0;
+    }
+
+    .compare-row strong:first-child {
+      background: var(--surface-soft);
+      color: var(--ink-soft);
+    }
+
+    .radar-wrap {
+      display: grid;
+      place-items: center;
+      gap: 10px;
+      min-height: 260px;
+    }
+
+    .radar-chart {
+      width: min(100%, 250px);
+      height: auto;
+    }
+
+    .radar-grid-line {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 1.3;
+    }
+
+    .radar-axis {
+      stroke: var(--line);
+      stroke-width: 1;
+    }
+
+    .radar-shape {
+      fill: rgba(42, 117, 187, .32);
+      stroke: var(--pokemon-blue);
+      stroke-width: 3;
+    }
+
+    .radar-label {
+      fill: var(--ink-soft);
+      font-size: 11px;
+      font-weight: 900;
+      text-anchor: middle;
+    }
+
+    .battle-action-menu {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: #172036;
+    }
+
+    .battle-action-menu .btn {
+      width: 100%;
+    }
+
+    .bag-card,
+    .event-card {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+    }
+
+    .item-icon {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: var(--pokemon-yellow);
+      color: #172036;
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 950;
+    }
+
+    .event-card {
+      grid-template-columns: 1fr auto;
+      align-items: start;
+      border-color: var(--line-strong);
+      background:
+        linear-gradient(135deg, rgba(255,203,5,.22), rgba(42,117,187,.12)),
+        var(--surface);
+    }
+
+    .countdown {
+      min-width: 82px;
+      display: grid;
+      place-items: center;
+      padding: 8px;
+      border: 2px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      background: var(--pokemon-red);
+      color: #ffffff;
+      font-family: var(--font-mono);
+      font-weight: 950;
+    }
+
+    .reward-shelf {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+      gap: 8px;
+    }
+
+    .reward {
+      display: grid;
+      justify-items: center;
+      gap: 8px;
+      min-width: 0;
+      min-height: 104px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      text-align: center;
+      font-size: .82rem;
+      font-weight: 850;
+      overflow: hidden;
+    }
+
+    .reward .gym-badge,
+    .reward .item-icon {
+      width: 48px;
+      height: 48px;
+      font-size: 1rem;
+    }
+
+    .reward > span:last-child {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      line-height: 1.2;
+    }
+
+    .reward.is-locked {
+      opacity: .48;
+      filter: grayscale(.45);
+    }
+
+    .code-block {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: .86rem;
+      line-height: 1.7;
+    }
+
+    .code-block code {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .checklist {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      color: var(--ink-soft);
+    }
+
+    .checklist li::before {
+      content: "✓";
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--success);
+      color: #ffffff;
+      font-weight: 950;
+      line-height: 1;
+    }
+
+    .footer {
+      padding: 34px 0 48px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    .footer strong {
+      color: var(--ink);
+    }
+
+    @media (max-width: 1080px) {
+      .top-nav {
+        grid-template-columns: 1fr auto;
+      }
+
+      .nav-links {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+        padding-bottom: 10px;
+      }
+
+      .hero,
+      .asset-showcase,
+      .template-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pokedex-shell {
+        max-width: 560px;
+      }
+
+      .grid.four,
+      .grid.six,
+      .weakness-matrix,
+      .reward-shelf {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 820px) {
+      .container {
+        padding: 0 18px;
+      }
+
+      .section {
+        padding: 42px 0;
+      }
+
+      h1 {
+        font-size: 3.05rem;
+      }
+
+      h2 {
+        font-size: 2.15rem;
+      }
+
+      .hero {
+        min-height: auto;
+      }
+
+      .quick-index,
+      .grid.two,
+      .grid.three,
+      .grid.four,
+      .grid.six,
+      .type-grid,
+      .asset-mini-grid,
+      .type-filter-grid,
+      .team-slots,
+      .weakness-matrix,
+      .reward-shelf {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .side-nav-demo,
+      .detail-layout,
+      .evolution-chain {
+        grid-template-columns: 1fr;
+      }
+
+      .evolution-node:not(:last-child)::after {
+        right: auto;
+        top: auto;
+        bottom: -25px;
+        left: 50%;
+        transform: translateX(-50%) rotate(90deg);
+      }
+
+      .side-rail {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .inventory-grid,
+      .dex-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .top-nav {
+        min-height: 64px;
+        gap: 12px;
+      }
+
+      .brand-lockup {
+        min-width: 0;
+      }
+
+      .pokemon-word {
+        font-size: 1.4rem;
+        -webkit-text-stroke-width: 1.5px;
+        text-shadow: 1px 2px 0 var(--pokemon-blue);
+      }
+
+      .brand-subtitle {
+        display: none;
+      }
+
+      h1 {
+        font-size: 2.35rem;
+      }
+
+      h2 {
+        font-size: 1.78rem;
+      }
+
+      .hero-copy,
+      .lead {
+        font-size: 1rem;
+      }
+
+      .quick-index,
+      .grid.two,
+      .grid.three,
+      .grid.four,
+      .grid.six,
+      .type-grid,
+      .asset-mini-grid,
+      .type-filter-grid,
+      .move-grid,
+      .team-slots,
+      .weakness-matrix,
+      .reward-shelf,
+      .battle-action-menu {
+        grid-template-columns: 1fr;
+      }
+
+      .compare-row {
+        grid-template-columns: 1fr;
+      }
+
+      .compare-row > * {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .compare-row > *:last-child {
+        border-bottom: 0;
+      }
+
+      .bag-card,
+      .event-card,
+      .filter-summary {
+        grid-template-columns: 1fr;
+      }
+
+      .pokedex-body {
+        padding: 12px;
+      }
+
+      .pokedex-screen {
+        min-height: 420px;
+        padding: 12px;
+      }
+
+      .pokedex-controls {
+        grid-template-columns: 1fr;
+      }
+
+      .screen-buttons,
+      .hero-actions,
+      .control-row {
+        align-items: stretch;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      .icon-btn {
+        width: 44px;
+      }
+
+      .modal-footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: .001ms !important;
+      }
+    }
+
+    @media print {
+      .site-header,
+      .hero-actions,
+      .nav-actions,
+      .toast-stack,
+      .modal-backdrop {
+        display: none !important;
+      }
+
+      body {
+        background: #ffffff;
+      }
+
+      .card,
+      .pokedex-shell,
+      .template-panel,
+      .pokemon-card {
+        box-shadow: none;
+      }
+
+      .section {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container top-nav">
+      <a class="brand-lockup" href="#top" aria-label="返回顶部">
+        <span class="pokeball" aria-hidden="true"></span>
+        <span>
+          <span class="pokemon-word">Pokémon</span>
+          <span class="brand-subtitle">UI Library Guidelines v3.0</span>
+        </span>
+      </a>
+
+      <nav class="nav-links" aria-label="页面导航">
+        <a href="#foundation">方向</a>
+        <a href="#assets">官方元素</a>
+        <a href="#tokens">Tokens</a>
+        <a href="#controls">控件</a>
+        <a href="#display">数据展示</a>
+        <a href="#pokemon-components">专属组件</a>
+        <a href="#feedback">反馈</a>
+        <a href="#navigation">导航</a>
+        <a href="#templates">模板</a>
+        <a href="#handoff">交付</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button class="btn icon-btn ghost" type="button" id="themeToggle" aria-label="切换明暗主题" title="切换明暗主题">
+          <span class="icon" aria-hidden="true">◐</span>
+        </button>
+        <button class="btn small primary" type="button" data-open-modal>
+          <span class="icon" aria-hidden="true">?</span>
+          用法
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="container hero" aria-labelledby="page-title">
+      <div>
+        <span class="section-kicker">Authorized Pokémon Product System</span>
+        <h1 id="page-title">Pokémon UI Library Design Guidelines v3</h1>
+        <p class="hero-copy">
+          针对已获得授权的 Pokémon 网页、活动页、会员中心、图鉴工具和电商体验，建立一套可落地的 UI 库。v3 在基础控件之上补齐 Team Builder、Evolution Chain、Move Data、Weakness Matrix、Battle Menu、Bag、Event 和 Reward 等产品专属组件。
+        </p>
+        <div class="hero-actions" aria-label="快速操作">
+          <a class="btn primary large" href="#controls"><span class="icon" aria-hidden="true">▶</span>查看控件库</a>
+          <a class="btn blue large" href="#pokemon-components"><span class="icon" aria-hidden="true">★</span>查看专属组件</a>
+          <a class="btn blue large" href="#templates"><span class="icon" aria-hidden="true">▦</span>查看页面模板</a>
+        </div>
+        <div class="quick-index" aria-label="规范索引">
+          <a href="#assets"><strong>Official Elements</strong><span>Logo / Poké Ball / Type</span></a>
+          <a href="#tokens"><strong>Design Tokens</strong><span>Color / Type / Radius</span></a>
+          <a href="#controls"><strong>Controls</strong><span>Form / Button / Tabs</span></a>
+          <a href="#pokemon-components"><strong>Product Components</strong><span>Team / Battle / Dex</span></a>
+        </div>
+      </div>
+
+      <aside class="pokedex-shell" aria-label="Pokédex UI 示例">
+        <div class="pokedex-head">
+          <div class="pokedex-lights" aria-hidden="true">
+            <span class="lens"></span>
+            <span class="signal red"></span>
+            <span class="signal yellow"></span>
+            <span class="signal green"></span>
+          </div>
+          <span class="pokedex-code">KANTO-025</span>
+        </div>
+        <div class="pokedex-body">
+          <div class="pokedex-screen">
+            <div class="screen-topline">
+              <span class="dex-number">NATIONAL DEX #025</span>
+              <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+            </div>
+            <div class="sprite-stage">
+              <div class="pikachu-face" role="img" aria-label="Pikachu 风格面部示意图"></div>
+            </div>
+            <div class="dex-title-row">
+              <div>
+                <h3>Pikachu</h3>
+                <p class="muted">Mouse Pokémon · Height 0.4 m · Weight 6.0 kg</p>
+              </div>
+              <span class="hp-pill">HP 35</span>
+            </div>
+            <p>
+              作为授权项目的核心示例，图鉴界面可以使用官方名称、类型、编号、HP 与 Pokédex 信息结构。视觉需要保证清晰可读，不能让装饰压过任务。
+            </p>
+            <div class="stat-list" aria-label="Pikachu 数值示意">
+              <div class="stat-row"><span>ATK</span><div class="stat-track"><span class="stat-fill" style="width: 55%;"></span></div><span>55</span></div>
+              <div class="stat-row"><span>SPD</span><div class="stat-track"><span class="stat-fill" style="width: 90%;"></span></div><span>90</span></div>
+              <div class="stat-row"><span>SP</span><div class="stat-track"><span class="stat-fill" style="width: 50%;"></span></div><span>50</span></div>
+            </div>
+            <div class="pokedex-controls">
+              <div class="screen-buttons">
+                <button class="btn small primary" type="button"><span class="icon" aria-hidden="true">⚡</span>Thunderbolt</button>
+                <button class="btn small blue" type="button"><span class="icon" aria-hidden="true">＋</span>Add Team</button>
+              </div>
+              <div class="dpad" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section band" id="foundation" aria-labelledby="foundation-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">01 / Creative Direction</span>
+          <h2 id="foundation-title">设计方向</h2>
+          <p class="lead">旧版的问题是过度抽象成泛怪兽风。新版以授权 Pokémon 产品为前提，明确使用官方视觉元素，但把它们工程化为可复用的 UI 语言。</p>
+        </div>
+
+        <div class="grid four">
+          <article class="card padded foundation-card">
+            <span class="number-mark">01</span>
+            <h3>Official First</h3>
+            <p class="muted">可使用 Pokémon、Poké Ball、Pokédex、官方角色名、类型体系、HP/EXP、Gym Badge 等授权资产语言。</p>
+          </article>
+          <article class="card padded foundation-card">
+            <span class="number-mark">02</span>
+            <h3>Game UI, Web Quality</h3>
+            <p class="muted">借用游戏中的状态、收集、队伍、战斗和背包结构，但网页控件必须保持可访问、可扫描、可响应。</p>
+          </article>
+          <article class="card padded foundation-card">
+            <span class="number-mark">03</span>
+            <h3>Bright, Not Noisy</h3>
+            <p class="muted">黄色、蓝色、红色用于关键动作和品牌识别；大面积阅读区域仍使用白色、浅蓝灰和明确分割线。</p>
+          </article>
+          <article class="card padded foundation-card">
+            <span class="number-mark">04</span>
+            <h3>System Completeness</h3>
+            <p class="muted">从按钮、表单、筛选、Tab、弹窗、Toast 到图鉴卡、数据表、页面模板，全部使用同一套 tokens。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="assets" aria-labelledby="assets-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">02 / Official Elements</span>
+          <h2 id="assets-title">官方元素使用规范</h2>
+          <p class="lead">授权场景下可以使用官方元素，但需要把“品牌资产”和“UI 控件”分层管理。Logo 和角色图优先作为内容资产，Poké Ball、类型色、徽章和图鉴框架可以进入组件体系。</p>
+        </div>
+
+        <div class="asset-showcase">
+          <div class="brand-panel" aria-label="Pokémon wordmark treatment">
+            <span class="pokemon-word">Pokémon</span>
+            <div class="trainer-pass">
+              <div class="trainer-avatar">T</div>
+              <div>
+                <span>TRAINER PASS</span>
+                <strong>Ash Ketchum</strong>
+                <span>Pallet Town · Badge 08</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="asset-mini-grid">
+            <div class="asset-tile">
+              <span class="pokeball" style="--ball-size: 72px;" aria-hidden="true"></span>
+              <strong>Poké Ball</strong>
+              <span class="muted">用于图标、空状态、加载、徽章背景</span>
+            </div>
+            <div class="asset-tile">
+              <span class="gym-badge" aria-hidden="true">8</span>
+              <strong>Gym Badge</strong>
+              <span class="muted">用于等级、成就、会员权益</span>
+            </div>
+            <div class="asset-tile">
+              <span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span>
+              <strong>Type System</strong>
+              <span class="muted">筛选、标签、属性、状态分类</span>
+            </div>
+            <div class="asset-tile">
+              <span class="dex-number">DEX #150</span>
+              <strong>Pokédex ID</strong>
+              <span class="muted">列表编号、详情标识、收藏序号</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid two" style="margin-top: 18px;">
+          <article class="card padded">
+            <div class="card-title"><h3>可进入 UI 库的元素</h3></div>
+            <ul class="rule-list">
+              <li>Poké Ball 作为系统图标、加载器、选择状态、空状态主符号。</li>
+              <li>使用 <code>frontend/public/types/</code> 中的 Type 图片资产作为筛选、标签、数值、卡片边缘和图表标识；CSS 类型色保留为 token 和兜底。</li>
+              <li>Pokédex 屏幕、训练家卡、Gym Badge、HP/EXP Bar 作为组件构型。</li>
+              <li>官方角色名和编号可用于样例数据，如 Pikachu #025、Charizard #006、Eevee #133。</li>
+            </ul>
+          </article>
+          <article class="card padded">
+            <div class="card-title"><h3>仍需控制的元素</h3></div>
+            <ul class="rule-list">
+              <li>Logo 不作为普通按钮图标反复出现，只用于品牌区域、授权说明和首屏识别。</li>
+              <li>角色官方插画不应被裁切到无法识别，也不应被当作装饰纹理平铺。</li>
+              <li>高饱和类型色必须配合文字对比策略，Electric、Ice、Ground、Steel 等浅色标签用深色字。</li>
+              <li>战斗 UI 可以借鉴状态结构，不建议直接把主机游戏画面一比一搬到网页任务流。</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section band" id="tokens" aria-labelledby="tokens-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">03 / Design Tokens</span>
+          <h2 id="tokens-title">视觉令牌</h2>
+          <p class="lead">Tokens 要覆盖品牌色、类型色、基础表面、描边、阴影、圆角和组件状态。这里采用 8px 卡片圆角，强调专业网页质感，而不是过度玩具化。</p>
+        </div>
+
+        <div class="grid six" aria-label="品牌色">
+          <div class="token-swatch light-text" style="--swatch: #ffcb05;"><strong>Pokémon Yellow</strong><span>Primary CTA / Logo fill</span><code>#FFCB05</code></div>
+          <div class="token-swatch" style="--swatch: #2a75bb;"><strong>Pokémon Blue</strong><span>Navigation / Links</span><code>#2A75BB</code></div>
+          <div class="token-swatch" style="--swatch: #003a70;"><strong>Deep Blue</strong><span>Header / Text contrast</span><code>#003A70</code></div>
+          <div class="token-swatch" style="--swatch: #ee1515;"><strong>Poké Red</strong><span>Urgent / Ball top</span><code>#EE1515</code></div>
+          <div class="token-swatch" style="--swatch: #202124;"><strong>Ball Black</strong><span>Icon stroke / Strong line</span><code>#202124</code></div>
+          <div class="token-swatch light-text" style="--swatch: #f2f5fa;"><strong>Map Mist</strong><span>Page background</span><code>#F2F5FA</code></div>
+        </div>
+
+        <div class="card padded" style="margin-top: 18px;">
+          <div class="card-title">
+            <h3>Type Badge Assets</h3>
+            <span class="status-badge info">large badges + small icons</span>
+          </div>
+          <div class="type-grid">
+            <span class="type-chip type-image-chip type-normal"><img src="frontend/public/types/1.png" alt="" loading="lazy" /><span class="sr-only">Normal</span></span>
+            <span class="type-chip type-image-chip type-fighting"><img src="frontend/public/types/2.png" alt="" loading="lazy" /><span class="sr-only">Fighting</span></span>
+            <span class="type-chip type-image-chip type-flying"><img src="frontend/public/types/3.png" alt="" loading="lazy" /><span class="sr-only">Flying</span></span>
+            <span class="type-chip type-image-chip type-poison"><img src="frontend/public/types/4.png" alt="" loading="lazy" /><span class="sr-only">Poison</span></span>
+            <span class="type-chip type-image-chip type-ground"><img src="frontend/public/types/5.png" alt="" loading="lazy" /><span class="sr-only">Ground</span></span>
+            <span class="type-chip type-image-chip type-rock"><img src="frontend/public/types/6.png" alt="" loading="lazy" /><span class="sr-only">Rock</span></span>
+            <span class="type-chip type-image-chip type-bug"><img src="frontend/public/types/7.png" alt="" loading="lazy" /><span class="sr-only">Bug</span></span>
+            <span class="type-chip type-image-chip type-ghost"><img src="frontend/public/types/8.png" alt="" loading="lazy" /><span class="sr-only">Ghost</span></span>
+            <span class="type-chip type-image-chip type-steel"><img src="frontend/public/types/9.png" alt="" loading="lazy" /><span class="sr-only">Steel</span></span>
+            <span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span>
+            <span class="type-chip type-image-chip type-water"><img src="frontend/public/types/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span>
+            <span class="type-chip type-image-chip type-grass"><img src="frontend/public/types/12.png" alt="" loading="lazy" /><span class="sr-only">Grass</span></span>
+            <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+            <span class="type-chip type-image-chip type-psychic"><img src="frontend/public/types/14.png" alt="" loading="lazy" /><span class="sr-only">Psychic</span></span>
+            <span class="type-chip type-image-chip type-ice"><img src="frontend/public/types/15.png" alt="" loading="lazy" /><span class="sr-only">Ice</span></span>
+            <span class="type-chip type-image-chip type-dragon"><img src="frontend/public/types/16.png" alt="" loading="lazy" /><span class="sr-only">Dragon</span></span>
+            <span class="type-chip type-image-chip type-dark"><img src="frontend/public/types/17.png" alt="" loading="lazy" /><span class="sr-only">Dark</span></span>
+            <span class="type-chip type-image-chip type-fairy"><img src="frontend/public/types/18.png" alt="" loading="lazy" /><span class="sr-only">Fairy</span></span>
+            <span class="type-chip type-image-chip type-stellar"><img src="frontend/public/types/19.png" alt="" loading="lazy" /><span class="sr-only">Stellar</span></span>
+          </div>
+          <p class="field-note" style="margin-top: 12px;">
+            横向徽章使用 <code>frontend/public/types/1.png</code> 至 <code>frontend/public/types/19.png</code>；紧凑网格、筛选器、矩阵和卡片内图标使用 <code>frontend/public/types/small/1.png</code> 至 <code>frontend/public/types/small/18.png</code>。文件映射：1 Normal, 2 Fighting, 3 Flying, 4 Poison, 5 Ground, 6 Rock, 7 Bug, 8 Ghost, 9 Steel, 10 Fire, 11 Water, 12 Grass, 13 Electric, 14 Psychic, 15 Ice, 16 Dragon, 17 Dark, 18 Fairy, 19 Stellar.
+          </p>
+        </div>
+
+        <div class="grid three" style="margin-top: 18px;">
+          <article class="card padded">
+            <div class="card-title"><h3>Typography</h3></div>
+            <p class="muted">标题使用圆润粗体，正文使用系统无衬线。Pokémon wordmark 只用于品牌展示，不替代正文或按钮文字。</p>
+            <div class="demo-surface" style="margin-top: 12px;">
+              <h3>Catch, Train, Explore</h3>
+              <p>正文保持 16px 以上，行高 1.55 至 1.7，保证儿童和成人用户都能快速阅读。</p>
+              <span class="dex-number">CAPTION / DEX ENTRY</span>
+            </div>
+          </article>
+          <article class="card padded">
+            <div class="card-title"><h3>Shape</h3></div>
+            <p class="muted">卡片半径 8px，控件半径 8px，Pill 只用于 type chips、HP、status badges。Poké Ball 和头像保持圆形。</p>
+            <div class="demo-surface" style="margin-top: 12px;">
+              <button class="btn primary" type="button">8px Button</button>
+              <span class="type-chip type-image-chip type-water"><img src="frontend/public/types/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span>
+              <span class="pokeball mini-ball" aria-hidden="true"></span>
+            </div>
+          </article>
+          <article class="card padded">
+            <div class="card-title"><h3>Elevation</h3></div>
+            <p class="muted">主 CTA 和游戏化面板可使用硬阴影，普通信息卡使用柔和阴影。阴影不可替代清晰边框。</p>
+            <div class="demo-surface" style="margin-top: 12px;">
+              <button class="btn blue" type="button">Raised Action</button>
+              <div class="list-row"><span class="pokeball mini-ball"></span><strong>Soft row</strong><span class="status-badge success">Ready</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="controls" aria-labelledby="controls-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">04 / Controls</span>
+          <h2 id="controls-title">控件库</h2>
+          <p class="lead">控件覆盖按钮、图标按钮、输入、选择、开关、范围、步进器、分段控制、Tabs 和筛选标签。所有控件最小点击高度不低于 44px。</p>
+        </div>
+
+        <div class="grid two">
+          <article class="card padded">
+            <div class="card-title"><h3>Buttons</h3><span class="status-badge info">Default / Hover / Active / Disabled</span></div>
+            <div class="demo-surface">
+              <div class="control-row">
+                <button class="btn primary" type="button"><span class="icon" aria-hidden="true">▶</span>Start Journey</button>
+                <button class="btn blue" type="button"><span class="icon" aria-hidden="true">＋</span>Add Team</button>
+                <button class="btn red" type="button"><span class="icon" aria-hidden="true">!</span>Battle</button>
+                <button class="btn ghost" type="button">Ghost</button>
+                <button class="btn" type="button" disabled>Disabled</button>
+              </div>
+              <div class="control-row">
+                <button class="btn small primary" type="button">Small</button>
+                <button class="btn primary" type="button">Medium</button>
+                <button class="btn large primary" type="button">Large</button>
+                <button class="btn icon-btn blue" type="button" title="搜索" aria-label="搜索"><span class="icon" aria-hidden="true">⌕</span></button>
+                <button class="btn icon-btn ghost" type="button" title="筛选" aria-label="筛选"><span class="icon" aria-hidden="true">☰</span></button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Inputs</h3><span class="status-badge success">A11y ready</span></div>
+            <div class="control-stack">
+              <div class="field search-field">
+                <label for="searchPokemon">Search Pokémon</label>
+                <input class="input" id="searchPokemon" type="search" placeholder="Pikachu, Eevee, Charizard" />
+              </div>
+              <div class="grid two">
+                <div class="field">
+                  <label for="trainerName">Trainer name</label>
+                  <input class="input is-valid" id="trainerName" type="text" value="Misty" />
+                  <span class="field-note">可用名称</span>
+                </div>
+                <div class="field">
+                  <label for="trainerRegion">Region</label>
+                  <select class="select" id="trainerRegion">
+                    <option>Kanto</option>
+                    <option>Johto</option>
+                    <option>Hoenn</option>
+                    <option>Sinnoh</option>
+                    <option>Paldea</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="friendCode">Friend code</label>
+                <div class="input-group">
+                  <span class="input-addon">ID</span>
+                  <input class="input is-error" id="friendCode" type="text" value="025-133" />
+                  <span class="input-addon">GEN 1</span>
+                </div>
+                <span class="field-note error">需要 12 位数字代码。</span>
+              </div>
+              <div class="field">
+                <label for="dexNote">Dex note</label>
+                <textarea class="textarea" id="dexNote">Pikachu stores electricity in the electric sacs on its cheeks.</textarea>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Selection Controls</h3></div>
+            <div class="demo-surface">
+              <div class="control-row">
+                <label class="check-control"><input type="checkbox" checked /> Show shiny form</label>
+                <label class="check-control"><input type="checkbox" /> Include regional forms</label>
+              </div>
+              <div class="control-row">
+                <label class="radio-control"><input name="starter" type="radio" checked /> Bulbasaur</label>
+                <label class="radio-control"><input name="starter" type="radio" /> Charmander</label>
+                <label class="radio-control"><input name="starter" type="radio" /> Squirtle</label>
+              </div>
+              <div class="control-row">
+                <label class="switch-control">
+                  <input type="checkbox" id="soundToggle" checked />
+                  <span class="switch-track" aria-hidden="true"></span>
+                  Battle sound
+                </label>
+                <label class="switch-control">
+                  <input type="checkbox" />
+                  <span class="switch-track" aria-hidden="true"></span>
+                  Compact mode
+                </label>
+              </div>
+              <div class="field">
+                <span class="field-label">Capture chance</span>
+                <div class="range-wrap">
+                  <input id="captureRange" type="range" min="0" max="100" value="64" />
+                  <output class="range-value" id="captureValue" for="captureRange">64</output>
+                </div>
+              </div>
+              <div class="control-row">
+                <span class="field-label">Potion count</span>
+                <div class="stepper" data-stepper>
+                  <button type="button" data-step="-1" aria-label="减少">−</button>
+                  <output>3</output>
+                  <button type="button" data-step="1" aria-label="增加">＋</button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Segmented / Tabs / Chips</h3></div>
+            <div class="demo-surface">
+              <div class="segmented" aria-label="Dex view mode">
+                <button type="button" aria-pressed="true">Grid</button>
+                <button type="button" aria-pressed="false">List</button>
+                <button type="button" aria-pressed="false">Map</button>
+              </div>
+
+              <div class="tabs" data-tabs>
+                <div class="tab-list" role="tablist" aria-label="Pokémon profile tabs">
+                  <button class="tab-button" role="tab" aria-selected="true" aria-controls="tab-base" id="tab-base-btn" type="button">Base</button>
+                  <button class="tab-button" role="tab" aria-selected="false" aria-controls="tab-moves" id="tab-moves-btn" type="button">Moves</button>
+                  <button class="tab-button" role="tab" aria-selected="false" aria-controls="tab-evo" id="tab-evo-btn" type="button">Evolution</button>
+                </div>
+                <div class="tab-panel is-active" role="tabpanel" id="tab-base" aria-labelledby="tab-base-btn">
+                  <p>Base tab 显示编号、分类、身高、体重、能力和基础数值。</p>
+                </div>
+                <div class="tab-panel" role="tabpanel" id="tab-moves" aria-labelledby="tab-moves-btn">
+                  <p>Moves tab 显示 Thunderbolt、Quick Attack、Iron Tail 等技能列表。</p>
+                </div>
+                <div class="tab-panel" role="tabpanel" id="tab-evo" aria-labelledby="tab-evo-btn">
+                  <p>Evolution tab 显示 Pichu → Pikachu → Raichu 的进化路径。</p>
+                </div>
+              </div>
+
+              <div class="control-row" aria-label="Type filters">
+                <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                <span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span>
+                <span class="type-chip type-image-chip type-water"><img src="frontend/public/types/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span>
+                <span class="type-chip type-image-chip type-grass"><img src="frontend/public/types/12.png" alt="" loading="lazy" /><span class="sr-only">Grass</span></span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section band" id="display" aria-labelledby="display-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">05 / Data Display</span>
+          <h2 id="display-title">数据展示组件</h2>
+          <p class="lead">Pokémon 产品通常需要承载大量收集、列表、数值和状态。展示组件应优先保证对比和扫描效率，再加入品牌趣味。</p>
+        </div>
+
+        <div class="grid three">
+          <article class="pokemon-card">
+            <div class="pokemon-card-media">
+              <div class="avatar-symbol" aria-hidden="true">25</div>
+            </div>
+            <div class="pokemon-card-body">
+              <div class="pokemon-card-head">
+                <div class="pokemon-name">
+                  <span class="dex-number">#025</span>
+                  <strong>Pikachu</strong>
+                </div>
+                <span class="hp-pill">HP 35</span>
+              </div>
+              <div class="control-row">
+                <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+              </div>
+              <div class="progress">
+                <div class="progress-label"><span>EXP</span><span>68%</span></div>
+                <div class="progress-track"><span class="progress-fill" style="width: 68%;"></span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>List Rows</h3></div>
+            <div class="control-stack">
+              <div class="list-row">
+                <span class="pokeball mini-ball" aria-hidden="true"></span>
+                <div><strong>Charizard</strong><p class="muted">Fire / Flying · #006</p></div>
+                <span class="status-badge warning">Rare</span>
+              </div>
+              <div class="list-row">
+                <span class="pokeball mini-ball" aria-hidden="true"></span>
+                <div><strong>Squirtle</strong><p class="muted">Water · #007</p></div>
+                <span class="status-badge success">Caught</span>
+              </div>
+              <div class="list-row">
+                <span class="pokeball mini-ball" aria-hidden="true"></span>
+                <div><strong>Mewtwo</strong><p class="muted">Psychic · #150</p></div>
+                <span class="status-badge danger">Locked</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Stats / Progress</h3></div>
+            <div class="control-stack">
+              <div class="progress">
+                <div class="progress-label"><span>HP</span><span>82 / 100</span></div>
+                <div class="progress-track"><span class="progress-fill" style="width: 82%; background: var(--success);"></span></div>
+              </div>
+              <div class="progress">
+                <div class="progress-label"><span>EXP</span><span>44%</span></div>
+                <div class="progress-track"><span class="progress-fill" style="width: 44%; background: var(--pokemon-yellow);"></span></div>
+              </div>
+              <div class="progress">
+                <div class="progress-label"><span>Catch rate</span><span>18%</span></div>
+                <div class="progress-track"><span class="progress-fill" style="width: 18%; background: var(--danger);"></span></div>
+              </div>
+              <div class="battle-hud">
+                <div class="hud-row"><strong>Snorlax Lv. 42</strong><span>HP</span></div>
+                <div class="hp-track"><span class="hp-fill" style="width: 72%;"></span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="card padded" style="margin-top: 18px;">
+          <div class="card-title"><h3>Data Table</h3><span class="status-badge info">Sortable / Filterable</span></div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Dex</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Region</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>#001</code></td>
+                  <td>Bulbasaur</td>
+                  <td><span class="type-chip type-image-chip type-grass"><img src="frontend/public/types/12.png" alt="" loading="lazy" /><span class="sr-only">Grass</span></span></td>
+                  <td>Kanto</td>
+                  <td><span class="status-badge success">Caught</span></td>
+                  <td><button class="btn small ghost" type="button">View</button></td>
+                </tr>
+                <tr>
+                  <td><code>#004</code></td>
+                  <td>Charmander</td>
+                  <td><span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span></td>
+                  <td>Kanto</td>
+                  <td><span class="status-badge warning">Seen</span></td>
+                  <td><button class="btn small ghost" type="button">View</button></td>
+                </tr>
+                <tr>
+                  <td><code>#007</code></td>
+                  <td>Squirtle</td>
+                  <td><span class="type-chip type-image-chip type-water"><img src="frontend/public/types/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span></td>
+                  <td>Kanto</td>
+                  <td><span class="status-badge success">Caught</span></td>
+                  <td><button class="btn small ghost" type="button">View</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="pokemon-components" aria-labelledby="pokemon-components-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">06 / Pokémon Product Components</span>
+          <h2 id="pokemon-components-title">Pokémon 专属组件</h2>
+          <p class="lead">v3 新增一组真正贴近 Pokémon 产品场景的组件：搜索联想、进阶 Type 筛选、进化链、技能数据、弱点矩阵、队伍构建、对比面板、战斗菜单、背包、活动和奖励体系。</p>
+        </div>
+
+        <div class="grid two">
+          <article class="card padded">
+            <div class="card-title">
+              <h3>Pokémon Autocomplete</h3>
+              <span class="status-badge info">Combobox</span>
+            </div>
+            <div class="demo-surface">
+              <div class="field search-field autocomplete demo-open">
+                <label for="pokemonCombobox">Search Pokémon</label>
+                <input class="input" id="pokemonCombobox" type="search" role="combobox" aria-controls="pokemonSuggestions" aria-expanded="true" aria-autocomplete="list" value="Pi" />
+                <ul class="suggestion-list is-open" id="pokemonSuggestions" role="listbox" aria-label="Pokémon 搜索建议">
+                  <li class="suggestion-item is-active" role="option" data-name="Pikachu" aria-selected="true">
+                    <span class="pokeball mini-ball" aria-hidden="true"></span>
+                    <div><strong>Pikachu</strong><span class="muted">#025 · Mouse Pokémon</span></div>
+                    <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                  </li>
+                  <li class="suggestion-item" role="option" data-name="Raichu" style="display: none;">
+                    <span class="pokeball mini-ball" aria-hidden="true"></span>
+                    <div><strong>Raichu</strong><span class="muted">#026 · Mouse Pokémon</span></div>
+                    <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                  </li>
+                  <li class="suggestion-item" role="option" data-name="Pichu">
+                    <span class="pokeball mini-ball" aria-hidden="true"></span>
+                    <div><strong>Pichu</strong><span class="muted">#172 · Tiny Mouse Pokémon</span></div>
+                    <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                  </li>
+                  <li class="suggestion-item" role="option" data-name="Charizard" style="display: none;">
+                    <span class="pokeball mini-ball" aria-hidden="true"></span>
+                    <div><strong>Charizard</strong><span class="muted">#006 · Flame Pokémon</span></div>
+                    <span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/small/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span>
+                  </li>
+                </ul>
+              </div>
+              <p class="field-note">用于 Pokédex、Team Builder、Shop search。结果项建议包含编号、名称、分类和 Type badge。</p>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title">
+              <h3>Advanced Type Filter</h3>
+              <span class="status-badge success">Multi-select</span>
+            </div>
+            <div class="control-stack">
+              <div class="filter-summary">
+                <div>
+                  <strong id="typeFilterSummary">Selected: Electric, Flying</strong>
+                  <p class="muted">支持多选、清空、组合筛选和弱点模式。</p>
+                </div>
+                <button class="btn small ghost" type="button" id="clearTypeFilters">Clear</button>
+              </div>
+              <div class="type-filter-grid" aria-label="Type filter demo">
+                <button class="type-toggle" type="button" aria-pressed="true" data-type-name="Electric" aria-label="Electric type">
+                  <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                </button>
+                <button class="type-toggle" type="button" aria-pressed="true" data-type-name="Flying" aria-label="Flying type">
+                  <span class="type-chip type-image-chip type-flying"><img src="frontend/public/types/small/3.png" alt="" loading="lazy" /><span class="sr-only">Flying</span></span>
+                </button>
+                <button class="type-toggle" type="button" aria-pressed="false" data-type-name="Fire" aria-label="Fire type">
+                  <span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/small/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span>
+                </button>
+                <button class="type-toggle" type="button" aria-pressed="false" data-type-name="Water" aria-label="Water type">
+                  <span class="type-chip type-image-chip type-water"><img src="frontend/public/types/small/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span>
+                </button>
+                <button class="type-toggle" type="button" aria-pressed="false" data-type-name="Grass" aria-label="Grass type">
+                  <span class="type-chip type-image-chip type-grass"><img src="frontend/public/types/small/12.png" alt="" loading="lazy" /><span class="sr-only">Grass</span></span>
+                </button>
+                <button class="type-toggle" type="button" aria-pressed="false" data-type-name="Psychic" aria-label="Psychic type">
+                  <span class="type-chip type-image-chip type-psychic"><img src="frontend/public/types/small/14.png" alt="" loading="lazy" /><span class="sr-only">Psychic</span></span>
+                </button>
+                <button class="type-toggle" type="button" aria-pressed="false" data-type-name="Dragon" aria-label="Dragon type">
+                  <span class="type-chip type-image-chip type-dragon"><img src="frontend/public/types/small/16.png" alt="" loading="lazy" /><span class="sr-only">Dragon</span></span>
+                </button>
+                <button class="type-toggle" type="button" aria-pressed="false" data-type-name="Fairy" aria-label="Fairy type">
+                  <span class="type-chip type-image-chip type-fairy"><img src="frontend/public/types/small/18.png" alt="" loading="lazy" /><span class="sr-only">Fairy</span></span>
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title">
+              <h3>Evolution Chain</h3>
+              <span class="status-badge info">Detail page</span>
+            </div>
+            <div class="evolution-chain" aria-label="Pichu to Pikachu to Raichu evolution chain">
+              <div class="evolution-node">
+                <div class="evolution-sprite">172</div>
+                <strong>Pichu</strong>
+                <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                <p class="muted">High friendship</p>
+              </div>
+              <div class="evolution-node">
+                <div class="evolution-sprite">025</div>
+                <strong>Pikachu</strong>
+                <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                <p class="muted">Thunder Stone</p>
+              </div>
+              <div class="evolution-node">
+                <div class="evolution-sprite">026</div>
+                <strong>Raichu</strong>
+                <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                <p class="muted">Final form</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title">
+              <h3>Move Cards</h3>
+              <span class="status-badge info">Power / Accuracy / PP</span>
+            </div>
+            <div class="move-grid">
+              <div class="move-card">
+                <div class="move-head"><strong>Thunderbolt</strong><span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span></div>
+                <p class="muted">May leave the target with paralysis.</p>
+                <div class="move-meta"><span class="move-category">Special</span><span>Power 90</span><span>Acc 100</span><span>PP 15</span></div>
+              </div>
+              <div class="move-card">
+                <div class="move-head"><strong>Quick Attack</strong><span class="type-chip type-image-chip type-normal"><img src="frontend/public/types/small/1.png" alt="" loading="lazy" /><span class="sr-only">Normal</span></span></div>
+                <p class="muted">This move always goes first.</p>
+                <div class="move-meta"><span class="move-category">Physical</span><span>Power 40</span><span>Acc 100</span><span>PP 30</span></div>
+              </div>
+              <div class="move-card">
+                <div class="move-head"><strong>Iron Tail</strong><span class="type-chip type-image-chip type-steel"><img src="frontend/public/types/small/9.png" alt="" loading="lazy" /><span class="sr-only">Steel</span></span></div>
+                <p class="muted">May lower the target's Defense stat.</p>
+                <div class="move-meta"><span class="move-category">Physical</span><span>Power 100</span><span>Acc 75</span><span>PP 15</span></div>
+              </div>
+              <div class="move-card">
+                <div class="move-head"><strong>Electro Ball</strong><span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span></div>
+                <p class="muted">The faster the user, the greater the power.</p>
+                <div class="move-meta"><span class="move-category">Special</span><span>Variable</span><span>Acc 100</span><span>PP 10</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="grid two" style="margin-top: 16px;">
+          <article class="card padded">
+            <div class="card-title">
+              <h3>Weakness Matrix</h3>
+              <span class="status-badge warning">Electric / Flying sample</span>
+            </div>
+            <div class="weakness-matrix" aria-label="Type effectiveness matrix">
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-ground"><img src="frontend/public/types/small/5.png" alt="" loading="lazy" /><span class="sr-only">Ground</span></span><span class="multiplier high">2x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-rock"><img src="frontend/public/types/small/6.png" alt="" loading="lazy" /><span class="sr-only">Rock</span></span><span class="multiplier high">2x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-ice"><img src="frontend/public/types/small/15.png" alt="" loading="lazy" /><span class="sr-only">Ice</span></span><span class="multiplier high">2x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-fighting"><img src="frontend/public/types/small/2.png" alt="" loading="lazy" /><span class="sr-only">Fighting</span></span><span class="multiplier low">0.5x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-flying"><img src="frontend/public/types/small/3.png" alt="" loading="lazy" /><span class="sr-only">Flying</span></span><span class="multiplier low">0.5x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-steel"><img src="frontend/public/types/small/9.png" alt="" loading="lazy" /><span class="sr-only">Steel</span></span><span class="multiplier low">0.5x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-bug"><img src="frontend/public/types/small/7.png" alt="" loading="lazy" /><span class="sr-only">Bug</span></span><span class="multiplier low">0.5x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-grass"><img src="frontend/public/types/small/12.png" alt="" loading="lazy" /><span class="sr-only">Grass</span></span><span class="multiplier low">0.5x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span><span class="multiplier low">0.5x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-ghost"><img src="frontend/public/types/small/8.png" alt="" loading="lazy" /><span class="sr-only">Ghost</span></span><span class="multiplier">1x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-dragon"><img src="frontend/public/types/small/16.png" alt="" loading="lazy" /><span class="sr-only">Dragon</span></span><span class="multiplier">1x</span></div>
+              <div class="weakness-cell"><span class="type-chip type-image-chip type-fairy"><img src="frontend/public/types/small/18.png" alt="" loading="lazy" /><span class="sr-only">Fairy</span></span><span class="multiplier">1x</span></div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title">
+              <h3>Team Builder Slots</h3>
+              <span class="status-badge success">6 slots</span>
+            </div>
+            <div class="team-slots" aria-label="Team builder slots">
+              <button class="team-slot is-filled is-selected" type="button">
+                <span class="avatar-symbol" style="width: 58px; height: 58px; font-size: 1.35rem;">25</span>
+                <strong>Pikachu</strong>
+                <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+              </button>
+              <button class="team-slot is-filled" type="button">
+                <span class="avatar-symbol" style="width: 58px; height: 58px; font-size: 1.35rem; background: var(--type-fire); color: #fff;">06</span>
+                <strong>Charizard</strong>
+                <span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/small/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span>
+              </button>
+              <button class="team-slot is-filled" type="button">
+                <span class="avatar-symbol" style="width: 58px; height: 58px; font-size: 1.35rem; background: var(--type-water); color: #fff;">07</span>
+                <strong>Squirtle</strong>
+                <span class="type-chip type-image-chip type-water"><img src="frontend/public/types/small/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span>
+              </button>
+              <button class="team-slot" type="button"><span class="pokeball" style="--ball-size: 42px;"></span><strong>Empty slot</strong><span class="muted">Add Pokémon</span></button>
+              <button class="team-slot" type="button"><span class="pokeball" style="--ball-size: 42px;"></span><strong>Empty slot</strong><span class="muted">Add Pokémon</span></button>
+              <button class="team-slot" type="button"><span class="pokeball" style="--ball-size: 42px;"></span><strong>Empty slot</strong><span class="muted">Add Pokémon</span></button>
+            </div>
+          </article>
+        </div>
+
+        <div class="grid two" style="margin-top: 16px;">
+          <article class="card padded">
+            <div class="card-title"><h3>Compare Panel</h3><span class="status-badge info">3-way compare</span></div>
+            <div class="compare-table" aria-label="Pokémon compare panel">
+              <div class="compare-row"><strong>Metric</strong><strong>Pikachu</strong><strong>Raichu</strong><strong>Jolteon</strong></div>
+              <div class="compare-row"><strong>Type</strong><span>Electric</span><span>Electric</span><span>Electric</span></div>
+              <div class="compare-row"><strong>HP</strong><span>35</span><span>60</span><span>65</span></div>
+              <div class="compare-row"><strong>Attack</strong><span>55</span><span>90</span><span>65</span></div>
+              <div class="compare-row"><strong>Speed</strong><span>90</span><span>110</span><span>130</span></div>
+              <div class="compare-row"><strong>Ability</strong><span>Static</span><span>Static</span><span>Volt Absorb</span></div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Base Stats Radar</h3><span class="status-badge info">SVG tokenized</span></div>
+            <div class="radar-wrap">
+              <svg class="radar-chart" viewBox="0 0 260 240" role="img" aria-label="Pikachu base stats radar chart">
+                <polygon class="radar-grid-line" points="130,20 225,75 225,165 130,220 35,165 35,75"></polygon>
+                <polygon class="radar-grid-line" points="130,55 195,93 195,147 130,185 65,147 65,93"></polygon>
+                <polygon class="radar-grid-line" points="130,90 165,110 165,130 130,150 95,130 95,110"></polygon>
+                <line class="radar-axis" x1="130" y1="120" x2="130" y2="20"></line>
+                <line class="radar-axis" x1="130" y1="120" x2="225" y2="75"></line>
+                <line class="radar-axis" x1="130" y1="120" x2="225" y2="165"></line>
+                <line class="radar-axis" x1="130" y1="120" x2="130" y2="220"></line>
+                <line class="radar-axis" x1="130" y1="120" x2="35" y2="165"></line>
+                <line class="radar-axis" x1="130" y1="120" x2="35" y2="75"></line>
+                <polygon class="radar-shape" points="130,84 168,102 162,139 130,175 92,142 76,94"></polygon>
+                <text class="radar-label" x="130" y="13">HP</text>
+                <text class="radar-label" x="240" y="76">ATK</text>
+                <text class="radar-label" x="240" y="169">DEF</text>
+                <text class="radar-label" x="130" y="236">SPD</text>
+                <text class="radar-label" x="20" y="169">SP.DEF</text>
+                <text class="radar-label" x="20" y="76">SP.ATK</text>
+              </svg>
+              <p class="muted">雷达图适合详情页摘要；精确对比仍建议使用条形图或 Compare Panel。</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="grid three" style="margin-top: 16px;">
+          <article class="card padded">
+            <div class="card-title"><h3>Battle Action Menu</h3></div>
+            <div class="battle-action-menu" aria-label="Battle actions">
+              <button class="btn primary" type="button"><span class="icon" aria-hidden="true">⚔</span>Fight</button>
+              <button class="btn blue" type="button"><span class="icon" aria-hidden="true">▣</span>Bag</button>
+              <button class="btn" type="button"><span class="icon" aria-hidden="true">★</span>Pokémon</button>
+              <button class="btn red" type="button"><span class="icon" aria-hidden="true">↗</span>Run</button>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Bag Item Card</h3></div>
+            <div class="control-stack">
+              <div class="bag-card">
+                <span class="item-icon">＋</span>
+                <div><strong>Hyper Potion</strong><p class="muted">Restores 120 HP to one Pokémon.</p><span class="status-badge info">Qty 12</span></div>
+              </div>
+              <div class="bag-card">
+                <span class="item-icon"><span class="pokeball mini-ball" aria-hidden="true"></span></span>
+                <div><strong>Ultra Ball</strong><p class="muted">A high-performance Ball with a better catch rate.</p><span class="status-badge warning">Qty 4</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Event / Reward</h3></div>
+            <div class="control-stack">
+              <div class="event-card">
+                <div>
+                  <strong>Electric Spotlight Weekend</strong>
+                  <p class="muted">Featured Pokémon, bonus candy, limited raid tasks.</p>
+                  <div class="control-row" style="margin-top: 8px;">
+                    <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/small/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                    <span class="status-badge success">Open</span>
+                  </div>
+                </div>
+                <span class="countdown">18h</span>
+              </div>
+              <div class="reward-shelf" aria-label="Reward shelf">
+                <div class="reward"><span class="gym-badge">1</span><span>Badge</span></div>
+                <div class="reward"><span class="item-icon">＋</span><span>Potion</span></div>
+                <div class="reward"><span class="pokeball" style="--ball-size: 44px;"></span><span>Ball</span></div>
+                <div class="reward is-locked"><span class="gym-badge">?</span><span>Locked</span></div>
+                <div class="reward is-locked"><span class="item-icon">★</span><span>Secret</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="feedback" aria-labelledby="feedback-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">07 / Feedback & Overlays</span>
+          <h2 id="feedback-title">反馈与覆盖层</h2>
+          <p class="lead">反馈组件需要清晰表达系统状态。Poké Ball 可以作为提示图标，但错误、成功、等待、解锁仍要配合文字和颜色。</p>
+        </div>
+
+        <div class="grid two">
+          <article class="card padded">
+            <div class="card-title"><h3>Alerts</h3></div>
+            <div class="control-stack">
+              <div class="alert success">
+                <span class="alert-icon">✓</span>
+                <div><strong>Pokémon caught!</strong><p class="muted">Pikachu has been added to your Pokédex.</p></div>
+                <button class="btn small ghost" type="button">Undo</button>
+              </div>
+              <div class="alert warning">
+                <span class="alert-icon">!</span>
+                <div><strong>Bag almost full</strong><p class="muted">You have 2 slots left. Transfer items before the next battle.</p></div>
+                <button class="btn small ghost" type="button">Manage</button>
+              </div>
+              <div class="alert danger">
+                <span class="alert-icon">×</span>
+                <div><strong>Connection lost</strong><p class="muted">Battle data will retry automatically.</p></div>
+                <button class="btn small ghost" type="button">Retry</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Modal / Toast / Tooltip</h3></div>
+            <div class="demo-surface">
+              <div class="control-row">
+                <button class="btn primary" type="button" data-open-modal><span class="icon" aria-hidden="true">▣</span>Open Modal</button>
+                <button class="btn blue" type="button" id="toastButton"><span class="icon" aria-hidden="true">◒</span>Show Toast</button>
+                <span class="tooltip-demo">
+                  <button class="btn icon-btn ghost" type="button" aria-label="查看捕获率提示"><span class="icon" aria-hidden="true">?</span></button>
+                  <span class="tooltip-bubble" role="tooltip">捕获率提示需要解释公式来源和影响因素。</span>
+                </span>
+              </div>
+              <div class="empty-state">
+                <span class="pokeball" style="--ball-size: 62px;" aria-hidden="true"></span>
+                <div>
+                  <h3>No Pokémon found</h3>
+                  <p class="muted">调整类型筛选或搜索其它区域。</p>
+                </div>
+                <button class="btn primary" type="button">Reset filters</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Loading States</h3></div>
+            <div class="demo-surface">
+              <div class="skeleton">
+                <div class="skeleton-box"></div>
+                <div class="skeleton-line" style="width: 72%;"></div>
+                <div class="skeleton-line" style="width: 92%;"></div>
+                <div class="skeleton-line" style="width: 48%;"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Motion Rules</h3></div>
+            <ul class="rule-list">
+              <li>按钮 hover 上浮 2px，active 下压 2px，时长 120ms 至 180ms。</li>
+              <li>捕获、升级、徽章解锁可使用 300ms 左右的弹性动效。</li>
+              <li>列表筛选和 Tab 切换不使用大幅移动，避免影响扫描。</li>
+              <li>必须支持 <code>prefers-reduced-motion</code>，关闭闪烁和持续动画。</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section band" id="navigation" aria-labelledby="navigation-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">08 / Navigation</span>
+          <h2 id="navigation-title">导航模式</h2>
+          <p class="lead">Pokémon 产品常见信息架构包括 Pokédex、Team、Bag、Battle、Events、Shop 和 Trainer Profile。桌面端可用侧边导航，移动端使用底部导航。</p>
+        </div>
+
+        <div class="grid two">
+          <article class="card padded">
+            <div class="card-title"><h3>Desktop Shell</h3></div>
+            <div class="side-nav-demo">
+              <nav class="side-rail" aria-label="桌面侧边导航示例">
+                <a href="#" class="is-active"><span class="pokeball mini-ball" aria-hidden="true"></span>Pokédex</a>
+                <a href="#"><span class="icon" aria-hidden="true">★</span>Team</a>
+                <a href="#"><span class="icon" aria-hidden="true">▣</span>Bag</a>
+                <a href="#"><span class="icon" aria-hidden="true">⚔</span>Battle</a>
+                <a href="#"><span class="icon" aria-hidden="true">◈</span>Shop</a>
+              </nav>
+              <div class="nav-preview">
+                <div class="breadcrumb" aria-label="面包屑示例">
+                  <span><a href="#">Home</a></span>
+                  <span><a href="#">Pokédex</a></span>
+                  <span>Pikachu</span>
+                </div>
+                <div class="list-row">
+                  <span class="pokeball mini-ball"></span>
+                  <div><strong>Current section</strong><p class="muted">Use blue fill for active destination.</p></div>
+                  <button class="btn small primary" type="button">Open</button>
+                </div>
+                <div class="pagination" aria-label="分页示例">
+                  <a class="page-link" href="#">‹</a>
+                  <a class="page-link is-active" href="#">1</a>
+                  <a class="page-link" href="#">2</a>
+                  <a class="page-link" href="#">3</a>
+                  <a class="page-link" href="#">…</a>
+                  <a class="page-link" href="#">9</a>
+                  <a class="page-link" href="#">›</a>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>Mobile Bottom Nav</h3></div>
+            <div class="demo-surface">
+              <nav class="bottom-nav" aria-label="移动端底部导航示例">
+                <a href="#" class="is-active"><span class="icon" aria-hidden="true">⌕</span><span>Dex</span></a>
+                <a href="#"><span class="icon" aria-hidden="true">★</span><span>Team</span></a>
+                <a href="#"><span class="icon" aria-hidden="true">▣</span><span>Bag</span></a>
+                <a href="#"><span class="icon" aria-hidden="true">◎</span><span>Profile</span></a>
+              </nav>
+              <ul class="rule-list">
+                <li>底部导航最多 5 项，当前项使用浅黄色背景和深蓝文字。</li>
+                <li>图标下方标签必须保留，不能只靠图标表达目的地。</li>
+                <li>一级导航和页面内 Tabs 分离，避免把筛选项放入全局导航。</li>
+                <li>活动页可使用顶部锚点导航，核心工具优先使用 App Shell。</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="templates" aria-labelledby="templates-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">09 / Templates</span>
+          <h2 id="templates-title">页面模板</h2>
+          <p class="lead">以下模板把控件组合成可直接落地的页面结构，覆盖图鉴列表、详情页、战斗状态和背包网格。</p>
+        </div>
+
+        <div class="template-grid">
+          <article class="template-panel">
+            <div class="template-toolbar">
+              <strong>Pokédex Listing</strong>
+              <button class="btn small primary" type="button">Filter</button>
+            </div>
+            <div class="template-body">
+              <div class="field search-field">
+                <label for="templateSearch">Search</label>
+                <input class="input" id="templateSearch" type="search" placeholder="Search National Dex" />
+              </div>
+              <div class="control-row">
+                <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                <span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span>
+                <span class="type-chip type-image-chip type-water"><img src="frontend/public/types/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span>
+                <span class="type-chip type-image-chip type-grass"><img src="frontend/public/types/12.png" alt="" loading="lazy" /><span class="sr-only">Grass</span></span>
+              </div>
+              <div class="dex-grid">
+                <div class="dex-mini-card"><span class="pokeball mini-ball"></span><strong>#025 Pikachu</strong><span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span></div>
+                <div class="dex-mini-card"><span class="pokeball mini-ball"></span><strong>#006 Charizard</strong><span class="type-chip type-image-chip type-fire"><img src="frontend/public/types/10.png" alt="" loading="lazy" /><span class="sr-only">Fire</span></span></div>
+                <div class="dex-mini-card"><span class="pokeball mini-ball"></span><strong>#007 Squirtle</strong><span class="type-chip type-image-chip type-water"><img src="frontend/public/types/11.png" alt="" loading="lazy" /><span class="sr-only">Water</span></span></div>
+                <div class="dex-mini-card"><span class="pokeball mini-ball"></span><strong>#133 Eevee</strong><span class="type-chip type-image-chip type-normal"><img src="frontend/public/types/1.png" alt="" loading="lazy" /><span class="sr-only">Normal</span></span></div>
+                <div class="dex-mini-card"><span class="pokeball mini-ball"></span><strong>#143 Snorlax</strong><span class="type-chip type-image-chip type-normal"><img src="frontend/public/types/1.png" alt="" loading="lazy" /><span class="sr-only">Normal</span></span></div>
+                <div class="dex-mini-card"><span class="pokeball mini-ball"></span><strong>#150 Mewtwo</strong><span class="type-chip type-image-chip type-psychic"><img src="frontend/public/types/14.png" alt="" loading="lazy" /><span class="sr-only">Psychic</span></span></div>
+              </div>
+            </div>
+          </article>
+
+          <div class="control-stack">
+            <article class="template-panel">
+              <div class="template-toolbar">
+                <strong>Pokémon Detail</strong>
+                <span class="dex-number">#025</span>
+              </div>
+              <div class="template-body">
+                <div class="detail-layout">
+                  <div class="detail-art"><div class="pikachu-face" role="img" aria-label="Pikachu 示例"></div></div>
+                  <div class="control-stack">
+                    <div>
+                      <h3>Pikachu</h3>
+                      <p class="muted">Mouse Pokémon · Electric</p>
+                    </div>
+                    <div class="control-row">
+                      <span class="type-chip type-image-chip type-electric"><img src="frontend/public/types/13.png" alt="" loading="lazy" /><span class="sr-only">Electric</span></span>
+                      <span class="hp-pill">HP 35</span>
+                    </div>
+                    <div class="progress">
+                      <div class="progress-label"><span>Friendship</span><span>84%</span></div>
+                      <div class="progress-track"><span class="progress-fill" style="width: 84%;"></span></div>
+                    </div>
+                    <button class="btn primary" type="button">Add to team</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="template-panel">
+              <div class="template-toolbar">
+                <strong>Battle & Bag</strong>
+                <span class="status-badge warning">Live</span>
+              </div>
+              <div class="template-body">
+                <div class="battle-hud">
+                  <div class="hud-row"><strong>Raichu Lv. 36</strong><span>HP 62/90</span></div>
+                  <div class="hp-track"><span class="hp-fill" style="width: 69%;"></span></div>
+                </div>
+                <div class="inventory-grid">
+                  <div class="item-slot"><span class="pokeball mini-ball"></span>Poké Ball</div>
+                  <div class="item-slot"><span class="icon">＋</span>Potion</div>
+                  <div class="item-slot"><span class="icon">★</span>Rare Candy</div>
+                  <div class="item-slot"><span class="icon">◈</span>Badge</div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section band" id="handoff" aria-labelledby="handoff-title">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">10 / Delivery Guidelines</span>
+          <h2 id="handoff-title">交付规范</h2>
+          <p class="lead">设计稿和前端实现需要以 token 与官方资产目录为唯一来源，避免组件各自写死颜色和尺寸。Logo、角色图、商品图与 Type 图片必须有授权来源和版本记录。</p>
+        </div>
+
+        <div class="grid two">
+          <article class="card padded">
+            <div class="card-title"><h3>设计验收清单</h3></div>
+            <ul class="checklist">
+              <li><span>所有页面使用同一套 Pokémon brand tokens、type assets、type tokens、surface tokens。</span></li>
+              <li><span>Logo、角色图、官方插画、商品图均标注授权来源和使用范围。</span></li>
+              <li><span>核心控件覆盖 default、hover、active、focus、disabled、loading、error 状态。</span></li>
+              <li><span>图鉴列表、详情、Team Builder、Move Data、Weakness Matrix、背包、战斗状态、活动卡片均有桌面和移动端布局。</span></li>
+              <li><span>Type 展示优先使用 <code>frontend/public/types/</code> 图片资产，隐藏文本和 CSS 类型色作为语义与兜底。</span></li>
+            </ul>
+          </article>
+
+          <article class="card padded">
+            <div class="card-title"><h3>前端验收清单</h3></div>
+            <ul class="checklist">
+              <li><span>CSS 变量集中声明，不在组件内硬编码品牌色和类型色。</span></li>
+              <li><span>控件高度不低于 44px，键盘焦点清晰，弹窗有 focus 管理和 ESC 关闭。</span></li>
+              <li><span>Tab、Modal、Toast、Switch、Range、Combobox、Type Filter、Team Slot 等控件具备基础 ARIA 语义。</span></li>
+              <li><span>支持明暗主题与 reduced motion，动画不会阻塞主要任务流程。</span></li>
+              <li><span>表格、列表、图鉴网格在 320px 宽度下不产生内容重叠。</span></li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="code-block" style="margin-top: 18px;">
+          <pre><code>:root {
+  --pokemon-yellow: #ffcb05;
+  --pokemon-blue: #2a75bb;
+  --pokemon-blue-deep: #003a70;
+  --pokemon-red: #ee1515;
+  --line-strong: #1f2a3b;
+  --radius-card: 8px;
+  --radius-control: 8px;
+  --shadow-control: 0 3px 0 var(--line-strong);
+}
+
+.btn.primary {
+  min-height: 44px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--pokemon-yellow);
+  color: #172036;
+  box-shadow: var(--shadow-control);
+}</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="container footer">
+    <p><strong>Pokémon UI Library Guidelines v3.0</strong>。本文件按“已获授权可使用 Pokémon 官方元素”的项目前提设计，适合用作网页产品、活动页、会员中心、图鉴工具、电商体验和 Team / Battle / Event 工具的 UI library 基线。</p>
+  </footer>
+
+  <div class="toast-stack" aria-live="polite" aria-atomic="true">
+    <div class="toast" id="toast">
+      <span class="pokeball mini-ball" aria-hidden="true"></span>
+      <div>
+        <strong>Item added</strong>
+        <p class="muted">Potion has been added to your Bag.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="guidelineModal" role="presentation">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h3 id="modalTitle">授权项目使用说明</h3>
+        <button class="btn icon-btn ghost" type="button" data-close-modal aria-label="关闭弹窗"><span class="icon" aria-hidden="true">×</span></button>
+      </div>
+      <div class="modal-body">
+        <p>这版 guidelines 默认项目已被允许使用 Pokémon 官方元素。落地时请把 Logo、角色图、商品图等官方素材作为独立资产管理，并在组件层使用 tokens、type 图片资产、Poké Ball、Pokédex、Team、Battle 和 Reward 结构保持一致性。</p>
+        <div class="alert warning">
+          <span class="alert-icon">!</span>
+          <div>
+            <strong>资产与组件分离</strong>
+            <p class="muted">官方插画不要直接写进组件 CSS；组件只依赖尺寸、颜色、状态和插槽。</p>
+          </div>
+          <span></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" type="button" data-close-modal>Cancel</button>
+        <button class="btn primary" type="button" data-close-modal>Got it</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const root = document.documentElement;
+    const themeToggle = document.getElementById('themeToggle');
+    const modal = document.getElementById('guidelineModal');
+    const toast = document.getElementById('toast');
+    const toastButton = document.getElementById('toastButton');
+    const captureRange = document.getElementById('captureRange');
+    const captureValue = document.getElementById('captureValue');
+    let lastFocused = null;
+    let toastTimer = null;
+
+    themeToggle?.addEventListener('click', () => {
+      const nextTheme = root.dataset.theme === 'night' ? '' : 'night';
+      if (nextTheme) {
+        root.dataset.theme = nextTheme;
+      } else {
+        delete root.dataset.theme;
+      }
+    });
+
+    document.querySelectorAll('[data-open-modal]').forEach((button) => {
+      button.addEventListener('click', () => {
+        lastFocused = document.activeElement;
+        modal.classList.add('is-open');
+        document.body.classList.add('lock-scroll');
+        modal.querySelector('[data-close-modal]')?.focus();
+      });
+    });
+
+    function closeModal() {
+      modal.classList.remove('is-open');
+      document.body.classList.remove('lock-scroll');
+      lastFocused?.focus();
+    }
+
+    document.querySelectorAll('[data-close-modal]').forEach((button) => {
+      button.addEventListener('click', closeModal);
+    });
+
+    modal?.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+        closeModal();
+      }
+    });
+
+    toastButton?.addEventListener('click', () => {
+      window.clearTimeout(toastTimer);
+      toast.classList.add('show');
+      toastTimer = window.setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2800);
+    });
+
+    captureRange?.addEventListener('input', () => {
+      captureValue.value = captureRange.value;
+      captureValue.textContent = captureRange.value;
+    });
+
+    document.querySelectorAll('[data-stepper]').forEach((stepper) => {
+      const output = stepper.querySelector('output');
+      stepper.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          const next = Math.max(0, Number(output.textContent) + Number(button.dataset.step));
+          output.textContent = next;
+        });
+      });
+    });
+
+    document.querySelectorAll('.segmented').forEach((group) => {
+      group.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          group.querySelectorAll('button').forEach((item) => item.setAttribute('aria-pressed', 'false'));
+          button.setAttribute('aria-pressed', 'true');
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-tabs]').forEach((tabs) => {
+      const buttons = tabs.querySelectorAll('[role="tab"]');
+      const panels = tabs.querySelectorAll('[role="tabpanel"]');
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          buttons.forEach((item) => item.setAttribute('aria-selected', 'false'));
+          panels.forEach((panel) => panel.classList.remove('is-active'));
+          button.setAttribute('aria-selected', 'true');
+          tabs.querySelector(`#${button.getAttribute('aria-controls')}`)?.classList.add('is-active');
+        });
+      });
+    });
+
+    const pokemonCombobox = document.getElementById('pokemonCombobox');
+    const pokemonSuggestions = document.getElementById('pokemonSuggestions');
+    const suggestionItems = [...document.querySelectorAll('.suggestion-item')];
+
+    function updateSuggestions() {
+      const query = pokemonCombobox.value.trim().toLowerCase();
+      let visibleCount = 0;
+      suggestionItems.forEach((item) => {
+        const isMatch = item.dataset.name.toLowerCase().includes(query);
+        item.style.display = isMatch ? '' : 'none';
+        if (isMatch) visibleCount += 1;
+      });
+      pokemonSuggestions.classList.toggle('is-open', visibleCount > 0 && document.activeElement === pokemonCombobox);
+      pokemonCombobox.setAttribute('aria-expanded', String(visibleCount > 0 && document.activeElement === pokemonCombobox));
+    }
+
+    pokemonCombobox?.addEventListener('input', updateSuggestions);
+    pokemonCombobox?.addEventListener('focus', updateSuggestions);
+    pokemonCombobox?.addEventListener('blur', () => {
+      window.setTimeout(() => {
+        pokemonSuggestions.classList.remove('is-open');
+        pokemonCombobox.setAttribute('aria-expanded', 'false');
+      }, 120);
+    });
+
+    suggestionItems.forEach((item) => {
+      item.addEventListener('click', () => {
+        pokemonCombobox.value = item.dataset.name;
+        suggestionItems.forEach((option) => option.classList.remove('is-active'));
+        item.classList.add('is-active');
+        pokemonSuggestions.classList.remove('is-open');
+        pokemonCombobox.setAttribute('aria-expanded', 'false');
+      });
+    });
+
+    const typeFilterSummary = document.getElementById('typeFilterSummary');
+    const typeToggles = [...document.querySelectorAll('.type-toggle')];
+
+    function updateTypeSummary() {
+      const selectedTypes = typeToggles
+        .filter((button) => button.getAttribute('aria-pressed') === 'true')
+        .map((button) => button.dataset.typeName);
+      typeFilterSummary.textContent = selectedTypes.length ? `Selected: ${selectedTypes.join(', ')}` : 'Selected: none';
+    }
+
+    typeToggles.forEach((button) => {
+      button.addEventListener('click', () => {
+        const isPressed = button.getAttribute('aria-pressed') === 'true';
+        button.setAttribute('aria-pressed', String(!isPressed));
+        updateTypeSummary();
+      });
+    });
+
+    document.getElementById('clearTypeFilters')?.addEventListener('click', () => {
+      typeToggles.forEach((button) => button.setAttribute('aria-pressed', 'false'));
+      updateTypeSummary();
+    });
+
+    document.querySelectorAll('.team-slot').forEach((slot) => {
+      slot.addEventListener('click', () => {
+        document.querySelectorAll('.team-slot').forEach((item) => item.classList.remove('is-selected'));
+        slot.classList.add('is-selected');
+      });
+    });
+
+    const chipTooltip = document.createElement('div');
+    chipTooltip.className = 'chip-tooltip';
+    chipTooltip.setAttribute('role', 'tooltip');
+    document.body.appendChild(chipTooltip);
+
+    function getChipLabel(chip) {
+      return chip.dataset.tooltip || chip.querySelector('.sr-only')?.textContent.trim() || '';
+    }
+
+    function positionChipTooltip(chip) {
+      const rect = chip.getBoundingClientRect();
+      const viewportPadding = 12;
+      chipTooltip.style.left = `${Math.min(Math.max(rect.left + rect.width / 2, viewportPadding), window.innerWidth - viewportPadding)}px`;
+      chipTooltip.style.top = `${Math.max(rect.top - chipTooltip.offsetHeight - 8, viewportPadding)}px`;
+    }
+
+    function showChipTooltip(chip) {
+      const label = getChipLabel(chip);
+      if (!label) return;
+      chipTooltip.textContent = `${label} type`;
+      chipTooltip.classList.add('is-visible');
+      positionChipTooltip(chip);
+    }
+
+    function hideChipTooltip() {
+      chipTooltip.classList.remove('is-visible');
+    }
+
+    document.querySelectorAll('.type-image-chip').forEach((chip) => {
+      const label = getChipLabel(chip);
+      if (!label) return;
+      chip.dataset.tooltip = label;
+      chip.setAttribute('aria-label', `${label} type`);
+
+      const trigger = chip.closest('.type-toggle, .team-slot, .weakness-cell, .suggestion-item, .dex-mini-card, .move-head, .event-card') || chip;
+      trigger.addEventListener('mouseenter', () => showChipTooltip(chip));
+      trigger.addEventListener('mouseleave', hideChipTooltip);
+      trigger.addEventListener('focusin', () => showChipTooltip(chip));
+      trigger.addEventListener('focusout', hideChipTooltip);
+    });
+
+    window.addEventListener('scroll', hideChipTooltip, { passive: true });
+    window.addEventListener('resize', hideChipTooltip);
+  </script>
+</body>
+</html>

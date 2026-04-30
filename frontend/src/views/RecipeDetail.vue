@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import DetailSection from '../components/DetailSection.vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api, type RecipeDetail } from '../services/api';
 
 const route = useRoute();
@@ -14,27 +17,26 @@ onMounted(async () => {
 </script>
 
 <template>
-  <p v-if="!recipe" class="status">加载中</p>
-  <section v-else>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">{{ recipe.name }}</h1>
-        <p class="page-subtitle">材料单详情</p>
+  <StatusMessage v-if="!recipe" :duration="0">加载中</StatusMessage>
+  <section v-else class="page-stack">
+    <PageHeader :title="recipe.name" subtitle="材料单详情">
+      <template #kicker>Recipe Detail</template>
+      <template #meta>
         <EditMeta :entity="recipe" />
-      </div>
-      <RouterLink class="link-button" to="/items">返回列表</RouterLink>
-    </div>
+      </template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">返回列表</RouterLink>
+      </template>
+    </PageHeader>
 
     <div class="detail-grid">
-      <section class="detail-section">
-        <h2>入手方式</h2>
+      <DetailSection title="入手方式">
         <EntityChips :items="recipe.acquisition_methods" />
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>需要材料</h2>
+      <DetailSection title="需要材料">
         <EntityChips :items="recipe.materials" />
-      </section>
+      </DetailSection>
     </div>
   </section>
 </template>

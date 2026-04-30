@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import DetailSection from '../components/DetailSection.vue';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
+import PageHeader from '../components/PageHeader.vue';
+import StatusMessage from '../components/StatusMessage.vue';
 import { api, type ItemDetail } from '../services/api';
 
 const route = useRoute();
@@ -26,54 +29,50 @@ onMounted(async () => {
 </script>
 
 <template>
-  <p v-if="!item" class="status">加载中</p>
-  <section v-else>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">{{ item.name }}</h1>
-        <p class="page-subtitle">{{ item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name }}</p>
+  <StatusMessage v-if="!item" :duration="0">加载中</StatusMessage>
+  <section v-else class="page-stack">
+    <PageHeader :title="item.name" :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name">
+      <template #kicker>Item Detail</template>
+      <template #meta>
         <EditMeta :entity="item" />
-      </div>
-      <RouterLink class="link-button" to="/items">返回列表</RouterLink>
-    </div>
+      </template>
+      <template #actions>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">返回列表</RouterLink>
+      </template>
+    </PageHeader>
 
     <div class="detail-grid">
-      <section class="detail-section">
-        <h2>入手方式</h2>
+      <DetailSection title="入手方式">
         <EntityChips :items="item.acquisitionMethods" />
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>自定义</h2>
+      <DetailSection title="自定义">
         <div v-if="customization.length" class="chips">
           <span v-for="entry in customization" :key="entry" class="chip">{{ entry }}</span>
         </div>
         <p v-else class="meta-line">无</p>
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>标签</h2>
+      <DetailSection title="标签">
         <EntityChips :items="item.tags" />
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>材料单信息</h2>
+      <DetailSection title="材料单信息">
         <template v-if="item.recipe">
           <RouterLink :to="`/recipes/${item.recipe.id}`">{{ item.recipe.name }}</RouterLink>
           <EntityChips :items="item.recipe.materials" />
         </template>
         <p v-else class="meta-line">无</p>
-      </section>
+      </DetailSection>
 
-      <section class="detail-section">
-        <h2>相关栖息地</h2>
+      <DetailSection title="相关栖息地">
         <ul class="row-list">
           <li v-for="habitat in item.relatedHabitats" :key="habitat.id">
             <RouterLink :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
             <span>× {{ habitat.quantity }}</span>
           </li>
         </ul>
-      </section>
+      </DetailSection>
     </div>
   </section>
 </template>

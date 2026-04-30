@@ -766,7 +766,7 @@ button:disabled,
 
 .skeleton-appearance-row {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: clamp(140px, 20%, 220px) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -913,6 +913,11 @@ button:disabled,
   gap: 16px;
 }
 
+.habitat-detail-stack {
+  display: grid;
+  gap: 16px;
+}
+
 .detail-section {
   display: grid;
   gap: 12px;
@@ -988,12 +993,15 @@ button:disabled,
 
 .appearance-list li {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: clamp(140px, 20%, 220px) minmax(0, 1fr);
   align-items: start;
   justify-content: stretch;
 }
 
 .appearance-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

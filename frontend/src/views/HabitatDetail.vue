@@ -94,7 +94,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="detail-grid" aria-hidden="true">
+    <div class="habitat-detail-stack" aria-hidden="true">
       <section class="detail-section skeleton-detail-section">
         <div class="detail-section__header">
           <Skeleton width="92px" height="24px" />
@@ -138,7 +138,7 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <div class="detail-grid">
+    <div class="habitat-detail-stack">
       <DetailSection title="配方列表">
         <EntityChips :items="habitat.recipe" />
       </DetailSection>

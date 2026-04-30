@@ -114,6 +114,22 @@ onMounted(async () => {
           <RouterLink :to="`/recipes/${item.recipe.id}`">{{ item.recipe.name }}</RouterLink>
           <EntityChips :items="item.recipe.materials" />
         </template>
+        <p v-else-if="item.noRecipe" class="meta-line">无材料单</p>
+        <template v-else>
+          <p class="meta-line">无</p>
+          <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/new?itemId=${item.id}`">
+            创建材料单
+          </RouterLink>
+        </template>
+      </DetailSection>
+
+      <DetailSection title="相关材料单">
+        <ul v-if="item.relatedRecipes.length" class="row-list">
+          <li v-for="recipe in item.relatedRecipes" :key="recipe.id">
+            <RouterLink :to="`/recipes/${recipe.id}`">{{ recipe.name }}</RouterLink>
+            <EntityChips :items="recipe.materials" />
+          </li>
+        </ul>
         <p v-else class="meta-line">无</p>
       </DetailSection>
 
@@ -121,7 +137,7 @@ onMounted(async () => {
         <ul v-if="item.relatedHabitats.length" class="row-list">
           <li v-for="habitat in item.relatedHabitats" :key="habitat.id">
             <RouterLink :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
-            <span>× {{ habitat.quantity }}</span>
+            <EntityChips :items="habitat.recipe" />
           </li>
         </ul>
         <p v-else class="meta-line">无</p>

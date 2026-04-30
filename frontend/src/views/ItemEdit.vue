@@ -21,6 +21,7 @@ const itemForm = ref({
   dyeable: false,
   dualDyeable: false,
   patternEditable: false,
+  noRecipe: false,
   acquisitionMethodIds: [] as string[],
   tagIds: [] as string[]
 });
@@ -29,6 +30,7 @@ const routeId = computed(() => (typeof route.params.id === 'string' ? route.para
 const isEditing = computed(() => routeId.value !== '');
 const pageTitle = computed(() => (isEditing.value ? `编辑 ${itemForm.value.name || '物品'}` : '新增物品'));
 const cancelTo = computed(() => (isEditing.value ? `/items/${routeId.value}` : '/items'));
+const hasRecipe = ref(false);
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -57,9 +59,11 @@ async function loadEditor() {
         dyeable: item.customization.dyeable,
         dualDyeable: item.customization.dualDyeable,
         patternEditable: item.customization.patternEditable,
+        noRecipe: item.noRecipe,
         acquisitionMethodIds: item.acquisitionMethods.map((method) => String(method.id)),
         tagIds: item.tags.map((tag) => String(tag.id))
       };
+      hasRecipe.value = item.recipe !== null;
     }
   } catch (error) {
     message.value = errorText(error, '加载失败');
@@ -117,6 +121,7 @@ async function saveItem() {
       dyeable: itemForm.value.dyeable,
       dualDyeable: itemForm.value.dualDyeable,
       patternEditable: itemForm.value.patternEditable,
+      noRecipe: itemForm.value.noRecipe,
       acquisitionMethodIds: toIds(itemForm.value.acquisitionMethodIds),
       tagIds: toIds(itemForm.value.tagIds)
     };
@@ -185,6 +190,7 @@ onMounted(() => {
         <label><input v-model="itemForm.dyeable" type="checkbox" /> 可染色</label>
         <label><input v-model="itemForm.dualDyeable" type="checkbox" /> 可双区染色</label>
         <label><input v-model="itemForm.patternEditable" type="checkbox" /> 可改花纹</label>
+        <label><input v-model="itemForm.noRecipe" type="checkbox" :disabled="hasRecipe" /> 无材料单</label>
       </div>
 
       <div class="field">

@@ -59,6 +59,22 @@ export interface HabitatDetail extends Habitat {
   }>;
 }
 
+export interface RecipeSummary extends EditInfo {
+  id: number;
+}
+
+export interface RecipeUsage {
+  id: number;
+  name: string;
+  materials: Array<NamedEntity & { quantity: number }>;
+}
+
+export interface HabitatUsage {
+  id: number;
+  name: string;
+  recipe: Array<NamedEntity & { quantity: number }>;
+}
+
 export interface Item extends EditInfo {
   id: number;
   name: string;
@@ -69,13 +85,16 @@ export interface Item extends EditInfo {
     dualDyeable: boolean;
     patternEditable: boolean;
   };
+  noRecipe: boolean;
   tags: NamedEntity[];
+  recipe: RecipeSummary | null;
 }
 
 export interface ItemDetail extends Item {
   acquisitionMethods: NamedEntity[];
   recipe: RecipeDetail | null;
-  relatedHabitats: Array<NamedEntity & { quantity: number }>;
+  relatedRecipes: RecipeUsage[];
+  relatedHabitats: HabitatUsage[];
   droppedByPokemon: Array<{
     pokemon: NamedEntity;
     skill: NamedEntity;
@@ -150,6 +169,7 @@ export interface ItemPayload {
   dyeable: boolean;
   dualDyeable: boolean;
   patternEditable: boolean;
+  noRecipe: boolean;
   acquisitionMethodIds: number[];
   tagIds: number[];
 }

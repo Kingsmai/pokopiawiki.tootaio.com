@@ -49,6 +49,7 @@ type ItemPayload = {
   dyeable: boolean;
   dualDyeable: boolean;
   patternEditable: boolean;
+  noRecipe: boolean;
   acquisitionMethodIds: number[];
   tagIds: number[];
 };
@@ -806,15 +807,35 @@ const itemProjection = `
       'dualDyeable', i.dual_dyeable,
       'patternEditable', i.pattern_editable
     ) AS customization,
+    i.no_recipe AS "noRecipe",
     COALESCE((
       SELECT json_agg(json_build_object('id', t.id, 'name', t.name) ORDER BY t.name)
       FROM item_favorite_things ift
       JOIN favorite_things t ON t.id = ift.favorite_thing_id
       WHERE ift.item_id = i.id
-    ), '[]'::json) AS tags
+    ), '[]'::json) AS tags,
+    CASE
+      WHEN item_recipe.id IS NULL THEN NULL
+      ELSE json_build_object(
+        'id', item_recipe.id,
+        'createdAt', item_recipe.created_at,
+        'updatedAt', item_recipe.updated_at,
+        'createdBy', CASE
+          WHEN recipe_created_user.id IS NULL THEN NULL
+          ELSE json_build_object('id', recipe_created_user.id, 'displayName', recipe_created_user.display_name)
+        END,
+        'updatedBy', CASE
+          WHEN recipe_updated_user.id IS NULL THEN NULL
+          ELSE json_build_object('id', recipe_updated_user.id, 'displayName', recipe_updated_user.display_name)
+        END
+      )
+    END AS recipe
   FROM items i
   JOIN item_categories c ON c.id = i.category_id
   LEFT JOIN item_usages u ON u.id = i.usage_id
+  LEFT JOIN recipes item_recipe ON item_recipe.item_id = i.id
+  LEFT JOIN users recipe_created_user ON recipe_created_user.id = item_recipe.created_by_user_id
+  LEFT JOIN users recipe_updated_user ON recipe_updated_user.id = item_recipe.updated_by_user_id
   ${auditJoins('i', 'item_created_user', 'item_updated_user')}
 `;
 
@@ -864,7 +885,7 @@ export async function getItem(id: number) {
     return null;
   }
 
-  const [acquisitionMethods, recipe, relatedHabitats, droppedByPokemon] = await Promise.all([
+  const [acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon] = await Promise.all([
     query(
       `
         SELECT am.id, am.name
@@ -903,10 +924,37 @@ export async function getItem(id: number) {
     ),
     query(
       `
-        SELECT h.id, h.name, hri.quantity
-        FROM habitat_recipe_items hri
-        JOIN habitats h ON h.id = hri.habitat_id
-        WHERE hri.item_id = $1
+        SELECT
+          r.id,
+          result_item.name,
+          COALESCE((
+            SELECT json_agg(json_build_object('id', mi.id, 'name', mi.name, 'quantity', recipe_material.quantity) ORDER BY mi.name)
+            FROM recipe_materials recipe_material
+            JOIN items mi ON mi.id = recipe_material.item_id
+            WHERE recipe_material.recipe_id = r.id
+          ), '[]'::json) AS materials
+        FROM recipe_materials used_material
+        JOIN recipes r ON r.id = used_material.recipe_id
+        JOIN items result_item ON result_item.id = r.item_id
+        WHERE used_material.item_id = $1
+        ORDER BY result_item.name
+      `,
+      [id]
+    ),
+    query(
+      `
+        SELECT
+          h.id,
+          h.name,
+          COALESCE((
+            SELECT json_agg(json_build_object('id', recipe_item.id, 'name', recipe_item.name, 'quantity', recipe_item_row.quantity) ORDER BY recipe_item.name)
+            FROM habitat_recipe_items recipe_item_row
+            JOIN items recipe_item ON recipe_item.id = recipe_item_row.item_id
+            WHERE recipe_item_row.habitat_id = h.id
+          ), '[]'::json) AS recipe
+        FROM habitat_recipe_items used_item
+        JOIN habitats h ON h.id = used_item.habitat_id
+        WHERE used_item.item_id = $1
         ORDER BY h.name
       `,
       [id]
@@ -927,7 +975,7 @@ export async function getItem(id: number) {
     )
   ]);
 
-  return { ...item, acquisitionMethods, recipe, relatedHabitats, droppedByPokemon };
+  return { ...item, acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon };
 }
 
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
@@ -942,9 +990,21 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     dyeable: Boolean(payload.dyeable),
     dualDyeable: Boolean(payload.dualDyeable),
     patternEditable: Boolean(payload.patternEditable),
+    noRecipe: Boolean(payload.noRecipe),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     tagIds: cleanIds(payload.tagIds)
   };
+}
+
+async function ensureItemCanDisableRecipe(client: DbClient, itemId: number, noRecipe: boolean): Promise<void> {
+  if (!noRecipe) {
+    return;
+  }
+
+  const result = await client.query('SELECT 1 FROM recipes WHERE item_id = $1', [itemId]);
+  if (result.rowCount && result.rowCount > 0) {
+    throw validationError('已有材料单的物品不能设置为无材料单');
+  }
 }
 
 async function replaceItemRelations(client: DbClient, itemId: number, payload: ItemPayload): Promise<void> {
@@ -979,10 +1039,11 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           dyeable,
           dual_dyeable,
           pattern_editable,
+          no_recipe,
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
         RETURNING id
       `,
       [
@@ -992,6 +1053,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
+        cleanPayload.noRecipe,
         userId
       ]
     );
@@ -1007,6 +1069,7 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
   const cleanPayload = cleanItemPayload(payload);
 
   const updated = await withTransaction(async (client) => {
+    await ensureItemCanDisableRecipe(client, id, cleanPayload.noRecipe);
     const result = await client.query(
       `
         UPDATE items
@@ -1016,9 +1079,10 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
             dyeable = $4,
             dual_dyeable = $5,
             pattern_editable = $6,
-            updated_by_user_id = $7,
+            no_recipe = $7,
+            updated_by_user_id = $8,
             updated_at = now()
-        WHERE id = $8
+        WHERE id = $9
       `,
       [
         cleanPayload.name,
@@ -1027,6 +1091,7 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
+        cleanPayload.noRecipe,
         userId,
         id
       ]
@@ -1140,10 +1205,14 @@ async function replaceRecipeRelations(client: DbClient, recipeId: number, payloa
   }
 }
 
-async function ensureItemExists(client: DbClient, itemId: number): Promise<void> {
-  const result = await client.query('SELECT 1 FROM items WHERE id = $1', [itemId]);
+async function ensureItemCanHaveRecipe(client: DbClient, itemId: number): Promise<void> {
+  const result = await client.query<{ no_recipe: boolean }>('SELECT no_recipe FROM items WHERE id = $1', [itemId]);
   if (result.rowCount === 0) {
     throw validationError('请选择物品');
+  }
+
+  if (result.rows[0].no_recipe) {
+    throw validationError('该物品已设置为无材料单');
   }
 }
 
@@ -1151,7 +1220,7 @@ export async function createRecipe(payload: Record<string, unknown>, userId: num
   const cleanPayload = cleanRecipePayload(payload);
 
   const id = await withTransaction(async (client) => {
-    await ensureItemExists(client, cleanPayload.itemId);
+    await ensureItemCanHaveRecipe(client, cleanPayload.itemId);
     const result = await client.query<{ id: number }>(
       `
         INSERT INTO recipes (item_id, created_by_user_id, updated_by_user_id)
@@ -1172,7 +1241,7 @@ export async function updateRecipe(id: number, payload: Record<string, unknown>,
   const cleanPayload = cleanRecipePayload(payload);
 
   const updated = await withTransaction(async (client) => {
-    await ensureItemExists(client, cleanPayload.itemId);
+    await ensureItemCanHaveRecipe(client, cleanPayload.itemId);
     const result = await client.query(
       'UPDATE recipes SET item_id = $1, updated_by_user_id = $2, updated_at = now() WHERE id = $3',
       [cleanPayload.itemId, userId, id]

@@ -23,8 +23,13 @@ const recipeForm = ref({
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
-const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
-const selectedItemName = computed(() => itemSelectOptions.value.find((item) => String(item.id) === recipeForm.value.itemId)?.name ?? '');
+const materialItemOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
+const resultItemOptions = computed(() =>
+  itemRows.value
+    .filter((item) => !item.noRecipe || String(item.id) === recipeForm.value.itemId)
+    .map((item) => ({ id: item.id, name: item.name }))
+);
+const selectedItemName = computed(() => resultItemOptions.value.find((item) => String(item.id) === recipeForm.value.itemId)?.name ?? '');
 const pageTitle = computed(() => (isEditing.value ? `编辑 ${selectedItemName.value || '材料单'}` : '新增材料单'));
 const cancelTo = computed(() => (isEditing.value ? `/recipes/${routeId.value}` : '/recipes'));
 
@@ -40,6 +45,15 @@ function toQuantityRows(rows: Array<{ itemId: string; quantity: number }>) {
 
 function errorText(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function preselectedItemId() {
+  const itemId = route.query.itemId;
+  if (typeof itemId !== 'string') {
+    return '';
+  }
+
+  return resultItemOptions.value.some((item) => String(item.id) === itemId) ? itemId : '';
 }
 
 async function loadEditor() {
@@ -58,6 +72,8 @@ async function loadEditor() {
         acquisitionMethodIds: recipe.acquisition_methods.map((method) => String(method.id)),
         materials: recipe.materials.map((material) => ({ itemId: String(material.id), quantity: material.quantity }))
       };
+    } else {
+      recipeForm.value.itemId = preselectedItemId();
     }
   } catch (error) {
     message.value = errorText(error, '加载失败');
@@ -135,7 +151,7 @@ onMounted(() => {
         <TagsSelect
           id="recipe-item"
           v-model="recipeForm.itemId"
-          :options="itemSelectOptions"
+          :options="resultItemOptions"
           :multiple="false"
           placeholder="请选择"
           search-placeholder="搜索物品"
@@ -161,7 +177,7 @@ onMounted(() => {
           <TagsSelect
             :id="`recipe-material-${index}`"
             v-model="row.itemId"
-            :options="itemSelectOptions"
+            :options="materialItemOptions"
             :multiple="false"
             placeholder="请选择"
             search-placeholder="搜索物品"

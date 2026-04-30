@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
-import { getUserBySessionToken, loginUser, logoutSession, registerUser, verifyEmail } from './auth.ts';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { getUserBySessionToken, loginUser, logoutSession, registerUser, verifyEmail, type AuthUser } from './auth.ts';
 import { initializeDatabase, pool } from './db.ts';
 import {
   createConfig,
@@ -71,6 +72,23 @@ function getBearerToken(authorization: string | undefined): string | null {
   return scheme === 'Bearer' && token ? token : null;
 }
 
+async function requireVerifiedUser(request: FastifyRequest, reply: FastifyReply): Promise<AuthUser | null> {
+  const token = getBearerToken(request.headers.authorization);
+  const user = token ? await getUserBySessionToken(token) : null;
+
+  if (!user) {
+    reply.code(401).send({ message: '请先登录' });
+    return null;
+  }
+
+  if (!user.emailVerified) {
+    reply.code(403).send({ message: '请先完成邮箱验证' });
+    return null;
+  }
+
+  return user;
+}
+
 app.post('/api/auth/register', async (request, reply) =>
   reply.code(201).send(await registerUser(request.body as Record<string, unknown>))
 );
@@ -114,11 +132,18 @@ app.get('/api/pokemon/:id', async (request, reply) => {
   return pokemon;
 });
 
-app.post('/api/pokemon', async (request, reply) => reply.code(201).send(await createPokemon(request.body as Record<string, unknown>)));
+app.post('/api/pokemon', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reply.code(201).send(await createPokemon(request.body as Record<string, unknown>, user.id)) : undefined;
+});
 
 app.put('/api/pokemon/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const pokemon = await updatePokemon(Number(id), request.body as Record<string, unknown>);
+  const pokemon = await updatePokemon(Number(id), request.body as Record<string, unknown>, user.id);
 
   if (!pokemon) {
     return reply.code(404).send({ message: 'Not found' });
@@ -128,8 +153,12 @@ app.put('/api/pokemon/:id', async (request, reply) => {
 });
 
 app.delete('/api/pokemon/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const deleted = await deletePokemon(Number(id));
+  const deleted = await deletePokemon(Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 
@@ -146,11 +175,18 @@ app.get('/api/habitats/:id', async (request, reply) => {
   return habitat;
 });
 
-app.post('/api/habitats', async (request, reply) => reply.code(201).send(await createHabitat(request.body as Record<string, unknown>)));
+app.post('/api/habitats', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reply.code(201).send(await createHabitat(request.body as Record<string, unknown>, user.id)) : undefined;
+});
 
 app.put('/api/habitats/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const habitat = await updateHabitat(Number(id), request.body as Record<string, unknown>);
+  const habitat = await updateHabitat(Number(id), request.body as Record<string, unknown>, user.id);
 
   if (!habitat) {
     return reply.code(404).send({ message: 'Not found' });
@@ -160,8 +196,12 @@ app.put('/api/habitats/:id', async (request, reply) => {
 });
 
 app.delete('/api/habitats/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const deleted = await deleteHabitat(Number(id));
+  const deleted = await deleteHabitat(Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 
@@ -178,11 +218,18 @@ app.get('/api/items/:id', async (request, reply) => {
   return item;
 });
 
-app.post('/api/items', async (request, reply) => reply.code(201).send(await createItem(request.body as Record<string, unknown>)));
+app.post('/api/items', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reply.code(201).send(await createItem(request.body as Record<string, unknown>, user.id)) : undefined;
+});
 
 app.put('/api/items/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const item = await updateItem(Number(id), request.body as Record<string, unknown>);
+  const item = await updateItem(Number(id), request.body as Record<string, unknown>, user.id);
 
   if (!item) {
     return reply.code(404).send({ message: 'Not found' });
@@ -192,8 +239,12 @@ app.put('/api/items/:id', async (request, reply) => {
 });
 
 app.delete('/api/items/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const deleted = await deleteItem(Number(id));
+  const deleted = await deleteItem(Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 
@@ -210,11 +261,18 @@ app.get('/api/recipes/:id', async (request, reply) => {
   return recipe;
 });
 
-app.post('/api/recipes', async (request, reply) => reply.code(201).send(await createRecipe(request.body as Record<string, unknown>)));
+app.post('/api/recipes', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reply.code(201).send(await createRecipe(request.body as Record<string, unknown>, user.id)) : undefined;
+});
 
 app.put('/api/recipes/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const recipe = await updateRecipe(Number(id), request.body as Record<string, unknown>);
+  const recipe = await updateRecipe(Number(id), request.body as Record<string, unknown>, user.id);
 
   if (!recipe) {
     return reply.code(404).send({ message: 'Not found' });
@@ -224,12 +282,20 @@ app.put('/api/recipes/:id', async (request, reply) => {
 });
 
 app.delete('/api/recipes/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { id } = request.params as { id: string };
-  const deleted = await deleteRecipe(Number(id));
+  const deleted = await deleteRecipe(Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 
 app.get('/api/admin/config/:type', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { type } = request.params as { type: string };
   if (!isConfigType(type)) {
     return reply.code(404).send({ message: 'Not found' });
@@ -238,28 +304,40 @@ app.get('/api/admin/config/:type', async (request, reply) => {
 });
 
 app.post('/api/admin/config/:type', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { type } = request.params as { type: string };
   if (!isConfigType(type)) {
     return reply.code(404).send({ message: 'Not found' });
   }
-  return reply.code(201).send(await createConfig(type, request.body as Record<string, unknown>));
+  return reply.code(201).send(await createConfig(type, request.body as Record<string, unknown>, user.id));
 });
 
 app.put('/api/admin/config/:type/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { type, id } = request.params as { type: string; id: string };
   if (!isConfigType(type)) {
     return reply.code(404).send({ message: 'Not found' });
   }
-  const config = await updateConfig(type, Number(id), request.body as Record<string, unknown>);
+  const config = await updateConfig(type, Number(id), request.body as Record<string, unknown>, user.id);
   return config ? config : reply.code(404).send({ message: 'Not found' });
 });
 
 app.delete('/api/admin/config/:type/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
   const { type, id } = request.params as { type: string; id: string };
   if (!isConfigType(type)) {
     return reply.code(404).send({ message: 'Not found' });
   }
-  const deleted = await deleteConfig(type, Number(id));
+  const deleted = await deleteConfig(type, Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 

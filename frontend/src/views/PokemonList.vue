@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Options, type Pokemon } from '../services/api';
@@ -92,6 +93,7 @@ watch(query, loadPokemon);
       <RouterLink v-for="item in pokemon" :key="item.id" class="entity-card" :to="`/pokemon/${item.id}`">
         <h2>#{{ item.id }} {{ item.name }}</h2>
         <p class="meta-line">喜欢的环境：{{ item.environment.name }}</p>
+        <EditMeta :entity="item" />
         <EntityChips :items="item.skills" />
         <EntityChips :items="item.favorite_things" />
       </RouterLink>

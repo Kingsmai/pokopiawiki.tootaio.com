@@ -67,6 +67,7 @@ type HabitatPayload = {
 };
 
 type ValidationError = Error & { statusCode: number };
+type EditAction = 'create' | 'update' | 'delete';
 
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
@@ -87,6 +88,39 @@ function asString(value: QueryValue): string | undefined {
 
 function optionSelect(tableName: string): Promise<Array<{ id: number; name: string }>> {
   return query(`SELECT id, name FROM ${tableName} ORDER BY name`);
+}
+
+function auditSelect(entityAlias: string, createdAlias = 'created_user', updatedAlias = 'updated_user'): string {
+  return `
+    ${entityAlias}.created_at AS "createdAt",
+    ${entityAlias}.updated_at AS "updatedAt",
+    CASE
+      WHEN ${createdAlias}.id IS NULL THEN NULL
+      ELSE json_build_object('id', ${createdAlias}.id, 'displayName', ${createdAlias}.display_name)
+    END AS "createdBy",
+    CASE
+      WHEN ${updatedAlias}.id IS NULL THEN NULL
+      ELSE json_build_object('id', ${updatedAlias}.id, 'displayName', ${updatedAlias}.display_name)
+    END AS "updatedBy"
+  `;
+}
+
+function auditJoins(entityAlias: string, createdAlias = 'created_user', updatedAlias = 'updated_user'): string {
+  return `
+    LEFT JOIN users ${createdAlias} ON ${createdAlias}.id = ${entityAlias}.created_by_user_id
+    LEFT JOIN users ${updatedAlias} ON ${updatedAlias}.id = ${entityAlias}.updated_by_user_id
+  `;
+}
+
+function configSelect(definition: ConfigDefinition): string {
+  return definition.hasSubcategory ? 'c.id, c.name, c.subcategory' : 'c.id, c.name';
+}
+
+function configOrder(definition: ConfigDefinition): string {
+  return definition.order
+    .split(', ')
+    .map((column) => `c.${column}`)
+    .join(', ');
 }
 
 function validationError(message: string): ValidationError {
@@ -158,10 +192,27 @@ async function withTransaction<T>(callback: (client: DbClient) => Promise<T>): P
   }
 }
 
+async function recordEditLog(
+  client: DbClient,
+  entityType: string,
+  entityId: number,
+  action: EditAction,
+  userId: number
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO wiki_edit_logs (entity_type, entity_id, action, user_id)
+      VALUES ($1, $2, $3, $4)
+    `,
+    [entityType, entityId, action, userId]
+  );
+}
+
 const pokemonProjection = `
   SELECT
     p.id,
     p.name,
+    ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
     json_build_object('id', e.id, 'name', e.name) AS environment,
     COALESCE((
       SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'subcategory', s.subcategory) ORDER BY s.name, s.subcategory)
@@ -177,6 +228,7 @@ const pokemonProjection = `
     ), '[]'::json) AS favorite_things
   FROM pokemon p
   JOIN environments e ON e.id = p.environment_id
+  ${auditJoins('p', 'pokemon_created_user', 'pokemon_updated_user')}
 `;
 
 export async function getOptions() {
@@ -218,43 +270,107 @@ export function isConfigType(type: string): type is ConfigType {
 
 export async function listConfig(type: ConfigType) {
   const definition = configDefinitions[type];
-  return query(`SELECT ${definition.select} FROM ${definition.table} ORDER BY ${definition.order}`);
+  return query(
+    `
+      SELECT ${configSelect(definition)}, ${auditSelect('c')}
+      FROM ${definition.table} c
+      ${auditJoins('c')}
+      ORDER BY ${configOrder(definition)}
+    `
+  );
 }
 
-export async function createConfig(type: ConfigType, payload: Record<string, unknown>) {
+async function getConfigById(type: ConfigType, id: number) {
+  const definition = configDefinitions[type];
+  return queryOne(
+    `
+      SELECT ${configSelect(definition)}, ${auditSelect('c')}
+      FROM ${definition.table} c
+      ${auditJoins('c')}
+      WHERE c.id = $1
+    `,
+    [id]
+  );
+}
+
+export async function createConfig(type: ConfigType, payload: Record<string, unknown>, userId: number) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
   const subcategory = typeof payload.subcategory === 'string' && payload.subcategory.trim() ? payload.subcategory.trim() : null;
 
-  if (definition.hasSubcategory) {
-    return queryOne(
-      `INSERT INTO ${definition.table} (name, subcategory) VALUES ($1, $2) RETURNING ${definition.select}`,
-      [name, subcategory]
-    );
-  }
+  const id = await withTransaction(async (client) => {
+    const result = definition.hasSubcategory
+      ? await client.query<{ id: number }>(
+          `
+            INSERT INTO ${definition.table} (name, subcategory, created_by_user_id, updated_by_user_id)
+            VALUES ($1, $2, $3, $3)
+            RETURNING id
+          `,
+          [name, subcategory, userId]
+        )
+      : await client.query<{ id: number }>(
+          `
+            INSERT INTO ${definition.table} (name, created_by_user_id, updated_by_user_id)
+            VALUES ($1, $2, $2)
+            RETURNING id
+          `,
+          [name, userId]
+        );
 
-  return queryOne(`INSERT INTO ${definition.table} (name) VALUES ($1) RETURNING ${definition.select}`, [name]);
+    const createdId = result.rows[0].id;
+    await recordEditLog(client, type, createdId, 'create', userId);
+    return createdId;
+  });
+
+  return getConfigById(type, id);
 }
 
-export async function updateConfig(type: ConfigType, id: number, payload: Record<string, unknown>) {
+export async function updateConfig(type: ConfigType, id: number, payload: Record<string, unknown>, userId: number) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
   const subcategory = typeof payload.subcategory === 'string' && payload.subcategory.trim() ? payload.subcategory.trim() : null;
 
-  if (definition.hasSubcategory) {
-    return queryOne(
-      `UPDATE ${definition.table} SET name = $1, subcategory = $2 WHERE id = $3 RETURNING ${definition.select}`,
-      [name, subcategory, id]
-    );
-  }
+  const updated = await withTransaction(async (client) => {
+    const result = definition.hasSubcategory
+      ? await client.query(
+          `
+            UPDATE ${definition.table}
+            SET name = $1, subcategory = $2, updated_by_user_id = $3, updated_at = now()
+            WHERE id = $4
+          `,
+          [name, subcategory, userId, id]
+        )
+      : await client.query(
+          `
+            UPDATE ${definition.table}
+            SET name = $1, updated_by_user_id = $2, updated_at = now()
+            WHERE id = $3
+          `,
+          [name, userId, id]
+        );
 
-  return queryOne(`UPDATE ${definition.table} SET name = $1 WHERE id = $2 RETURNING ${definition.select}`, [name, id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, type, id, 'update', userId);
+    return true;
+  });
+
+  return updated ? getConfigById(type, id) : null;
 }
 
-export async function deleteConfig(type: ConfigType, id: number) {
+export async function deleteConfig(type: ConfigType, id: number, userId: number) {
   const definition = configDefinitions[type];
-  const result = await pool.query(`DELETE FROM ${definition.table} WHERE id = $1`, [id]);
-  return (result.rowCount ?? 0) > 0;
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>(`DELETE FROM ${definition.table} WHERE id = $1 RETURNING id`, [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, type, id, 'delete', userId);
+    return true;
+  });
 }
 
 export async function listPokemon(paramsQuery: QueryParams) {
@@ -368,42 +484,56 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
   }
 }
 
-export async function createPokemon(payload: Record<string, unknown>) {
+export async function createPokemon(payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanPokemonPayload(payload);
 
   const id = await withTransaction(async (client) => {
-    await client.query('INSERT INTO pokemon (id, name, environment_id) VALUES ($1, $2, $3)', [
-      cleanPayload.id,
-      cleanPayload.name,
-      cleanPayload.environmentId
-    ]);
+    await client.query(
+      `
+        INSERT INTO pokemon (id, name, environment_id, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $4, $4)
+      `,
+      [cleanPayload.id, cleanPayload.name, cleanPayload.environmentId, userId]
+    );
     await replacePokemonRelations(client, cleanPayload.id, cleanPayload);
+    await recordEditLog(client, 'pokemon', cleanPayload.id, 'create', userId);
     return cleanPayload.id;
   });
   return getPokemon(id);
 }
 
-export async function updatePokemon(id: number, payload: Record<string, unknown>) {
+export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanPokemonPayload({ ...payload, id });
 
   const updated = await withTransaction(async (client) => {
-    const result = await client.query('UPDATE pokemon SET name = $1, environment_id = $2 WHERE id = $3', [
-      cleanPayload.name,
-      cleanPayload.environmentId,
-      id
-    ]);
+    const result = await client.query(
+      `
+        UPDATE pokemon
+        SET name = $1, environment_id = $2, updated_by_user_id = $3, updated_at = now()
+        WHERE id = $4
+      `,
+      [cleanPayload.name, cleanPayload.environmentId, userId, id]
+    );
     if (result.rowCount === 0) {
       return false;
     }
     await replacePokemonRelations(client, id, cleanPayload);
+    await recordEditLog(client, 'pokemon', id, 'update', userId);
     return true;
   });
   return updated ? getPokemon(id) : null;
 }
 
-export async function deletePokemon(id: number) {
-  const result = await pool.query('DELETE FROM pokemon WHERE id = $1', [id]);
-  return (result.rowCount ?? 0) > 0;
+export async function deletePokemon(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>('DELETE FROM pokemon WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, 'pokemon', id, 'delete', userId);
+    return true;
+  });
 }
 
 export async function listHabitats() {
@@ -411,6 +541,7 @@ export async function listHabitats() {
     SELECT
       h.id,
       h.name,
+      ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
       COALESCE((
         SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', hri.quantity) ORDER BY i.name)
         FROM habitat_recipe_items hri
@@ -424,6 +555,7 @@ export async function listHabitats() {
         WHERE hp.habitat_id = h.id
       ), '[]'::json) AS pokemon
     FROM habitats h
+    ${auditJoins('h', 'habitat_created_user', 'habitat_updated_user')}
     ORDER BY h.name
   `);
 }
@@ -434,6 +566,7 @@ export async function getHabitat(id: number) {
       SELECT
         h.id,
         h.name,
+        ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
         COALESCE((
           SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', hri.quantity) ORDER BY i.name)
           FROM habitat_recipe_items hri
@@ -441,6 +574,7 @@ export async function getHabitat(id: number) {
           WHERE hri.habitat_id = h.id
         ), '[]'::json) AS recipe
       FROM habitats h
+      ${auditJoins('h', 'habitat_created_user', 'habitat_updated_user')}
       WHERE h.id = $1
     `,
     [id]
@@ -532,43 +666,61 @@ async function replaceHabitatRelations(client: DbClient, habitatId: number, payl
   }
 }
 
-export async function createHabitat(payload: Record<string, unknown>) {
+export async function createHabitat(payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanHabitatPayload(payload);
 
   const id = await withTransaction(async (client) => {
-    const result = await client.query<{ id: number }>('INSERT INTO habitats (name) VALUES ($1) RETURNING id', [
-      cleanPayload.name
-    ]);
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO habitats (name, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $2)
+        RETURNING id
+      `,
+      [cleanPayload.name, userId]
+    );
     const habitatId = result.rows[0].id;
     await replaceHabitatRelations(client, habitatId, cleanPayload);
+    await recordEditLog(client, 'habitats', habitatId, 'create', userId);
     return habitatId;
   });
   return getHabitat(id);
 }
 
-export async function updateHabitat(id: number, payload: Record<string, unknown>) {
+export async function updateHabitat(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanHabitatPayload(payload);
 
   const updated = await withTransaction(async (client) => {
-    const result = await client.query('UPDATE habitats SET name = $1 WHERE id = $2', [cleanPayload.name, id]);
+    const result = await client.query(
+      'UPDATE habitats SET name = $1, updated_by_user_id = $2, updated_at = now() WHERE id = $3',
+      [cleanPayload.name, userId, id]
+    );
     if (result.rowCount === 0) {
       return false;
     }
     await replaceHabitatRelations(client, id, cleanPayload);
+    await recordEditLog(client, 'habitats', id, 'update', userId);
     return true;
   });
   return updated ? getHabitat(id) : null;
 }
 
-export async function deleteHabitat(id: number) {
-  const result = await pool.query('DELETE FROM habitats WHERE id = $1', [id]);
-  return (result.rowCount ?? 0) > 0;
+export async function deleteHabitat(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>('DELETE FROM habitats WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, 'habitats', id, 'delete', userId);
+    return true;
+  });
 }
 
 const itemProjection = `
   SELECT
     i.id,
     i.name,
+    ${auditSelect('i', 'item_created_user', 'item_updated_user')},
     json_build_object('id', c.id, 'name', c.name) AS category,
     CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'name', u.name) END AS usage,
     json_build_object(
@@ -585,6 +737,7 @@ const itemProjection = `
   FROM items i
   JOIN item_categories c ON c.id = i.category_id
   LEFT JOIN item_usages u ON u.id = i.usage_id
+  ${auditJoins('i', 'item_created_user', 'item_updated_user')}
 `;
 
 export async function listItems(paramsQuery: QueryParams) {
@@ -649,6 +802,7 @@ export async function getItem(id: number) {
         SELECT
           r.id,
           result_item.name,
+          ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
           COALESCE((
             SELECT json_agg(json_build_object('id', am.id, 'name', am.name) ORDER BY am.name)
             FROM recipe_acquisition_methods ram
@@ -664,6 +818,7 @@ export async function getItem(id: number) {
           json_build_object('id', result_item.id, 'name', result_item.name) AS item
         FROM recipes r
         JOIN items result_item ON result_item.id = r.item_id
+        ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
         WHERE r.item_id = $1
       `,
       [id]
@@ -719,14 +874,23 @@ async function replaceItemRelations(client: DbClient, itemId: number, payload: I
   }
 }
 
-export async function createItem(payload: Record<string, unknown>) {
+export async function createItem(payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanItemPayload(payload);
 
   const id = await withTransaction(async (client) => {
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO items (name, category_id, usage_id, dyeable, dual_dyeable, pattern_editable)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO items (
+          name,
+          category_id,
+          usage_id,
+          dyeable,
+          dual_dyeable,
+          pattern_editable,
+          created_by_user_id,
+          updated_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
         RETURNING id
       `,
       [
@@ -735,17 +899,19 @@ export async function createItem(payload: Record<string, unknown>) {
         cleanPayload.usageId,
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
-        cleanPayload.patternEditable
+        cleanPayload.patternEditable,
+        userId
       ]
     );
     const itemId = result.rows[0].id;
     await replaceItemRelations(client, itemId, cleanPayload);
+    await recordEditLog(client, 'items', itemId, 'create', userId);
     return itemId;
   });
   return getItem(id);
 }
 
-export async function updateItem(id: number, payload: Record<string, unknown>) {
+export async function updateItem(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanItemPayload(payload);
 
   const updated = await withTransaction(async (client) => {
@@ -757,8 +923,10 @@ export async function updateItem(id: number, payload: Record<string, unknown>) {
             usage_id = $3,
             dyeable = $4,
             dual_dyeable = $5,
-            pattern_editable = $6
-        WHERE id = $7
+            pattern_editable = $6,
+            updated_by_user_id = $7,
+            updated_at = now()
+        WHERE id = $8
       `,
       [
         cleanPayload.name,
@@ -767,6 +935,7 @@ export async function updateItem(id: number, payload: Record<string, unknown>) {
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
+        userId,
         id
       ]
     );
@@ -774,14 +943,22 @@ export async function updateItem(id: number, payload: Record<string, unknown>) {
       return false;
     }
     await replaceItemRelations(client, id, cleanPayload);
+    await recordEditLog(client, 'items', id, 'update', userId);
     return true;
   });
   return updated ? getItem(id) : null;
 }
 
-export async function deleteItem(id: number) {
-  const result = await pool.query('DELETE FROM items WHERE id = $1', [id]);
-  return (result.rowCount ?? 0) > 0;
+export async function deleteItem(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>('DELETE FROM items WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, 'items', id, 'delete', userId);
+    return true;
+  });
 }
 
 export async function listRecipes() {
@@ -789,6 +966,7 @@ export async function listRecipes() {
     SELECT
       r.id,
       result_item.name,
+      ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
       COALESCE((
         SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', rm.quantity) ORDER BY i.name)
         FROM recipe_materials rm
@@ -797,6 +975,7 @@ export async function listRecipes() {
       ), '[]'::json) AS materials
     FROM recipes r
     JOIN items result_item ON result_item.id = r.item_id
+    ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
     ORDER BY result_item.name
   `);
 }
@@ -807,6 +986,7 @@ export async function getRecipe(id: number) {
       SELECT
         r.id,
         result_item.name,
+        ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
         COALESCE((
           SELECT json_agg(json_build_object('id', am.id, 'name', am.name) ORDER BY am.name)
           FROM recipe_acquisition_methods ram
@@ -822,6 +1002,7 @@ export async function getRecipe(id: number) {
         json_build_object('id', result_item.id, 'name', result_item.name) AS item
       FROM recipes r
       JOIN items result_item ON result_item.id = r.item_id
+      ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
       WHERE r.id = $1
     `,
     [id]
@@ -863,37 +1044,54 @@ async function ensureItemExists(client: DbClient, itemId: number): Promise<void>
   }
 }
 
-export async function createRecipe(payload: Record<string, unknown>) {
+export async function createRecipe(payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanRecipePayload(payload);
 
   const id = await withTransaction(async (client) => {
     await ensureItemExists(client, cleanPayload.itemId);
-    const result = await client.query<{ id: number }>('INSERT INTO recipes (item_id) VALUES ($1) RETURNING id', [
-      cleanPayload.itemId
-    ]);
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO recipes (item_id, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $2)
+        RETURNING id
+      `,
+      [cleanPayload.itemId, userId]
+    );
     const recipeId = result.rows[0].id;
     await replaceRecipeRelations(client, recipeId, cleanPayload);
+    await recordEditLog(client, 'recipes', recipeId, 'create', userId);
     return recipeId;
   });
   return getRecipe(id);
 }
 
-export async function updateRecipe(id: number, payload: Record<string, unknown>) {
+export async function updateRecipe(id: number, payload: Record<string, unknown>, userId: number) {
   const cleanPayload = cleanRecipePayload(payload);
 
   const updated = await withTransaction(async (client) => {
     await ensureItemExists(client, cleanPayload.itemId);
-    const result = await client.query('UPDATE recipes SET item_id = $1 WHERE id = $2', [cleanPayload.itemId, id]);
+    const result = await client.query(
+      'UPDATE recipes SET item_id = $1, updated_by_user_id = $2, updated_at = now() WHERE id = $3',
+      [cleanPayload.itemId, userId, id]
+    );
     if (result.rowCount === 0) {
       return false;
     }
     await replaceRecipeRelations(client, id, cleanPayload);
+    await recordEditLog(client, 'recipes', id, 'update', userId);
     return true;
   });
   return updated ? getRecipe(id) : null;
 }
 
-export async function deleteRecipe(id: number) {
-  const result = await pool.query('DELETE FROM recipes WHERE id = $1', [id]);
-  return (result.rowCount ?? 0) > 0;
+export async function deleteRecipe(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>('DELETE FROM recipes WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, 'recipes', id, 'delete', userId);
+    return true;
+  });
 }

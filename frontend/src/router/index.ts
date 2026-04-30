@@ -10,6 +10,7 @@ import AdminView from '../views/AdminView.vue';
 import LoginView from '../views/LoginView.vue';
 import RegisterView from '../views/RegisterView.vue';
 import VerifyEmailView from '../views/VerifyEmailView.vue';
+import { api, getAuthToken, setAuthToken } from '../services/api';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -28,4 +29,22 @@ export const router = createRouter({
     { path: '/verify-email', component: VerifyEmailView }
   ],
   scrollBehavior: () => ({ top: 0 })
+});
+
+router.beforeEach(async (to) => {
+  if (to.path !== '/admin') {
+    return true;
+  }
+
+  if (!getAuthToken()) {
+    return { path: '/login', query: { redirect: to.fullPath } };
+  }
+
+  try {
+    await api.me();
+    return true;
+  } catch {
+    setAuthToken(null);
+    return { path: '/login', query: { redirect: to.fullPath } };
+  }
 });

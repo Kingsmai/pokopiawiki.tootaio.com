@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import { api, type PokemonDetail } from '../services/api';
 
@@ -83,6 +84,7 @@ onMounted(async () => {
       <div>
         <h1 class="page-title">#{{ pokemon.id }} {{ pokemon.name }}</h1>
         <p class="page-subtitle">喜欢的环境：{{ pokemon.environment.name }}</p>
+        <EditMeta :entity="pokemon" />
       </div>
       <RouterLink class="link-button" to="/pokemon">返回列表</RouterLink>
     </div>

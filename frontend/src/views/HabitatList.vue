@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import { api, type Habitat } from '../services/api';
 
@@ -25,6 +26,7 @@ onMounted(async () => {
     <div v-else class="grid">
       <RouterLink v-for="item in habitats" :key="item.id" class="entity-card" :to="`/habitats/${item.id}`">
         <h2>{{ item.name }}</h2>
+        <EditMeta :entity="item" />
         <EntityChips :items="item.recipe" />
         <EntityChips :items="item.pokemon ?? []" />
       </RouterLink>

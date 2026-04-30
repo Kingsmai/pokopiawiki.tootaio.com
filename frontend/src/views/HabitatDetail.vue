@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import { api, type HabitatDetail } from '../services/api';
 
@@ -83,6 +84,7 @@ onMounted(async () => {
       <div>
         <h1 class="page-title">{{ habitat.name }}</h1>
         <p class="page-subtitle">栖息地详情</p>
+        <EditMeta :entity="habitat" />
       </div>
       <RouterLink class="link-button" to="/habitats">返回列表</RouterLink>
     </div>

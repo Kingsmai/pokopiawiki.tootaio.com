@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import { api, type ItemDetail } from '../services/api';
 
@@ -31,6 +32,7 @@ onMounted(async () => {
       <div>
         <h1 class="page-title">{{ item.name }}</h1>
         <p class="page-subtitle">{{ item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name }}</p>
+        <EditMeta :entity="item" />
       </div>
       <RouterLink class="link-button" to="/items">返回列表</RouterLink>
     </div>

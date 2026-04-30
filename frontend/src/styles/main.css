@@ -392,6 +392,13 @@ select {
   color: #657067;
 }
 
+.edit-meta {
+  margin: 0;
+  color: #7b766a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

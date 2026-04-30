@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import {
   api,
+  type AuthUser,
   type ConfigType,
   type Habitat,
   type HabitatDetail,
@@ -59,6 +60,7 @@ const pokemonRows = ref<Pokemon[]>([]);
 const itemRows = ref<Item[]>([]);
 const recipeRows = ref<Recipe[]>([]);
 const habitatRows = ref<Habitat[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
@@ -94,6 +96,7 @@ const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: ite
 const pokemonSelectOptions = computed(() =>
   pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.id} ${pokemon.name}` }))
 );
+const canEdit = computed(() => currentUser.value?.emailVerified === true);
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -179,8 +182,25 @@ async function loadCurrentTab() {
 }
 
 function setTab(tab: AdminTab) {
+  if (!canEdit.value) {
+    message.value = '请先完成邮箱验证';
+    return;
+  }
+
   activeTab.value = tab;
   void run(loadCurrentTab);
+}
+
+async function loadAdmin() {
+  const response = await api.me();
+  currentUser.value = response.user;
+
+  if (!response.user.emailVerified) {
+    message.value = '请先完成邮箱验证';
+    return;
+  }
+
+  await loadCurrentTab();
 }
 
 function resetConfigForm() {
@@ -442,7 +462,7 @@ async function removeHabitat(id: number) {
 }
 
 onMounted(() => {
-  void run(loadCurrentTab);
+  void run(loadAdmin);
 });
 </script>
 
@@ -455,7 +475,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="tabs" role="tablist" aria-label="管理模块">
+    <div v-if="canEdit" class="tabs" role="tablist" aria-label="管理模块">
       <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" type="button" @click="setTab(tab.key)">
         {{ tab.label }}
       </button>
@@ -463,7 +483,7 @@ onMounted(() => {
 
     <p v-if="message" class="status">{{ message }}</p>
 
-    <section v-if="activeTab === 'config'" class="admin-layout">
+    <section v-if="canEdit && activeTab === 'config'" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveConfig">
         <h2>系统配置</h2>
         <div class="field">
@@ -500,7 +520,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="activeTab === 'pokemon' && options" class="admin-layout">
+    <section v-if="canEdit && activeTab === 'pokemon' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="savePokemon">
         <h2>Pokemon</h2>
         <div class="field"><label for="pokemon-id">ID</label><input id="pokemon-id" v-model="pokemonForm.id" type="number" /></div>
@@ -562,7 +582,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="activeTab === 'items' && options" class="admin-layout">
+    <section v-if="canEdit && activeTab === 'items' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveItem">
         <h2>物品</h2>
         <div class="field"><label for="item-name">名称</label><input id="item-name" v-model="itemForm.name" /></div>
@@ -637,7 +657,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="activeTab === 'recipes' && options" class="admin-layout">
+    <section v-if="canEdit && activeTab === 'recipes' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveRecipe">
         <h2>材料单</h2>
         <div class="field">
@@ -699,7 +719,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="activeTab === 'habitats' && options" class="admin-layout">
+    <section v-if="canEdit && activeTab === 'habitats' && options" class="admin-layout">
       <form class="detail-section" @submit.prevent="saveHabitat">
         <h2>栖息地</h2>
         <div class="field"><label for="habitat-name">名称</label><input id="habitat-name" v-model="habitatForm.name" /></div>

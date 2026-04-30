@@ -11,7 +11,19 @@ export interface Skill extends NamedEntity {
   subcategory: string | null;
 }
 
-export interface Pokemon {
+export interface UserSummary {
+  id: number;
+  displayName: string;
+}
+
+export interface EditInfo {
+  createdAt: string;
+  updatedAt: string;
+  createdBy: UserSummary | null;
+  updatedBy: UserSummary | null;
+}
+
+export interface Pokemon extends EditInfo {
   id: number;
   name: string;
   environment: NamedEntity;
@@ -30,7 +42,7 @@ export interface PokemonDetail extends Pokemon {
   }>;
 }
 
-export interface Habitat {
+export interface Habitat extends EditInfo {
   id: number;
   name: string;
   recipe: Array<NamedEntity & { quantity: number }>;
@@ -46,7 +58,7 @@ export interface HabitatDetail extends Habitat {
   }>;
 }
 
-export interface Item {
+export interface Item extends EditInfo {
   id: number;
   name: string;
   category: NamedEntity;
@@ -65,7 +77,7 @@ export interface ItemDetail extends Item {
   relatedHabitats: Array<NamedEntity & { quantity: number }>;
 }
 
-export interface Recipe {
+export interface Recipe extends EditInfo {
   id: number;
   name: string;
   materials: Array<NamedEntity & { quantity: number }>;

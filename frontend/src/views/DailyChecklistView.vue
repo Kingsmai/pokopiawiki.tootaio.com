@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { api, type DailyChecklistItem } from '../services/api';
@@ -10,6 +11,7 @@ type ChecklistState = {
 };
 
 const checklistStateKey = 'pokopia_daily_checklist_state';
+const { t } = useI18n();
 const stateRefreshIntervalMs = 60_000;
 const checklistItems = ref<DailyChecklistItem[]>([]);
 const checkedTaskIds = ref<Set<number>>(new Set());
@@ -108,14 +110,14 @@ onUnmounted(() => {
 
 <template>
   <section class="page-stack">
-    <PageHeader title="每日清单" subtitle="查看每天可以完成的事项。">
+    <PageHeader :title="t('pages.checklist.title')" :subtitle="t('pages.checklist.subtitle')">
       <template #kicker>CheckList</template>
     </PageHeader>
 
     <section class="detail-section" :aria-busy="loading">
-      <h2>每日做什么</h2>
+      <h2>{{ t('pages.checklist.sectionTitle') }}</h2>
 
-      <ul v-if="loading" class="row-list skeleton-row-list checklist-skeleton-list" aria-label="正在加载每日清单">
+      <ul v-if="loading" class="row-list skeleton-row-list checklist-skeleton-list" :aria-label="t('pages.checklist.loading')">
         <li v-for="index in skeletonRows" :key="index">
           <Skeleton variant="box" width="34px" height="34px" />
           <Skeleton :width="index % 2 === 0 ? '220px' : '160px'" />
@@ -135,7 +137,7 @@ onUnmounted(() => {
         </li>
       </ul>
 
-      <p v-else class="meta-line">暂无每日清单</p>
+      <p v-else class="meta-line">{{ t('pages.checklist.empty') }}</p>
     </section>
   </section>
 </template>

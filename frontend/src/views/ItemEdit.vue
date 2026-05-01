@@ -1,21 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
-import { api, type ConfigType, type ItemPayload, type Options } from '../services/api';
+import TranslationFields from '../components/TranslationFields.vue';
+import { api, type ConfigType, type ItemPayload, type Language, type Options, type TranslationMap } from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const options = ref<Options | null>(null);
+const languages = ref<Language[]>([]);
 const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
 const itemForm = ref({
   name: '',
+  translations: {} as TranslationMap,
   categoryId: '',
   usageId: '',
   dyeable: false,
@@ -28,7 +33,11 @@ const itemForm = ref({
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
-const pageTitle = computed(() => (isEditing.value ? `编辑 ${itemForm.value.name || '物品'}` : '新增物品'));
+const pageTitle = computed(() =>
+  isEditing.value
+    ? t('pages.items.editTitle', { name: itemForm.value.name || t('pages.items.fallbackName') })
+    : t('pages.items.newTitle')
+);
 const cancelTo = computed(() => (isEditing.value ? `/items/${routeId.value}` : '/items'));
 const hasRecipe = ref(false);
 
@@ -41,7 +50,9 @@ function errorText(error: unknown, fallback: string) {
 }
 
 async function loadOptions() {
-  options.value = await api.options();
+  const [loadedOptions, loadedLanguages] = await Promise.all([api.options(), api.languages()]);
+  options.value = loadedOptions;
+  languages.value = loadedLanguages;
 }
 
 async function loadEditor() {
@@ -54,6 +65,7 @@ async function loadEditor() {
       const item = await api.itemDetail(routeId.value);
       itemForm.value = {
         name: item.name,
+        translations: item.translations ?? {},
         categoryId: String(item.category.id),
         usageId: item.usage ? String(item.usage.id) : '',
         dyeable: item.customization.dyeable,
@@ -66,7 +78,7 @@ async function loadEditor() {
       hasRecipe.value = item.recipe !== null;
     }
   } catch (error) {
-    message.value = errorText(error, '加载失败');
+    message.value = errorText(error, t('errors.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -83,7 +95,7 @@ async function createSingleOption(selectKey: string, type: ConfigType, name: str
     await loadOptions();
     assign(String(created.id));
   } catch (error) {
-    message.value = errorText(error, '添加失败');
+    message.value = errorText(error, t('errors.addFailed'));
   } finally {
     creatingSelect.value = '';
   }
@@ -103,7 +115,7 @@ async function createMultiOption(selectKey: string, type: ConfigType, name: stri
       values.push(value);
     }
   } catch (error) {
-    message.value = errorText(error, '添加失败');
+    message.value = errorText(error, t('errors.addFailed'));
   } finally {
     creatingSelect.value = '';
   }
@@ -116,6 +128,7 @@ async function saveItem() {
   try {
     const payload: ItemPayload = {
       name: itemForm.value.name,
+      translations: itemForm.value.translations,
       categoryId: Number(itemForm.value.categoryId),
       usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
       dyeable: itemForm.value.dyeable,
@@ -128,7 +141,7 @@ async function saveItem() {
     const saved = isEditing.value ? await api.updateItem(routeId.value, payload) : await api.createItem(payload);
     await router.push(`/items/${saved.id}`);
   } catch (error) {
-    message.value = errorText(error, '保存失败');
+    message.value = errorText(error, t('errors.saveFailed'));
   } finally {
     busy.value = false;
   }
@@ -141,23 +154,28 @@ onMounted(() => {
 
 <template>
   <section class="page-stack">
-    <PageHeader :title="pageTitle" subtitle="维护物品分类、用途、入手方式、自定义和标签。">
+    <PageHeader :title="pageTitle" :subtitle="t('pages.items.editSubtitle')">
       <template #kicker>Item Edit</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">返回</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">{{ t('common.back') }}</RouterLink>
       </template>
     </PageHeader>
 
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
     <form v-if="!loading && options" class="detail-section" @submit.prevent="saveItem">
-      <div class="field">
-        <label for="item-name">名称</label>
-        <input id="item-name" v-model="itemForm.name" required />
-      </div>
+      <TranslationFields
+        id-prefix="item-name"
+        v-model:base-value="itemForm.name"
+        v-model:translations="itemForm.translations"
+        field="name"
+        :label="t('common.name')"
+        :languages="languages"
+        required
+      />
 
       <div class="field">
-        <label for="item-category">分类</label>
+        <label for="item-category">{{ t('pages.items.category') }}</label>
         <TagsSelect
           id="item-category"
           v-model="itemForm.categoryId"
@@ -165,14 +183,14 @@ onMounted(() => {
           :multiple="false"
           allow-create
           :creating="creatingSelect === 'item-category'"
-          placeholder="请选择"
-          search-placeholder="搜索分类"
+          :placeholder="t('common.select')"
+          :search-placeholder="t('pages.items.searchCategory')"
           @create="createSingleOption('item-category', 'item-categories', $event, (value) => (itemForm.categoryId = value))"
         />
       </div>
 
       <div class="field">
-        <label for="item-usage">用途</label>
+        <label for="item-usage">{{ t('pages.items.usage') }}</label>
         <TagsSelect
           id="item-usage"
           v-model="itemForm.usageId"
@@ -180,52 +198,52 @@ onMounted(() => {
           :multiple="false"
           allow-create
           :creating="creatingSelect === 'item-usage'"
-          placeholder="无"
-          search-placeholder="搜索用途"
+          :placeholder="t('common.none')"
+          :search-placeholder="t('pages.items.searchUsage')"
           @create="createSingleOption('item-usage', 'item-usages', $event, (value) => (itemForm.usageId = value))"
         />
       </div>
 
       <div class="check-row">
-        <label><input v-model="itemForm.dyeable" type="checkbox" /> 可染色</label>
-        <label><input v-model="itemForm.dualDyeable" type="checkbox" /> 可双区染色</label>
-        <label><input v-model="itemForm.patternEditable" type="checkbox" /> 可改花纹</label>
-        <label><input v-model="itemForm.noRecipe" type="checkbox" :disabled="hasRecipe" /> 无材料单</label>
+        <label><input v-model="itemForm.dyeable" type="checkbox" /> {{ t('pages.items.dyeable') }}</label>
+        <label><input v-model="itemForm.dualDyeable" type="checkbox" /> {{ t('pages.items.dualDyeable') }}</label>
+        <label><input v-model="itemForm.patternEditable" type="checkbox" /> {{ t('pages.items.patternEditable') }}</label>
+        <label><input v-model="itemForm.noRecipe" type="checkbox" :disabled="hasRecipe" /> {{ t('pages.items.noRecipe') }}</label>
       </div>
 
       <div class="field">
-        <label for="item-methods">入手方式</label>
+        <label for="item-methods">{{ t('pages.items.acquisitionMethods') }}</label>
         <TagsSelect
           id="item-methods"
           v-model="itemForm.acquisitionMethodIds"
           :options="options.acquisitionMethods"
           allow-create
           :creating="creatingSelect === 'item-methods'"
-          placeholder="搜索入手方式"
+          :placeholder="t('pages.items.searchMethods')"
           @create="createMultiOption('item-methods', 'acquisition-methods', $event, itemForm.acquisitionMethodIds)"
         />
       </div>
 
       <div class="field">
-        <label for="item-tags">标签</label>
+        <label for="item-tags">{{ t('pages.items.tags') }}</label>
         <TagsSelect
           id="item-tags"
           v-model="itemForm.tagIds"
           :options="options.itemTags"
           allow-create
           :creating="creatingSelect === 'item-tags'"
-          placeholder="搜索标签"
+          :placeholder="t('pages.items.searchTags')"
           @create="createMultiOption('item-tags', 'favorite-things', $event, itemForm.tagIds)"
         />
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
-        <RouterLink class="plain-button" :to="cancelTo">取消</RouterLink>
+        <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+        <RouterLink class="plain-button" :to="cancelTo">{{ t('common.cancel') }}</RouterLink>
       </div>
     </form>
 
-    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" aria-label="正在加载物品编辑内容">
+    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.items.loadingEdit')">
       <div v-for="index in 6" :key="index" class="field">
         <Skeleton :width="index === 1 ? '52px' : '88px'" />
         <Skeleton variant="box" height="44px" />

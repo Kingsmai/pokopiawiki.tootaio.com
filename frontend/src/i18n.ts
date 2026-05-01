@@ -1,0 +1,565 @@
+import { createI18n } from 'vue-i18n';
+
+export const defaultLocale = 'en';
+const localeStorageKey = 'pokopia_locale';
+const localeChangeEvent = 'pokopia-locale-change';
+
+const messages = {
+  en: {
+    common: {
+      add: 'Add',
+      admin: 'Admin',
+      all: 'All',
+      back: 'Back',
+      backToList: 'Back to list',
+      cancel: 'Cancel',
+      create: 'Create',
+      delete: 'Delete',
+      edit: 'Edit',
+      filters: 'Filters',
+      loading: 'Loading',
+      name: 'Name',
+      new: 'New',
+      none: 'None',
+      save: 'Save',
+      saving: 'Saving',
+      search: 'Search',
+      select: 'Select',
+      selected: 'Selected',
+      system: 'System',
+      noRecords: 'No records',
+      fieldForLanguage: '{field} ({language})',
+      searchOrSelect: 'Search or select',
+      noMatches: 'No matches',
+      createNamed: 'Add "{name}"',
+      creating: 'Adding',
+      removeNamed: 'Remove {name}',
+      quantity: 'Quantity',
+      required: 'Required'
+    },
+    nav: {
+      pokemon: 'Pokemon',
+      habitats: 'Habitats',
+      items: 'Items',
+      recipes: 'Recipes',
+      checklist: 'CheckList',
+      admin: 'Admin',
+      main: 'Main navigation',
+      language: 'Language',
+      login: 'Log in',
+      logout: 'Log out',
+      register: 'Register'
+    },
+    auth: {
+      email: 'Email',
+      password: 'Password',
+      displayName: 'Display name',
+      loginTitle: 'Log in',
+      loginSubtitle: 'Use a verified email to enter Pokopia Wiki.',
+      loggingIn: 'Logging in',
+      loginFailed: 'Login failed',
+      noAccount: 'No account yet?',
+      registerTitle: 'Register',
+      registerSubtitle: 'Verify your email after creating an account.',
+      registerFailed: 'Registration failed',
+      sending: 'Sending',
+      sendVerification: 'Send verification email',
+      hasAccount: 'Already have an account?',
+      verifyTitle: 'Email verification',
+      verifySubtitle: 'You can log in after verification is complete.',
+      verifyingEmail: 'Verifying email',
+      invalidVerification: 'The verification link is invalid or expired.',
+      verifyFailed: 'Email verification failed',
+      goLogin: 'Go to login'
+    },
+    errors: {
+      requestFailed: 'Request failed ({status})',
+      operationFailed: 'Operation failed',
+      loadFailed: 'Load failed',
+      addFailed: 'Add failed',
+      saveFailed: 'Save failed',
+      completeEmailVerification: 'Please complete email verification first.'
+    },
+    pages: {
+      pokemon: {
+        title: 'Pokemon',
+        subtitle: 'Search Pokemon and filter by specialities, ideal habitat, and favourites.',
+        detailKicker: 'Pokédex Detail',
+        editKicker: 'Pokédex Edit',
+        editSubtitle: 'Maintain Pokemon profile, specialities, and favourites.',
+        newTitle: 'New Pokemon',
+        editTitle: 'Edit #{id} {name}',
+        loadingList: 'Loading Pokemon list',
+        loadingDetail: 'Loading Pokemon detail',
+        loadingEdit: 'Loading Pokemon editor',
+        environmentPrefix: 'Ideal Habitat: {name}',
+        environment: 'Ideal Habitat',
+        skills: 'Specialities',
+        skillMatchMode: 'Speciality match mode',
+        any: 'Any',
+        all: 'All',
+        favoriteThings: 'Favourites',
+        favoriteThingMatchMode: 'Favourites match mode',
+        skillDrops: 'Speciality drops',
+        skillDrop: '{name} drop',
+        dropItem: 'Drop item',
+        searchPokemon: 'Search Pokemon',
+        relatedItems: 'Related items',
+        relatedItemCategory: 'Related item category',
+        habitats: 'Habitats',
+        namePlaceholder: 'Name',
+        searchEnvironment: 'Search ideal habitats',
+        searchSkills: 'Search specialities',
+        searchFavoriteThings: 'Search favourites',
+        searchItems: 'Search items'
+      },
+      habitats: {
+        title: 'Habitats',
+        subtitle: 'View recipes and Pokemon that may appear.',
+        detailSubtitle: 'Habitat detail',
+        editSubtitle: 'Maintain habitat recipes and possible Pokemon appearances.',
+        newTitle: 'New habitat',
+        editTitle: 'Edit {name}',
+        fallbackName: 'Habitat',
+        loadingList: 'Loading habitat list',
+        loadingDetail: 'Loading habitat detail',
+        loadingEdit: 'Loading habitat editor',
+        recipe: 'Recipe',
+        recipeList: 'Recipe list',
+        possiblePokemon: 'Possible Pokemon',
+        addItem: 'Add item',
+        addPokemon: 'Add Pokemon',
+        maps: 'Maps',
+        searchMaps: 'Search maps'
+      },
+      items: {
+        title: 'Items',
+        subtitle: 'Browse items by category, usage, and tags.',
+        detailKicker: 'Item Detail',
+        detailSubtitle: 'Item detail',
+        editKicker: 'Item Edit',
+        editSubtitle: 'Maintain item category, usage, acquisition methods, customization, and tags.',
+        newTitle: 'New item',
+        editTitle: 'Edit {name}',
+        fallbackName: 'Item',
+        loadingList: 'Loading item list',
+        loadingDetail: 'Loading item detail',
+        loadingEdit: 'Loading item editor',
+        category: 'Category',
+        usage: 'Usage',
+        tags: 'Tags',
+        acquisitionMethods: 'Acquisition methods',
+        customization: 'Customization',
+        dyeable: 'Dyeable',
+        dualDyeable: 'Dual dyeable',
+        patternEditable: 'Pattern editable',
+        noRecipe: 'No recipe',
+        recipeInfo: 'Recipe info',
+        relatedRecipes: 'Related recipes',
+        relatedHabitats: 'Related habitats',
+        pokemonDrops: 'Pokemon drops',
+        createRecipe: 'Create recipe',
+        searchCategory: 'Search categories',
+        searchUsage: 'Search usages',
+        searchMethods: 'Search acquisition methods',
+        searchTags: 'Search tags'
+      },
+      recipes: {
+        title: 'Recipes',
+        subtitle: 'Browse recipes by category, usage, and tags.',
+        detailKicker: 'Recipe Detail',
+        detailSubtitle: 'Recipe detail',
+        editKicker: 'Recipe Edit',
+        editSubtitle: 'Maintain result item, acquisition methods, and materials.',
+        newTitle: 'New recipe',
+        editTitle: 'Edit {name}',
+        fallbackName: 'Recipe',
+        loadingList: 'Loading recipe list',
+        loadingDetail: 'Loading recipe detail',
+        loadingEdit: 'Loading recipe editor',
+        item: 'Item',
+        materials: 'Materials',
+        addMaterial: 'Add material'
+      },
+      checklist: {
+        title: 'Daily checklist',
+        subtitle: 'See what can be completed each day.',
+        sectionTitle: 'Daily tasks',
+        empty: 'No daily checklist',
+        loading: 'Loading daily checklist',
+        task: 'Task',
+        newTask: 'New task',
+        editTask: 'Edit task'
+      },
+      admin: {
+        title: 'Admin',
+        subtitle: 'Maintain system configuration and manage Wiki records.',
+        modules: 'Admin modules',
+        loading: 'Loading admin list',
+        config: 'System config',
+        configType: 'System config type',
+        checklist: 'CheckList',
+        pokemonList: 'Pokemon list',
+        itemList: 'Item list',
+        recipeList: 'Recipe list',
+        habitatList: 'Habitat list',
+        languages: 'Languages',
+        newConfig: 'New {name}',
+        editConfig: 'Edit {name}',
+        hasItemDrop: 'Has item drop',
+        dragSort: 'Drag to reorder: {name}',
+        dragSortTitle: 'Drag to reorder',
+        languageCode: 'Code',
+        languageName: 'Language name',
+        enabled: 'Enabled',
+        defaultLanguage: 'Default language',
+        sortOrder: 'Sort order',
+        newLanguage: 'New language',
+        editLanguage: 'Edit language'
+      }
+    },
+    config: {
+      skills: 'Specialities',
+      environments: 'Ideal Habitats',
+      favoriteThings: 'Favourites / tags',
+      itemCategories: 'Item categories',
+      itemUsages: 'Item usages',
+      acquisitionMethods: 'Acquisition methods',
+      maps: 'Maps'
+    },
+    appearance: {
+      time: 'Time',
+      weather: 'Weather',
+      rarity: 'Rarity',
+      map: 'Map',
+      maps: 'Maps',
+      morning: 'Morning',
+      noon: 'Noon',
+      evening: 'Evening',
+      night: 'Night',
+      sunny: 'Sunny',
+      cloudy: 'Cloudy',
+      rainy: 'Rainy',
+      stars: '{count} stars'
+    },
+    history: {
+      title: 'Contribution records',
+      createdBy: 'Created by',
+      lastEdited: 'Last edited',
+      editHistory: 'Edit history',
+      before: 'Before',
+      after: 'After',
+      author: 'Author',
+      time: 'Time',
+      action: 'Action',
+      create: 'Create',
+      update: 'Edit',
+      delete: 'Delete',
+      empty: 'No edit history'
+    }
+  },
+  'zh-CN': {
+    common: {
+      add: '添加',
+      admin: '管理',
+      all: '全部',
+      back: '返回',
+      backToList: '返回列表',
+      cancel: '取消',
+      create: '创建',
+      delete: '删除',
+      edit: '编辑',
+      filters: '筛选',
+      loading: '加载中',
+      name: '名称',
+      new: '新建',
+      none: '无',
+      save: '保存',
+      saving: '保存中',
+      search: '搜索',
+      select: '请选择',
+      selected: '已选',
+      system: '系统',
+      noRecords: '暂无记录',
+      fieldForLanguage: '{field}（{language}）',
+      searchOrSelect: '搜索或选择',
+      noMatches: '没有匹配项',
+      createNamed: '添加「{name}」',
+      creating: '添加中',
+      removeNamed: '移除{name}',
+      quantity: '数量',
+      required: '必填'
+    },
+    nav: {
+      pokemon: 'Pokemon',
+      habitats: '栖息地',
+      items: '物品',
+      recipes: '材料单',
+      checklist: 'CheckList',
+      admin: '管理',
+      main: '主导航',
+      language: '语言',
+      login: '登录',
+      logout: '退出',
+      register: '注册'
+    },
+    auth: {
+      email: '邮箱',
+      password: '密码',
+      displayName: '显示名',
+      loginTitle: '登录',
+      loginSubtitle: '使用已验证邮箱进入 Pokopia Wiki',
+      loggingIn: '登录中',
+      loginFailed: '登录失败',
+      noAccount: '还没有账号？',
+      registerTitle: '注册',
+      registerSubtitle: '创建账号后需要完成邮箱验证',
+      registerFailed: '注册失败',
+      sending: '发送中',
+      sendVerification: '发送验证邮件',
+      hasAccount: '已有账号？',
+      verifyTitle: '邮箱验证',
+      verifySubtitle: '完成验证后即可登录',
+      verifyingEmail: '正在验证邮箱',
+      invalidVerification: '验证链接无效或已过期',
+      verifyFailed: '邮箱验证失败',
+      goLogin: '去登录'
+    },
+    errors: {
+      requestFailed: '请求失败（{status}）',
+      operationFailed: '操作失败',
+      loadFailed: '加载失败',
+      addFailed: '添加失败',
+      saveFailed: '保存失败',
+      completeEmailVerification: '请先完成邮箱验证'
+    },
+    pages: {
+      pokemon: {
+        title: 'Pokemon',
+        subtitle: '搜索宝可梦，并按特长、环境、喜欢的东西筛选。',
+        detailKicker: 'Pokédex Detail',
+        editKicker: 'Pokédex Edit',
+        editSubtitle: '维护 Pokemon 基本资料、特长和喜欢的东西。',
+        newTitle: '新增 Pokemon',
+        editTitle: '编辑 #{id} {name}',
+        loadingList: '正在加载 Pokemon 列表',
+        loadingDetail: '正在加载 Pokemon 详情',
+        loadingEdit: '正在加载 Pokemon 编辑内容',
+        environmentPrefix: '喜欢的环境：{name}',
+        environment: '喜欢的环境',
+        skills: '特长',
+        skillMatchMode: '特长匹配方式',
+        any: '任意',
+        all: '全部',
+        favoriteThings: '喜欢的东西',
+        favoriteThingMatchMode: '喜欢的东西匹配方式',
+        skillDrops: '特长掉落物',
+        skillDrop: '{name}掉落物',
+        dropItem: '掉落物',
+        searchPokemon: '搜索 Pokemon',
+        relatedItems: '关联物品',
+        relatedItemCategory: '关联物品分类',
+        habitats: '栖息地',
+        namePlaceholder: '名字',
+        searchEnvironment: '搜索喜欢的环境',
+        searchSkills: '搜索特长',
+        searchFavoriteThings: '搜索喜欢的东西',
+        searchItems: '搜索物品'
+      },
+      habitats: {
+        title: '栖息地',
+        subtitle: '查看配方和可能出现的宝可梦。',
+        detailSubtitle: '栖息地详情',
+        editSubtitle: '维护栖息地配方和可能出现的 Pokemon。',
+        newTitle: '新增栖息地',
+        editTitle: '编辑 {name}',
+        fallbackName: '栖息地',
+        loadingList: '正在加载栖息地列表',
+        loadingDetail: '正在加载栖息地详情',
+        loadingEdit: '正在加载栖息地编辑内容',
+        recipe: '配方',
+        recipeList: '配方列表',
+        possiblePokemon: '可能出现的宝可梦',
+        addItem: '添加物品',
+        addPokemon: '添加 Pokemon',
+        maps: '地图',
+        searchMaps: '搜索地图'
+      },
+      items: {
+        title: '物品',
+        subtitle: '按分类、用途、标签查看物品。',
+        detailKicker: 'Item Detail',
+        detailSubtitle: '物品详情',
+        editKicker: 'Item Edit',
+        editSubtitle: '维护物品分类、用途、入手方式、自定义和标签。',
+        newTitle: '新增物品',
+        editTitle: '编辑 {name}',
+        fallbackName: '物品',
+        loadingList: '正在加载列表',
+        loadingDetail: '正在加载物品详情',
+        loadingEdit: '正在加载物品编辑内容',
+        category: '分类',
+        usage: '用途',
+        tags: '标签',
+        acquisitionMethods: '入手方式',
+        customization: '自定义',
+        dyeable: '可染色',
+        dualDyeable: '可双区染色',
+        patternEditable: '可改花纹',
+        noRecipe: '无材料单',
+        recipeInfo: '材料单信息',
+        relatedRecipes: '相关材料单',
+        relatedHabitats: '相关栖息地',
+        pokemonDrops: 'Pokemon 掉落',
+        createRecipe: '创建材料单',
+        searchCategory: '搜索分类',
+        searchUsage: '搜索用途',
+        searchMethods: '搜索入手方式',
+        searchTags: '搜索标签'
+      },
+      recipes: {
+        title: '材料单',
+        subtitle: '按分类、用途、标签查看材料单。',
+        detailKicker: 'Recipe Detail',
+        detailSubtitle: '材料单详情',
+        editKicker: 'Recipe Edit',
+        editSubtitle: '维护材料单结果物品、入手方式和需要材料。',
+        newTitle: '新增材料单',
+        editTitle: '编辑 {name}',
+        fallbackName: '材料单',
+        loadingList: '正在加载材料单列表',
+        loadingDetail: '正在加载材料单详情',
+        loadingEdit: '正在加载材料单编辑内容',
+        item: '物品',
+        materials: '需要材料',
+        addMaterial: '添加材料'
+      },
+      checklist: {
+        title: '每日清单',
+        subtitle: '查看每天可以完成的事项。',
+        sectionTitle: '每日做什么',
+        empty: '暂无每日清单',
+        loading: '正在加载每日清单',
+        task: 'Task',
+        newTask: '新增 Task',
+        editTask: '编辑 Task'
+      },
+      admin: {
+        title: '管理',
+        subtitle: '维护系统配置，查看并删除 Wiki 数据记录。',
+        modules: '管理模块',
+        loading: '正在加载管理列表',
+        config: '系统配置',
+        configType: '系统配置类型',
+        checklist: 'CheckList',
+        pokemonList: 'Pokemon 列表',
+        itemList: '物品列表',
+        recipeList: '材料单列表',
+        habitatList: '栖息地列表',
+        languages: '语言',
+        newConfig: '新增{name}',
+        editConfig: '编辑{name}',
+        hasItemDrop: '有掉落物',
+        dragSort: '拖曳排序：{name}',
+        dragSortTitle: '拖曳排序',
+        languageCode: 'Code',
+        languageName: '语言名称',
+        enabled: '启用',
+        defaultLanguage: '默认语言',
+        sortOrder: '排序',
+        newLanguage: '新增语言',
+        editLanguage: '编辑语言'
+      }
+    },
+    config: {
+      skills: '特长',
+      environments: '喜欢的环境',
+      favoriteThings: '喜欢的东西 / 标签',
+      itemCategories: '物品分类',
+      itemUsages: '物品用途',
+      acquisitionMethods: '入手方式',
+      maps: '地图'
+    },
+    appearance: {
+      time: '时段',
+      weather: '天气',
+      rarity: '稀有度',
+      map: '地图',
+      maps: '出现地图',
+      morning: '早晨',
+      noon: '中午',
+      evening: '傍晚',
+      night: '晚上',
+      sunny: '晴天',
+      cloudy: '阴天',
+      rainy: '雨天',
+      stars: '{count} 星'
+    },
+    history: {
+      title: '贡献记录',
+      createdBy: '由谁创建',
+      lastEdited: '最后编辑',
+      editHistory: '编辑历史',
+      before: '修改前',
+      after: '修改后',
+      author: '作者',
+      time: '时间',
+      action: '动作',
+      create: '创建',
+      update: '编辑',
+      delete: '删除',
+      empty: '暂无编辑历史'
+    }
+  }
+};
+
+export type MessageKey = keyof typeof messages.en;
+
+export const i18n = createI18n({
+  legacy: false,
+  globalInjection: true,
+  locale: readStoredLocale(),
+  fallbackLocale: defaultLocale,
+  messages
+});
+
+function readStoredLocale(): string {
+  if (typeof localStorage === 'undefined') {
+    return defaultLocale;
+  }
+
+  const storedLocale = localStorage.getItem(localeStorageKey);
+  return storedLocale && storedLocale.trim() !== '' ? storedLocale : defaultLocale;
+}
+
+function globalLocaleRef() {
+  return i18n.global.locale as unknown as { value: string };
+}
+
+export function getCurrentLocale(): string {
+  return globalLocaleRef().value || defaultLocale;
+}
+
+export function setCurrentLocale(locale: string): void {
+  const nextLocale = locale || defaultLocale;
+  globalLocaleRef().value = nextLocale;
+
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = nextLocale;
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(localeStorageKey, nextLocale);
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(localeChangeEvent));
+  }
+}
+
+export function onLocaleChange(callback: () => void): () => void {
+  window.addEventListener(localeChangeEvent, callback);
+  return () => window.removeEventListener(localeChangeEvent, callback);
+}
+
+setCurrentLocale(getCurrentLocale());

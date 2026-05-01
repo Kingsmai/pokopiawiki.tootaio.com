@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import PageHeader from '../components/PageHeader.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import { api } from '../services/api';
@@ -10,6 +11,7 @@ const password = ref('');
 const busy = ref(false);
 const message = ref('');
 const errorMessage = ref('');
+const { t } = useI18n();
 
 async function submitRegister() {
   busy.value = true;
@@ -24,7 +26,7 @@ async function submitRegister() {
     });
     message.value = response.message;
   } catch (error) {
-    errorMessage.value = error instanceof Error && error.message ? error.message : '注册失败';
+    errorMessage.value = error instanceof Error && error.message ? error.message : t('auth.registerFailed');
   } finally {
     busy.value = false;
   }
@@ -34,23 +36,23 @@ async function submitRegister() {
 <template>
   <section class="auth-page">
     <div class="auth-panel">
-      <PageHeader title="注册" subtitle="创建账号后需要完成邮箱验证">
+      <PageHeader :title="t('auth.registerTitle')" :subtitle="t('auth.registerSubtitle')">
         <template #kicker>Trainer Pass</template>
       </PageHeader>
 
       <form class="auth-form" @submit.prevent="submitRegister">
         <div class="field">
-          <label for="register-email">邮箱</label>
+          <label for="register-email">{{ t('auth.email') }}</label>
           <input id="register-email" v-model="email" autocomplete="email" required type="email" />
         </div>
 
         <div class="field">
-          <label for="register-display-name">显示名</label>
+          <label for="register-display-name">{{ t('auth.displayName') }}</label>
           <input id="register-display-name" v-model="displayName" autocomplete="nickname" maxlength="40" required />
         </div>
 
         <div class="field">
-          <label for="register-password">密码</label>
+          <label for="register-password">{{ t('auth.password') }}</label>
           <input
             id="register-password"
             v-model="password"
@@ -65,13 +67,13 @@ async function submitRegister() {
         <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
 
         <button class="ui-button ui-button--primary" :disabled="busy" type="submit">
-          {{ busy ? '发送中' : '发送验证邮件' }}
+          {{ busy ? t('auth.sending') : t('auth.sendVerification') }}
         </button>
       </form>
 
       <p class="auth-switch">
-        已有账号？
-        <RouterLink to="/login">登录</RouterLink>
+        {{ t('auth.hasAccount') }}
+        <RouterLink to="/login">{{ t('nav.login') }}</RouterLink>
       </p>
     </div>
   </section>

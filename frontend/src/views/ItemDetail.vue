@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
@@ -9,6 +10,7 @@ import Skeleton from '../components/Skeleton.vue';
 import { api, type ItemDetail } from '../services/api';
 
 const route = useRoute();
+const { t } = useI18n();
 const item = ref<ItemDetail | null>(null);
 
 const customization = computed(() => {
@@ -17,9 +19,9 @@ const customization = computed(() => {
   }
 
   return [
-    item.value.customization.dyeable ? '可染色' : '',
-    item.value.customization.dualDyeable ? '可双区染色' : '',
-    item.value.customization.patternEditable ? '可改花纹' : ''
+    item.value.customization.dyeable ? t('pages.items.dyeable') : '',
+    item.value.customization.dualDyeable ? t('pages.items.dualDyeable') : '',
+    item.value.customization.patternEditable ? t('pages.items.patternEditable') : ''
   ].filter(Boolean);
 });
 
@@ -29,7 +31,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section v-if="!item" class="page-stack" aria-busy="true" aria-label="正在加载物品详情">
+  <section v-if="!item" class="page-stack" aria-busy="true" :aria-label="t('pages.items.loadingDetail')">
     <div class="page-header page-header--skeleton" aria-hidden="true">
       <div class="page-header__copy">
         <Skeleton width="96px" />
@@ -85,70 +87,70 @@ onMounted(async () => {
     <PageHeader :title="item.name" :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name">
       <template #kicker>Item Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">编辑</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">返回列表</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">{{ t('common.edit') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">{{ t('common.backToList') }}</RouterLink>
       </template>
     </PageHeader>
 
     <div class="detail-with-sidebar">
       <div class="detail-grid">
-        <DetailSection title="入手方式">
+        <DetailSection :title="t('pages.items.acquisitionMethods')">
           <EntityChips :items="item.acquisitionMethods" />
         </DetailSection>
 
-        <DetailSection title="自定义">
+        <DetailSection :title="t('pages.items.customization')">
           <div v-if="customization.length" class="chips">
             <span v-for="entry in customization" :key="entry" class="chip">{{ entry }}</span>
           </div>
-          <p v-else class="meta-line">无</p>
+          <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
 
-        <DetailSection title="标签">
+        <DetailSection :title="t('pages.items.tags')">
           <EntityChips :items="item.tags" />
         </DetailSection>
 
-        <DetailSection title="材料单信息">
+        <DetailSection :title="t('pages.items.recipeInfo')">
           <template v-if="item.recipe">
             <RouterLink :to="`/recipes/${item.recipe.id}`">{{ item.recipe.name }}</RouterLink>
             <EntityChips :items="item.recipe.materials" />
           </template>
-          <p v-else-if="item.noRecipe" class="meta-line">无材料单</p>
+          <p v-else-if="item.noRecipe" class="meta-line">{{ t('pages.items.noRecipe') }}</p>
           <template v-else>
-            <p class="meta-line">无</p>
+            <p class="meta-line">{{ t('common.none') }}</p>
             <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/new?itemId=${item.id}`">
-              创建材料单
+              {{ t('pages.items.createRecipe') }}
             </RouterLink>
           </template>
         </DetailSection>
 
-        <DetailSection title="相关材料单">
+        <DetailSection :title="t('pages.items.relatedRecipes')">
           <ul v-if="item.relatedRecipes.length" class="row-list">
             <li v-for="recipe in item.relatedRecipes" :key="recipe.id">
               <RouterLink :to="`/recipes/${recipe.id}`">{{ recipe.name }}</RouterLink>
               <EntityChips :items="recipe.materials" />
             </li>
           </ul>
-          <p v-else class="meta-line">无</p>
+          <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
 
-        <DetailSection title="相关栖息地">
+        <DetailSection :title="t('pages.items.relatedHabitats')">
           <ul v-if="item.relatedHabitats.length" class="row-list">
             <li v-for="habitat in item.relatedHabitats" :key="habitat.id">
               <RouterLink :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
               <EntityChips :items="habitat.recipe" />
             </li>
           </ul>
-          <p v-else class="meta-line">无</p>
+          <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
 
-        <DetailSection title="Pokemon 掉落">
+        <DetailSection :title="t('pages.items.pokemonDrops')">
           <ul v-if="item.droppedByPokemon.length" class="row-list">
             <li v-for="entry in item.droppedByPokemon" :key="`${entry.pokemon.id}-${entry.skill.id}`">
               <RouterLink :to="`/pokemon/${entry.pokemon.id}`">#{{ entry.pokemon.id }} {{ entry.pokemon.name }}</RouterLink>
-              <span>{{ entry.skill.name }}掉落物</span>
+              <span>{{ t('pages.pokemon.skillDrop', { name: entry.skill.name }) }}</span>
             </li>
           </ul>
-          <p v-else class="meta-line">无</p>
+          <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
       </div>
 

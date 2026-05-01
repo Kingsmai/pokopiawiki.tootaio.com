@@ -12,9 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@iconify/vue": "^5.0.0",
     "@vitejs/plugin-vue": "latest",
     "vite": "latest",
     "vue": "latest",
+    "vue-i18n": "^11.4.0",
     "vue-router": "latest"
   },
   "devDependencies": {

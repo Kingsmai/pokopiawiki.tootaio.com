@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import PageHeader from '../components/PageHeader.vue';
+import ReorderableList from '../components/ReorderableList.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
+import TranslationFields from '../components/TranslationFields.vue';
+import { defaultLocale, getCurrentLocale, setCurrentLocale } from '../i18n';
 import {
   api,
   type AuthUser,
@@ -11,37 +15,43 @@ import {
   type DailyChecklistItem,
   type Habitat,
   type Item,
+  type Language,
   type NamedEntity,
   type Pokemon,
   type Recipe,
-  type Skill
+  type Skill,
+  type TranslationMap
 } from '../services/api';
 
-type AdminTab = 'config' | 'checklist' | 'pokemon' | 'items' | 'recipes' | 'habitats';
+type AdminTab = 'config' | 'languages' | 'checklist' | 'pokemon' | 'items' | 'recipes' | 'habitats';
 type EditableConfig = (NamedEntity | Skill) & { hasItemDrop?: boolean };
 
-const tabs: Array<{ key: AdminTab; label: string }> = [
-  { key: 'config', label: '系统配置' },
-  { key: 'checklist', label: 'CheckList' },
-  { key: 'pokemon', label: 'Pokemon' },
-  { key: 'items', label: '物品' },
-  { key: 'recipes', label: '材料单' },
-  { key: 'habitats', label: '栖息地' }
-];
+const { locale, t } = useI18n();
 
-const configTypes: Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean }> = [
-  { key: 'skills', label: '特长', supportsItemDrop: true },
-  { key: 'environments', label: '喜欢的环境' },
-  { key: 'favorite-things', label: '喜欢的东西 / 标签' },
-  { key: 'item-categories', label: '物品分类' },
-  { key: 'item-usages', label: '物品用途' },
-  { key: 'acquisition-methods', label: '入手方式' },
-  { key: 'maps', label: '地图' }
-];
+const tabs = computed<Array<{ key: AdminTab; label: string }>>(() => [
+  { key: 'config', label: t('pages.admin.config') },
+  { key: 'languages', label: t('pages.admin.languages') },
+  { key: 'checklist', label: t('pages.admin.checklist') },
+  { key: 'pokemon', label: 'Pokemon' },
+  { key: 'items', label: t('pages.items.title') },
+  { key: 'recipes', label: t('pages.recipes.title') },
+  { key: 'habitats', label: t('pages.habitats.title') }
+]);
+
+const configTypes = computed<Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean }>>(() => [
+  { key: 'skills', label: t('config.skills'), supportsItemDrop: true },
+  { key: 'environments', label: t('config.environments') },
+  { key: 'favorite-things', label: t('config.favoriteThings') },
+  { key: 'item-categories', label: t('config.itemCategories') },
+  { key: 'item-usages', label: t('config.itemUsages') },
+  { key: 'acquisition-methods', label: t('config.acquisitionMethods') },
+  { key: 'maps', label: t('config.maps') }
+]);
 
 const activeTab = ref<AdminTab>('config');
 const activeConfigType = ref<ConfigType>('skills');
 const configRows = ref<EditableConfig[]>([]);
+const languageRows = ref<Language[]>([]);
 const checklistRows = ref<DailyChecklistItem[]>([]);
 const pokemonRows = ref<Pokemon[]>([]);
 const itemRows = ref<Item[]>([]);
@@ -51,20 +61,37 @@ const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
 const message = ref('');
-const configForm = ref({ id: 0, name: '', hasItemDrop: false });
-const checklistForm = ref({ id: 0, title: '' });
-const draggingChecklistId = ref<number | null>(null);
-const dragOverChecklistId = ref<number | null>(null);
-const dragInsertAfterTarget = ref(false);
-const dragSourceChecklistRows = ref<DailyChecklistItem[]>([]);
-const dragDropCommitted = ref(false);
+const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, hasItemDrop: false });
+const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
+const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
+const editingLanguageCode = ref('');
 
-const selectedConfig = computed(() => configTypes.find((item) => item.key === activeConfigType.value) ?? configTypes[0]);
-const configTabs = computed<TabOption[]>(() => configTypes.map((item) => ({ value: item.key, label: item.label })));
+const selectedConfig = computed(() => configTypes.value.find((item) => item.key === activeConfigType.value) ?? configTypes.value[0]);
+const configTabs = computed<TabOption[]>(() => configTypes.value.map((item) => ({ value: item.key, label: item.label })));
+const currentConfigLocale = computed(() => String(locale.value || defaultLocale));
+const isConfigDefaultLocale = computed(() => currentConfigLocale.value === defaultLocale);
+const configNameRequired = computed(() => isConfigDefaultLocale.value || !configForm.value.id);
+const configNameInput = computed({
+  get: () => {
+    if (isConfigDefaultLocale.value) {
+      return configForm.value.name;
+    }
+
+    return configForm.value.translations[currentConfigLocale.value]?.name ?? configForm.value.name;
+  },
+  set: (value: string) => {
+    if (isConfigDefaultLocale.value) {
+      configForm.value.name = value;
+      return;
+    }
+
+    updateConfigTranslation(currentConfigLocale.value, value);
+  }
+});
 const activeConfigTab = computed({
   get: () => activeConfigType.value,
   set: (value: string) => {
-    const nextConfig = configTypes.find((item) => item.key === value);
+    const nextConfig = configTypes.value.find((item) => item.key === value);
     if (!nextConfig || nextConfig.key === activeConfigType.value) return;
 
     activeConfigType.value = nextConfig.key;
@@ -74,6 +101,15 @@ const activeConfigTab = computed({
 });
 const canEdit = computed(() => currentUser.value?.emailVerified === true);
 const showAdminSkeleton = computed(() => busy.value && !message.value && (!currentUser.value || contentLoading.value));
+const canSetLanguageDefault = computed(() => languageForm.value.code === 'en');
+const checklistKey = (item: DailyChecklistItem) => item.id;
+const checklistLabel = (item: DailyChecklistItem) => item.title;
+const languageKey = (item: Language) => item.code;
+const languageLabel = (item: Language) => item.name;
+
+function dragSortLabel(name: string) {
+  return t('pages.admin.dragSort', { name });
+}
 
 function errorText(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -85,59 +121,86 @@ async function run(action: () => Promise<void>) {
   try {
     await action();
   } catch (error) {
-    message.value = errorText(error, '操作失败');
+    message.value = errorText(error, t('errors.operationFailed'));
   } finally {
     busy.value = false;
   }
 }
 
 async function loadConfig() {
+  await loadLanguages();
   configRows.value = (await api.config(activeConfigType.value)) as EditableConfig[];
 }
 
+async function loadLanguages() {
+  languageRows.value = await api.adminLanguages();
+}
+
 function resetConfigForm() {
-  configForm.value = { id: 0, name: '', hasItemDrop: false };
+  configForm.value = { id: 0, name: '', translations: {}, hasItemDrop: false };
 }
 
 function resetChecklistForm() {
-  checklistForm.value = { id: 0, title: '' };
+  checklistForm.value = { id: 0, title: '', translations: {} };
+}
+
+function resetLanguageForm() {
+  languageForm.value = { code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 };
+  editingLanguageCode.value = '';
 }
 
 function editConfig(item: EditableConfig) {
-  configForm.value = { id: item.id, name: item.name, hasItemDrop: item.hasItemDrop === true };
+  configForm.value = { id: item.id, name: item.baseName ?? item.name, translations: item.translations ?? {}, hasItemDrop: item.hasItemDrop === true };
 }
 
 function editChecklistItem(item: DailyChecklistItem) {
-  checklistForm.value = { id: item.id, title: item.title };
+  checklistForm.value = { id: item.id, title: item.title, translations: item.translations ?? {} };
 }
 
-function hasChecklistOrderChanged(rows: DailyChecklistItem[], nextRows: DailyChecklistItem[]) {
-  return rows.length !== nextRows.length || rows.some((item, index) => item.id !== nextRows[index]?.id);
+function editLanguage(item: Language) {
+  editingLanguageCode.value = item.code;
+  languageForm.value = {
+    code: item.code,
+    name: item.name,
+    enabled: item.enabled,
+    isDefault: item.isDefault,
+    sortOrder: item.sortOrder
+  };
 }
 
-function reorderedChecklistRows(
-  rows: DailyChecklistItem[],
-  draggedId: number,
-  targetId: number,
-  insertAfterTarget: boolean
-) {
-  if (draggedId === targetId) {
-    return rows;
+function updateConfigTranslation(localeCode: string, value: string) {
+  const nextTranslations: TranslationMap = { ...configForm.value.translations };
+  const nextFields = { ...(nextTranslations[localeCode] ?? {}) };
+
+  if (value.trim() === '') {
+    delete nextFields.name;
+  } else {
+    nextFields.name = value;
   }
 
-  const draggedItem = rows.find((item) => item.id === draggedId);
-  if (!draggedItem) {
-    return rows;
+  if (Object.keys(nextFields).length) {
+    nextTranslations[localeCode] = nextFields;
+  } else {
+    delete nextTranslations[localeCode];
   }
 
-  const nextRows = rows.filter((item) => item.id !== draggedId);
-  const targetIndex = nextRows.findIndex((item) => item.id === targetId);
-  if (targetIndex < 0) {
-    return rows;
+  configForm.value.translations = nextTranslations;
+}
+
+function configBaseNameForSave() {
+  if (configForm.value.name.trim() !== '' || isConfigDefaultLocale.value) {
+    return configForm.value.name;
   }
 
-  nextRows.splice(targetIndex + (insertAfterTarget ? 1 : 0), 0, draggedItem);
-  return nextRows;
+  return configForm.value.translations[currentConfigLocale.value]?.name ?? '';
+}
+
+function previewChecklistOrder(rows: DailyChecklistItem[]) {
+  checklistRows.value = rows;
+}
+
+function previewLanguageOrder(rows: Language[]) {
+  languageRows.value = rows;
 }
 
 async function persistChecklistOrder(nextRows: DailyChecklistItem[], fallbackRows: DailyChecklistItem[]) {
@@ -152,10 +215,24 @@ async function persistChecklistOrder(nextRows: DailyChecklistItem[], fallbackRow
   });
 }
 
+async function persistLanguageOrder(nextRows: Language[], fallbackRows: Language[]) {
+  languageRows.value = nextRows;
+  await run(async () => {
+    try {
+      languageRows.value = await api.reorderLanguages(nextRows.map((item) => item.code));
+      setCurrentLocale(getCurrentLocale());
+    } catch (error) {
+      languageRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
 async function saveConfig() {
   await run(async () => {
     const payload = {
-      name: configForm.value.name,
+      name: configBaseNameForSave(),
+      translations: configForm.value.translations,
       hasItemDrop: selectedConfig.value.supportsItemDrop ? configForm.value.hasItemDrop : undefined
     };
 
@@ -171,6 +248,7 @@ async function saveConfig() {
 }
 
 async function loadChecklist() {
+  await loadLanguages();
   checklistRows.value = await api.dailyChecklist();
   if (!checklistForm.value.id && checklistForm.value.title.trim() === '') {
     resetChecklistForm();
@@ -180,7 +258,8 @@ async function loadChecklist() {
 async function saveChecklistItem() {
   await run(async () => {
     const payload = {
-      title: checklistForm.value.title
+      title: checklistForm.value.title,
+      translations: checklistForm.value.translations
     };
 
     if (checklistForm.value.id) {
@@ -192,6 +271,32 @@ async function saveChecklistItem() {
     await loadChecklist();
     resetChecklistForm();
   });
+}
+
+async function saveLanguage() {
+  await run(async () => {
+    const payload = {
+      code: languageForm.value.code,
+      name: languageForm.value.name,
+      enabled: languageForm.value.enabled,
+      isDefault: languageForm.value.isDefault,
+      sortOrder: languageSortOrderForSave()
+    };
+
+    languageRows.value = editingLanguageCode.value
+      ? await api.updateLanguage(editingLanguageCode.value, payload)
+      : await api.createLanguage(payload);
+    resetLanguageForm();
+    setCurrentLocale(getCurrentLocale());
+  });
+}
+
+function languageSortOrderForSave() {
+  if (editingLanguageCode.value) {
+    return languageRows.value.find((item) => item.code === editingLanguageCode.value)?.sortOrder ?? languageForm.value.sortOrder;
+  }
+
+  return languageRows.value.reduce((maxOrder, item) => Math.max(maxOrder, item.sortOrder), 0) + 10;
 }
 
 async function loadPokemon() {
@@ -217,6 +322,7 @@ async function loadCurrentTab(showSkeleton = false) {
 
   try {
     if (activeTab.value === 'config') await loadConfig();
+    if (activeTab.value === 'languages') await loadLanguages();
     if (activeTab.value === 'checklist') await loadChecklist();
     if (activeTab.value === 'pokemon') await loadPokemon();
     if (activeTab.value === 'items') await loadItems();
@@ -231,7 +337,7 @@ async function loadCurrentTab(showSkeleton = false) {
 
 function setTab(tab: AdminTab) {
   if (!canEdit.value) {
-    message.value = '请先完成邮箱验证';
+    message.value = t('errors.completeEmailVerification');
     return;
   }
 
@@ -244,11 +350,22 @@ async function loadAdmin() {
   currentUser.value = response.user;
 
   if (!response.user.emailVerified) {
-    message.value = '请先完成邮箱验证';
+    message.value = t('errors.completeEmailVerification');
     return;
   }
 
   await loadCurrentTab(true);
+}
+
+async function removeLanguage(code: string) {
+  await run(async () => {
+    await api.deleteLanguage(code);
+    if (editingLanguageCode.value === code) {
+      resetLanguageForm();
+    }
+    await loadLanguages();
+    setCurrentLocale(getCurrentLocale());
+  });
 }
 
 async function removeConfig(id: number) {
@@ -269,119 +386,6 @@ async function removeChecklistItem(id: number) {
     }
     await loadChecklist();
   });
-}
-
-function startChecklistDrag(item: DailyChecklistItem, event: Event) {
-  draggingChecklistId.value = item.id;
-  dragSourceChecklistRows.value = [...checklistRows.value];
-  dragDropCommitted.value = false;
-  const dragEvent = event instanceof DragEvent ? event : null;
-  dragEvent?.dataTransfer?.setData('text/plain', String(item.id));
-  if (dragEvent?.dataTransfer) {
-    dragEvent.dataTransfer.effectAllowed = 'move';
-    dragEvent.dataTransfer.dropEffect = 'move';
-  }
-}
-
-function clearChecklistDragState() {
-  draggingChecklistId.value = null;
-  dragOverChecklistId.value = null;
-  dragInsertAfterTarget.value = false;
-  dragSourceChecklistRows.value = [];
-  dragDropCommitted.value = false;
-}
-
-function endChecklistDrag() {
-  if (draggingChecklistId.value !== null && !dragDropCommitted.value && dragSourceChecklistRows.value.length) {
-    checklistRows.value = dragSourceChecklistRows.value;
-  }
-
-  clearChecklistDragState();
-}
-
-function previewChecklistDrop(targetItem: DailyChecklistItem, event: Event) {
-  const dragEvent = event instanceof DragEvent ? event : null;
-  const draggedId = draggingChecklistId.value ?? Number(dragEvent?.dataTransfer?.getData('text/plain'));
-  if (!draggedId || busy.value) {
-    return;
-  }
-
-  if (draggedId === targetItem.id) {
-    dragOverChecklistId.value = null;
-    dragInsertAfterTarget.value = false;
-    return;
-  }
-
-  if (dragEvent?.dataTransfer) {
-    dragEvent.dataTransfer.dropEffect = 'move';
-  }
-
-  const targetElement = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  const insertAfterTarget = targetElement
-    ? (dragEvent?.clientY ?? 0) > targetElement.getBoundingClientRect().top + targetElement.getBoundingClientRect().height / 2
-    : false;
-
-  dragOverChecklistId.value = targetItem.id;
-  dragInsertAfterTarget.value = insertAfterTarget;
-  const nextRows = reorderedChecklistRows(checklistRows.value, draggedId, targetItem.id, insertAfterTarget);
-  if (hasChecklistOrderChanged(checklistRows.value, nextRows)) {
-    checklistRows.value = nextRows;
-  }
-}
-
-async function dropChecklistItem(targetItem: DailyChecklistItem, event: Event) {
-  if (!draggingChecklistId.value || busy.value) {
-    endChecklistDrag();
-    return;
-  }
-
-  previewChecklistDrop(targetItem, event);
-
-  const nextRows = [...checklistRows.value];
-  const fallbackRows = dragSourceChecklistRows.value.length ? [...dragSourceChecklistRows.value] : nextRows;
-  dragDropCommitted.value = true;
-  clearChecklistDragState();
-
-  if (!hasChecklistOrderChanged(fallbackRows, nextRows)) {
-    return;
-  }
-
-  await persistChecklistOrder(nextRows, fallbackRows);
-}
-
-async function moveChecklistItemByKeyboard(item: DailyChecklistItem, offset: -1 | 1) {
-  if (busy.value) {
-    return;
-  }
-
-  const currentIndex = checklistRows.value.findIndex((row) => row.id === item.id);
-  const targetIndex = currentIndex + offset;
-  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= checklistRows.value.length) {
-    return;
-  }
-
-  const fallbackRows = [...checklistRows.value];
-  const nextRows = [...checklistRows.value];
-  const [movedItem] = nextRows.splice(currentIndex, 1);
-  nextRows.splice(targetIndex, 0, movedItem);
-  await persistChecklistOrder(nextRows, fallbackRows);
-}
-
-function handleChecklistHandleKey(item: DailyChecklistItem, event: Event) {
-  const keyboardEvent = event instanceof KeyboardEvent ? event : null;
-  if (!keyboardEvent) {
-    return;
-  }
-
-  if (keyboardEvent.key === 'ArrowUp') {
-    keyboardEvent.preventDefault();
-    void moveChecklistItemByKeyboard(item, -1);
-  }
-
-  if (keyboardEvent.key === 'ArrowDown') {
-    keyboardEvent.preventDefault();
-    void moveChecklistItemByKeyboard(item, 1);
-  }
 }
 
 async function removePokemon(id: number) {
@@ -419,11 +423,11 @@ onMounted(() => {
 
 <template>
   <section class="page-stack">
-    <PageHeader title="管理" subtitle="维护系统配置，查看并删除 Wiki 数据记录。">
+    <PageHeader :title="t('pages.admin.title')" :subtitle="t('pages.admin.subtitle')">
       <template #kicker>Admin</template>
     </PageHeader>
 
-    <div v-if="canEdit" class="tabs" role="tablist" aria-label="管理模块">
+    <div v-if="canEdit" class="tabs" role="tablist" :aria-label="t('pages.admin.modules')">
       <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" type="button" @click="setTab(tab.key)">
         {{ tab.label }}
       </button>
@@ -431,7 +435,7 @@ onMounted(() => {
 
     <StatusMessage v-if="message" variant="warning">{{ message }}</StatusMessage>
 
-    <section v-if="showAdminSkeleton" class="detail-section skeleton-detail-section" aria-busy="true" aria-label="正在加载管理列表">
+    <section v-if="showAdminSkeleton" class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.admin.loading')">
       <h2><Skeleton width="120px" height="24px" /></h2>
       <ul class="row-list skeleton-row-list">
         <li v-for="index in 6" :key="index">
@@ -444,143 +448,188 @@ onMounted(() => {
     </section>
 
     <section v-else-if="canEdit && activeTab === 'checklist'" class="detail-section">
-      <h2>CheckList</h2>
+      <h2>{{ t('pages.admin.checklist') }}</h2>
 
       <form class="detail-section__body" @submit.prevent="saveChecklistItem">
-        <h3 class="section-subtitle">{{ checklistForm.id ? '编辑 Task' : '新增 Task' }}</h3>
-        <div class="field">
-          <label for="checklist-title">Task</label>
-          <input id="checklist-title" v-model="checklistForm.title" required />
-        </div>
+        <h3 class="section-subtitle">{{ checklistForm.id ? t('pages.checklist.editTask') : t('pages.checklist.newTask') }}</h3>
+        <TranslationFields
+          id-prefix="checklist-title"
+          v-model:base-value="checklistForm.title"
+          v-model:translations="checklistForm.translations"
+          field="title"
+          :label="t('pages.checklist.task')"
+          :languages="languageRows"
+          required
+        />
         <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
-          <button type="button" class="plain-button" :disabled="busy" @click="resetChecklistForm">新建</button>
+          <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+          <button type="button" class="plain-button" :disabled="busy" @click="resetChecklistForm">{{ t('common.new') }}</button>
         </div>
       </form>
 
-      <h3 class="section-subtitle">每日做什么</h3>
-      <TransitionGroup v-if="checklistRows.length" name="admin-checklist" tag="ul" class="row-list admin-checklist-list">
-        <li
-          v-for="item in checklistRows"
-          :key="item.id"
-          class="admin-checklist-row"
-          :class="{
-            'is-dragging': draggingChecklistId === item.id,
-            'is-drop-target': dragOverChecklistId === item.id,
-            'is-drop-after': dragOverChecklistId === item.id && dragInsertAfterTarget,
-            'is-drop-before': dragOverChecklistId === item.id && !dragInsertAfterTarget
-          }"
-          @dragover.prevent="previewChecklistDrop(item, $event)"
-          @drop.prevent="dropChecklistItem(item, $event)"
-        >
-          <button
-            type="button"
-            class="drag-handle"
-            draggable="true"
-            :aria-label="`拖曳排序：${item.title}`"
-            title="拖曳排序"
-            :disabled="busy"
-            @dragstart="startChecklistDrag(item, $event)"
-            @dragend="endChecklistDrag"
-            @keydown="handleChecklistHandleKey(item, $event)"
-          >
-            <span aria-hidden="true">⋮⋮</span>
-          </button>
-          <span class="admin-checklist-title">{{ item.title }}</span>
+      <h3 class="section-subtitle">{{ t('pages.checklist.sectionTitle') }}</h3>
+      <ReorderableList
+        v-if="checklistRows.length"
+        :items="checklistRows"
+        :item-key="checklistKey"
+        :item-label="checklistLabel"
+        :disabled="busy"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewChecklistOrder"
+        @cancel="previewChecklistOrder"
+        @reorder="persistChecklistOrder"
+      >
+        <template #default="{ item }">
+          <span class="reorderable-row-title">{{ item.title }}</span>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="editChecklistItem(item)">编辑</button>
-            <button type="button" :disabled="busy" @click="removeChecklistItem(item.id)">删除</button>
+            <button type="button" :disabled="busy" @click="editChecklistItem(item)">{{ t('common.edit') }}</button>
+            <button type="button" :disabled="busy" @click="removeChecklistItem(item.id)">{{ t('common.delete') }}</button>
           </span>
-        </li>
-      </TransitionGroup>
-      <p v-else class="meta-line">暂无记录</p>
+        </template>
+      </ReorderableList>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'config'" class="detail-section">
-      <h2>系统配置</h2>
-      <Tabs id="admin-config-type" v-model="activeConfigTab" :tabs="configTabs" label="系统配置类型" />
+      <h2>{{ t('pages.admin.config') }}</h2>
+      <Tabs id="admin-config-type" v-model="activeConfigTab" :tabs="configTabs" :label="t('pages.admin.configType')" />
 
       <form class="detail-section__body" @submit.prevent="saveConfig">
-        <h3 class="section-subtitle">{{ configForm.id ? `编辑${selectedConfig.label}` : `新增${selectedConfig.label}` }}</h3>
+        <h3 class="section-subtitle">
+          {{ configForm.id ? t('pages.admin.editConfig', { name: selectedConfig.label }) : t('pages.admin.newConfig', { name: selectedConfig.label }) }}
+        </h3>
         <div class="field">
-          <label for="config-name">名称</label>
-          <input id="config-name" v-model="configForm.name" required />
+          <label for="config-name">{{ t('common.name') }}</label>
+          <input id="config-name" v-model="configNameInput" :required="configNameRequired" />
         </div>
         <div v-if="selectedConfig.supportsItemDrop" class="check-row">
           <label>
             <input v-model="configForm.hasItemDrop" type="checkbox" />
-            有掉落物
+            {{ t('pages.admin.hasItemDrop') }}
           </label>
         </div>
         <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
-          <button type="button" class="plain-button" :disabled="busy" @click="resetConfigForm">新建</button>
+          <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+          <button type="button" class="plain-button" :disabled="busy" @click="resetConfigForm">{{ t('common.new') }}</button>
         </div>
       </form>
 
       <h3 class="section-subtitle">{{ selectedConfig.label }}</h3>
       <ul v-if="configRows.length" class="row-list">
         <li v-for="item in configRows" :key="item.id">
-          <span>{{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">有掉落物</span></span>
+          <span>{{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span></span>
           <span class="row-actions">
-            <button type="button" @click="editConfig(item)">编辑</button>
-            <button type="button" @click="removeConfig(item.id)">删除</button>
+            <button type="button" @click="editConfig(item)">{{ t('common.edit') }}</button>
+            <button type="button" @click="removeConfig(item.id)">{{ t('common.delete') }}</button>
           </span>
         </li>
       </ul>
-      <p v-else class="meta-line">暂无记录</p>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'languages'" class="detail-section">
+      <h2>{{ t('pages.admin.languages') }}</h2>
+
+      <form class="detail-section__body" @submit.prevent="saveLanguage">
+        <h3 class="section-subtitle">{{ editingLanguageCode ? t('pages.admin.editLanguage') : t('pages.admin.newLanguage') }}</h3>
+        <div class="field">
+          <label for="language-code">{{ t('pages.admin.languageCode') }}</label>
+          <input id="language-code" v-model="languageForm.code" :disabled="Boolean(editingLanguageCode)" required />
+        </div>
+        <div class="field">
+          <label for="language-name">{{ t('pages.admin.languageName') }}</label>
+          <input id="language-name" v-model="languageForm.name" required />
+        </div>
+        <div class="check-row">
+          <label><input v-model="languageForm.enabled" type="checkbox" /> {{ t('pages.admin.enabled') }}</label>
+          <label>
+            <input v-model="languageForm.isDefault" type="checkbox" :disabled="!canSetLanguageDefault" />
+            {{ t('pages.admin.defaultLanguage') }}
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+          <button type="button" class="plain-button" :disabled="busy" @click="resetLanguageForm">{{ t('common.new') }}</button>
+        </div>
+      </form>
+
+      <ReorderableList
+        v-if="languageRows.length"
+        :items="languageRows"
+        :item-key="languageKey"
+        :item-label="languageLabel"
+        :disabled="busy"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewLanguageOrder"
+        @cancel="previewLanguageOrder"
+        @reorder="persistLanguageOrder"
+      >
+        <template #default="{ item }">
+          <span class="reorderable-row-title">
+            {{ item.name }} <span class="meta-line">{{ item.code }}</span>
+            <span v-if="item.isDefault" class="config-flag">{{ t('pages.admin.defaultLanguage') }}</span>
+          </span>
+          <span class="row-actions">
+            <button type="button" @click="editLanguage(item)">{{ t('common.edit') }}</button>
+            <button type="button" :disabled="item.isDefault" @click="removeLanguage(item.code)">{{ t('common.delete') }}</button>
+          </span>
+        </template>
+      </ReorderableList>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'pokemon'" class="detail-section">
-      <h2>Pokemon 列表</h2>
+      <h2>{{ t('pages.admin.pokemonList') }}</h2>
       <ul v-if="pokemonRows.length" class="row-list">
         <li v-for="item in pokemonRows" :key="item.id">
           <RouterLink :to="`/pokemon/${item.id}`">#{{ item.id }} {{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removePokemon(item.id)">删除</button>
+            <button type="button" @click="removePokemon(item.id)">{{ t('common.delete') }}</button>
           </span>
         </li>
       </ul>
-      <p v-else class="meta-line">暂无记录</p>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'items'" class="detail-section">
-      <h2>物品列表</h2>
+      <h2>{{ t('pages.admin.itemList') }}</h2>
       <ul v-if="itemRows.length" class="row-list">
         <li v-for="item in itemRows" :key="item.id">
           <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removeItem(item.id)">删除</button>
+            <button type="button" @click="removeItem(item.id)">{{ t('common.delete') }}</button>
           </span>
         </li>
       </ul>
-      <p v-else class="meta-line">暂无记录</p>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'recipes'" class="detail-section">
-      <h2>材料单列表</h2>
+      <h2>{{ t('pages.admin.recipeList') }}</h2>
       <ul v-if="recipeRows.length" class="row-list">
         <li v-for="item in recipeRows" :key="item.id">
           <RouterLink :to="`/recipes/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removeRecipe(item.id)">删除</button>
+            <button type="button" @click="removeRecipe(item.id)">{{ t('common.delete') }}</button>
           </span>
         </li>
       </ul>
-      <p v-else class="meta-line">暂无记录</p>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'habitats'" class="detail-section">
-      <h2>栖息地列表</h2>
+      <h2>{{ t('pages.admin.habitatList') }}</h2>
       <ul v-if="habitatRows.length" class="row-list">
         <li v-for="item in habitatRows" :key="item.id">
           <RouterLink :to="`/habitats/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removeHabitat(item.id)">删除</button>
+            <button type="button" @click="removeHabitat(item.id)">{{ t('common.delete') }}</button>
           </span>
         </li>
       </ul>
-      <p v-else class="meta-line">暂无记录</p>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
   </section>
 </template>

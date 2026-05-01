@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
@@ -10,6 +11,7 @@ import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Options, type Pokemon } from '../services/api';
 
 const options = ref<Options | null>(null);
+const { t } = useI18n();
 const pokemon = ref<Pokemon[]>([]);
 const loading = ref(true);
 const search = ref('');
@@ -46,49 +48,54 @@ watch(query, loadPokemon);
 
 <template>
   <section class="page-stack">
-    <PageHeader title="Pokemon" subtitle="搜索宝可梦，并按特长、环境、喜欢的东西筛选。">
+    <PageHeader :title="t('pages.pokemon.title')" :subtitle="t('pages.pokemon.subtitle')">
       <template #kicker>Pokédex</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">新增</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">{{ t('common.add') }}</RouterLink>
       </template>
     </PageHeader>
 
     <FilterPanel v-if="options">
       <div class="field">
-        <label for="pokemon-search">搜索</label>
-        <input id="pokemon-search" v-model="search" type="search" placeholder="名字" />
+        <label for="pokemon-search">{{ t('common.search') }}</label>
+        <input id="pokemon-search" v-model="search" type="search" :placeholder="t('pages.pokemon.namePlaceholder')" />
       </div>
 
       <div class="field">
-        <label for="environment">喜欢的环境</label>
+        <label for="environment">{{ t('pages.pokemon.environment') }}</label>
         <TagsSelect
           id="environment"
           v-model="environmentId"
           :options="options.environments"
           :multiple="false"
-          placeholder="全部"
-          search-placeholder="搜索喜欢的环境"
+          :placeholder="t('common.all')"
+          :search-placeholder="t('pages.pokemon.searchEnvironment')"
         />
       </div>
 
       <div class="field">
-        <label for="skills">特长</label>
-        <TagsSelect id="skills" v-model="skillIds" :options="options.skills" placeholder="搜索特长" />
-        <div class="segmented" aria-label="特长匹配方式">
-          <button :class="{ active: skillMode === 'any' }" type="button" @click="skillMode = 'any'">任意</button>
-          <button :class="{ active: skillMode === 'all' }" type="button" @click="skillMode = 'all'">全部</button>
+        <label for="skills">{{ t('pages.pokemon.skills') }}</label>
+        <TagsSelect id="skills" v-model="skillIds" :options="options.skills" :placeholder="t('pages.pokemon.searchSkills')" />
+        <div class="segmented" :aria-label="t('pages.pokemon.skillMatchMode')">
+          <button :class="{ active: skillMode === 'any' }" type="button" @click="skillMode = 'any'">{{ t('pages.pokemon.any') }}</button>
+          <button :class="{ active: skillMode === 'all' }" type="button" @click="skillMode = 'all'">{{ t('pages.pokemon.all') }}</button>
         </div>
       </div>
 
       <div class="field">
-        <label for="favorite-things">喜欢的东西</label>
-        <TagsSelect id="favorite-things" v-model="favoriteThingIds" :options="options.favoriteThings" placeholder="搜索喜欢的东西" />
-        <div class="segmented" aria-label="喜欢的东西匹配方式">
+        <label for="favorite-things">{{ t('pages.pokemon.favoriteThings') }}</label>
+        <TagsSelect
+          id="favorite-things"
+          v-model="favoriteThingIds"
+          :options="options.favoriteThings"
+          :placeholder="t('pages.pokemon.searchFavoriteThings')"
+        />
+        <div class="segmented" :aria-label="t('pages.pokemon.favoriteThingMatchMode')">
           <button :class="{ active: favoriteThingMode === 'any' }" type="button" @click="favoriteThingMode = 'any'">
-            任意
+            {{ t('pages.pokemon.any') }}
           </button>
           <button :class="{ active: favoriteThingMode === 'all' }" type="button" @click="favoriteThingMode = 'all'">
-            全部
+            {{ t('pages.pokemon.all') }}
           </button>
         </div>
       </div>
@@ -104,7 +111,7 @@ watch(query, loadPokemon);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid" aria-busy="true" aria-label="正在加载 Pokemon 列表">
+    <div v-if="loading" class="entity-grid" aria-busy="true" :aria-label="t('pages.pokemon.loadingList')">
       <article v-for="index in skeletonCardCount" :key="index" class="entity-card entity-card--skeleton">
         <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
@@ -125,7 +132,7 @@ watch(query, loadPokemon);
         v-for="item in pokemon"
         :key="item.id"
         :title="`#${item.id} ${item.name}`"
-        :subtitle="`喜欢的环境：${item.environment.name}`"
+        :subtitle="t('pages.pokemon.environmentPrefix', { name: item.environment.name })"
         :to="`/pokemon/${item.id}`"
       >
         <EditMeta :entity="item" />

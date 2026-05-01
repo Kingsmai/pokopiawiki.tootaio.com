@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
@@ -10,6 +11,7 @@ import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { api, type PokemonDetail } from '../services/api';
 
 const route = useRoute();
+const { t } = useI18n();
 const pokemon = ref<PokemonDetail | null>(null);
 const itemCategoryTab = ref('');
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
@@ -33,6 +35,25 @@ function sortByOrder(values: Set<string>, order: string[]) {
     if (indexB === -1) return -1;
     return indexA - indexB;
   });
+}
+
+function timeLabel(value: string): string {
+  const labels: Record<string, string> = {
+    早晨: t('appearance.morning'),
+    中午: t('appearance.noon'),
+    傍晚: t('appearance.evening'),
+    晚上: t('appearance.night')
+  };
+  return labels[value] ?? value;
+}
+
+function weatherLabel(value: string): string {
+  const labels: Record<string, string> = {
+    晴天: t('appearance.sunny'),
+    阴天: t('appearance.cloudy'),
+    雨天: t('appearance.rainy')
+  };
+  return labels[value] ?? value;
 }
 
 const habitatRows = computed<HabitatRow[]>(() => {
@@ -88,7 +109,7 @@ const itemCategoryTabs = computed<TabOption[]>(() => {
     .sort(([, nameA], [, nameB]) => nameA.localeCompare(nameB))
     .map(([value, label]) => ({ value, label }));
 
-  return tabs.length > 1 ? [{ value: '', label: '全部' }, ...tabs] : [];
+  return tabs.length > 1 ? [{ value: '', label: t('common.all') }, ...tabs] : [];
 });
 const favoriteThingItems = computed(() => {
   const items = pokemon.value?.favoriteThingItems ?? [];
@@ -106,7 +127,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section v-if="!pokemon" class="page-stack" aria-busy="true" aria-label="正在加载 Pokemon 详情">
+  <section v-if="!pokemon" class="page-stack" aria-busy="true" :aria-label="t('pages.pokemon.loadingDetail')">
     <div class="page-header page-header--skeleton" aria-hidden="true">
       <div class="page-header__copy">
         <Skeleton width="142px" />
@@ -163,41 +184,41 @@ onMounted(async () => {
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="`#${pokemon.id} ${pokemon.name}`" :subtitle="`喜欢的环境：${pokemon.environment.name}`">
+    <PageHeader :title="`#${pokemon.id} ${pokemon.name}`" :subtitle="t('pages.pokemon.environmentPrefix', { name: pokemon.environment.name })">
       <template #kicker>Pokédex Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">编辑</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">返回列表</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">{{ t('common.edit') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">{{ t('common.backToList') }}</RouterLink>
       </template>
     </PageHeader>
 
     <div class="detail-with-sidebar">
       <div class="detail-grid detail-grid--stack">
-        <DetailSection title="特长">
+        <DetailSection :title="t('pages.pokemon.skills')">
           <EntityChips :items="pokemon.skills" />
         </DetailSection>
 
-        <DetailSection v-if="skillDropRows.length" title="特长掉落物">
+        <DetailSection v-if="skillDropRows.length" :title="t('pages.pokemon.skillDrops')">
           <ul class="row-list skill-drop-summary">
             <li v-for="skill in skillDropRows" :key="skill.id">
-              <span>{{ skill.name }}掉落物</span>
+              <span>{{ t('pages.pokemon.skillDrop', { name: skill.name }) }}</span>
               <RouterLink v-if="skill.itemDrop" :to="`/items/${skill.itemDrop.id}`">{{ skill.itemDrop.name }}</RouterLink>
             </li>
           </ul>
         </DetailSection>
 
-        <DetailSection title="喜欢的东西">
+        <DetailSection :title="t('pages.pokemon.favoriteThings')">
           <EntityChips :items="pokemon.favorite_things" />
         </DetailSection>
 
-        <DetailSection title="关联物品">
+        <DetailSection :title="t('pages.pokemon.relatedItems')">
           <template v-if="pokemon.favoriteThingItems.length">
             <Tabs
               v-if="itemCategoryTabs.length"
               id="pokemon-favorite-items"
               v-model="itemCategoryTab"
               :tabs="itemCategoryTabs"
-              label="关联物品分类"
+              :label="t('pages.pokemon.relatedItemCategory')"
             />
             <ul v-if="favoriteThingItems.length" class="row-list">
               <li v-for="item in favoriteThingItems" :key="item.id">
@@ -205,30 +226,30 @@ onMounted(async () => {
                 <EntityChips :items="item.tags" />
               </li>
             </ul>
-            <p v-else class="meta-line">无</p>
+            <p v-else class="meta-line">{{ t('common.none') }}</p>
           </template>
-          <p v-else class="meta-line">无</p>
+          <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
 
-        <DetailSection title="栖息地">
+        <DetailSection :title="t('pages.pokemon.habitats')">
           <ul class="row-list appearance-list">
             <li v-for="habitat in habitatRows" :key="`${habitat.id}-${habitat.rarity}`">
               <RouterLink class="appearance-name" :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
               <dl class="appearance-summary">
                 <div>
-                  <dt>时段</dt>
-                  <dd>{{ habitat.timeOfDays.join(' / ') }}</dd>
+                  <dt>{{ t('appearance.time') }}</dt>
+                  <dd>{{ habitat.timeOfDays.map(timeLabel).join(' / ') }}</dd>
                 </div>
                 <div>
-                  <dt>天气</dt>
-                  <dd>{{ habitat.weathers.join(' / ') }}</dd>
+                  <dt>{{ t('appearance.weather') }}</dt>
+                  <dd>{{ habitat.weathers.map(weatherLabel).join(' / ') }}</dd>
                 </div>
                 <div>
-                  <dt>稀有度</dt>
-                  <dd>{{ habitat.rarity }} 星</dd>
+                  <dt>{{ t('appearance.rarity') }}</dt>
+                  <dd>{{ t('appearance.stars', { count: habitat.rarity }) }}</dd>
                 </div>
                 <div>
-                  <dt>出现地图</dt>
+                  <dt>{{ t('appearance.maps') }}</dt>
                   <dd>{{ habitat.maps.join(' / ') }}</dd>
                 </div>
               </dl>

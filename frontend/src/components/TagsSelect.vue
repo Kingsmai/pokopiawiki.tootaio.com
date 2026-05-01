@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 export type TagsSelectOption = {
   id: number | string;
@@ -32,12 +33,8 @@ const props = withDefaults(
   {
     multiple: true,
     max: 0,
-    placeholder: '搜索或选择',
-    searchPlaceholder: '搜索',
-    emptyText: '没有匹配项',
     allowCreate: false,
-    creating: false,
-    createLabel: '添加「{name}」'
+    creating: false
   }
 );
 
@@ -46,6 +43,7 @@ const emit = defineEmits<{
   create: [name: string];
 }>();
 
+const { t } = useI18n();
 const root = ref<HTMLElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const isOpen = ref(false);
@@ -85,7 +83,10 @@ const hasExactMatch = computed(() => {
   return optionRows.value.some((option) => option.label.toLowerCase() === keyword);
 });
 const canCreate = computed(() => props.allowCreate && createName.value !== '' && !hasExactMatch.value && !maxReached.value);
-const createText = computed(() => props.createLabel.replace('{name}', createName.value));
+const placeholderText = computed(() => props.placeholder ?? t('common.searchOrSelect'));
+const searchPlaceholderText = computed(() => props.searchPlaceholder ?? t('common.search'));
+const emptyTextValue = computed(() => props.emptyText ?? t('common.noMatches'));
+const createText = computed(() => props.createLabel?.replace('{name}', createName.value) ?? t('common.createNamed', { name: createName.value }));
 const optionsListId = computed(() => `${props.id}-options`);
 const createOptionId = computed(() => `${props.id}-create`);
 const candidateRows = computed<CandidateRow[]>(() => {
@@ -252,7 +253,7 @@ watch(candidateRows, clampActiveIndex);
               class="tags-select__remove"
               role="button"
               tabindex="0"
-              :aria-label="`移除${option.label}`"
+              :aria-label="t('common.removeNamed', { name: option.label })"
               @click.stop="remove(option.value)"
               @keydown.enter.stop.prevent="remove(option.value)"
               @keydown.space.stop.prevent="remove(option.value)"
@@ -263,7 +264,7 @@ watch(candidateRows, clampActiveIndex);
         </template>
         <span v-else class="tags-select__single-value">{{ selectedLabel }}</span>
       </span>
-      <span v-else class="tags-select__placeholder">{{ placeholder }}</span>
+      <span v-else class="tags-select__placeholder">{{ placeholderText }}</span>
       <span class="tags-select__arrow" aria-hidden="true">⌄</span>
     </button>
 
@@ -273,7 +274,7 @@ watch(candidateRows, clampActiveIndex);
         v-model="search"
         class="tags-select__search"
         type="search"
-        :placeholder="searchPlaceholder"
+        :placeholder="searchPlaceholderText"
         :aria-activedescendant="activeDescendant"
         :aria-controls="optionsListId"
         aria-autocomplete="list"
@@ -297,7 +298,7 @@ watch(candidateRows, clampActiveIndex);
           @click="selectOption(option.value)"
         >
           <span>{{ option.label }}</span>
-          <span v-if="selectedValues.has(option.value)" class="tags-select__state">已选</span>
+          <span v-if="selectedValues.has(option.value)" class="tags-select__state">{{ t('common.selected') }}</span>
         </button>
         <button
           v-if="canCreate"
@@ -309,9 +310,9 @@ watch(candidateRows, clampActiveIndex);
           @click="createOption"
         >
           <span>{{ createText }}</span>
-          <span v-if="creating" class="tags-select__state">添加中</span>
+          <span v-if="creating" class="tags-select__state">{{ t('common.creating') }}</span>
         </button>
-        <p v-if="!filteredRows.length && !canCreate" class="tags-select__empty">{{ emptyText }}</p>
+        <p v-if="!filteredRows.length && !canCreate" class="tags-select__empty">{{ emptyTextValue }}</p>
       </div>
     </div>
   </div>

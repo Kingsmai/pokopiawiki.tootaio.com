@@ -1,10 +1,25 @@
+import { getCurrentLocale } from '../i18n';
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 const authTokenKey = 'pokopia_auth_token';
 const authChangeEvent = 'pokopia-auth-change';
 
+export type TranslationField = 'name' | 'title';
+export type TranslationMap = Record<string, Partial<Record<TranslationField, string>>>;
+
+export interface Language {
+  code: string;
+  name: string;
+  enabled: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+}
+
 export interface NamedEntity {
   id: number;
   name: string;
+  baseName?: string;
+  translations?: TranslationMap;
 }
 
 export interface Skill extends NamedEntity {
@@ -41,6 +56,7 @@ export interface EditHistoryEntry {
 export interface Pokemon extends EditInfo {
   id: number;
   name: string;
+  translations?: TranslationMap;
   environment: NamedEntity;
   skills: Skill[];
   favorite_things: NamedEntity[];
@@ -63,6 +79,7 @@ export interface PokemonDetail extends Pokemon {
 export interface Habitat extends EditInfo {
   id: number;
   name: string;
+  translations?: TranslationMap;
   recipe: Array<NamedEntity & { quantity: number }>;
   pokemon?: NamedEntity[];
 }
@@ -96,6 +113,7 @@ export interface HabitatUsage {
 export interface Item extends EditInfo {
   id: number;
   name: string;
+  translations?: TranslationMap;
   category: NamedEntity;
   usage: NamedEntity | null;
   customization: {
@@ -129,6 +147,7 @@ export interface Recipe extends EditInfo {
 export interface DailyChecklistItem {
   id: number;
   title: string;
+  translations?: TranslationMap;
 }
 
 export interface RecipeDetail extends Recipe {
@@ -181,6 +200,7 @@ export type ConfigType =
 export interface PokemonPayload {
   id: number;
   name: string;
+  translations?: TranslationMap;
   environmentId: number;
   skillIds: number[];
   favoriteThingIds: number[];
@@ -189,6 +209,7 @@ export interface PokemonPayload {
 
 export interface ItemPayload {
   name: string;
+  translations?: TranslationMap;
   categoryId: number;
   usageId: number | null;
   dyeable: boolean;
@@ -207,6 +228,7 @@ export interface RecipePayload {
 
 export interface HabitatPayload {
   name: string;
+  translations?: TranslationMap;
   recipeItems: Array<{ itemId: number; quantity: number }>;
   pokemonAppearances: Array<{
     pokemonId: number;
@@ -219,6 +241,7 @@ export interface HabitatPayload {
 
 export interface DailyChecklistPayload {
   title: string;
+  translations?: TranslationMap;
 }
 
 export function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -261,9 +284,12 @@ export function onAuthTokenChange(callback: () => void): () => void {
   return () => window.removeEventListener(authChangeEvent, callback);
 }
 
-function authHeaders(): HeadersInit {
+function requestHeaders(): HeadersInit {
   const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {
+    'X-Locale': getCurrentLocale(),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
 }
 
 async function getErrorMessage(response: Response): Promise<string> {
@@ -276,12 +302,12 @@ async function getErrorMessage(response: Response): Promise<string> {
     // Ignore invalid or empty error bodies and use the status fallback.
   }
 
-  return `请求失败（${response.status}）`;
+  return `Request failed (${response.status})`;
 }
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: authHeaders()
+    headers: requestHeaders()
   });
 
   if (!response.ok) {
@@ -296,7 +322,7 @@ async function sendJson<T>(path: string, method: 'POST' | 'PUT', body: unknown):
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders()
+      ...requestHeaders()
     },
     body: JSON.stringify(body)
   });
@@ -311,7 +337,7 @@ async function sendJson<T>(path: string, method: 'POST' | 'PUT', body: unknown):
 async function postEmpty(path: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: 'POST',
-    headers: authHeaders()
+    headers: requestHeaders()
   });
 
   if (!response.ok) {
@@ -322,7 +348,7 @@ async function postEmpty(path: string): Promise<void> {
 async function deleteJson(path: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: 'DELETE',
-    headers: authHeaders()
+    headers: requestHeaders()
   });
 
   if (!response.ok) {
@@ -331,6 +357,14 @@ async function deleteJson(path: string): Promise<void> {
 }
 
 export const api = {
+  languages: () => getJson<Language[]>('/api/languages'),
+  adminLanguages: () => getJson<Language[]>('/api/admin/languages'),
+  createLanguage: (payload: Omit<Language, 'sortOrder'> & { sortOrder?: number }) =>
+    sendJson<Language[]>('/api/admin/languages', 'POST', payload),
+  updateLanguage: (code: string, payload: Partial<Language> & { name: string }) =>
+    sendJson<Language[]>(`/api/admin/languages/${code}`, 'PUT', payload),
+  reorderLanguages: (codes: string[]) => sendJson<Language[]>('/api/admin/languages/order', 'PUT', { codes }),
+  deleteLanguage: (code: string) => deleteJson(`/api/admin/languages/${code}`),
   register: (payload: RegisterPayload) => sendJson<{ message: string }>('/api/auth/register', 'POST', payload),
   verifyEmail: (token: string) =>
     sendJson<{ message: string; user: AuthUser }>('/api/auth/verify-email', 'POST', { token }),
@@ -347,9 +381,9 @@ export const api = {
     sendJson<DailyChecklistItem[]>('/api/admin/daily-checklist/order', 'PUT', { ids }),
   deleteDailyChecklistItem: (id: string | number) => deleteJson(`/api/admin/daily-checklist/${id}`),
   config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
-  createConfig: (type: ConfigType, payload: { name: string; hasItemDrop?: boolean }) =>
+  createConfig: (type: ConfigType, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean }) =>
     sendJson<Skill | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
-  updateConfig: (type: ConfigType, id: number, payload: { name: string; hasItemDrop?: boolean }) =>
+  updateConfig: (type: ConfigType, id: number, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean }) =>
     sendJson<Skill | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
   pokemon: (params: Record<string, string | number | undefined>) =>

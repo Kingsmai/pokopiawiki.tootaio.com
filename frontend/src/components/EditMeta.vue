@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import type { EditInfo } from '../services/api';
 
 defineProps<{
   entity: EditInfo;
 }>();
 
+const { locale, t } = useI18n();
+
 function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(locale.value, {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(new Date(value));
@@ -15,6 +18,6 @@ function formatDateTime(value: string): string {
 
 <template>
   <p class="edit-meta">
-    最后编辑：{{ entity.updatedBy?.displayName ?? '系统' }} / {{ formatDateTime(entity.updatedAt) }}
+    {{ t('history.lastEdited') }}: {{ entity.updatedBy?.displayName ?? t('common.system') }} / {{ formatDateTime(entity.updatedAt) }}
   </p>
 </template>

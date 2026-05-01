@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
-import { api, type ConfigType, type NamedEntity, type Options, type PokemonPayload } from '../services/api';
+import TranslationFields from '../components/TranslationFields.vue';
+import { api, type ConfigType, type Language, type NamedEntity, type Options, type PokemonPayload, type TranslationMap } from '../services/api';
 
 type SkillItemDropForm = {
   skillId: string;
@@ -14,8 +16,10 @@ type SkillItemDropForm = {
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const options = ref<Options | null>(null);
 const itemOptions = ref<NamedEntity[]>([]);
+const languages = ref<Language[]>([]);
 const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
@@ -23,6 +27,7 @@ const creatingSelect = ref('');
 const pokemonForm = ref({
   id: '',
   name: '',
+  translations: {} as TranslationMap,
   environmentId: '',
   skillIds: [] as string[],
   favoriteThingIds: [] as string[],
@@ -31,7 +36,11 @@ const pokemonForm = ref({
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
-const pageTitle = computed(() => (isEditing.value ? `编辑 #${pokemonForm.value.id || routeId.value} ${pokemonForm.value.name}` : '新增 Pokemon'));
+const pageTitle = computed(() =>
+  isEditing.value
+    ? t('pages.pokemon.editTitle', { id: pokemonForm.value.id || routeId.value, name: pokemonForm.value.name })
+    : t('pages.pokemon.newTitle')
+);
 const cancelTo = computed(() => (isEditing.value ? `/pokemon/${routeId.value}` : '/pokemon'));
 const selectedSkillDropRows = computed(() =>
   pokemonForm.value.skillItemDrops.filter((row) => pokemonForm.value.skillIds.includes(row.skillId) && skillSupportsItemDrop(row.skillId))
@@ -46,9 +55,10 @@ function errorText(error: unknown, fallback: string) {
 }
 
 async function loadOptions() {
-  const [loadedOptions, loadedItems] = await Promise.all([api.options(), api.items({})]);
+  const [loadedOptions, loadedItems, loadedLanguages] = await Promise.all([api.options(), api.items({}), api.languages()]);
   options.value = loadedOptions;
   itemOptions.value = loadedItems.map((item) => ({ id: item.id, name: item.name }));
+  languages.value = loadedLanguages;
 }
 
 function syncSkillItemDrops() {
@@ -74,7 +84,7 @@ function skillSupportsItemDrop(skillId: string) {
 
 function skillDropLabel(skillId: string) {
   const name = skillName(skillId);
-  return name ? `${name}掉落物` : '掉落物';
+  return name ? t('pages.pokemon.skillDrop', { name }) : t('pages.pokemon.dropItem');
 }
 
 async function loadEditor() {
@@ -88,6 +98,7 @@ async function loadEditor() {
       pokemonForm.value = {
         id: String(pokemon.id),
         name: pokemon.name,
+        translations: pokemon.translations ?? {},
         environmentId: String(pokemon.environment.id),
         skillIds: pokemon.skills.map((skill) => String(skill.id)),
         favoriteThingIds: pokemon.favorite_things.map((thing) => String(thing.id)),
@@ -99,7 +110,7 @@ async function loadEditor() {
       syncSkillItemDrops();
     }
   } catch (error) {
-    message.value = errorText(error, '加载失败');
+    message.value = errorText(error, t('errors.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -116,7 +127,7 @@ async function createSingleOption(selectKey: string, type: ConfigType, name: str
     await loadOptions();
     assign(String(created.id));
   } catch (error) {
-    message.value = errorText(error, '添加失败');
+    message.value = errorText(error, t('errors.addFailed'));
   } finally {
     creatingSelect.value = '';
   }
@@ -136,7 +147,7 @@ async function createMultiOption(selectKey: string, type: ConfigType, name: stri
       values.push(value);
     }
   } catch (error) {
-    message.value = errorText(error, '添加失败');
+    message.value = errorText(error, t('errors.addFailed'));
   } finally {
     creatingSelect.value = '';
   }
@@ -150,6 +161,7 @@ async function savePokemon() {
     const payload: PokemonPayload = {
       id: Number(isEditing.value ? routeId.value : pokemonForm.value.id),
       name: pokemonForm.value.name,
+      translations: pokemonForm.value.translations,
       environmentId: Number(pokemonForm.value.environmentId),
       skillIds: toIds(pokemonForm.value.skillIds.slice(0, 2)),
       favoriteThingIds: toIds(pokemonForm.value.favoriteThingIds.slice(0, 6)),
@@ -160,7 +172,7 @@ async function savePokemon() {
     const saved = isEditing.value ? await api.updatePokemon(routeId.value, payload) : await api.createPokemon(payload);
     await router.push(`/pokemon/${saved.id}`);
   } catch (error) {
-    message.value = errorText(error, '保存失败');
+    message.value = errorText(error, t('errors.saveFailed'));
   } finally {
     busy.value = false;
   }
@@ -175,10 +187,10 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
 
 <template>
   <section class="page-stack">
-    <PageHeader :title="pageTitle" subtitle="维护 Pokemon 基本资料、特长和喜欢的东西。">
+    <PageHeader :title="pageTitle" :subtitle="t('pages.pokemon.editSubtitle')">
       <template #kicker>Pokédex Edit</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">返回</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">{{ t('common.back') }}</RouterLink>
       </template>
     </PageHeader>
 
@@ -190,13 +202,18 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
         <input id="pokemon-id" v-model="pokemonForm.id" :disabled="isEditing" min="1" required type="number" />
       </div>
 
-      <div class="field">
-        <label for="pokemon-name">名字</label>
-        <input id="pokemon-name" v-model="pokemonForm.name" required />
-      </div>
+      <TranslationFields
+        id-prefix="pokemon-name"
+        v-model:base-value="pokemonForm.name"
+        v-model:translations="pokemonForm.translations"
+        field="name"
+        :label="t('common.name')"
+        :languages="languages"
+        required
+      />
 
       <div class="field">
-        <label for="pokemon-environment">喜欢的环境</label>
+        <label for="pokemon-environment">{{ t('pages.pokemon.environment') }}</label>
         <TagsSelect
           id="pokemon-environment"
           v-model="pokemonForm.environmentId"
@@ -204,14 +221,14 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
           :multiple="false"
           allow-create
           :creating="creatingSelect === 'pokemon-environment'"
-          placeholder="请选择"
-          search-placeholder="搜索喜欢的环境"
+          :placeholder="t('common.select')"
+          :search-placeholder="t('pages.pokemon.searchEnvironment')"
           @create="createSingleOption('pokemon-environment', 'environments', $event, (value) => (pokemonForm.environmentId = value))"
         />
       </div>
 
       <div class="field">
-        <label for="pokemon-skills">特长</label>
+        <label for="pokemon-skills">{{ t('pages.pokemon.skills') }}</label>
         <TagsSelect
           id="pokemon-skills"
           v-model="pokemonForm.skillIds"
@@ -219,13 +236,13 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
           :max="2"
           allow-create
           :creating="creatingSelect === 'pokemon-skills'"
-          placeholder="搜索特长"
+          :placeholder="t('pages.pokemon.searchSkills')"
           @create="createMultiOption('pokemon-skills', 'skills', $event, pokemonForm.skillIds, 2)"
         />
       </div>
 
       <div class="field">
-        <label for="pokemon-things">喜欢的东西</label>
+        <label for="pokemon-things">{{ t('pages.pokemon.favoriteThings') }}</label>
         <TagsSelect
           id="pokemon-things"
           v-model="pokemonForm.favoriteThingIds"
@@ -233,13 +250,13 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
           :max="6"
           allow-create
           :creating="creatingSelect === 'pokemon-things'"
-          placeholder="搜索喜欢的东西"
+          :placeholder="t('pages.pokemon.searchFavoriteThings')"
           @create="createMultiOption('pokemon-things', 'favorite-things', $event, pokemonForm.favoriteThingIds, 6)"
         />
       </div>
 
       <div v-if="selectedSkillDropRows.length" class="field">
-        <span class="field-label">特长掉落物</span>
+        <span class="field-label">{{ t('pages.pokemon.skillDrops') }}</span>
         <div class="skill-drop-list">
           <div v-for="row in selectedSkillDropRows" :key="row.skillId" class="skill-drop-row">
             <label :for="`pokemon-skill-drops-${row.skillId}`">{{ skillDropLabel(row.skillId) }}</label>
@@ -248,20 +265,20 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
               v-model="row.itemId"
               :options="itemOptions"
               :multiple="false"
-              placeholder="选择掉落物品"
-              search-placeholder="搜索物品"
+              :placeholder="t('pages.pokemon.dropItem')"
+              :search-placeholder="t('pages.pokemon.searchItems')"
             />
           </div>
         </div>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
-        <RouterLink class="plain-button" :to="cancelTo">取消</RouterLink>
+        <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+        <RouterLink class="plain-button" :to="cancelTo">{{ t('common.cancel') }}</RouterLink>
       </div>
     </form>
 
-    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" aria-label="正在加载 Pokemon 编辑内容">
+    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.pokemon.loadingEdit')">
       <div v-for="index in 5" :key="index" class="field">
         <Skeleton :width="index === 1 ? '52px' : '88px'" />
         <Skeleton variant="box" height="44px" />

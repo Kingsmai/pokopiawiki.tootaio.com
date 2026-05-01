@@ -8,6 +8,21 @@ type QueryParams = Record<string, QueryValue>;
 
 type DbClient = PoolClient;
 
+type TranslationField = 'name' | 'title';
+type TranslationInput = Record<string, Partial<Record<TranslationField, unknown>>>;
+type EntityType =
+  | 'pokemon'
+  | 'skills'
+  | 'environments'
+  | 'favorite-things'
+  | 'item-categories'
+  | 'item-usages'
+  | 'acquisition-methods'
+  | 'items'
+  | 'maps'
+  | 'habitats'
+  | 'daily-checklist-items';
+
 type ConfigType =
   | 'skills'
   | 'environments'
@@ -19,7 +34,7 @@ type ConfigType =
 
 type ConfigDefinition = {
   table: string;
-  order: string;
+  entityType: EntityType;
   hasItemDrop?: boolean;
 };
 
@@ -36,6 +51,7 @@ type SkillItemDrop = {
 type PokemonPayload = {
   id: number;
   name: string;
+  translations: TranslationInput;
   environmentId: number;
   skillIds: number[];
   favoriteThingIds: number[];
@@ -44,6 +60,7 @@ type PokemonPayload = {
 
 type ItemPayload = {
   name: string;
+  translations: TranslationInput;
   categoryId: number;
   usageId: number | null;
   dyeable: boolean;
@@ -62,10 +79,12 @@ type RecipePayload = {
 
 type DailyChecklistPayload = {
   title: string;
+  translations: TranslationInput;
 };
 
 type HabitatPayload = {
   name: string;
+  translations: TranslationInput;
   recipeItems: IdQuantity[];
   pokemonAppearances: Array<{
     pokemonId: number;
@@ -74,6 +93,14 @@ type HabitatPayload = {
     weather: string;
     rarity: number;
   }>;
+};
+
+type LanguagePayload = {
+  code: string;
+  name: string;
+  enabled: boolean;
+  isDefault: boolean;
+  sortOrder: number;
 };
 
 type ValidationError = Error & { statusCode: number };
@@ -117,27 +144,170 @@ type RecipeChangeSource = {
 
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
+const defaultLocale = 'en';
+const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
 
 const configDefinitions: Record<ConfigType, ConfigDefinition> = {
-  skills: { table: 'skills', order: 'name', hasItemDrop: true },
-  environments: { table: 'environments', order: 'name' },
-  'favorite-things': { table: 'favorite_things', order: 'name' },
-  'item-categories': { table: 'item_categories', order: 'name' },
-  'item-usages': { table: 'item_usages', order: 'name' },
-  'acquisition-methods': { table: 'acquisition_methods', order: 'name' },
-  maps: { table: 'maps', order: 'name' }
+  skills: { table: 'skills', entityType: 'skills', hasItemDrop: true },
+  environments: { table: 'environments', entityType: 'environments' },
+  'favorite-things': { table: 'favorite_things', entityType: 'favorite-things' },
+  'item-categories': { table: 'item_categories', entityType: 'item-categories' },
+  'item-usages': { table: 'item_usages', entityType: 'item-usages' },
+  'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
+  maps: { table: 'maps', entityType: 'maps' }
 };
 
 function asString(value: QueryValue): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function optionSelect(tableName: string): Promise<Array<{ id: number; name: string }>> {
-  return query(`SELECT id, name FROM ${tableName} ORDER BY name`);
+export function cleanLocale(value: unknown): string {
+  const locale = typeof value === 'string' ? value.trim() : '';
+  return localePattern.test(locale) ? locale : defaultLocale;
 }
 
-function skillOptions(): Promise<Array<{ id: number; name: string; hasItemDrop: boolean }>> {
-  return query('SELECT id, name, has_item_drop AS "hasItemDrop" FROM skills ORDER BY name');
+function sqlLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function localizedField(
+  entityType: EntityType,
+  entityIdExpression: string,
+  baseExpression: string,
+  fieldName: TranslationField,
+  locale: string
+): string {
+  const entity = sqlLiteral(entityType);
+  const field = sqlLiteral(fieldName);
+  const requestedLocale = sqlLiteral(cleanLocale(locale));
+  const defaultLocaleSql = sqlLiteral(defaultLocale);
+
+  return `
+    COALESCE(
+      (
+        SELECT et.value
+        FROM entity_translations et
+        WHERE et.entity_type = ${entity}
+          AND et.entity_id = ${entityIdExpression}
+          AND et.locale = ${requestedLocale}
+          AND et.field_name = ${field}
+      ),
+      (
+        SELECT et.value
+        FROM entity_translations et
+        WHERE et.entity_type = ${entity}
+          AND et.entity_id = ${entityIdExpression}
+          AND et.locale = ${defaultLocaleSql}
+          AND et.field_name = ${field}
+      ),
+      ${baseExpression}
+    )
+  `;
+}
+
+function localizedName(entityType: EntityType, entityAlias: string, locale: string): string {
+  return localizedField(entityType, `${entityAlias}.id`, `${entityAlias}.name`, 'name', locale);
+}
+
+function translationsSelect(entityType: EntityType, entityIdExpression: string): string {
+  return `
+    COALESCE((
+      SELECT jsonb_object_agg(locale, fields)
+      FROM (
+        SELECT locale, jsonb_object_agg(field_name, value) AS fields
+        FROM entity_translations
+        WHERE entity_type = ${sqlLiteral(entityType)}
+          AND entity_id = ${entityIdExpression}
+        GROUP BY locale
+      ) translation_rows
+    ), '{}'::jsonb)
+  `;
+}
+
+function cleanTranslations(value: unknown, allowedFields: TranslationField[]): TranslationInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const translations: TranslationInput = {};
+  const allowedFieldSet = new Set(allowedFields);
+
+  for (const [locale, fields] of Object.entries(value as Record<string, unknown>)) {
+    if (!localePattern.test(locale) || locale === defaultLocale || !fields || typeof fields !== 'object' || Array.isArray(fields)) {
+      continue;
+    }
+
+    const cleanFields: Partial<Record<TranslationField, string>> = {};
+    for (const [fieldName, fieldValue] of Object.entries(fields as Record<string, unknown>)) {
+      if (!allowedFieldSet.has(fieldName as TranslationField) || typeof fieldValue !== 'string') {
+        continue;
+      }
+
+      const cleanValue = fieldValue.trim();
+      if (cleanValue !== '') {
+        cleanFields[fieldName as TranslationField] = cleanValue;
+      }
+    }
+
+    if (Object.keys(cleanFields).length > 0) {
+      translations[locale] = cleanFields;
+    }
+  }
+
+  return translations;
+}
+
+async function replaceEntityTranslations(
+  client: DbClient,
+  entityType: EntityType,
+  entityId: number,
+  translations: TranslationInput,
+  fields: TranslationField[]
+): Promise<void> {
+  await client.query(
+    `
+      DELETE FROM entity_translations
+      WHERE entity_type = $1
+        AND entity_id = $2
+        AND field_name = ANY($3::text[])
+    `,
+    [entityType, entityId, fields]
+  );
+
+  for (const [locale, translatedFields] of Object.entries(translations)) {
+    for (const fieldName of fields) {
+      const value = translatedFields[fieldName];
+      if (typeof value !== 'string' || value.trim() === '') {
+        continue;
+      }
+
+      await client.query(
+        `
+          INSERT INTO entity_translations (entity_type, entity_id, locale, field_name, value)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        [entityType, entityId, locale, fieldName, value.trim()]
+      );
+    }
+  }
+}
+
+async function deleteEntityTranslations(client: DbClient, entityType: EntityType, entityId: number): Promise<void> {
+  await client.query('DELETE FROM entity_translations WHERE entity_type = $1 AND entity_id = $2', [entityType, entityId]);
+}
+
+function optionSelect(
+  tableName: string,
+  entityType: EntityType,
+  locale: string
+): Promise<Array<{ id: number; name: string }>> {
+  const name = localizedName(entityType, 'o', locale);
+  return query(`SELECT o.id, ${name} AS name FROM ${tableName} o ORDER BY ${name}`);
+}
+
+function skillOptions(locale: string): Promise<Array<{ id: number; name: string; hasItemDrop: boolean }>> {
+  const name = localizedName('skills', 's', locale);
+  return query(`SELECT s.id, ${name} AS name, s.has_item_drop AS "hasItemDrop" FROM skills s ORDER BY ${name}`);
 }
 
 function auditSelect(entityAlias: string, createdAlias = 'created_user', updatedAlias = 'updated_user'): string {
@@ -162,15 +332,16 @@ function auditJoins(entityAlias: string, createdAlias = 'created_user', updatedA
   `;
 }
 
-function configOrder(definition: ConfigDefinition): string {
-  return definition.order
-    .split(', ')
-    .map((column) => `c.${column}`)
-    .join(', ');
+function configOrder(definition: ConfigDefinition, locale: string): string {
+  return localizedName(definition.entityType, 'c', locale);
 }
 
-function configSelect(definition: ConfigDefinition): string {
-  return definition.hasItemDrop ? 'c.id, c.name, c.has_item_drop AS "hasItemDrop"' : 'c.id, c.name';
+function configSelect(definition: ConfigDefinition, locale: string): string {
+  const name = localizedName(definition.entityType, 'c', locale);
+  const translations = translationsSelect(definition.entityType, 'c.id');
+  return definition.hasItemDrop
+    ? `c.id, ${name} AS name, c.name AS "baseName", ${translations} AS translations, c.has_item_drop AS "hasItemDrop"`
+    : `c.id, ${name} AS name, c.name AS "baseName", ${translations} AS translations`;
 }
 
 function validationError(message: string): ValidationError {
@@ -187,7 +358,7 @@ function requirePositiveInteger(value: unknown, message: string): number {
   return numberValue;
 }
 
-function cleanName(value: unknown, message = '请输入名称'): string {
+function cleanName(value: unknown, message = 'Name is required'): string {
   if (typeof value !== 'string' || value.trim() === '') {
     throw validationError(message);
   }
@@ -259,9 +430,165 @@ async function recordEditLog(
   );
 }
 
+function cleanLanguagePayload(payload: Record<string, unknown>, requireCode: boolean): LanguagePayload {
+  const code = typeof payload.code === 'string' ? payload.code.trim() : '';
+  if (requireCode && !localePattern.test(code)) {
+    throw validationError('Language code is invalid');
+  }
+
+  const sortOrder = Number(payload.sortOrder ?? 0);
+
+  return {
+    code,
+    name: cleanName(payload.name, 'Language name is required'),
+    enabled: payload.enabled !== false,
+    isDefault: Boolean(payload.isDefault),
+    sortOrder: Number.isInteger(sortOrder) && sortOrder >= 0 ? sortOrder : 0
+  };
+}
+
+function requireLanguageCode(value: unknown): string {
+  const code = typeof value === 'string' ? value.trim() : '';
+  if (!localePattern.test(code)) {
+    throw validationError('Language code is invalid');
+  }
+  return code;
+}
+
+export async function listLanguages(includeDisabled = false) {
+  return query(
+    `
+      SELECT code, name, enabled, is_default AS "isDefault", sort_order AS "sortOrder"
+      FROM languages
+      ${includeDisabled ? '' : 'WHERE enabled = true'}
+      ORDER BY sort_order, name
+    `
+  );
+}
+
+export async function createLanguage(payload: Record<string, unknown>) {
+  const cleanPayload = cleanLanguagePayload(payload, true);
+  if (cleanPayload.isDefault && cleanPayload.code !== defaultLocale) {
+    throw validationError('Default language must be English');
+  }
+  if (!cleanPayload.enabled && cleanPayload.isDefault) {
+    throw validationError('Default language must be enabled');
+  }
+
+  await withTransaction(async (client) => {
+    if (cleanPayload.isDefault) {
+      await client.query('UPDATE languages SET is_default = false');
+    }
+
+    await client.query(
+      `
+        INSERT INTO languages (code, name, enabled, is_default, sort_order)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [cleanPayload.code, cleanPayload.name, cleanPayload.enabled, cleanPayload.isDefault, cleanPayload.sortOrder]
+    );
+  });
+
+  return listLanguages(true);
+}
+
+export async function updateLanguage(code: string, payload: Record<string, unknown>) {
+  const locale = requireLanguageCode(code);
+  const cleanPayload = cleanLanguagePayload({ ...payload, code: locale }, false);
+  if (cleanPayload.isDefault && locale !== defaultLocale) {
+    throw validationError('Default language must be English');
+  }
+  if (!cleanPayload.enabled && cleanPayload.isDefault) {
+    throw validationError('Default language must be enabled');
+  }
+
+  await withTransaction(async (client) => {
+    const current = await client.query<{ isDefault: boolean }>(
+      'SELECT is_default AS "isDefault" FROM languages WHERE code = $1',
+      [locale]
+    );
+
+    if (current.rowCount === 0) {
+      throw validationError('Language not found');
+    }
+
+    if (!cleanPayload.enabled && current.rows[0].isDefault) {
+      throw validationError('Default language must be enabled');
+    }
+
+    if (current.rows[0].isDefault && !cleanPayload.isDefault) {
+      throw validationError('A default language is required');
+    }
+
+    if (cleanPayload.isDefault) {
+      await client.query('UPDATE languages SET is_default = false WHERE code <> $1', [locale]);
+    }
+
+    await client.query(
+      `
+        UPDATE languages
+        SET name = $1,
+            enabled = $2,
+            is_default = $3,
+            sort_order = $4
+        WHERE code = $5
+      `,
+      [cleanPayload.name, cleanPayload.enabled, cleanPayload.isDefault, cleanPayload.sortOrder, locale]
+    );
+  });
+
+  return listLanguages(true);
+}
+
+export async function deleteLanguage(code: string) {
+  const locale = requireLanguageCode(code);
+  if (locale === defaultLocale) {
+    throw validationError('Default language cannot be deleted');
+  }
+
+  return withTransaction(async (client) => {
+    const result = await client.query<{ isDefault: boolean }>(
+      'DELETE FROM languages WHERE code = $1 AND is_default = false RETURNING is_default AS "isDefault"',
+      [locale]
+    );
+    return (result.rowCount ?? 0) > 0;
+  });
+}
+
+export async function reorderLanguages(payload: Record<string, unknown>) {
+  const codes = Array.isArray(payload.codes) ? payload.codes.map(requireLanguageCode) : [];
+  if (codes.length === 0) {
+    throw validationError('Please select a language');
+  }
+
+  await withTransaction(async (client) => {
+    const existing = await client.query<{ code: string }>(
+      'SELECT code FROM languages WHERE code = ANY($1::text[])',
+      [codes]
+    );
+
+    if (existing.rowCount !== codes.length) {
+      throw validationError('Language does not exist');
+    }
+
+    for (const [index, code] of codes.entries()) {
+      await client.query(
+        `
+          UPDATE languages
+          SET sort_order = $1
+          WHERE code = $2
+        `,
+        [(index + 1) * 10, code]
+      );
+    }
+  });
+
+  return listLanguages(true);
+}
+
 function displayValue(value: string | null | undefined): string {
   const cleanValue = value?.trim() ?? '';
-  return cleanValue === '' ? '无' : cleanValue;
+  return cleanValue === '' ? 'None' : cleanValue;
 }
 
 function pushChange(changes: EditChange[], label: string, before: string | null | undefined, after: string | null | undefined): void {
@@ -274,12 +601,12 @@ function pushChange(changes: EditChange[], label: string, before: string | null 
 }
 
 function boolValue(value: boolean): string {
-  return value ? '是' : '否';
+  return value ? 'Yes' : 'No';
 }
 
 function namedListValue(items: Array<{ name: string }> | null | undefined): string {
   if (!items?.length) {
-    return '无';
+    return 'None';
   }
 
   return [...new Set(items.map((item) => item.name))]
@@ -289,7 +616,7 @@ function namedListValue(items: Array<{ name: string }> | null | undefined): stri
 
 function quantityListValue(items: Array<{ name: string; quantity: number }> | null | undefined): string {
   if (!items?.length) {
-    return '无';
+    return 'None';
   }
 
   return items
@@ -302,21 +629,21 @@ function quantityListValue(items: Array<{ name: string; quantity: number }> | nu
 function skillDropListValue(skills: Array<{ name: string; itemDrop?: { name: string } | null }> | null | undefined): string {
   const rows = skills
     ?.filter((skill) => skill.itemDrop)
-    .map((skill) => `${skill.name}：${skill.itemDrop?.name}`)
+    .map((skill) => `${skill.name}: ${skill.itemDrop?.name}`)
     .sort((a, b) => a.localeCompare(b)) ?? [];
 
-  return rows.length ? rows.join(' / ') : '无';
+  return rows.length ? rows.join(' / ') : 'None';
 }
 
 function appearanceListValue(
   rows: Array<{ name: string; time_of_day: string; weather: string; rarity: number; map: { name: string } }> | null | undefined
 ): string {
   if (!rows?.length) {
-    return '无';
+    return 'None';
   }
 
   return rows
-    .map((row) => `${row.name}：${row.time_of_day} / ${row.weather} / ${row.rarity} 星 / ${row.map.name}`)
+    .map((row) => `${row.name}: ${row.time_of_day} / ${row.weather} / ${row.rarity} stars / ${row.map.name}`)
     .sort((a, b) => a.localeCompare(b))
     .join(' / ');
 }
@@ -341,7 +668,7 @@ function namesFromIds(ids: number[], namesById: Map<number, string>): string {
     .filter((name): name is string => Boolean(name))
     .sort((a, b) => a.localeCompare(b));
 
-  return names.length ? names.join(' / ') : '无';
+  return names.length ? names.join(' / ') : 'None';
 }
 
 async function quantityPayloadValue(client: DbClient, rows: IdQuantity[]): Promise<string> {
@@ -371,17 +698,17 @@ async function pokemonEditChanges(
     .map((drop) => {
       const skillName = dropSkillNames.get(drop.skillId);
       const itemName = dropItemNames.get(drop.itemId);
-      return skillName && itemName ? `${skillName}：${itemName}` : null;
+      return skillName && itemName ? `${skillName}: ${itemName}` : null;
     })
     .filter((drop): drop is string => drop !== null)
     .sort((a, b) => a.localeCompare(b))
     .join(' / ');
 
-  pushChange(changes, '名字', before.name, after.name);
-  pushChange(changes, '喜欢的环境', before.environment.name, environmentNames.get(after.environmentId));
-  pushChange(changes, '特长', namedListValue(before.skills), namesFromIds(after.skillIds, skillNames));
-  pushChange(changes, '喜欢的东西', namedListValue(before.favorite_things), namesFromIds(after.favoriteThingIds, favoriteThingNames));
-  pushChange(changes, '特长掉落物', skillDropListValue(before.skills), afterDrops);
+  pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Ideal Habitat', before.environment.name, environmentNames.get(after.environmentId));
+  pushChange(changes, 'Specialities', namedListValue(before.skills), namesFromIds(after.skillIds, skillNames));
+  pushChange(changes, 'Favourites', namedListValue(before.favorite_things), namesFromIds(after.favoriteThingIds, favoriteThingNames));
+  pushChange(changes, 'Speciality drops', skillDropListValue(before.skills), afterDrops);
 
   return changes;
 }
@@ -397,15 +724,15 @@ async function itemEditChanges(
   const methodNames = await entityNameMap(client, 'acquisition_methods', after.acquisitionMethodIds);
   const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
 
-  pushChange(changes, '名称', before.name, after.name);
-  pushChange(changes, '分类', before.category.name, categoryNames.get(after.categoryId));
-  pushChange(changes, '用途', before.usage?.name, after.usageId ? usageNames.get(after.usageId) : null);
-  pushChange(changes, '可染色', boolValue(before.customization.dyeable), boolValue(after.dyeable));
-  pushChange(changes, '可双区染色', boolValue(before.customization.dualDyeable), boolValue(after.dualDyeable));
-  pushChange(changes, '可改花纹', boolValue(before.customization.patternEditable), boolValue(after.patternEditable));
-  pushChange(changes, '无材料单', boolValue(before.noRecipe), boolValue(after.noRecipe));
-  pushChange(changes, '入手方式', namedListValue(before.acquisitionMethods), namesFromIds(after.acquisitionMethodIds, methodNames));
-  pushChange(changes, '标签', namedListValue(before.tags), namesFromIds(after.tagIds, tagNames));
+  pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Category', before.category.name, categoryNames.get(after.categoryId));
+  pushChange(changes, 'Usage', before.usage?.name, after.usageId ? usageNames.get(after.usageId) : null);
+  pushChange(changes, 'Dyeable', boolValue(before.customization.dyeable), boolValue(after.dyeable));
+  pushChange(changes, 'Dual dyeable', boolValue(before.customization.dualDyeable), boolValue(after.dualDyeable));
+  pushChange(changes, 'Pattern editable', boolValue(before.customization.patternEditable), boolValue(after.patternEditable));
+  pushChange(changes, 'No recipe', boolValue(before.noRecipe), boolValue(after.noRecipe));
+  pushChange(changes, 'Acquisition methods', namedListValue(before.acquisitionMethods), namesFromIds(after.acquisitionMethodIds, methodNames));
+  pushChange(changes, 'Tags', namedListValue(before.tags), namesFromIds(after.tagIds, tagNames));
 
   return changes;
 }
@@ -422,15 +749,15 @@ async function habitatEditChanges(
     .map((row) => {
       const pokemonName = pokemonNames.get(row.pokemonId);
       const mapName = mapNames.get(row.mapId);
-      return pokemonName && mapName ? `${pokemonName}：${row.timeOfDay} / ${row.weather} / ${row.rarity} 星 / ${mapName}` : null;
+      return pokemonName && mapName ? `${pokemonName}: ${row.timeOfDay} / ${row.weather} / ${row.rarity} stars / ${mapName}` : null;
     })
     .filter((row): row is string => row !== null)
     .sort((a, b) => a.localeCompare(b))
     .join(' / ');
 
-  pushChange(changes, '名称', before.name, after.name);
-  pushChange(changes, '配方', quantityListValue(before.recipe), await quantityPayloadValue(client, after.recipeItems));
-  pushChange(changes, '可能出现的宝可梦', appearanceListValue(before.pokemon), afterAppearances);
+  pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Recipe', quantityListValue(before.recipe), await quantityPayloadValue(client, after.recipeItems));
+  pushChange(changes, 'Possible Pokemon', appearanceListValue(before.pokemon), afterAppearances);
 
   return changes;
 }
@@ -444,9 +771,9 @@ async function recipeEditChanges(
   const itemNames = await entityNameMap(client, 'items', [after.itemId]);
   const methodNames = await entityNameMap(client, 'acquisition_methods', after.acquisitionMethodIds);
 
-  pushChange(changes, '物品', before.item.name, itemNames.get(after.itemId));
-  pushChange(changes, '入手方式', namedListValue(before.acquisition_methods), namesFromIds(after.acquisitionMethodIds, methodNames));
-  pushChange(changes, '需要材料', quantityListValue(before.materials), await quantityPayloadValue(client, after.materials));
+  pushChange(changes, 'Item', before.item.name, itemNames.get(after.itemId));
+  pushChange(changes, 'Acquisition methods', namedListValue(before.acquisition_methods), namesFromIds(after.acquisitionMethodIds, methodNames));
+  pushChange(changes, 'Materials', quantityListValue(before.materials), await quantityPayloadValue(client, after.materials));
 
   return changes;
 }
@@ -472,30 +799,38 @@ function getEditHistory(entityType: string, entityId: number): Promise<EditHisto
   );
 }
 
-const pokemonProjection = `
-  SELECT
-    p.id,
-    p.name,
-    ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
-    json_build_object('id', e.id, 'name', e.name) AS environment,
-    COALESCE((
-      SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'hasItemDrop', s.has_item_drop) ORDER BY s.name)
-      FROM pokemon_skills ps
-      JOIN skills s ON s.id = ps.skill_id
-      WHERE ps.pokemon_id = p.id
-    ), '[]'::json) AS skills,
-    COALESCE((
-      SELECT json_agg(json_build_object('id', ft.id, 'name', ft.name) ORDER BY ft.name)
-      FROM pokemon_favorite_things pft
-      JOIN favorite_things ft ON ft.id = pft.favorite_thing_id
-      WHERE pft.pokemon_id = p.id
-    ), '[]'::json) AS favorite_things
-  FROM pokemon p
-  JOIN environments e ON e.id = p.environment_id
-  ${auditJoins('p', 'pokemon_created_user', 'pokemon_updated_user')}
-`;
+function pokemonProjection(locale: string): string {
+  const pokemonName = localizedName('pokemon', 'p', locale);
+  const environmentName = localizedName('environments', 'e', locale);
+  const skillName = localizedName('skills', 's', locale);
+  const favoriteThingName = localizedName('favorite-things', 'ft', locale);
 
-export async function getOptions() {
+  return `
+    SELECT
+      p.id,
+      ${pokemonName} AS name,
+      ${translationsSelect('pokemon', 'p.id')} AS translations,
+      ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
+      json_build_object('id', e.id, 'name', ${environmentName}) AS environment,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', s.id, 'name', ${skillName}, 'hasItemDrop', s.has_item_drop) ORDER BY ${skillName})
+        FROM pokemon_skills ps
+        JOIN skills s ON s.id = ps.skill_id
+        WHERE ps.pokemon_id = p.id
+      ), '[]'::json) AS skills,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', ft.id, 'name', ${favoriteThingName}) ORDER BY ${favoriteThingName})
+        FROM pokemon_favorite_things pft
+        JOIN favorite_things ft ON ft.id = pft.favorite_thing_id
+        WHERE pft.pokemon_id = p.id
+      ), '[]'::json) AS favorite_things
+    FROM pokemon p
+    JOIN environments e ON e.id = p.environment_id
+    ${auditJoins('p', 'pokemon_created_user', 'pokemon_updated_user')}
+  `;
+}
+
+export async function getOptions(locale = defaultLocale) {
   const [
     skills,
     environments,
@@ -505,13 +840,13 @@ export async function getOptions() {
     acquisitionMethods,
     maps
   ] = await Promise.all([
-    skillOptions(),
-    optionSelect('environments'),
-    optionSelect('favorite_things'),
-    optionSelect('item_categories'),
-    optionSelect('item_usages'),
-    optionSelect('acquisition_methods'),
-    optionSelect('maps')
+    skillOptions(locale),
+    optionSelect('environments', 'environments', locale),
+    optionSelect('favorite_things', 'favorite-things', locale),
+    optionSelect('item_categories', 'item-categories', locale),
+    optionSelect('item_usages', 'item-usages', locale),
+    optionSelect('acquisition_methods', 'acquisition-methods', locale),
+    optionSelect('maps', 'maps', locale)
   ]);
 
   return {
@@ -528,24 +863,27 @@ export async function getOptions() {
 
 function cleanDailyChecklistPayload(payload: Record<string, unknown>): DailyChecklistPayload {
   return {
-    title: cleanName(payload.title, '请输入 Task')
+    title: cleanName(payload.title, 'Please enter a task'),
+    translations: cleanTranslations(payload.translations, ['title'])
   };
 }
 
-export async function listDailyChecklistItems() {
+export async function listDailyChecklistItems(locale = defaultLocale) {
+  const title = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
   return query(
     `
-      SELECT c.id, c.title
+      SELECT c.id, ${title} AS title, ${translationsSelect('daily-checklist-items', 'c.id')} AS translations
       FROM daily_checklist_items c
       ORDER BY c.sort_order, c.id
     `
   );
 }
 
-async function getDailyChecklistItemById(id: number) {
+async function getDailyChecklistItemById(id: number, locale = defaultLocale) {
+  const title = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
   return queryOne(
     `
-      SELECT c.id, c.title
+      SELECT c.id, ${title} AS title, ${translationsSelect('daily-checklist-items', 'c.id')} AS translations
       FROM daily_checklist_items c
       WHERE c.id = $1
     `,
@@ -553,7 +891,7 @@ async function getDailyChecklistItemById(id: number) {
   );
 }
 
-export async function createDailyChecklistItem(payload: Record<string, unknown>, userId: number) {
+export async function createDailyChecklistItem(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanDailyChecklistPayload(payload);
 
   const id = await withTransaction(async (client) => {
@@ -572,14 +910,20 @@ export async function createDailyChecklistItem(payload: Record<string, unknown>,
     );
 
     const createdId = result.rows[0].id;
+    await replaceEntityTranslations(client, 'daily-checklist-items', createdId, cleanPayload.translations, ['title']);
     await recordEditLog(client, 'daily-checklist-items', createdId, 'create', userId);
     return createdId;
   });
 
-  return getDailyChecklistItemById(id);
+  return getDailyChecklistItemById(id, locale);
 }
 
-export async function updateDailyChecklistItem(id: number, payload: Record<string, unknown>, userId: number) {
+export async function updateDailyChecklistItem(
+  id: number,
+  payload: Record<string, unknown>,
+  userId: number,
+  locale = defaultLocale
+) {
   const cleanPayload = cleanDailyChecklistPayload(payload);
 
   const updated = await withTransaction(async (client) => {
@@ -596,17 +940,18 @@ export async function updateDailyChecklistItem(id: number, payload: Record<strin
       return false;
     }
 
+    await replaceEntityTranslations(client, 'daily-checklist-items', id, cleanPayload.translations, ['title']);
     await recordEditLog(client, 'daily-checklist-items', id, 'update', userId);
     return true;
   });
 
-  return updated ? getDailyChecklistItemById(id) : null;
+  return updated ? getDailyChecklistItemById(id, locale) : null;
 }
 
-export async function reorderDailyChecklistItems(payload: Record<string, unknown>, userId: number) {
+export async function reorderDailyChecklistItems(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const ids = cleanIds(payload.ids);
   if (ids.length === 0) {
-    throw validationError('请选择 Task');
+    throw validationError('Please select a task');
   }
 
   await withTransaction(async (client) => {
@@ -616,7 +961,7 @@ export async function reorderDailyChecklistItems(payload: Record<string, unknown
     );
 
     if (existing.rowCount !== ids.length) {
-      throw validationError('Task 不存在');
+      throw validationError('Task does not exist');
     }
 
     for (const [index, id] of ids.entries()) {
@@ -632,7 +977,7 @@ export async function reorderDailyChecklistItems(payload: Record<string, unknown
     }
   });
 
-  return listDailyChecklistItems();
+  return listDailyChecklistItems(locale);
 }
 
 export async function deleteDailyChecklistItem(id: number, userId: number) {
@@ -642,6 +987,7 @@ export async function deleteDailyChecklistItem(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityTranslations(client, 'daily-checklist-items', id);
     await recordEditLog(client, 'daily-checklist-items', id, 'delete', userId);
     return true;
   });
@@ -651,23 +997,23 @@ export function isConfigType(type: string): type is ConfigType {
   return Object.hasOwn(configDefinitions, type);
 }
 
-export async function listConfig(type: ConfigType) {
+export async function listConfig(type: ConfigType, locale = defaultLocale) {
   const definition = configDefinitions[type];
   return query(
     `
-      SELECT ${configSelect(definition)}, ${auditSelect('c')}
+      SELECT ${configSelect(definition, locale)}, ${auditSelect('c')}
       FROM ${definition.table} c
       ${auditJoins('c')}
-      ORDER BY ${configOrder(definition)}
+      ORDER BY ${configOrder(definition, locale)}
     `
   );
 }
 
-async function getConfigById(type: ConfigType, id: number) {
+async function getConfigById(type: ConfigType, id: number, locale = defaultLocale) {
   const definition = configDefinitions[type];
   return queryOne(
     `
-      SELECT ${configSelect(definition)}, ${auditSelect('c')}
+      SELECT ${configSelect(definition, locale)}, ${auditSelect('c')}
       FROM ${definition.table} c
       ${auditJoins('c')}
       WHERE c.id = $1
@@ -676,9 +1022,10 @@ async function getConfigById(type: ConfigType, id: number) {
   );
 }
 
-export async function createConfig(type: ConfigType, payload: Record<string, unknown>, userId: number) {
+export async function createConfig(type: ConfigType, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
+  const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
 
   const id = await withTransaction(async (client) => {
@@ -701,16 +1048,24 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
         );
 
     const createdId = result.rows[0].id;
+    await replaceEntityTranslations(client, definition.entityType, createdId, translations, ['name']);
     await recordEditLog(client, type, createdId, 'create', userId);
     return createdId;
   });
 
-  return getConfigById(type, id);
+  return getConfigById(type, id, locale);
 }
 
-export async function updateConfig(type: ConfigType, id: number, payload: Record<string, unknown>, userId: number) {
+export async function updateConfig(
+  type: ConfigType,
+  id: number,
+  payload: Record<string, unknown>,
+  userId: number,
+  locale = defaultLocale
+) {
   const definition = configDefinitions[type];
   const name = cleanName(payload.name);
+  const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
 
   const updated = await withTransaction(async (client) => {
@@ -740,11 +1095,12 @@ export async function updateConfig(type: ConfigType, id: number, payload: Record
       await client.query('DELETE FROM pokemon_skill_item_drops WHERE skill_id = $1', [id]);
     }
 
+    await replaceEntityTranslations(client, definition.entityType, id, translations, ['name']);
     await recordEditLog(client, type, id, 'update', userId);
     return true;
   });
 
-  return updated ? getConfigById(type, id) : null;
+  return updated ? getConfigById(type, id, locale) : null;
 }
 
 export async function deleteConfig(type: ConfigType, id: number, userId: number) {
@@ -755,12 +1111,13 @@ export async function deleteConfig(type: ConfigType, id: number, userId: number)
       return false;
     }
 
+    await deleteEntityTranslations(client, definition.entityType, id);
     await recordEditLog(client, type, id, 'delete', userId);
     return true;
   });
 }
 
-export async function listPokemon(paramsQuery: QueryParams) {
+export async function listPokemon(paramsQuery: QueryParams, locale = defaultLocale) {
   const params: unknown[] = [];
   const conditions: string[] = [];
   const search = asString(paramsQuery.search)?.trim();
@@ -770,7 +1127,7 @@ export async function listPokemon(paramsQuery: QueryParams) {
 
   if (search) {
     params.push(`%${search}%`);
-    conditions.push(`p.name ILIKE $${params.length}`);
+    conditions.push(`${localizedName('pokemon', 'p', locale)} ILIKE $${params.length}`);
   }
 
   if (Number.isInteger(environmentId) && environmentId > 0) {
@@ -805,42 +1162,48 @@ export async function listPokemon(paramsQuery: QueryParams) {
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${pokemonProjection} ${whereClause} ORDER BY p.id`, params);
+  return query(`${pokemonProjection(locale)} ${whereClause} ORDER BY p.id`, params);
 }
 
-export async function getPokemon(id: number) {
-  const pokemon = await queryOne(`${pokemonProjection} WHERE p.id = $1`, [id]);
+export async function getPokemon(id: number, locale = defaultLocale) {
+  const pokemon = await queryOne(`${pokemonProjection(locale)} WHERE p.id = $1`, [id]);
   if (!pokemon) {
     return null;
   }
+
+  const habitatName = localizedName('habitats', 'h', locale);
+  const mapName = localizedName('maps', 'm', locale);
+  const itemName = localizedName('items', 'i', locale);
+  const categoryName = localizedName('item-categories', 'c', locale);
+  const tagName = localizedName('favorite-things', 'ft', locale);
 
   const [habitats, itemDrops, favoriteThingItems, editHistory] = await Promise.all([
     query(
       `
         SELECT
           h.id,
-          h.name,
+          ${habitatName} AS name,
           hp.time_of_day,
           hp.weather,
           hp.rarity,
-          json_build_object('id', m.id, 'name', m.name) AS map
+          json_build_object('id', m.id, 'name', ${mapName}) AS map
         FROM habitat_pokemon hp
         JOIN habitats h ON h.id = hp.habitat_id
         JOIN maps m ON m.id = hp.map_id
         WHERE hp.pokemon_id = $1
-        ORDER BY h.name, hp.rarity, m.name
+        ORDER BY ${habitatName}, hp.rarity, ${mapName}
       `,
       [id]
     ),
     query<{ skillId: number; id: number; name: string }>(
       `
-        SELECT psid.skill_id AS "skillId", i.id, i.name
+        SELECT psid.skill_id AS "skillId", i.id, ${itemName} AS name
         FROM pokemon_skill_item_drops psid
         JOIN skills s ON s.id = psid.skill_id
         JOIN items i ON i.id = psid.item_id
         WHERE psid.pokemon_id = $1
           AND s.has_item_drop = true
-        ORDER BY psid.skill_id, i.name
+        ORDER BY psid.skill_id, ${itemName}
       `,
       [id]
     ),
@@ -848,9 +1211,9 @@ export async function getPokemon(id: number) {
       `
         SELECT
           i.id,
-          i.name,
-          json_build_object('id', c.id, 'name', c.name) AS category,
-          json_agg(json_build_object('id', ft.id, 'name', ft.name) ORDER BY ft.name) AS tags
+          ${itemName} AS name,
+          json_build_object('id', c.id, 'name', ${categoryName}) AS category,
+          json_agg(json_build_object('id', ft.id, 'name', ${tagName}) ORDER BY ${tagName}) AS tags
         FROM pokemon_favorite_things pft
         JOIN item_favorite_things ift ON ift.favorite_thing_id = pft.favorite_thing_id
         JOIN favorite_things ft ON ft.id = pft.favorite_thing_id
@@ -858,7 +1221,7 @@ export async function getPokemon(id: number) {
         JOIN item_categories c ON c.id = i.category_id
         WHERE pft.pokemon_id = $1
         GROUP BY i.id, i.name, c.id, c.name
-        ORDER BY c.name, i.name
+        ORDER BY ${categoryName}, ${itemName}
       `,
       [id]
     ),
@@ -887,10 +1250,10 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   const skillItemDrops = new Map<string, SkillItemDrop>();
 
   if (skillIds.length > 2) {
-    throw validationError('特长最多选择 2 个');
+    throw validationError('Choose at most 2 specialities');
   }
   if (favoriteThingIds.length > 6) {
-    throw validationError('喜欢的东西最多选择 6 个');
+    throw validationError('Choose at most 6 favourites');
   }
 
   if (Array.isArray(payload.skillItemDrops)) {
@@ -904,7 +1267,7 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
       }
 
       if (!Number.isInteger(skillId) || skillId <= 0 || !selectedSkillIds.has(skillId)) {
-        throw validationError('掉落物品必须关联已选择的特长');
+        throw validationError('Drop items must be linked to selected specialities');
       }
 
       skillItemDrops.set(String(skillId), { skillId, itemId });
@@ -912,9 +1275,10 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   }
 
   return {
-    id: requirePositiveInteger(payload.id, '请输入 Pokemon ID'),
-    name: cleanName(payload.name, '请输入 Pokemon 名字'),
-    environmentId: requirePositiveInteger(payload.environmentId, '请选择喜欢的环境'),
+    id: requirePositiveInteger(payload.id, 'Pokemon ID is required'),
+    name: cleanName(payload.name, 'Pokemon name is required'),
+    translations: cleanTranslations(payload.translations, ['name']),
+    environmentId: requirePositiveInteger(payload.environmentId, 'Ideal Habitat is required'),
     skillIds,
     favoriteThingIds,
     skillItemDrops: [...skillItemDrops.values()]
@@ -945,7 +1309,7 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
     const allowedDropSkillIds = new Set(allowedDrops.rows.map((row) => row.id));
 
     if (payload.skillItemDrops.some((drop) => !allowedDropSkillIds.has(drop.skillId))) {
-      throw validationError('该特长不能配置掉落物');
+      throw validationError('This speciality cannot have a drop item');
     }
   }
 
@@ -957,7 +1321,7 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
   }
 }
 
-export async function createPokemon(payload: Record<string, unknown>, userId: number) {
+export async function createPokemon(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanPokemonPayload(payload);
 
   const id = await withTransaction(async (client) => {
@@ -969,15 +1333,16 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
       [cleanPayload.id, cleanPayload.name, cleanPayload.environmentId, userId]
     );
     await replacePokemonRelations(client, cleanPayload.id, cleanPayload);
+    await replaceEntityTranslations(client, 'pokemon', cleanPayload.id, cleanPayload.translations, ['name']);
     await recordEditLog(client, 'pokemon', cleanPayload.id, 'create', userId);
     return cleanPayload.id;
   });
-  return getPokemon(id);
+  return getPokemon(id, locale);
 }
 
-export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number) {
+export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanPokemonPayload({ ...payload, id });
-  const before = await getPokemon(id);
+  const before = await getPokemon(id, locale);
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
@@ -992,11 +1357,12 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
       return false;
     }
     await replacePokemonRelations(client, id, cleanPayload);
+    await replaceEntityTranslations(client, 'pokemon', id, cleanPayload.translations, ['name']);
     const changes = before ? await pokemonEditChanges(client, before as unknown as PokemonChangeSource, cleanPayload) : [];
     await recordEditLog(client, 'pokemon', id, 'update', userId, changes);
     return true;
   });
-  return updated ? getPokemon(id) : null;
+  return updated ? getPokemon(id, locale) : null;
 }
 
 export async function deletePokemon(id: number, userId: number) {
@@ -1006,44 +1372,56 @@ export async function deletePokemon(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityTranslations(client, 'pokemon', id);
     await recordEditLog(client, 'pokemon', id, 'delete', userId);
     return true;
   });
 }
 
-export async function listHabitats() {
+export async function listHabitats(locale = defaultLocale) {
+  const habitatName = localizedName('habitats', 'h', locale);
+  const itemName = localizedName('items', 'i', locale);
+  const pokemonName = localizedName('pokemon', 'p', locale);
+
   return query(`
     SELECT
       h.id,
-      h.name,
+      ${habitatName} AS name,
+      ${translationsSelect('habitats', 'h.id')} AS translations,
       ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
       COALESCE((
-        SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', hri.quantity) ORDER BY i.name)
+        SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${itemName})
         FROM habitat_recipe_items hri
         JOIN items i ON i.id = hri.item_id
         WHERE hri.habitat_id = h.id
       ), '[]'::json) AS recipe,
       COALESCE((
-        SELECT json_agg(DISTINCT jsonb_build_object('id', p.id, 'name', p.name))
+        SELECT json_agg(DISTINCT jsonb_build_object('id', p.id, 'name', ${pokemonName}))
         FROM habitat_pokemon hp
         JOIN pokemon p ON p.id = hp.pokemon_id
         WHERE hp.habitat_id = h.id
       ), '[]'::json) AS pokemon
     FROM habitats h
     ${auditJoins('h', 'habitat_created_user', 'habitat_updated_user')}
-    ORDER BY h.name
+    ORDER BY ${habitatName}
   `);
 }
 
-export async function getHabitat(id: number) {
+export async function getHabitat(id: number, locale = defaultLocale) {
+  const habitatName = localizedName('habitats', 'h', locale);
+  const itemName = localizedName('items', 'i', locale);
+  const pokemonName = localizedName('pokemon', 'p', locale);
+  const mapName = localizedName('maps', 'm', locale);
+
   const habitat = await queryOne(
     `
       SELECT
         h.id,
-        h.name,
+        ${habitatName} AS name,
+        ${translationsSelect('habitats', 'h.id')} AS translations,
         ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
         COALESCE((
-          SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', hri.quantity) ORDER BY i.name)
+          SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${itemName})
           FROM habitat_recipe_items hri
           JOIN items i ON i.id = hri.item_id
           WHERE hri.habitat_id = h.id
@@ -1064,16 +1442,16 @@ export async function getHabitat(id: number) {
       `
         SELECT
           p.id,
-          p.name,
+          ${pokemonName} AS name,
           hp.time_of_day,
           hp.weather,
           hp.rarity,
-          json_build_object('id', m.id, 'name', m.name) AS map
+          json_build_object('id', m.id, 'name', ${mapName}) AS map
         FROM habitat_pokemon hp
         JOIN pokemon p ON p.id = hp.pokemon_id
         JOIN maps m ON m.id = hp.map_id
         WHERE hp.habitat_id = $1
-        ORDER BY hp.rarity, p.id, m.name
+        ORDER BY hp.rarity, p.id, ${mapName}
       `,
       [id]
     ),
@@ -1115,7 +1493,8 @@ function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
   }
 
   return {
-    name: cleanName(payload.name, '请输入栖息地名字'),
+    name: cleanName(payload.name, 'Habitat name is required'),
+    translations: cleanTranslations(payload.translations, ['name']),
     recipeItems: cleanQuantities(payload.recipeItems),
     pokemonAppearances: [...pokemonAppearances.values()]
   };
@@ -1144,7 +1523,7 @@ async function replaceHabitatRelations(client: DbClient, habitatId: number, payl
   }
 }
 
-export async function createHabitat(payload: Record<string, unknown>, userId: number) {
+export async function createHabitat(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanHabitatPayload(payload);
 
   const id = await withTransaction(async (client) => {
@@ -1158,15 +1537,16 @@ export async function createHabitat(payload: Record<string, unknown>, userId: nu
     );
     const habitatId = result.rows[0].id;
     await replaceHabitatRelations(client, habitatId, cleanPayload);
+    await replaceEntityTranslations(client, 'habitats', habitatId, cleanPayload.translations, ['name']);
     await recordEditLog(client, 'habitats', habitatId, 'create', userId);
     return habitatId;
   });
-  return getHabitat(id);
+  return getHabitat(id, locale);
 }
 
-export async function updateHabitat(id: number, payload: Record<string, unknown>, userId: number) {
+export async function updateHabitat(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanHabitatPayload(payload);
-  const before = await getHabitat(id);
+  const before = await getHabitat(id, locale);
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
@@ -1177,11 +1557,12 @@ export async function updateHabitat(id: number, payload: Record<string, unknown>
       return false;
     }
     await replaceHabitatRelations(client, id, cleanPayload);
+    await replaceEntityTranslations(client, 'habitats', id, cleanPayload.translations, ['name']);
     const changes = before ? await habitatEditChanges(client, before as unknown as HabitatChangeSource, cleanPayload) : [];
     await recordEditLog(client, 'habitats', id, 'update', userId, changes);
     return true;
   });
-  return updated ? getHabitat(id) : null;
+  return updated ? getHabitat(id, locale) : null;
 }
 
 export async function deleteHabitat(id: number, userId: number) {
@@ -1191,56 +1572,65 @@ export async function deleteHabitat(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityTranslations(client, 'habitats', id);
     await recordEditLog(client, 'habitats', id, 'delete', userId);
     return true;
   });
 }
 
-const itemProjection = `
-  SELECT
-    i.id,
-    i.name,
-    ${auditSelect('i', 'item_created_user', 'item_updated_user')},
-    json_build_object('id', c.id, 'name', c.name) AS category,
-    CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'name', u.name) END AS usage,
-    json_build_object(
-      'dyeable', i.dyeable,
-      'dualDyeable', i.dual_dyeable,
-      'patternEditable', i.pattern_editable
-    ) AS customization,
-    i.no_recipe AS "noRecipe",
-    COALESCE((
-      SELECT json_agg(json_build_object('id', t.id, 'name', t.name) ORDER BY t.name)
-      FROM item_favorite_things ift
-      JOIN favorite_things t ON t.id = ift.favorite_thing_id
-      WHERE ift.item_id = i.id
-    ), '[]'::json) AS tags,
-    CASE
-      WHEN item_recipe.id IS NULL THEN NULL
-      ELSE json_build_object(
-        'id', item_recipe.id,
-        'createdAt', item_recipe.created_at,
-        'updatedAt', item_recipe.updated_at,
-        'createdBy', CASE
-          WHEN recipe_created_user.id IS NULL THEN NULL
-          ELSE json_build_object('id', recipe_created_user.id, 'displayName', recipe_created_user.display_name)
-        END,
-        'updatedBy', CASE
-          WHEN recipe_updated_user.id IS NULL THEN NULL
-          ELSE json_build_object('id', recipe_updated_user.id, 'displayName', recipe_updated_user.display_name)
-        END
-      )
-    END AS recipe
-  FROM items i
-  JOIN item_categories c ON c.id = i.category_id
-  LEFT JOIN item_usages u ON u.id = i.usage_id
-  LEFT JOIN recipes item_recipe ON item_recipe.item_id = i.id
-  LEFT JOIN users recipe_created_user ON recipe_created_user.id = item_recipe.created_by_user_id
-  LEFT JOIN users recipe_updated_user ON recipe_updated_user.id = item_recipe.updated_by_user_id
-  ${auditJoins('i', 'item_created_user', 'item_updated_user')}
-`;
+function itemProjection(locale: string): string {
+  const itemName = localizedName('items', 'i', locale);
+  const categoryName = localizedName('item-categories', 'c', locale);
+  const usageName = localizedName('item-usages', 'u', locale);
+  const tagName = localizedName('favorite-things', 't', locale);
 
-export async function listItems(paramsQuery: QueryParams) {
+  return `
+    SELECT
+      i.id,
+      ${itemName} AS name,
+      ${translationsSelect('items', 'i.id')} AS translations,
+      ${auditSelect('i', 'item_created_user', 'item_updated_user')},
+      json_build_object('id', c.id, 'name', ${categoryName}) AS category,
+      CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'name', ${usageName}) END AS usage,
+      json_build_object(
+        'dyeable', i.dyeable,
+        'dualDyeable', i.dual_dyeable,
+        'patternEditable', i.pattern_editable
+      ) AS customization,
+      i.no_recipe AS "noRecipe",
+      COALESCE((
+        SELECT json_agg(json_build_object('id', t.id, 'name', ${tagName}) ORDER BY ${tagName})
+        FROM item_favorite_things ift
+        JOIN favorite_things t ON t.id = ift.favorite_thing_id
+        WHERE ift.item_id = i.id
+      ), '[]'::json) AS tags,
+      CASE
+        WHEN item_recipe.id IS NULL THEN NULL
+        ELSE json_build_object(
+          'id', item_recipe.id,
+          'createdAt', item_recipe.created_at,
+          'updatedAt', item_recipe.updated_at,
+          'createdBy', CASE
+            WHEN recipe_created_user.id IS NULL THEN NULL
+            ELSE json_build_object('id', recipe_created_user.id, 'displayName', recipe_created_user.display_name)
+          END,
+          'updatedBy', CASE
+            WHEN recipe_updated_user.id IS NULL THEN NULL
+            ELSE json_build_object('id', recipe_updated_user.id, 'displayName', recipe_updated_user.display_name)
+          END
+        )
+      END AS recipe
+    FROM items i
+    JOIN item_categories c ON c.id = i.category_id
+    LEFT JOIN item_usages u ON u.id = i.usage_id
+    LEFT JOIN recipes item_recipe ON item_recipe.item_id = i.id
+    LEFT JOIN users recipe_created_user ON recipe_created_user.id = item_recipe.created_by_user_id
+    LEFT JOIN users recipe_updated_user ON recipe_updated_user.id = item_recipe.updated_by_user_id
+    ${auditJoins('i', 'item_created_user', 'item_updated_user')}
+  `;
+}
+
+export async function listItems(paramsQuery: QueryParams, locale = defaultLocale) {
   const params: unknown[] = [];
   const conditions: string[] = [];
   const categoryId = Number(asString(paramsQuery.categoryId));
@@ -1250,7 +1640,7 @@ export async function listItems(paramsQuery: QueryParams) {
 
   if (search) {
     params.push(`%${search}%`);
-    conditions.push(`i.name ILIKE $${params.length}`);
+    conditions.push(`${localizedName('items', 'i', locale)} ILIKE $${params.length}`);
   }
 
   if (Number.isInteger(categoryId) && categoryId > 0) {
@@ -1277,23 +1667,31 @@ export async function listItems(paramsQuery: QueryParams) {
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${itemProjection} ${whereClause} ORDER BY c.name, i.name`, params);
+  return query(`${itemProjection(locale)} ${whereClause} ORDER BY ${localizedName('item-categories', 'c', locale)}, ${localizedName('items', 'i', locale)}`, params);
 }
 
-export async function getItem(id: number) {
-  const item = await queryOne(`${itemProjection} WHERE i.id = $1`, [id]);
+export async function getItem(id: number, locale = defaultLocale) {
+  const item = await queryOne(`${itemProjection(locale)} WHERE i.id = $1`, [id]);
   if (!item) {
     return null;
   }
 
+  const acquisitionMethodName = localizedName('acquisition-methods', 'am', locale);
+  const resultItemName = localizedName('items', 'result_item', locale);
+  const materialItemName = localizedName('items', 'mi', locale);
+  const habitatName = localizedName('habitats', 'h', locale);
+  const recipeItemName = localizedName('items', 'recipe_item', locale);
+  const pokemonName = localizedName('pokemon', 'p', locale);
+  const skillName = localizedName('skills', 's', locale);
+
   const [acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory] = await Promise.all([
     query(
       `
-        SELECT am.id, am.name
+        SELECT am.id, ${acquisitionMethodName} AS name
         FROM item_acquisition_methods iam
         JOIN acquisition_methods am ON am.id = iam.acquisition_method_id
         WHERE iam.item_id = $1
-        ORDER BY am.name
+        ORDER BY ${acquisitionMethodName}
       `,
       [id]
     ),
@@ -1301,21 +1699,21 @@ export async function getItem(id: number) {
       `
         SELECT
           r.id,
-          result_item.name,
+          ${resultItemName} AS name,
           ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
           COALESCE((
-            SELECT json_agg(json_build_object('id', am.id, 'name', am.name) ORDER BY am.name)
+            SELECT json_agg(json_build_object('id', am.id, 'name', ${acquisitionMethodName}) ORDER BY ${acquisitionMethodName})
             FROM recipe_acquisition_methods ram
             JOIN acquisition_methods am ON am.id = ram.acquisition_method_id
             WHERE ram.recipe_id = r.id
           ), '[]'::json) AS acquisition_methods,
           COALESCE((
-            SELECT json_agg(json_build_object('id', mi.id, 'name', mi.name, 'quantity', rm.quantity) ORDER BY mi.name)
+            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${materialItemName})
             FROM recipe_materials rm
             JOIN items mi ON mi.id = rm.item_id
             WHERE rm.recipe_id = r.id
           ), '[]'::json) AS materials,
-          json_build_object('id', result_item.id, 'name', result_item.name) AS item
+          json_build_object('id', result_item.id, 'name', ${resultItemName}) AS item
         FROM recipes r
         JOIN items result_item ON result_item.id = r.item_id
         ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
@@ -1327,9 +1725,9 @@ export async function getItem(id: number) {
       `
         SELECT
           r.id,
-          result_item.name,
+          ${resultItemName} AS name,
           COALESCE((
-            SELECT json_agg(json_build_object('id', mi.id, 'name', mi.name, 'quantity', recipe_material.quantity) ORDER BY mi.name)
+            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', recipe_material.quantity) ORDER BY ${materialItemName})
             FROM recipe_materials recipe_material
             JOIN items mi ON mi.id = recipe_material.item_id
             WHERE recipe_material.recipe_id = r.id
@@ -1338,7 +1736,7 @@ export async function getItem(id: number) {
         JOIN recipes r ON r.id = used_material.recipe_id
         JOIN items result_item ON result_item.id = r.item_id
         WHERE used_material.item_id = $1
-        ORDER BY result_item.name
+        ORDER BY ${resultItemName}
       `,
       [id]
     ),
@@ -1346,9 +1744,9 @@ export async function getItem(id: number) {
       `
         SELECT
           h.id,
-          h.name,
+          ${habitatName} AS name,
           COALESCE((
-            SELECT json_agg(json_build_object('id', recipe_item.id, 'name', recipe_item.name, 'quantity', recipe_item_row.quantity) ORDER BY recipe_item.name)
+            SELECT json_agg(json_build_object('id', recipe_item.id, 'name', ${recipeItemName}, 'quantity', recipe_item_row.quantity) ORDER BY ${recipeItemName})
             FROM habitat_recipe_items recipe_item_row
             JOIN items recipe_item ON recipe_item.id = recipe_item_row.item_id
             WHERE recipe_item_row.habitat_id = h.id
@@ -1356,21 +1754,21 @@ export async function getItem(id: number) {
         FROM habitat_recipe_items used_item
         JOIN habitats h ON h.id = used_item.habitat_id
         WHERE used_item.item_id = $1
-        ORDER BY h.name
+        ORDER BY ${habitatName}
       `,
       [id]
     ),
     query(
       `
         SELECT
-          json_build_object('id', p.id, 'name', p.name) AS pokemon,
-          json_build_object('id', s.id, 'name', s.name) AS skill
+          json_build_object('id', p.id, 'name', ${pokemonName}) AS pokemon,
+          json_build_object('id', s.id, 'name', ${skillName}) AS skill
         FROM pokemon_skill_item_drops psid
         JOIN pokemon p ON p.id = psid.pokemon_id
         JOIN skills s ON s.id = psid.skill_id
         WHERE psid.item_id = $1
           AND s.has_item_drop = true
-        ORDER BY p.id, s.name
+        ORDER BY p.id, ${skillName}
       `,
       [id]
     ),
@@ -1383,11 +1781,12 @@ export async function getItem(id: number) {
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
   const usageId = payload.usageId === null || payload.usageId === '' || payload.usageId === undefined
     ? null
-    : requirePositiveInteger(payload.usageId, '请选择用途');
+    : requirePositiveInteger(payload.usageId, 'Usage is required');
 
   return {
-    name: cleanName(payload.name, '请输入物品名字'),
-    categoryId: requirePositiveInteger(payload.categoryId, '请选择分类'),
+    name: cleanName(payload.name, 'Item name is required'),
+    translations: cleanTranslations(payload.translations, ['name']),
+    categoryId: requirePositiveInteger(payload.categoryId, 'Category is required'),
     usageId,
     dyeable: Boolean(payload.dyeable),
     dualDyeable: Boolean(payload.dualDyeable),
@@ -1405,7 +1804,7 @@ async function ensureItemCanDisableRecipe(client: DbClient, itemId: number, noRe
 
   const result = await client.query('SELECT 1 FROM recipes WHERE item_id = $1', [itemId]);
   if (result.rowCount && result.rowCount > 0) {
-    throw validationError('已有材料单的物品不能设置为无材料单');
+    throw validationError('An item with a recipe cannot be marked as recipe-free');
   }
 }
 
@@ -1428,7 +1827,7 @@ async function replaceItemRelations(client: DbClient, itemId: number, payload: I
   }
 }
 
-export async function createItem(payload: Record<string, unknown>, userId: number) {
+export async function createItem(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanItemPayload(payload);
 
   const id = await withTransaction(async (client) => {
@@ -1461,15 +1860,16 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
     );
     const itemId = result.rows[0].id;
     await replaceItemRelations(client, itemId, cleanPayload);
+    await replaceEntityTranslations(client, 'items', itemId, cleanPayload.translations, ['name']);
     await recordEditLog(client, 'items', itemId, 'create', userId);
     return itemId;
   });
-  return getItem(id);
+  return getItem(id, locale);
 }
 
-export async function updateItem(id: number, payload: Record<string, unknown>, userId: number) {
+export async function updateItem(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanItemPayload(payload);
-  const before = await getItem(id);
+  const before = await getItem(id, locale);
 
   const updated = await withTransaction(async (client) => {
     await ensureItemCanDisableRecipe(client, id, cleanPayload.noRecipe);
@@ -1503,11 +1903,12 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
       return false;
     }
     await replaceItemRelations(client, id, cleanPayload);
+    await replaceEntityTranslations(client, 'items', id, cleanPayload.translations, ['name']);
     const changes = before ? await itemEditChanges(client, before as unknown as ItemChangeSource, cleanPayload) : [];
     await recordEditLog(client, 'items', id, 'update', userId, changes);
     return true;
   });
-  return updated ? getItem(id) : null;
+  return updated ? getItem(id, locale) : null;
 }
 
 export async function deleteItem(id: number, userId: number) {
@@ -1517,15 +1918,18 @@ export async function deleteItem(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityTranslations(client, 'items', id);
     await recordEditLog(client, 'items', id, 'delete', userId);
     return true;
   });
 }
 
-export async function listRecipes(paramsQuery: QueryParams = {}) {
+export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaultLocale) {
   const params: unknown[] = [];
   const conditions: string[] = [];
   const categoryId = Number(asString(paramsQuery.categoryId));
+  const resultItemName = localizedName('items', 'result_item', locale);
+  const materialItemName = localizedName('items', 'i', locale);
 
   if (Number.isInteger(categoryId) && categoryId > 0) {
     params.push(categoryId);
@@ -1536,10 +1940,10 @@ export async function listRecipes(paramsQuery: QueryParams = {}) {
   return query(`
     SELECT
       r.id,
-      result_item.name,
+      ${resultItemName} AS name,
       ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
       COALESCE((
-        SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', rm.quantity) ORDER BY i.name)
+        SELECT json_agg(json_build_object('id', i.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${materialItemName})
         FROM recipe_materials rm
         JOIN items i ON i.id = rm.item_id
         WHERE rm.recipe_id = r.id
@@ -1548,30 +1952,34 @@ export async function listRecipes(paramsQuery: QueryParams = {}) {
     JOIN items result_item ON result_item.id = r.item_id
     ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
     ${whereClause}
-    ORDER BY result_item.name
+    ORDER BY ${resultItemName}
   `, params);
 }
 
-export async function getRecipe(id: number) {
+export async function getRecipe(id: number, locale = defaultLocale) {
+  const resultItemName = localizedName('items', 'result_item', locale);
+  const acquisitionMethodName = localizedName('acquisition-methods', 'am', locale);
+  const materialItemName = localizedName('items', 'i', locale);
+
   const recipe = await queryOne(
     `
       SELECT
         r.id,
-        result_item.name,
+        ${resultItemName} AS name,
         ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
         COALESCE((
-          SELECT json_agg(json_build_object('id', am.id, 'name', am.name) ORDER BY am.name)
+          SELECT json_agg(json_build_object('id', am.id, 'name', ${acquisitionMethodName}) ORDER BY ${acquisitionMethodName})
           FROM recipe_acquisition_methods ram
           JOIN acquisition_methods am ON am.id = ram.acquisition_method_id
           WHERE ram.recipe_id = r.id
         ), '[]'::json) AS acquisition_methods,
         COALESCE((
-          SELECT json_agg(json_build_object('id', i.id, 'name', i.name, 'quantity', rm.quantity) ORDER BY i.name)
+          SELECT json_agg(json_build_object('id', i.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${materialItemName})
           FROM recipe_materials rm
           JOIN items i ON i.id = rm.item_id
           WHERE rm.recipe_id = r.id
         ), '[]'::json) AS materials,
-        json_build_object('id', result_item.id, 'name', result_item.name) AS item
+        json_build_object('id', result_item.id, 'name', ${resultItemName}) AS item
       FROM recipes r
       JOIN items result_item ON result_item.id = r.item_id
       ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
@@ -1590,7 +1998,7 @@ export async function getRecipe(id: number) {
 
 function cleanRecipePayload(payload: Record<string, unknown>): RecipePayload {
   return {
-    itemId: requirePositiveInteger(payload.itemId, '请选择物品'),
+    itemId: requirePositiveInteger(payload.itemId, 'Item is required'),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     materials: cleanQuantities(payload.materials)
   };
@@ -1619,15 +2027,15 @@ async function replaceRecipeRelations(client: DbClient, recipeId: number, payloa
 async function ensureItemCanHaveRecipe(client: DbClient, itemId: number): Promise<void> {
   const result = await client.query<{ no_recipe: boolean }>('SELECT no_recipe FROM items WHERE id = $1', [itemId]);
   if (result.rowCount === 0) {
-    throw validationError('请选择物品');
+    throw validationError('Item is required');
   }
 
   if (result.rows[0].no_recipe) {
-    throw validationError('该物品已设置为无材料单');
+    throw validationError('This item is marked as recipe-free');
   }
 }
 
-export async function createRecipe(payload: Record<string, unknown>, userId: number) {
+export async function createRecipe(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanRecipePayload(payload);
 
   const id = await withTransaction(async (client) => {
@@ -1645,12 +2053,12 @@ export async function createRecipe(payload: Record<string, unknown>, userId: num
     await recordEditLog(client, 'recipes', recipeId, 'create', userId);
     return recipeId;
   });
-  return getRecipe(id);
+  return getRecipe(id, locale);
 }
 
-export async function updateRecipe(id: number, payload: Record<string, unknown>, userId: number) {
+export async function updateRecipe(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanRecipePayload(payload);
-  const before = await getRecipe(id);
+  const before = await getRecipe(id, locale);
 
   const updated = await withTransaction(async (client) => {
     await ensureItemCanHaveRecipe(client, cleanPayload.itemId);
@@ -1666,7 +2074,7 @@ export async function updateRecipe(id: number, payload: Record<string, unknown>,
     await recordEditLog(client, 'recipes', id, 'update', userId, changes);
     return true;
   });
-  return updated ? getRecipe(id) : null;
+  return updated ? getRecipe(id, locale) : null;
 }
 
 export async function deleteRecipe(id: number, userId: number) {

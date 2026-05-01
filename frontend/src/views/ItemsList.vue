@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
@@ -11,6 +12,7 @@ import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Item, type Options } from '../services/api';
 
 const options = ref<Options | null>(null);
+const { t } = useI18n();
 const items = ref<Item[]>([]);
 const loading = ref(true);
 const search = ref('');
@@ -23,7 +25,7 @@ const filterSkeletonWidths = ['52px', '48px', '48px'];
 const skeletonCardCount = 6;
 
 const categoryTabs = computed<TabOption[]>(() => [
-  { value: '', label: '全部' },
+  { value: '', label: t('common.all') },
   ...(options.value?.itemCategories.map((item) => ({ value: String(item.id), label: item.name })) ?? [])
 ]);
 
@@ -50,14 +52,14 @@ watch(itemQuery, loadItems);
 
 <template>
   <section class="page-stack">
-    <PageHeader title="物品" subtitle="按分类、用途、标签查看物品。">
+    <PageHeader :title="t('pages.items.title')" :subtitle="t('pages.items.subtitle')">
       <template #kicker>Bag</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/items/new">新增</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/items/new">{{ t('common.add') }}</RouterLink>
       </template>
     </PageHeader>
 
-    <Tabs v-if="options" id="item-category" v-model="categoryId" :tabs="categoryTabs" label="分类" />
+    <Tabs v-if="options" id="item-category" v-model="categoryId" :tabs="categoryTabs" :label="t('pages.items.category')" />
     <div v-else class="tabs tabs--component" aria-hidden="true">
       <div class="tab-list tab-list--skeleton">
         <Skeleton
@@ -73,25 +75,25 @@ watch(itemQuery, loadItems);
 
     <FilterPanel v-if="options">
       <div class="field">
-        <label for="item-search">搜索</label>
-        <input id="item-search" v-model="search" type="search" placeholder="名称" />
+        <label for="item-search">{{ t('common.search') }}</label>
+        <input id="item-search" v-model="search" type="search" :placeholder="t('common.name')" />
       </div>
 
       <div class="field">
-        <label for="usage">用途</label>
+        <label for="usage">{{ t('pages.items.usage') }}</label>
         <TagsSelect
           id="usage"
           v-model="usageId"
           :options="options.itemUsages"
           :multiple="false"
-          placeholder="全部"
-          search-placeholder="搜索用途"
+          :placeholder="t('common.all')"
+          :search-placeholder="t('pages.items.searchUsage')"
         />
       </div>
 
       <div class="field">
-        <label for="tags">标签</label>
-        <TagsSelect id="tags" v-model="tagIds" :options="options.itemTags" placeholder="搜索标签" />
+        <label for="tags">{{ t('pages.items.tags') }}</label>
+        <TagsSelect id="tags" v-model="tagIds" :options="options.itemTags" :placeholder="t('pages.items.searchTags')" />
       </div>
     </FilterPanel>
     <FilterPanel v-else class="filter-panel--skeleton" aria-hidden="true">
@@ -101,7 +103,7 @@ watch(itemQuery, loadItems);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid" aria-busy="true" aria-label="正在加载列表">
+    <div v-if="loading" class="entity-grid" aria-busy="true" :aria-label="t('pages.items.loadingList')">
       <article v-for="index in skeletonCardCount" :key="`item-skeleton-${index}`" class="entity-card entity-card--skeleton">
         <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
         <div class="entity-card__content">

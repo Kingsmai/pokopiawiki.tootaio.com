@@ -184,6 +184,109 @@ svg {
   gap: 8px;
 }
 
+.language-menu {
+  position: relative;
+}
+
+.language-menu__trigger {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    color 0.14s ease;
+}
+
+.language-menu__trigger:hover,
+.language-menu__trigger[aria-expanded="true"] {
+  border-color: var(--pokemon-blue);
+  background: rgba(255, 203, 5, 0.22);
+  color: var(--pokemon-blue-deep);
+}
+
+.language-menu__trigger:focus-visible {
+  outline: none;
+  border-color: var(--pokemon-blue);
+  box-shadow: 0 0 0 4px rgba(42, 117, 187, 0.16);
+}
+
+.language-menu__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.language-menu__glyph {
+  white-space: nowrap;
+}
+
+.language-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  padding: 8px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.language-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.language-menu__item:hover,
+.language-menu__item.active {
+  background: rgba(255, 203, 5, 0.22);
+  color: var(--pokemon-blue-deep);
+}
+
+.language-menu__item:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.language-menu__item.active {
+  box-shadow: inset 0 0 0 2px rgba(42, 117, 187, 0.2);
+}
+
+.language-menu__code {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .auth-user {
   max-width: 180px;
   overflow: hidden;
@@ -919,7 +1022,7 @@ button:disabled,
   justify-content: flex-start;
 }
 
-.admin-checklist-row {
+.reorderable-row {
   position: relative;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -931,7 +1034,7 @@ button:disabled,
     transform 0.16s ease;
 }
 
-.admin-checklist-row.is-dragging {
+.reorderable-row.is-dragging {
   z-index: 2;
   background: color-mix(in srgb, var(--pokemon-yellow) 12%, var(--surface));
   box-shadow: var(--shadow-soft);
@@ -939,7 +1042,7 @@ button:disabled,
   transform: scale(0.99);
 }
 
-.admin-checklist-row.is-drop-target::before {
+.reorderable-row.is-drop-target::before {
   content: "";
   position: absolute;
   right: 0;
@@ -950,29 +1053,29 @@ button:disabled,
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--pokemon-blue) 18%, transparent);
 }
 
-.admin-checklist-row.is-drop-before::before {
+.reorderable-row.is-drop-before::before {
   top: -2px;
 }
 
-.admin-checklist-row.is-drop-after::before {
+.reorderable-row.is-drop-after::before {
   bottom: -2px;
 }
 
-.admin-checklist-move,
-.admin-checklist-enter-active,
-.admin-checklist-leave-active {
+.reorderable-list-move,
+.reorderable-list-enter-active,
+.reorderable-list-leave-active {
   transition:
     opacity 0.18s ease,
     transform 0.18s ease;
 }
 
-.admin-checklist-enter-from,
-.admin-checklist-leave-to {
+.reorderable-list-enter-from,
+.reorderable-list-leave-to {
   opacity: 0;
   transform: translateY(6px);
 }
 
-.admin-checklist-leave-active {
+.reorderable-list-leave-active {
   position: absolute;
   right: 0;
   left: 0;
@@ -1015,7 +1118,7 @@ button:disabled,
   opacity: 0.54;
 }
 
-.admin-checklist-title {
+.reorderable-row-title {
   flex: 1 1 180px;
   min-width: 0;
   display: flex;
@@ -1027,17 +1130,17 @@ button:disabled,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-checklist-row,
-  .admin-checklist-move,
-  .admin-checklist-enter-active,
-  .admin-checklist-leave-active,
+  .reorderable-row,
+  .reorderable-list-move,
+  .reorderable-list-enter-active,
+  .reorderable-list-leave-active,
   .drag-handle {
     transition: none;
   }
 
-  .admin-checklist-row.is-dragging,
-  .admin-checklist-enter-from,
-  .admin-checklist-leave-to,
+  .reorderable-row.is-dragging,
+  .reorderable-list-enter-from,
+  .reorderable-list-leave-to,
   .drag-handle:active {
     transform: none;
   }
@@ -1648,6 +1751,10 @@ button:disabled,
 .skill-drop-list {
   display: grid;
   gap: 10px;
+}
+
+.translation-fields {
+  display: contents;
 }
 
 .skill-drop-row {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
@@ -8,6 +9,7 @@ import Skeleton from '../components/Skeleton.vue';
 import { api, type Habitat } from '../services/api';
 
 const habitats = ref<Habitat[]>([]);
+const { t } = useI18n();
 const loading = ref(true);
 const skeletonCardCount = 6;
 
@@ -19,14 +21,14 @@ onMounted(async () => {
 
 <template>
   <section class="page-stack">
-    <PageHeader title="栖息地" subtitle="查看配方和可能出现的宝可梦。">
+    <PageHeader :title="t('pages.habitats.title')" :subtitle="t('pages.habitats.subtitle')">
       <template #kicker>Habitats</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/habitats/new">新增</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/habitats/new">{{ t('common.add') }}</RouterLink>
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="entity-grid" aria-busy="true" aria-label="正在加载栖息地列表">
+    <div v-if="loading" class="entity-grid" aria-busy="true" :aria-label="t('pages.habitats.loadingList')">
       <article v-for="index in skeletonCardCount" :key="index" class="entity-card entity-card--skeleton">
         <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
         <div class="entity-card__content">

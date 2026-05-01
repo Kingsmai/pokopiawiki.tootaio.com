@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import StatusMessage from '../components/StatusMessage.vue';
@@ -7,6 +8,7 @@ import { api, setAuthToken } from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const email = ref('');
 const password = ref('');
 const busy = ref(false);
@@ -29,7 +31,7 @@ async function submitLogin() {
         : '/pokemon';
     await router.push(redirect);
   } catch (error) {
-    errorMessage.value = error instanceof Error && error.message ? error.message : '登录失败';
+    errorMessage.value = error instanceof Error && error.message ? error.message : t('auth.loginFailed');
   } finally {
     busy.value = false;
   }
@@ -39,31 +41,31 @@ async function submitLogin() {
 <template>
   <section class="auth-page">
     <div class="auth-panel">
-      <PageHeader title="登录" subtitle="使用已验证邮箱进入 Pokopia Wiki">
+      <PageHeader :title="t('auth.loginTitle')" :subtitle="t('auth.loginSubtitle')">
         <template #kicker>Trainer Pass</template>
       </PageHeader>
 
       <form class="auth-form" @submit.prevent="submitLogin">
         <div class="field">
-          <label for="login-email">邮箱</label>
+          <label for="login-email">{{ t('auth.email') }}</label>
           <input id="login-email" v-model="email" autocomplete="email" required type="email" />
         </div>
 
         <div class="field">
-          <label for="login-password">密码</label>
+          <label for="login-password">{{ t('auth.password') }}</label>
           <input id="login-password" v-model="password" autocomplete="current-password" required type="password" />
         </div>
 
         <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
 
         <button class="ui-button ui-button--primary" :disabled="busy" type="submit">
-          {{ busy ? '登录中' : '登录' }}
+          {{ busy ? t('auth.loggingIn') : t('nav.login') }}
         </button>
       </form>
 
       <p class="auth-switch">
-        还没有账号？
-        <RouterLink to="/register">注册</RouterLink>
+        {{ t('auth.noAccount') }}
+        <RouterLink to="/register">{{ t('nav.register') }}</RouterLink>
       </p>
     </div>
   </section>

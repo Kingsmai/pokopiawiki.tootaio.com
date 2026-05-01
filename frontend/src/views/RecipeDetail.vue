@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
@@ -9,6 +10,7 @@ import Skeleton from '../components/Skeleton.vue';
 import { api, type RecipeDetail } from '../services/api';
 
 const route = useRoute();
+const { t } = useI18n();
 const recipe = ref<RecipeDetail | null>(null);
 
 onMounted(async () => {
@@ -17,7 +19,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section v-if="!recipe" class="page-stack" aria-busy="true" aria-label="正在加载材料单详情">
+  <section v-if="!recipe" class="page-stack" aria-busy="true" :aria-label="t('pages.recipes.loadingDetail')">
     <div class="page-header page-header--skeleton" aria-hidden="true">
       <div class="page-header__copy">
         <Skeleton width="112px" />
@@ -44,21 +46,21 @@ onMounted(async () => {
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="recipe.name" subtitle="材料单详情">
+    <PageHeader :title="recipe.name" :subtitle="t('pages.recipes.detailSubtitle')">
       <template #kicker>Recipe Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">编辑</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/recipes">返回列表</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">{{ t('common.edit') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/recipes">{{ t('common.backToList') }}</RouterLink>
       </template>
     </PageHeader>
 
     <div class="detail-with-sidebar">
       <div class="detail-grid">
-        <DetailSection title="入手方式">
+        <DetailSection :title="t('pages.items.acquisitionMethods')">
           <EntityChips :items="recipe.acquisition_methods" />
         </DetailSection>
 
-        <DetailSection title="需要材料">
+        <DetailSection :title="t('pages.recipes.materials')">
           <EntityChips :items="recipe.materials" />
         </DetailSection>
       </div>

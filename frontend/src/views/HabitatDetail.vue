@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
@@ -9,6 +10,7 @@ import Skeleton from '../components/Skeleton.vue';
 import { api, type HabitatDetail } from '../services/api';
 
 const route = useRoute();
+const { t } = useI18n();
 const habitat = ref<HabitatDetail | null>(null);
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
@@ -31,6 +33,25 @@ function sortByOrder(values: Set<string>, order: string[]) {
     if (indexB === -1) return -1;
     return indexA - indexB;
   });
+}
+
+function timeLabel(value: string): string {
+  const labels: Record<string, string> = {
+    早晨: t('appearance.morning'),
+    中午: t('appearance.noon'),
+    傍晚: t('appearance.evening'),
+    晚上: t('appearance.night')
+  };
+  return labels[value] ?? value;
+}
+
+function weatherLabel(value: string): string {
+  const labels: Record<string, string> = {
+    晴天: t('appearance.sunny'),
+    阴天: t('appearance.cloudy'),
+    雨天: t('appearance.rainy')
+  };
+  return labels[value] ?? value;
 }
 
 const pokemonRows = computed<PokemonRow[]>(() => {
@@ -81,7 +102,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section v-if="!habitat" class="page-stack" aria-busy="true" aria-label="正在加载栖息地详情">
+  <section v-if="!habitat" class="page-stack" aria-busy="true" :aria-label="t('pages.habitats.loadingDetail')">
     <div class="page-header page-header--skeleton" aria-hidden="true">
       <div class="page-header__copy">
         <Skeleton width="132px" />
@@ -127,39 +148,39 @@ onMounted(async () => {
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="habitat.name" subtitle="栖息地详情">
+    <PageHeader :title="habitat.name" :subtitle="t('pages.habitats.detailSubtitle')">
       <template #kicker>Habitat Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">编辑</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">返回列表</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">{{ t('common.edit') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">{{ t('common.backToList') }}</RouterLink>
       </template>
     </PageHeader>
 
     <div class="detail-with-sidebar">
       <div class="habitat-detail-stack">
-        <DetailSection title="配方列表">
+        <DetailSection :title="t('pages.habitats.recipeList')">
           <EntityChips :items="habitat.recipe" />
         </DetailSection>
 
-        <DetailSection title="可能出现的宝可梦">
+        <DetailSection :title="t('pages.habitats.possiblePokemon')">
           <ul class="row-list appearance-list">
             <li v-for="item in pokemonRows" :key="`${item.id}-${item.rarity}`">
               <RouterLink class="appearance-name" :to="`/pokemon/${item.id}`">{{ item.name }}</RouterLink>
               <dl class="appearance-summary">
                 <div>
-                  <dt>时段</dt>
-                  <dd>{{ item.timeOfDays.join(' / ') }}</dd>
+                  <dt>{{ t('appearance.time') }}</dt>
+                  <dd>{{ item.timeOfDays.map(timeLabel).join(' / ') }}</dd>
                 </div>
                 <div>
-                  <dt>天气</dt>
-                  <dd>{{ item.weathers.join(' / ') }}</dd>
+                  <dt>{{ t('appearance.weather') }}</dt>
+                  <dd>{{ item.weathers.map(weatherLabel).join(' / ') }}</dd>
                 </div>
                 <div>
-                  <dt>稀有度</dt>
-                  <dd>{{ item.rarity }} 星</dd>
+                  <dt>{{ t('appearance.rarity') }}</dt>
+                  <dd>{{ t('appearance.stars', { count: item.rarity }) }}</dd>
                 </div>
                 <div>
-                  <dt>出现地图</dt>
+                  <dt>{{ t('appearance.maps') }}</dt>
                   <dd>{{ item.maps.join(' / ') }}</dd>
                 </div>
               </dl>

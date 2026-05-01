@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -9,6 +10,7 @@ import { api, type ConfigType, type Item, type Options, type RecipePayload } fro
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const options = ref<Options | null>(null);
 const itemRows = ref<Item[]>([]);
 const loading = ref(true);
@@ -30,7 +32,11 @@ const resultItemOptions = computed(() =>
     .map((item) => ({ id: item.id, name: item.name }))
 );
 const selectedItemName = computed(() => resultItemOptions.value.find((item) => String(item.id) === recipeForm.value.itemId)?.name ?? '');
-const pageTitle = computed(() => (isEditing.value ? `编辑 ${selectedItemName.value || '材料单'}` : '新增材料单'));
+const pageTitle = computed(() =>
+  isEditing.value
+    ? t('pages.recipes.editTitle', { name: selectedItemName.value || t('pages.recipes.fallbackName') })
+    : t('pages.recipes.newTitle')
+);
 const cancelTo = computed(() => (isEditing.value ? `/recipes/${routeId.value}` : '/recipes'));
 
 function toIds(values: string[]): number[] {
@@ -76,7 +82,7 @@ async function loadEditor() {
       recipeForm.value.itemId = preselectedItemId();
     }
   } catch (error) {
-    message.value = errorText(error, '加载失败');
+    message.value = errorText(error, t('errors.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -104,7 +110,7 @@ async function createMultiOption(selectKey: string, type: ConfigType, name: stri
       values.push(value);
     }
   } catch (error) {
-    message.value = errorText(error, '添加失败');
+    message.value = errorText(error, t('errors.addFailed'));
   } finally {
     creatingSelect.value = '';
   }
@@ -123,7 +129,7 @@ async function saveRecipe() {
     const saved = isEditing.value ? await api.updateRecipe(routeId.value, payload) : await api.createRecipe(payload);
     await router.push(`/recipes/${saved.id}`);
   } catch (error) {
-    message.value = errorText(error, '保存失败');
+    message.value = errorText(error, t('errors.saveFailed'));
   } finally {
     busy.value = false;
   }
@@ -136,10 +142,10 @@ onMounted(() => {
 
 <template>
   <section class="page-stack">
-    <PageHeader :title="pageTitle" subtitle="维护材料单结果物品、入手方式和需要材料。">
+    <PageHeader :title="pageTitle" :subtitle="t('pages.recipes.editSubtitle')">
       <template #kicker>Recipe Edit</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">返回</RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">{{ t('common.back') }}</RouterLink>
       </template>
     </PageHeader>
 
@@ -147,54 +153,54 @@ onMounted(() => {
 
     <form v-if="!loading && options" class="detail-section" @submit.prevent="saveRecipe">
       <div class="field">
-        <label for="recipe-item">物品</label>
+        <label for="recipe-item">{{ t('pages.recipes.item') }}</label>
         <TagsSelect
           id="recipe-item"
           v-model="recipeForm.itemId"
           :options="resultItemOptions"
           :multiple="false"
-          placeholder="请选择"
-          search-placeholder="搜索物品"
+          :placeholder="t('common.select')"
+          :search-placeholder="t('pages.pokemon.searchItems')"
         />
       </div>
 
       <div class="field">
-        <label for="recipe-methods">入手方式</label>
+        <label for="recipe-methods">{{ t('pages.items.acquisitionMethods') }}</label>
         <TagsSelect
           id="recipe-methods"
           v-model="recipeForm.acquisitionMethodIds"
           :options="options.acquisitionMethods"
           allow-create
           :creating="creatingSelect === 'recipe-methods'"
-          placeholder="搜索入手方式"
+          :placeholder="t('pages.items.searchMethods')"
           @create="createMultiOption('recipe-methods', 'acquisition-methods', $event, recipeForm.acquisitionMethodIds)"
         />
       </div>
 
       <div class="field">
-        <label>需要材料</label>
+        <label>{{ t('pages.recipes.materials') }}</label>
         <div v-for="(row, index) in recipeForm.materials" :key="index" class="inline-row">
           <TagsSelect
             :id="`recipe-material-${index}`"
             v-model="row.itemId"
             :options="materialItemOptions"
             :multiple="false"
-            placeholder="请选择"
-            search-placeholder="搜索物品"
+            :placeholder="t('common.select')"
+            :search-placeholder="t('pages.pokemon.searchItems')"
           />
-          <input v-model.number="row.quantity" aria-label="数量" type="number" min="1" />
-          <button type="button" @click="recipeForm.materials.splice(index, 1)">删除</button>
+          <input v-model.number="row.quantity" :aria-label="t('common.quantity')" type="number" min="1" />
+          <button type="button" @click="recipeForm.materials.splice(index, 1)">{{ t('common.delete') }}</button>
         </div>
-        <button type="button" class="plain-button" @click="addRecipeMaterial">添加材料</button>
+        <button type="button" class="plain-button" @click="addRecipeMaterial">{{ t('pages.recipes.addMaterial') }}</button>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="link-button" :disabled="busy">{{ busy ? '保存中' : '保存' }}</button>
-        <RouterLink class="plain-button" :to="cancelTo">取消</RouterLink>
+        <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+        <RouterLink class="plain-button" :to="cancelTo">{{ t('common.cancel') }}</RouterLink>
       </div>
     </form>
 
-    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" aria-label="正在加载材料单编辑内容">
+    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.recipes.loadingEdit')">
       <div v-for="index in 4" :key="index" class="field">
         <Skeleton :width="index === 1 ? '52px' : '88px'" />
         <Skeleton variant="box" height="44px" />

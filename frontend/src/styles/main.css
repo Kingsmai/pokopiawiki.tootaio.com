@@ -1061,24 +1061,8 @@ button:disabled,
   bottom: -2px;
 }
 
-.reorderable-list-move,
-.reorderable-list-enter-active,
-.reorderable-list-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-
-.reorderable-list-enter-from,
-.reorderable-list-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.reorderable-list-leave-active {
-  position: absolute;
-  right: 0;
-  left: 0;
+.reorderable-list-move {
+  transition: transform 0.18s ease;
 }
 
 .drag-handle {
@@ -1132,15 +1116,11 @@ button:disabled,
 @media (prefers-reduced-motion: reduce) {
   .reorderable-row,
   .reorderable-list-move,
-  .reorderable-list-enter-active,
-  .reorderable-list-leave-active,
   .drag-handle {
     transition: none;
   }
 
   .reorderable-row.is-dragging,
-  .reorderable-list-enter-from,
-  .reorderable-list-leave-to,
   .drag-handle:active {
     transform: none;
   }

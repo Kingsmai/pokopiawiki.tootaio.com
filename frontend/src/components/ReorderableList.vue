@@ -5,10 +5,12 @@ const props = withDefaults(defineProps<{
   items: T[];
   itemKey: (item: T) => string | number;
   itemLabel: (item: T) => string;
+  listKeyPrefix?: string;
   disabled?: boolean;
   handleLabel: (name: string) => string;
   handleTitle: string;
 }>(), {
+  listKeyPrefix: '',
   disabled: false
 });
 
@@ -26,6 +28,10 @@ const dropCommitted = ref(false);
 
 function keyFor(item: T): string | number {
   return props.itemKey(item);
+}
+
+function transitionKeyFor(item: T): string {
+  return props.listKeyPrefix ? `${props.listKeyPrefix}:${String(keyFor(item))}` : String(keyFor(item));
 }
 
 function sameKey(first: string | number, second: string | number): boolean {
@@ -181,7 +187,7 @@ function handleKeydown(item: T, event: KeyboardEvent) {
   <TransitionGroup name="reorderable-list" tag="ul" class="row-list reorderable-list">
     <li
       v-for="item in items"
-      :key="keyFor(item)"
+      :key="transitionKeyFor(item)"
       class="reorderable-row"
       :class="{
         'is-dragging': draggingKey === keyFor(item),

@@ -12,6 +12,7 @@ import Tabs, { type TabOption } from '../components/Tabs.vue';
 import {
   iconAdd,
   iconCancel,
+  iconChevronDown,
   iconComment,
   iconDelete,
   iconEdit,
@@ -22,7 +23,8 @@ import {
   iconReactionThanks,
   iconReply,
   iconSave,
-  iconSearch
+  iconSearch,
+  iconWarning
 } from '../icons';
 import {
   api,
@@ -65,6 +67,8 @@ const reactionErrors = ref<Record<number, string>>({});
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
 const loadMoreSentinel = ref<HTMLElement | null>(null);
 const lifePostPageSize = 20;
+const bodyMaxLength = 2000;
+const commentMaxLength = 1000;
 const skeletonPostCount = 3;
 const loadingMoreSkeletonCount = 2;
 let removeAuthListener: (() => void) | null = null;
@@ -83,7 +87,7 @@ const reactionOptions = [
 ] as const satisfies ReadonlyArray<{ type: LifeReactionType; icon: string; labelKey: string }>;
 
 const canPost = computed(() => currentUser.value?.emailVerified === true);
-const charactersLeft = computed(() => Math.max(0, 2000 - body.value.length));
+const charactersLeft = computed(() => Math.max(0, bodyMaxLength - body.value.length));
 const isEditing = computed(() => editingPostId.value !== null);
 const searchQuery = computed(() => submittedSearch.value.trim());
 const selectedFeedTagId = computed(() => {
@@ -220,6 +224,25 @@ function submitSearch() {
 
   submittedSearch.value = nextSearch;
   void loadPosts();
+}
+
+function clearSearch() {
+  const hadSubmittedSearch = Boolean(submittedSearch.value);
+  if (!searchDraft.value && !hadSubmittedSearch) {
+    return;
+  }
+
+  searchDraft.value = '';
+  submittedSearch.value = '';
+
+  if (hadSubmittedSearch) {
+    void loadPosts();
+  }
+}
+
+function retryLoadMore() {
+  loadMorePaused.value = false;
+  void loadMorePosts();
 }
 
 function matchesCurrentFilters(post: LifePost) {
@@ -391,6 +414,10 @@ function canUseReactions() {
   return canPost.value && reactionBusyPostId.value === null;
 }
 
+function closeReactionPicker() {
+  reactionPickerPostId.value = null;
+}
+
 function toggleReactionPicker(postId: number) {
   if (!canUseReactions()) {
     return;
@@ -398,6 +425,22 @@ function toggleReactionPicker(postId: number) {
 
   clearReactionError(postId);
   reactionPickerPostId.value = reactionPickerPostId.value === postId ? null : postId;
+}
+
+function closeReactionPickerFromDocument(event: MouseEvent) {
+  if (reactionPickerPostId.value === null || !(event.target instanceof Element)) {
+    return;
+  }
+
+  if (!event.target.closest('.life-reactions')) {
+    closeReactionPicker();
+  }
+}
+
+function closeReactionPickerFromKeyboard(event: KeyboardEvent) {
+  if (event.key === 'Escape' && reactionPickerPostId.value !== null) {
+    closeReactionPicker();
+  }
 }
 
 function handleReactionContextMenu(event: MouseEvent, postId: number) {
@@ -616,6 +659,8 @@ watch(locale, () => {
 });
 
 onMounted(() => {
+  document.addEventListener('click', closeReactionPickerFromDocument);
+  document.addEventListener('keydown', closeReactionPickerFromKeyboard);
   void loadCurrentUser();
   void loadLifeTags();
   void loadPosts();
@@ -626,6 +671,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  document.removeEventListener('click', closeReactionPickerFromDocument);
+  document.removeEventListener('keydown', closeReactionPickerFromKeyboard);
   disconnectFeedObserver();
   removeAuthListener?.();
 });
@@ -638,10 +685,21 @@ onUnmounted(() => {
     </PageHeader>
 
     <FilterPanel class="life-toolbar">
-      <form class="life-toolbar__search" @submit.prevent="submitSearch">
-        <div class="field">
+      <form class="life-toolbar__search" role="search" @submit.prevent="submitSearch">
+        <div class="field life-toolbar__field">
           <label for="life-search">{{ t('pages.life.search') }}</label>
-          <input id="life-search" v-model="searchDraft" type="search" :placeholder="t('pages.life.searchPlaceholder')" />
+          <div class="life-search-control">
+            <input id="life-search" v-model="searchDraft" type="search" :placeholder="t('pages.life.searchPlaceholder')" />
+            <button
+              v-if="searchDraft || submittedSearch"
+              class="life-search-control__clear"
+              type="button"
+              :aria-label="t('pages.life.clearSearch')"
+              @click="clearSearch"
+            >
+              <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <button class="ui-button ui-button--ghost" type="submit">
           <Icon :icon="iconSearch" class="ui-icon" aria-hidden="true" />
@@ -681,7 +739,7 @@ onUnmounted(() => {
             id="life-post-body"
             ref="bodyInput"
             v-model="body"
-            maxlength="2000"
+            :maxlength="bodyMaxLength"
             :placeholder="t('pages.life.bodyPlaceholder')"
             required
           ></textarea>
@@ -771,31 +829,44 @@ onUnmounted(() => {
           <div class="life-post__engagement">
             <div class="life-post__engagement-actions">
               <div class="life-reactions">
-                <button
-                  class="life-post__engagement-button life-reaction-trigger"
-                  :class="{ 'is-active': post.myReaction !== null }"
-                  type="button"
-                  :aria-controls="`life-reactions-${post.id}`"
-                  :aria-expanded="reactionPickerPostId === post.id"
-                  :aria-label="reactionButtonLabel(post)"
-                  :aria-describedby="`life-reaction-tooltip-${post.id}`"
-                  :disabled="!canPost || reactionBusyPostId !== null"
-                  @click="toggleDefaultReaction(post)"
-                  @contextmenu="handleReactionContextMenu($event, post.id)"
-                  @keydown="handleReactionKeydown($event, post.id)"
-                >
-                  <Icon :icon="reactionIcon(post.myReaction)" class="ui-icon" aria-hidden="true" />
-                  <span :id="`life-reaction-tooltip-${post.id}`" class="life-reaction-tooltip" role="tooltip">
-                    {{ reactionButtonLabel(post) }}
-                  </span>
-                </button>
+                <div class="life-reaction-control">
+                  <button
+                    class="life-post__engagement-button life-reaction-trigger"
+                    :class="{ 'is-active': post.myReaction !== null }"
+                    type="button"
+                    :aria-controls="`life-reactions-${post.id}`"
+                    :aria-expanded="reactionPickerPostId === post.id"
+                    :aria-label="reactionButtonLabel(post)"
+                    :disabled="!canPost || reactionBusyPostId !== null"
+                    @click="toggleDefaultReaction(post)"
+                    @contextmenu="handleReactionContextMenu($event, post.id)"
+                    @keydown="handleReactionKeydown($event, post.id)"
+                  >
+                    <Icon :icon="reactionIcon(post.myReaction)" class="ui-icon" aria-hidden="true" />
+                    <span class="life-reaction-trigger__label">{{ reactionButtonLabel(post) }}</span>
+                  </button>
+
+                  <button
+                    class="life-reaction-menu-button"
+                    type="button"
+                    :aria-controls="`life-reactions-${post.id}`"
+                    :aria-expanded="reactionPickerPostId === post.id"
+                    :aria-label="t('pages.life.chooseReaction')"
+                    :disabled="!canPost || reactionBusyPostId !== null"
+                    @click="toggleReactionPicker(post.id)"
+                    @contextmenu="handleReactionContextMenu($event, post.id)"
+                    @keydown="handleReactionKeydown($event, post.id)"
+                  >
+                    <Icon :icon="iconChevronDown" class="ui-icon" aria-hidden="true" />
+                  </button>
+                </div>
 
                 <div
                   v-if="reactionPickerPostId === post.id && canPost"
                   :id="`life-reactions-${post.id}`"
                   class="life-reaction-picker"
                   role="group"
-                  :aria-label="t('pages.life.reactions')"
+                  :aria-label="t('pages.life.reactionMenu')"
                 >
                   <button
                     v-for="option in reactionOptions"
@@ -805,18 +876,11 @@ onUnmounted(() => {
                     type="button"
                     :aria-pressed="post.myReaction === option.type"
                     :aria-label="reactionOptionLabel(post, option.type)"
-                    :aria-describedby="`life-reaction-option-tooltip-${post.id}-${option.type}`"
                     :disabled="isReactionBusy(post.id)"
                     @click="toggleReaction(post, option.type)"
                   >
                     <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
-                    <span
-                      :id="`life-reaction-option-tooltip-${post.id}-${option.type}`"
-                      class="life-reaction-tooltip"
-                      role="tooltip"
-                    >
-                      {{ reactionOptionLabel(post, option.type) }}
-                    </span>
+                    <span>{{ reactionLabel(option.type) }}</span>
                   </button>
                 </div>
               </div>
@@ -883,7 +947,7 @@ onUnmounted(() => {
                 <textarea
                   :id="`life-comment-${post.id}`"
                   v-model="commentBodies[post.id]"
-                  maxlength="1000"
+                  :maxlength="commentMaxLength"
                   :placeholder="t('pages.life.commentPlaceholder')"
                 ></textarea>
               </div>
@@ -946,7 +1010,7 @@ onUnmounted(() => {
                         <textarea
                           :id="`life-reply-${comment.id}`"
                           v-model="replyBodies[comment.id]"
-                          maxlength="1000"
+                          :maxlength="commentMaxLength"
                           :placeholder="t('pages.life.commentReplyPlaceholder')"
                         ></textarea>
                       </div>
@@ -1015,9 +1079,29 @@ onUnmounted(() => {
         </article>
 
         <div v-if="hasMorePosts" ref="loadMoreSentinel" class="life-feed__sentinel" aria-hidden="true"></div>
+        <div v-if="loadMorePaused && hasMorePosts" class="life-feed__retry">
+          <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="retryLoadMore">
+            <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.life.retryFeed') }}
+          </button>
+        </div>
       </div>
 
-      <p v-else class="status">{{ searchQuery ? t('pages.life.searchEmpty') : t('pages.life.empty') }}</p>
+      <div v-else class="life-empty">
+        <Icon :icon="searchQuery ? iconSearch : iconLife" class="life-empty__icon" aria-hidden="true" />
+        <div class="life-empty__copy">
+          <h2>{{ searchQuery ? t('pages.life.searchEmpty') : t('pages.life.empty') }}</h2>
+          <p>{{ searchQuery ? t('pages.life.searchEmptyHint') : t('pages.life.emptyHint') }}</p>
+        </div>
+        <button v-if="searchQuery" class="ui-button ui-button--ghost" type="button" @click="clearSearch">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.life.clearSearch') }}
+        </button>
+        <button v-else class="ui-button ui-button--primary" :disabled="!authReady" type="button" @click="openCreatePostModal">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.life.newPost') }}
+        </button>
+      </div>
     </section>
   </section>
 </template>

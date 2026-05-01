@@ -1189,13 +1189,51 @@ button:disabled,
 .life-toolbar {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
+  gap: 16px;
 }
 
 .life-toolbar__search {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   align-items: end;
   gap: 10px;
+  min-width: 0;
+}
+
+.life-toolbar__field {
+  min-width: 0;
+}
+
+.life-search-control {
+  position: relative;
+}
+
+.life-search-control input {
+  padding-right: 48px;
+}
+
+.life-search-control__clear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  min-height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.life-search-control__clear:hover {
+  background: color-mix(in srgb, var(--pokemon-blue) 9%, transparent);
+  color: var(--pokemon-blue-deep);
+}
+
+.life-search-control__clear .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .life-toolbar__actions {
@@ -1251,8 +1289,23 @@ button:disabled,
   gap: 14px;
 }
 
+.life-feed {
+  display: grid;
+}
+
+.life-feed__list {
+  width: min(100%, 920px);
+  justify-self: center;
+}
+
 .life-feed__sentinel {
   min-height: 1px;
+}
+
+.life-feed__retry {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 8px;
 }
 
 .life-form__counter {
@@ -1288,6 +1341,8 @@ button:disabled,
 }
 
 .life-post {
+  gap: 16px;
+  padding: 18px;
   box-shadow: var(--shadow-soft);
 }
 
@@ -1345,8 +1400,10 @@ button:disabled,
 }
 
 .life-post__body {
+  max-width: 72ch;
   margin: 0;
   color: var(--ink);
+  font-size: 16px;
   line-height: 1.65;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -1381,8 +1438,8 @@ button:disabled,
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding-top: 8px;
+  gap: 10px 14px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 
@@ -1411,6 +1468,10 @@ button:disabled,
   color: var(--ink-soft);
   font-weight: 900;
   cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
 }
 
 .life-post__engagement-button:hover,
@@ -1435,11 +1496,49 @@ button:disabled,
   position: relative;
 }
 
+.life-reaction-control {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+
 .life-reaction-trigger {
   position: relative;
+  min-width: 96px;
+  justify-content: flex-start;
+  padding: 7px 10px;
+}
+
+.life-reaction-trigger__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.life-reaction-menu-button {
   width: 44px;
-  justify-content: center;
-  padding: 7px;
+  min-height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.life-reaction-menu-button:hover,
+.life-reaction-menu-button[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--pokemon-blue) 10%, var(--surface-soft));
+  color: var(--pokemon-blue-deep);
+}
+
+.life-post__engagement-button:disabled,
+.life-reaction-menu-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
 }
 
 .life-reaction-picker {
@@ -1447,10 +1546,10 @@ button:disabled,
   z-index: 10;
   top: calc(100% + 6px);
   left: 0;
-  width: max-content;
+  width: min(280px, calc(100vw - 48px));
   max-width: calc(100vw - 48px);
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 8px;
   border: 2px solid var(--line-strong);
@@ -1461,18 +1560,27 @@ button:disabled,
 
 .life-reaction-option {
   position: relative;
-  width: 44px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 7px;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--surface-soft);
   color: var(--ink-soft);
+  font-size: 14px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.life-reaction-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .life-reaction-option:hover,
@@ -1564,6 +1672,8 @@ button:disabled,
 .life-comments {
   display: grid;
   gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .life-comments__header {
@@ -1596,6 +1706,7 @@ button:disabled,
 .life-comment-form {
   display: grid;
   gap: 8px;
+  max-width: 760px;
 }
 
 .life-comment-form textarea {
@@ -1700,11 +1811,12 @@ button:disabled,
 }
 
 .life-comment__link-button {
-  min-height: 32px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--pokemon-blue);
   font-size: 13px;
@@ -1713,8 +1825,8 @@ button:disabled,
 }
 
 .life-comment__link-button:hover {
+  background: color-mix(in srgb, var(--pokemon-blue) 9%, transparent);
   color: var(--pokemon-blue-deep);
-  text-decoration: underline;
 }
 
 .life-comment__link-button .ui-icon {
@@ -1724,6 +1836,49 @@ button:disabled,
 
 .life-comments__empty {
   margin: 0;
+}
+
+.life-empty {
+  width: min(100%, 680px);
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px 20px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+  text-align: center;
+}
+
+.life-empty__icon {
+  width: 38px;
+  height: 38px;
+  color: var(--pokemon-blue);
+}
+
+.life-empty__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.life-empty__copy h2,
+.life-empty__copy p {
+  margin: 0;
+}
+
+.life-empty__copy h2 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.life-empty__copy p {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .reorderable-row {
@@ -1823,12 +1978,19 @@ button:disabled,
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .life-page .ui-button,
+  .life-post__engagement-button,
+  .life-reaction-menu-button,
+  .life-reaction-option,
+  .life-reaction-tooltip,
+  .life-search-control__clear,
   .reorderable-row,
   .reorderable-list-move,
   .drag-handle {
     transition: none;
   }
 
+  .life-page .ui-button:hover,
   .reorderable-row.is-dragging,
   .drag-handle:active {
     transform: none;
@@ -2910,7 +3072,47 @@ button:disabled,
     width: 100%;
   }
 
+  .life-feed__list {
+    width: 100%;
+  }
+
+  .life-post {
+    padding: 16px;
+  }
+
+  .life-post__engagement {
+    align-items: stretch;
+  }
+
+  .life-post__engagement-actions,
   .life-post__metrics {
+    width: 100%;
+  }
+
+  .life-post__engagement-actions {
+    align-items: stretch;
+  }
+
+  .life-reactions,
+  .life-reaction-control {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .life-reaction-trigger {
+    flex: 1 1 auto;
+  }
+
+  .life-reaction-picker {
+    width: min(100%, calc(100vw - 64px));
+    grid-template-columns: 1fr;
+  }
+
+  .life-post__metrics {
+    justify-content: flex-start;
+  }
+
+  .life-reaction-summary {
     justify-content: flex-start;
   }
 

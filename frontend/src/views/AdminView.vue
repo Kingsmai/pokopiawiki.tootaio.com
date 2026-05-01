@@ -106,6 +106,16 @@ const checklistKey = (item: DailyChecklistItem) => item.id;
 const checklistLabel = (item: DailyChecklistItem) => item.title;
 const languageKey = (item: Language) => item.code;
 const languageLabel = (item: Language) => item.name;
+const configKey = (item: EditableConfig) => item.id;
+const configLabel = (item: EditableConfig) => item.name;
+const pokemonKey = (item: Pokemon) => item.id;
+const pokemonLabel = (item: Pokemon) => `#${item.id} ${item.name}`;
+const itemKey = (item: Item) => item.id;
+const itemLabel = (item: Item) => item.name;
+const recipeKey = (item: Recipe) => item.id;
+const recipeLabel = (item: Recipe) => item.name;
+const habitatKey = (item: Habitat) => item.id;
+const habitatLabel = (item: Habitat) => item.name;
 
 function dragSortLabel(name: string) {
   return t('pages.admin.dragSort', { name });
@@ -203,6 +213,26 @@ function previewLanguageOrder(rows: Language[]) {
   languageRows.value = rows;
 }
 
+function previewConfigOrder(rows: EditableConfig[]) {
+  configRows.value = rows;
+}
+
+function previewPokemonOrder(rows: Pokemon[]) {
+  pokemonRows.value = rows;
+}
+
+function previewItemOrder(rows: Item[]) {
+  itemRows.value = rows;
+}
+
+function previewRecipeOrder(rows: Recipe[]) {
+  recipeRows.value = rows;
+}
+
+function previewHabitatOrder(rows: Habitat[]) {
+  habitatRows.value = rows;
+}
+
 async function persistChecklistOrder(nextRows: DailyChecklistItem[], fallbackRows: DailyChecklistItem[]) {
   checklistRows.value = nextRows;
   await run(async () => {
@@ -223,6 +253,66 @@ async function persistLanguageOrder(nextRows: Language[], fallbackRows: Language
       setCurrentLocale(getCurrentLocale());
     } catch (error) {
       languageRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
+async function persistConfigOrder(nextRows: EditableConfig[], fallbackRows: EditableConfig[]) {
+  configRows.value = nextRows;
+  await run(async () => {
+    try {
+      configRows.value = (await api.reorderConfig(activeConfigType.value, nextRows.map((item) => item.id))) as EditableConfig[];
+    } catch (error) {
+      configRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
+async function persistPokemonOrder(nextRows: Pokemon[], fallbackRows: Pokemon[]) {
+  pokemonRows.value = nextRows;
+  await run(async () => {
+    try {
+      pokemonRows.value = await api.reorderPokemon(nextRows.map((item) => item.id));
+    } catch (error) {
+      pokemonRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
+async function persistItemOrder(nextRows: Item[], fallbackRows: Item[]) {
+  itemRows.value = nextRows;
+  await run(async () => {
+    try {
+      itemRows.value = await api.reorderItems(nextRows.map((item) => item.id));
+    } catch (error) {
+      itemRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
+async function persistRecipeOrder(nextRows: Recipe[], fallbackRows: Recipe[]) {
+  recipeRows.value = nextRows;
+  await run(async () => {
+    try {
+      recipeRows.value = await api.reorderRecipes(nextRows.map((item) => item.id));
+    } catch (error) {
+      recipeRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
+async function persistHabitatOrder(nextRows: Habitat[], fallbackRows: Habitat[]) {
+  habitatRows.value = nextRows;
+  await run(async () => {
+    try {
+      habitatRows.value = await api.reorderHabitats(nextRows.map((item) => item.id));
+    } catch (error) {
+      habitatRows.value = fallbackRows;
       throw error;
     }
   });
@@ -516,15 +606,28 @@ onMounted(() => {
       </form>
 
       <h3 class="section-subtitle">{{ selectedConfig.label }}</h3>
-      <ul v-if="configRows.length" class="row-list">
-        <li v-for="item in configRows" :key="item.id">
-          <span>{{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span></span>
-          <span class="row-actions">
-            <button type="button" @click="editConfig(item)">{{ t('common.edit') }}</button>
-            <button type="button" @click="removeConfig(item.id)">{{ t('common.delete') }}</button>
+      <ReorderableList
+        v-if="configRows.length"
+        :items="configRows"
+        :item-key="configKey"
+        :item-label="configLabel"
+        :disabled="busy"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewConfigOrder"
+        @cancel="previewConfigOrder"
+        @reorder="persistConfigOrder"
+      >
+        <template #default="{ item }">
+          <span class="reorderable-row-title">
+            {{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span>
           </span>
-        </li>
-      </ul>
+          <span class="row-actions">
+            <button type="button" :disabled="busy" @click="editConfig(item)">{{ t('common.edit') }}</button>
+            <button type="button" :disabled="busy" @click="removeConfig(item.id)">{{ t('common.delete') }}</button>
+          </span>
+        </template>
+      </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
@@ -582,53 +685,97 @@ onMounted(() => {
 
     <section v-else-if="canEdit && activeTab === 'pokemon'" class="detail-section">
       <h2>{{ t('pages.admin.pokemonList') }}</h2>
-      <ul v-if="pokemonRows.length" class="row-list">
-        <li v-for="item in pokemonRows" :key="item.id">
+      <ReorderableList
+        v-if="pokemonRows.length"
+        :items="pokemonRows"
+        :item-key="pokemonKey"
+        :item-label="pokemonLabel"
+        :disabled="busy"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewPokemonOrder"
+        @cancel="previewPokemonOrder"
+        @reorder="persistPokemonOrder"
+      >
+        <template #default="{ item }">
           <RouterLink :to="`/pokemon/${item.id}`">#{{ item.id }} {{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removePokemon(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removePokemon(item.id)">{{ t('common.delete') }}</button>
           </span>
-        </li>
-      </ul>
+        </template>
+      </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'items'" class="detail-section">
       <h2>{{ t('pages.admin.itemList') }}</h2>
-      <ul v-if="itemRows.length" class="row-list">
-        <li v-for="item in itemRows" :key="item.id">
+      <ReorderableList
+        v-if="itemRows.length"
+        :items="itemRows"
+        :item-key="itemKey"
+        :item-label="itemLabel"
+        :disabled="busy"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewItemOrder"
+        @cancel="previewItemOrder"
+        @reorder="persistItemOrder"
+      >
+        <template #default="{ item }">
           <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removeItem(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removeItem(item.id)">{{ t('common.delete') }}</button>
           </span>
-        </li>
-      </ul>
+        </template>
+      </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'recipes'" class="detail-section">
       <h2>{{ t('pages.admin.recipeList') }}</h2>
-      <ul v-if="recipeRows.length" class="row-list">
-        <li v-for="item in recipeRows" :key="item.id">
+      <ReorderableList
+        v-if="recipeRows.length"
+        :items="recipeRows"
+        :item-key="recipeKey"
+        :item-label="recipeLabel"
+        :disabled="busy"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewRecipeOrder"
+        @cancel="previewRecipeOrder"
+        @reorder="persistRecipeOrder"
+      >
+        <template #default="{ item }">
           <RouterLink :to="`/recipes/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removeRecipe(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removeRecipe(item.id)">{{ t('common.delete') }}</button>
           </span>
-        </li>
-      </ul>
+        </template>
+      </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'habitats'" class="detail-section">
       <h2>{{ t('pages.admin.habitatList') }}</h2>
-      <ul v-if="habitatRows.length" class="row-list">
-        <li v-for="item in habitatRows" :key="item.id">
+      <ReorderableList
+        v-if="habitatRows.length"
+        :items="habitatRows"
+        :item-key="habitatKey"
+        :item-label="habitatLabel"
+        :disabled="busy"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewHabitatOrder"
+        @cancel="previewHabitatOrder"
+        @reorder="persistHabitatOrder"
+      >
+        <template #default="{ item }">
           <RouterLink :to="`/habitats/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" @click="removeHabitat(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removeHabitat(item.id)">{{ t('common.delete') }}</button>
           </span>
-        </li>
-      </ul>
+        </template>
+      </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
   </section>

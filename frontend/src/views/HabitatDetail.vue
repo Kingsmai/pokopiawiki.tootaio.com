@@ -92,7 +92,7 @@ const pokemonRows = computed<PokemonRow[]>(() => {
     timeOfDays: sortByOrder(row.timeOfDays, timeOfDays),
     weathers: sortByOrder(row.weathers, weathers),
     rarity: row.rarity,
-    maps: [...row.maps].sort((a, b) => a.localeCompare(b))
+    maps: [...row.maps]
   }));
 });
 

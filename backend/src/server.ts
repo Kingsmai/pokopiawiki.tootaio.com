@@ -32,8 +32,13 @@ import {
   listLanguages,
   listPokemon,
   listRecipes,
+  reorderConfig,
   reorderDailyChecklistItems,
+  reorderHabitats,
+  reorderItems,
   reorderLanguages,
+  reorderPokemon,
+  reorderRecipes,
   updateConfig,
   updateDailyChecklistItem,
   updateHabitat,
@@ -391,6 +396,26 @@ app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 
+app.put('/api/admin/pokemon/order', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reorderPokemon(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
+});
+
+app.put('/api/admin/items/order', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reorderItems(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
+});
+
+app.put('/api/admin/recipes/order', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reorderRecipes(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
+});
+
+app.put('/api/admin/habitats/order', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reorderHabitats(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
+});
+
 app.get('/api/admin/languages', async (request, reply) => {
   const user = await requireVerifiedUser(request, reply);
   return user ? listLanguages(true) : undefined;
@@ -449,6 +474,18 @@ app.post('/api/admin/config/:type', async (request, reply) => {
   return reply
     .code(201)
     .send(await createConfig(type, request.body as Record<string, unknown>, user.id, requestLocale(request)));
+});
+
+app.put('/api/admin/config/:type/order', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { type } = request.params as { type: string };
+  if (!isConfigType(type)) {
+    return reply.code(404).send({ message: 'Not found' });
+  }
+  return reorderConfig(type, request.body as Record<string, unknown>, user.id, requestLocale(request));
 });
 
 app.put('/api/admin/config/:type/:id', async (request, reply) => {

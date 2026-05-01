@@ -94,7 +94,7 @@ const habitatRows = computed<HabitatRow[]>(() => {
     timeOfDays: sortByOrder(row.timeOfDays, timeOfDays),
     weathers: sortByOrder(row.weathers, weathers),
     rarity: row.rarity,
-    maps: [...row.maps].sort((a, b) => a.localeCompare(b))
+    maps: [...row.maps]
   }));
 });
 const skillDropRows = computed(() => pokemon.value?.skills.filter((skill) => skill.itemDrop) ?? []);
@@ -105,9 +105,7 @@ const itemCategoryTabs = computed<TabOption[]>(() => {
     categories.set(String(item.category.id), item.category.name);
   });
 
-  const tabs = [...categories.entries()]
-    .sort(([, nameA], [, nameB]) => nameA.localeCompare(nameB))
-    .map(([value, label]) => ({ value, label }));
+  const tabs = [...categories.entries()].map(([value, label]) => ({ value, label }));
 
   return tabs.length > 1 ? [{ value: '', label: t('common.all') }, ...tabs] : [];
 });

@@ -37,6 +37,11 @@ type ConfigDefinition = {
   entityType: EntityType;
   hasItemDrop?: boolean;
 };
+type SortableContentType = 'pokemon' | 'items' | 'recipes' | 'habitats';
+type SortableContentDefinition = {
+  table: string;
+  entityType: SortableContentType;
+};
 
 type IdQuantity = {
   itemId: number;
@@ -155,6 +160,13 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'item-usages': { table: 'item_usages', entityType: 'item-usages' },
   'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
   maps: { table: 'maps', entityType: 'maps' }
+};
+
+const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
+  pokemon: { table: 'pokemon', entityType: 'pokemon' },
+  items: { table: 'items', entityType: 'items' },
+  recipes: { table: 'recipes', entityType: 'recipes' },
+  habitats: { table: 'habitats', entityType: 'habitats' }
 };
 
 function asString(value: QueryValue): string | undefined {
@@ -302,12 +314,12 @@ function optionSelect(
   locale: string
 ): Promise<Array<{ id: number; name: string }>> {
   const name = localizedName(entityType, 'o', locale);
-  return query(`SELECT o.id, ${name} AS name FROM ${tableName} o ORDER BY ${name}`);
+  return query(`SELECT o.id, ${name} AS name FROM ${tableName} o ORDER BY ${orderByEntity('o')}`);
 }
 
 function skillOptions(locale: string): Promise<Array<{ id: number; name: string; hasItemDrop: boolean }>> {
   const name = localizedName('skills', 's', locale);
-  return query(`SELECT s.id, ${name} AS name, s.has_item_drop AS "hasItemDrop" FROM skills s ORDER BY ${name}`);
+  return query(`SELECT s.id, ${name} AS name, s.has_item_drop AS "hasItemDrop" FROM skills s ORDER BY ${orderByEntity('s')}`);
 }
 
 function auditSelect(entityAlias: string, createdAlias = 'created_user', updatedAlias = 'updated_user'): string {
@@ -332,8 +344,8 @@ function auditJoins(entityAlias: string, createdAlias = 'created_user', updatedA
   `;
 }
 
-function configOrder(definition: ConfigDefinition, locale: string): string {
-  return localizedName(definition.entityType, 'c', locale);
+function configOrder(): string {
+  return orderByEntity('c');
 }
 
 function configSelect(definition: ConfigDefinition, locale: string): string {
@@ -397,6 +409,10 @@ function cleanOptions(value: unknown, allowedValues: string[]): string[] {
   return [...new Set(values.map((item) => String(item ?? '')).filter((item) => allowedValues.includes(item)))];
 }
 
+function orderByEntity(entityAlias: string): string {
+  return `${entityAlias}.sort_order, ${entityAlias}.id`;
+}
+
 async function withTransaction<T>(callback: (client: DbClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
 
@@ -410,6 +426,42 @@ async function withTransaction<T>(callback: (client: DbClient) => Promise<T>): P
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function nextSortOrder(client: DbClient, tableName: string): Promise<number> {
+  const result = await client.query<{ sortOrder: number }>(
+    `SELECT COALESCE(MAX(sort_order), 0) + 10 AS "sortOrder" FROM ${tableName}`
+  );
+  return result.rows[0]?.sortOrder ?? 10;
+}
+
+async function reorderTableRows(
+  client: DbClient,
+  tableName: string,
+  entityType: string,
+  ids: number[],
+  userId: number
+): Promise<void> {
+  const existing = await client.query<{ id: number }>(
+    `SELECT id FROM ${tableName} WHERE id = ANY($1::integer[])`,
+    [ids]
+  );
+
+  if (existing.rowCount !== ids.length) {
+    throw validationError('Record does not exist');
+  }
+
+  for (const [index, id] of ids.entries()) {
+    await client.query(
+      `
+        UPDATE ${tableName}
+        SET sort_order = $1, updated_by_user_id = $2, updated_at = now()
+        WHERE id = $3
+      `,
+      [(index + 1) * 10, userId, id]
+    );
+    await recordEditLog(client, entityType, id, 'update', userId);
   }
 }
 
@@ -813,13 +865,13 @@ function pokemonProjection(locale: string): string {
       ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
       json_build_object('id', e.id, 'name', ${environmentName}) AS environment,
       COALESCE((
-        SELECT json_agg(json_build_object('id', s.id, 'name', ${skillName}, 'hasItemDrop', s.has_item_drop) ORDER BY ${skillName})
+        SELECT json_agg(json_build_object('id', s.id, 'name', ${skillName}, 'hasItemDrop', s.has_item_drop) ORDER BY ${orderByEntity('s')})
         FROM pokemon_skills ps
         JOIN skills s ON s.id = ps.skill_id
         WHERE ps.pokemon_id = p.id
       ), '[]'::json) AS skills,
       COALESCE((
-        SELECT json_agg(json_build_object('id', ft.id, 'name', ${favoriteThingName}) ORDER BY ${favoriteThingName})
+        SELECT json_agg(json_build_object('id', ft.id, 'name', ${favoriteThingName}) ORDER BY ${orderByEntity('ft')})
         FROM pokemon_favorite_things pft
         JOIN favorite_things ft ON ft.id = pft.favorite_thing_id
         WHERE pft.pokemon_id = p.id
@@ -1004,7 +1056,7 @@ export async function listConfig(type: ConfigType, locale = defaultLocale) {
       SELECT ${configSelect(definition, locale)}, ${auditSelect('c')}
       FROM ${definition.table} c
       ${auditJoins('c')}
-      ORDER BY ${configOrder(definition, locale)}
+      ORDER BY ${configOrder()}
     `
   );
 }
@@ -1029,22 +1081,23 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
 
   const id = await withTransaction(async (client) => {
+    const sortOrder = await nextSortOrder(client, definition.table);
     const result = definition.hasItemDrop
       ? await client.query<{ id: number }>(
           `
-            INSERT INTO ${definition.table} (name, has_item_drop, created_by_user_id, updated_by_user_id)
-            VALUES ($1, $2, $3, $3)
+            INSERT INTO ${definition.table} (name, has_item_drop, sort_order, created_by_user_id, updated_by_user_id)
+            VALUES ($1, $2, $3, $4, $4)
             RETURNING id
           `,
-          [name, hasItemDrop, userId]
+          [name, hasItemDrop, sortOrder, userId]
         )
       : await client.query<{ id: number }>(
           `
-            INSERT INTO ${definition.table} (name, created_by_user_id, updated_by_user_id)
-            VALUES ($1, $2, $2)
+            INSERT INTO ${definition.table} (name, sort_order, created_by_user_id, updated_by_user_id)
+            VALUES ($1, $2, $3, $3)
             RETURNING id
           `,
-          [name, userId]
+          [name, sortOrder, userId]
         );
 
     const createdId = result.rows[0].id;
@@ -1054,6 +1107,20 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
   });
 
   return getConfigById(type, id, locale);
+}
+
+export async function reorderConfig(type: ConfigType, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const definition = configDefinitions[type];
+  const ids = cleanIds(payload.ids);
+  if (ids.length === 0) {
+    throw validationError('Please select a record');
+  }
+
+  await withTransaction(async (client) => {
+    await reorderTableRows(client, definition.table, type, ids, userId);
+  });
+
+  return listConfig(type, locale);
 }
 
 export async function updateConfig(
@@ -1117,6 +1184,38 @@ export async function deleteConfig(type: ConfigType, id: number, userId: number)
   });
 }
 
+async function reorderContent(type: SortableContentType, payload: Record<string, unknown>, userId: number): Promise<void> {
+  const definition = sortableContentDefinitions[type];
+  const ids = cleanIds(payload.ids);
+  if (ids.length === 0) {
+    throw validationError('Please select a record');
+  }
+
+  await withTransaction(async (client) => {
+    await reorderTableRows(client, definition.table, definition.entityType, ids, userId);
+  });
+}
+
+export async function reorderPokemon(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  await reorderContent('pokemon', payload, userId);
+  return listPokemon({}, locale);
+}
+
+export async function reorderItems(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  await reorderContent('items', payload, userId);
+  return listItems({}, locale);
+}
+
+export async function reorderRecipes(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  await reorderContent('recipes', payload, userId);
+  return listRecipes({}, locale);
+}
+
+export async function reorderHabitats(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  await reorderContent('habitats', payload, userId);
+  return listHabitats(locale);
+}
+
 export async function listPokemon(paramsQuery: QueryParams, locale = defaultLocale) {
   const params: unknown[] = [];
   const conditions: string[] = [];
@@ -1162,7 +1261,7 @@ export async function listPokemon(paramsQuery: QueryParams, locale = defaultLoca
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${pokemonProjection(locale)} ${whereClause} ORDER BY p.id`, params);
+  return query(`${pokemonProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('p')}`, params);
 }
 
 export async function getPokemon(id: number, locale = defaultLocale) {
@@ -1191,7 +1290,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         JOIN habitats h ON h.id = hp.habitat_id
         JOIN maps m ON m.id = hp.map_id
         WHERE hp.pokemon_id = $1
-        ORDER BY ${habitatName}, hp.rarity, ${mapName}
+        ORDER BY ${orderByEntity('h')}, hp.rarity, ${orderByEntity('m')}
       `,
       [id]
     ),
@@ -1203,7 +1302,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         JOIN items i ON i.id = psid.item_id
         WHERE psid.pokemon_id = $1
           AND s.has_item_drop = true
-        ORDER BY psid.skill_id, ${itemName}
+        ORDER BY ${orderByEntity('s')}, ${orderByEntity('i')}
       `,
       [id]
     ),
@@ -1213,15 +1312,15 @@ export async function getPokemon(id: number, locale = defaultLocale) {
           i.id,
           ${itemName} AS name,
           json_build_object('id', c.id, 'name', ${categoryName}) AS category,
-          json_agg(json_build_object('id', ft.id, 'name', ${tagName}) ORDER BY ${tagName}) AS tags
+          json_agg(json_build_object('id', ft.id, 'name', ${tagName}) ORDER BY ${orderByEntity('ft')}) AS tags
         FROM pokemon_favorite_things pft
         JOIN item_favorite_things ift ON ift.favorite_thing_id = pft.favorite_thing_id
         JOIN favorite_things ft ON ft.id = pft.favorite_thing_id
         JOIN items i ON i.id = ift.item_id
         JOIN item_categories c ON c.id = i.category_id
         WHERE pft.pokemon_id = $1
-        GROUP BY i.id, i.name, c.id, c.name
-        ORDER BY ${categoryName}, ${itemName}
+        GROUP BY i.id, i.name, i.sort_order, c.id, c.name, c.sort_order
+        ORDER BY ${orderByEntity('c')}, ${orderByEntity('i')}
       `,
       [id]
     ),
@@ -1325,12 +1424,13 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
   const cleanPayload = cleanPokemonPayload(payload);
 
   const id = await withTransaction(async (client) => {
+    const sortOrder = await nextSortOrder(client, 'pokemon');
     await client.query(
       `
-        INSERT INTO pokemon (id, name, environment_id, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $3, $4, $4)
+        INSERT INTO pokemon (id, name, environment_id, sort_order, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $4, $5, $5)
       `,
-      [cleanPayload.id, cleanPayload.name, cleanPayload.environmentId, userId]
+      [cleanPayload.id, cleanPayload.name, cleanPayload.environmentId, sortOrder, userId]
     );
     await replacePokemonRelations(client, cleanPayload.id, cleanPayload);
     await replaceEntityTranslations(client, 'pokemon', cleanPayload.id, cleanPayload.translations, ['name']);
@@ -1390,20 +1490,23 @@ export async function listHabitats(locale = defaultLocale) {
       ${translationsSelect('habitats', 'h.id')} AS translations,
       ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
       COALESCE((
-        SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${itemName})
+        SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${orderByEntity('i')})
         FROM habitat_recipe_items hri
         JOIN items i ON i.id = hri.item_id
         WHERE hri.habitat_id = h.id
       ), '[]'::json) AS recipe,
       COALESCE((
-        SELECT json_agg(DISTINCT jsonb_build_object('id', p.id, 'name', ${pokemonName}))
-        FROM habitat_pokemon hp
-        JOIN pokemon p ON p.id = hp.pokemon_id
-        WHERE hp.habitat_id = h.id
+        SELECT json_agg(json_build_object('id', pokemon_rows.id, 'name', pokemon_rows.name) ORDER BY pokemon_rows.sort_order, pokemon_rows.id)
+        FROM (
+          SELECT DISTINCT p.id, ${pokemonName} AS name, p.sort_order
+          FROM habitat_pokemon hp
+          JOIN pokemon p ON p.id = hp.pokemon_id
+          WHERE hp.habitat_id = h.id
+        ) pokemon_rows
       ), '[]'::json) AS pokemon
     FROM habitats h
     ${auditJoins('h', 'habitat_created_user', 'habitat_updated_user')}
-    ORDER BY ${habitatName}
+    ORDER BY ${orderByEntity('h')}
   `);
 }
 
@@ -1421,7 +1524,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
         ${translationsSelect('habitats', 'h.id')} AS translations,
         ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
         COALESCE((
-          SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${itemName})
+          SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${orderByEntity('i')})
           FROM habitat_recipe_items hri
           JOIN items i ON i.id = hri.item_id
           WHERE hri.habitat_id = h.id
@@ -1451,7 +1554,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
         JOIN pokemon p ON p.id = hp.pokemon_id
         JOIN maps m ON m.id = hp.map_id
         WHERE hp.habitat_id = $1
-        ORDER BY hp.rarity, p.id, ${mapName}
+        ORDER BY hp.rarity, ${orderByEntity('p')}, ${orderByEntity('m')}
       `,
       [id]
     ),
@@ -1527,13 +1630,14 @@ export async function createHabitat(payload: Record<string, unknown>, userId: nu
   const cleanPayload = cleanHabitatPayload(payload);
 
   const id = await withTransaction(async (client) => {
+    const sortOrder = await nextSortOrder(client, 'habitats');
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO habitats (name, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $2)
+        INSERT INTO habitats (name, sort_order, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $3)
         RETURNING id
       `,
-      [cleanPayload.name, userId]
+      [cleanPayload.name, sortOrder, userId]
     );
     const habitatId = result.rows[0].id;
     await replaceHabitatRelations(client, habitatId, cleanPayload);
@@ -1599,7 +1703,7 @@ function itemProjection(locale: string): string {
       ) AS customization,
       i.no_recipe AS "noRecipe",
       COALESCE((
-        SELECT json_agg(json_build_object('id', t.id, 'name', ${tagName}) ORDER BY ${tagName})
+        SELECT json_agg(json_build_object('id', t.id, 'name', ${tagName}) ORDER BY ${orderByEntity('t')})
         FROM item_favorite_things ift
         JOIN favorite_things t ON t.id = ift.favorite_thing_id
         WHERE ift.item_id = i.id
@@ -1637,6 +1741,7 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
   const usageId = Number(asString(paramsQuery.usageId));
   const tagIds = parseIdList(asString(paramsQuery.tagIds));
   const search = asString(paramsQuery.search)?.trim();
+  const recipeOrder = asString(paramsQuery.recipeOrder) === '1';
 
   if (search) {
     params.push(`%${search}%`);
@@ -1667,7 +1772,10 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${itemProjection(locale)} ${whereClause} ORDER BY ${localizedName('item-categories', 'c', locale)}, ${localizedName('items', 'i', locale)}`, params);
+  const orderClause = recipeOrder
+    ? `ORDER BY CASE WHEN item_recipe.id IS NULL THEN 1 ELSE 0 END, item_recipe.sort_order, item_recipe.id, ${orderByEntity('i')}`
+    : `ORDER BY ${orderByEntity('i')}`;
+  return query(`${itemProjection(locale)} ${whereClause} ${orderClause}`, params);
 }
 
 export async function getItem(id: number, locale = defaultLocale) {
@@ -1691,7 +1799,7 @@ export async function getItem(id: number, locale = defaultLocale) {
         FROM item_acquisition_methods iam
         JOIN acquisition_methods am ON am.id = iam.acquisition_method_id
         WHERE iam.item_id = $1
-        ORDER BY ${acquisitionMethodName}
+        ORDER BY ${orderByEntity('am')}
       `,
       [id]
     ),
@@ -1702,13 +1810,13 @@ export async function getItem(id: number, locale = defaultLocale) {
           ${resultItemName} AS name,
           ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
           COALESCE((
-            SELECT json_agg(json_build_object('id', am.id, 'name', ${acquisitionMethodName}) ORDER BY ${acquisitionMethodName})
+            SELECT json_agg(json_build_object('id', am.id, 'name', ${acquisitionMethodName}) ORDER BY ${orderByEntity('am')})
             FROM recipe_acquisition_methods ram
             JOIN acquisition_methods am ON am.id = ram.acquisition_method_id
             WHERE ram.recipe_id = r.id
           ), '[]'::json) AS acquisition_methods,
           COALESCE((
-            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${materialItemName})
+            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${orderByEntity('mi')})
             FROM recipe_materials rm
             JOIN items mi ON mi.id = rm.item_id
             WHERE rm.recipe_id = r.id
@@ -1727,7 +1835,7 @@ export async function getItem(id: number, locale = defaultLocale) {
           r.id,
           ${resultItemName} AS name,
           COALESCE((
-            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', recipe_material.quantity) ORDER BY ${materialItemName})
+            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', recipe_material.quantity) ORDER BY ${orderByEntity('mi')})
             FROM recipe_materials recipe_material
             JOIN items mi ON mi.id = recipe_material.item_id
             WHERE recipe_material.recipe_id = r.id
@@ -1736,7 +1844,7 @@ export async function getItem(id: number, locale = defaultLocale) {
         JOIN recipes r ON r.id = used_material.recipe_id
         JOIN items result_item ON result_item.id = r.item_id
         WHERE used_material.item_id = $1
-        ORDER BY ${resultItemName}
+        ORDER BY ${orderByEntity('r')}
       `,
       [id]
     ),
@@ -1746,7 +1854,7 @@ export async function getItem(id: number, locale = defaultLocale) {
           h.id,
           ${habitatName} AS name,
           COALESCE((
-            SELECT json_agg(json_build_object('id', recipe_item.id, 'name', ${recipeItemName}, 'quantity', recipe_item_row.quantity) ORDER BY ${recipeItemName})
+            SELECT json_agg(json_build_object('id', recipe_item.id, 'name', ${recipeItemName}, 'quantity', recipe_item_row.quantity) ORDER BY ${orderByEntity('recipe_item')})
             FROM habitat_recipe_items recipe_item_row
             JOIN items recipe_item ON recipe_item.id = recipe_item_row.item_id
             WHERE recipe_item_row.habitat_id = h.id
@@ -1754,7 +1862,7 @@ export async function getItem(id: number, locale = defaultLocale) {
         FROM habitat_recipe_items used_item
         JOIN habitats h ON h.id = used_item.habitat_id
         WHERE used_item.item_id = $1
-        ORDER BY ${habitatName}
+        ORDER BY ${orderByEntity('h')}
       `,
       [id]
     ),
@@ -1768,7 +1876,7 @@ export async function getItem(id: number, locale = defaultLocale) {
         JOIN skills s ON s.id = psid.skill_id
         WHERE psid.item_id = $1
           AND s.has_item_drop = true
-        ORDER BY p.id, ${skillName}
+        ORDER BY ${orderByEntity('p')}, ${orderByEntity('s')}
       `,
       [id]
     ),
@@ -1831,6 +1939,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
   const cleanPayload = cleanItemPayload(payload);
 
   const id = await withTransaction(async (client) => {
+    const sortOrder = await nextSortOrder(client, 'items');
     const result = await client.query<{ id: number }>(
       `
         INSERT INTO items (
@@ -1841,10 +1950,11 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           dual_dyeable,
           pattern_editable,
           no_recipe,
+          sort_order,
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
         RETURNING id
       `,
       [
@@ -1855,6 +1965,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
         cleanPayload.noRecipe,
+        sortOrder,
         userId
       ]
     );
@@ -1943,7 +2054,7 @@ export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaul
       ${resultItemName} AS name,
       ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
       COALESCE((
-        SELECT json_agg(json_build_object('id', i.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${materialItemName})
+        SELECT json_agg(json_build_object('id', i.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${orderByEntity('i')})
         FROM recipe_materials rm
         JOIN items i ON i.id = rm.item_id
         WHERE rm.recipe_id = r.id
@@ -1952,7 +2063,7 @@ export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaul
     JOIN items result_item ON result_item.id = r.item_id
     ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
     ${whereClause}
-    ORDER BY ${resultItemName}
+    ORDER BY ${orderByEntity('r')}
   `, params);
 }
 
@@ -1968,13 +2079,13 @@ export async function getRecipe(id: number, locale = defaultLocale) {
         ${resultItemName} AS name,
         ${auditSelect('r', 'recipe_created_user', 'recipe_updated_user')},
         COALESCE((
-          SELECT json_agg(json_build_object('id', am.id, 'name', ${acquisitionMethodName}) ORDER BY ${acquisitionMethodName})
+          SELECT json_agg(json_build_object('id', am.id, 'name', ${acquisitionMethodName}) ORDER BY ${orderByEntity('am')})
           FROM recipe_acquisition_methods ram
           JOIN acquisition_methods am ON am.id = ram.acquisition_method_id
           WHERE ram.recipe_id = r.id
         ), '[]'::json) AS acquisition_methods,
         COALESCE((
-          SELECT json_agg(json_build_object('id', i.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${materialItemName})
+          SELECT json_agg(json_build_object('id', i.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${orderByEntity('i')})
           FROM recipe_materials rm
           JOIN items i ON i.id = rm.item_id
           WHERE rm.recipe_id = r.id
@@ -2040,13 +2151,14 @@ export async function createRecipe(payload: Record<string, unknown>, userId: num
 
   const id = await withTransaction(async (client) => {
     await ensureItemCanHaveRecipe(client, cleanPayload.itemId);
+    const sortOrder = await nextSortOrder(client, 'recipes');
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO recipes (item_id, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $2)
+        INSERT INTO recipes (item_id, sort_order, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $3)
         RETURNING id
       `,
-      [cleanPayload.itemId, userId]
+      [cleanPayload.itemId, sortOrder, userId]
     );
     const recipeId = result.rows[0].id;
     await replaceRecipeRelations(client, recipeId, cleanPayload);

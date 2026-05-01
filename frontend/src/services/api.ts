@@ -383,6 +383,8 @@ export const api = {
   config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
   createConfig: (type: ConfigType, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean }) =>
     sendJson<Skill | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
+  reorderConfig: (type: ConfigType, ids: number[]) =>
+    sendJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}/order`, 'PUT', { ids }),
   updateConfig: (type: ConfigType, id: number, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean }) =>
     sendJson<Skill | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
@@ -393,23 +395,27 @@ export const api = {
   updatePokemon: (id: string | number, payload: PokemonPayload) =>
     sendJson<PokemonDetail>(`/api/pokemon/${id}`, 'PUT', payload),
   deletePokemon: (id: string | number) => deleteJson(`/api/pokemon/${id}`),
+  reorderPokemon: (ids: number[]) => sendJson<Pokemon[]>('/api/admin/pokemon/order', 'PUT', { ids }),
   habitats: () => getJson<Habitat[]>('/api/habitats'),
   habitatDetail: (id: string | number) => getJson<HabitatDetail>(`/api/habitats/${id}`),
   createHabitat: (payload: HabitatPayload) => sendJson<HabitatDetail>('/api/habitats', 'POST', payload),
   updateHabitat: (id: string | number, payload: HabitatPayload) =>
     sendJson<HabitatDetail>(`/api/habitats/${id}`, 'PUT', payload),
   deleteHabitat: (id: string | number) => deleteJson(`/api/habitats/${id}`),
+  reorderHabitats: (ids: number[]) => sendJson<Habitat[]>('/api/admin/habitats/order', 'PUT', { ids }),
   items: (params: Record<string, string | number | undefined>) =>
     getJson<Item[]>(`/api/items${buildQuery(params)}`),
   itemDetail: (id: string | number) => getJson<ItemDetail>(`/api/items/${id}`),
   createItem: (payload: ItemPayload) => sendJson<ItemDetail>('/api/items', 'POST', payload),
   updateItem: (id: string | number, payload: ItemPayload) => sendJson<ItemDetail>(`/api/items/${id}`, 'PUT', payload),
   deleteItem: (id: string | number) => deleteJson(`/api/items/${id}`),
+  reorderItems: (ids: number[]) => sendJson<Item[]>('/api/admin/items/order', 'PUT', { ids }),
   recipes: (params: Record<string, string | number | undefined> = {}) =>
     getJson<Recipe[]>(`/api/recipes${buildQuery(params)}`),
   recipeDetail: (id: string | number) => getJson<RecipeDetail>(`/api/recipes/${id}`),
   createRecipe: (payload: RecipePayload) => sendJson<RecipeDetail>('/api/recipes', 'POST', payload),
   updateRecipe: (id: string | number, payload: RecipePayload) =>
     sendJson<RecipeDetail>(`/api/recipes/${id}`, 'PUT', payload),
-  deleteRecipe: (id: string | number) => deleteJson(`/api/recipes/${id}`)
+  deleteRecipe: (id: string | number) => deleteJson(`/api/recipes/${id}`),
+  reorderRecipes: (ids: number[]) => sendJson<Recipe[]>('/api/admin/recipes/order', 'PUT', { ids })
 };

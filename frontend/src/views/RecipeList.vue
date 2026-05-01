@@ -32,7 +32,8 @@ const itemQuery = computed(() => ({
   search: search.value,
   categoryId: categoryId.value,
   usageId: usageId.value,
-  tagIds: tagIds.value.join(',')
+  tagIds: tagIds.value.join(','),
+  recipeOrder: 1
 }));
 
 function recipeTarget(item: Item) {

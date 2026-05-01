@@ -11,6 +11,8 @@ const props = defineProps<{
   translations: TranslationMap;
   languages: Language[];
   required?: boolean;
+  multiline?: boolean;
+  rows?: number;
 }>();
 
 const emit = defineEmits<{
@@ -79,11 +81,20 @@ function updateField(language: Language, value: string) {
         {{ t('common.fieldForLanguage', { field: label, language: currentLanguage.name }) }}
       </label>
       <input
+        v-if="!multiline"
         :id="`${idPrefix}-${currentLanguage.code}`"
         v-model="currentValue"
         :placeholder="currentPlaceholder"
         :required="currentRequired"
       />
+      <textarea
+        v-else
+        :id="`${idPrefix}-${currentLanguage.code}`"
+        v-model="currentValue"
+        :placeholder="currentPlaceholder"
+        :required="currentRequired"
+        :rows="rows ?? 4"
+      ></textarea>
     </div>
   </div>
 </template>

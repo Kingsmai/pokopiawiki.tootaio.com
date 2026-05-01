@@ -6,6 +6,8 @@
   --pokemon-blue-deep: #003a70;
   --pokemon-red: #ee1515;
   --pokemon-red-deep: #cc0000;
+  --type-water: #6390f0;
+  --type-psychic: #f95587;
   --pokeball-black: #202124;
   --pokeball-white: #f7f8fb;
   --bg: #f2f5fa;
@@ -540,6 +542,7 @@ button:disabled,
 
 .field input,
 .field select,
+.field textarea,
 .tags-select__search {
   width: 100%;
   min-height: 44px;
@@ -555,10 +558,16 @@ button:disabled,
 
 .field input:focus,
 .field select:focus,
+.field textarea:focus,
 .tags-select__search:focus {
   border-color: var(--pokemon-blue);
   box-shadow: 0 0 0 4px rgba(42, 117, 187, 0.16);
   outline: none;
+}
+
+.field textarea {
+  min-height: 112px;
+  resize: vertical;
 }
 
 .modal-backdrop {
@@ -655,6 +664,13 @@ button:disabled,
 
 .modal-edit-form {
   display: grid;
+  gap: 12px;
+}
+
+.pokemon-measurement-fields,
+.pokemon-stats-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
   gap: 12px;
 }
 
@@ -1322,6 +1338,12 @@ button:disabled,
   align-items: start;
 }
 
+.pokemon-detail-sidebar {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
 .habitat-detail-stack {
   display: grid;
   gap: 16px;
@@ -1647,6 +1669,195 @@ button:disabled,
 
 .skill-drop-summary .chips {
   justify-content: flex-end;
+}
+
+.detail-text {
+  margin: 0;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.pokemon-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.pokemon-profile-main,
+.pokemon-profile-row {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.pokemon-profile-row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.pokemon-profile-card,
+.pokemon-profile-stats {
+  gap: 12px;
+  min-width: 0;
+}
+
+.pokemon-profile-stats {
+  align-self: stretch;
+}
+
+.pokemon-types-card {
+  align-content: center;
+  justify-items: center;
+}
+
+.pokemon-genus {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.pokemon-profile-divider {
+  height: 1px;
+  background: var(--line);
+}
+
+.pokemon-measurement-display {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  align-items: stretch;
+}
+
+.pokemon-measurement-item {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  min-width: 0;
+  padding: 4px 18px;
+}
+
+.pokemon-measurement-item + .pokemon-measurement-item {
+  border-left: 1px solid var(--line);
+}
+
+.pokemon-measurement-stack {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.pokemon-measurement-value {
+  color: var(--ink);
+  font-size: 1.14rem;
+  font-weight: 950;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.pokemon-measurement-divider {
+  width: min(92px, 72%);
+  height: 1px;
+  background: var(--line);
+}
+
+.pokemon-measurement-label {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.pokemon-stats-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.pokemon-profile-facts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.pokemon-profile-facts div {
+  display: grid;
+  gap: 2px;
+}
+
+.pokemon-profile-facts dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.pokemon-profile-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.pokemon-type-slots {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  align-content: center;
+  justify-items: center;
+}
+
+.pokemon-type-slots--single {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+
+.pokemon-type-slot {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.progress {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.progress-label span {
+  min-width: 0;
+}
+
+.progress-label span:last-child {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pokemon-blue);
 }
 
 .appearance-list li {
@@ -2086,6 +2297,8 @@ button:disabled,
 
   .detail-grid,
   .detail-with-sidebar,
+  .pokemon-profile-grid,
+  .pokemon-profile-row,
   .admin-layout {
     grid-template-columns: 1fr;
   }

@@ -8,10 +8,11 @@ type QueryParams = Record<string, QueryValue>;
 
 type DbClient = PoolClient;
 
-type TranslationField = 'name' | 'title';
+type TranslationField = 'name' | 'title' | 'details' | 'genus';
 type TranslationInput = Record<string, Partial<Record<TranslationField, unknown>>>;
 type EntityType =
   | 'pokemon'
+  | 'pokemon-types'
   | 'skills'
   | 'environments'
   | 'favorite-things'
@@ -24,6 +25,7 @@ type EntityType =
   | 'daily-checklist-items';
 
 type ConfigType =
+  | 'pokemon-types'
   | 'skills'
   | 'environments'
   | 'favorite-things'
@@ -53,10 +55,25 @@ type SkillItemDrop = {
   itemId: number;
 };
 
+type PokemonStats = {
+  hp: number;
+  attack: number;
+  defense: number;
+  specialAttack: number;
+  specialDefense: number;
+  speed: number;
+};
+
 type PokemonPayload = {
   id: number;
   name: string;
+  genus: string;
+  details: string;
+  heightInches: number;
+  weightPounds: number;
   translations: TranslationInput;
+  typeIds: number[];
+  stats: PokemonStats;
   environmentId: number;
   skillIds: number[];
   favoriteThingIds: number[];
@@ -123,6 +140,12 @@ type EditHistoryEntry = {
 };
 type PokemonChangeSource = {
   name: string;
+  genus: string;
+  details: string;
+  heightInches: number;
+  weightPounds: number;
+  types: Array<{ name: string }>;
+  stats: PokemonStats;
   environment: { name: string };
   skills: Array<{ name: string; itemDrop?: { name: string } | null }>;
   favorite_things: Array<{ name: string }>;
@@ -151,8 +174,17 @@ const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const defaultLocale = 'en';
 const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
+const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
+  { key: 'hp', label: 'HP' },
+  { key: 'attack', label: 'Attack' },
+  { key: 'defense', label: 'Defense' },
+  { key: 'specialAttack', label: 'Special Attack' },
+  { key: 'specialDefense', label: 'Special Defense' },
+  { key: 'speed', label: 'Speed' }
+];
 
 const configDefinitions: Record<ConfigType, ConfigDefinition> = {
+  'pokemon-types': { table: 'pokemon_types', entityType: 'pokemon-types' },
   skills: { table: 'skills', entityType: 'skills', hasItemDrop: true },
   environments: { table: 'environments', entityType: 'environments' },
   'favorite-things': { table: 'favorite_things', entityType: 'favorite-things' },
@@ -377,6 +409,10 @@ function cleanName(value: unknown, message = 'Name is required'): string {
   return value.trim();
 }
 
+function cleanOptionalText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 function cleanIds(value: unknown): number[] {
   if (!Array.isArray(value)) {
     return [];
@@ -386,6 +422,27 @@ function cleanIds(value: unknown): number[] {
 
 function cleanIdValues(value: unknown): number[] {
   return cleanIds(Array.isArray(value) ? value : [value]);
+}
+
+function cleanPokemonStats(value: unknown): PokemonStats {
+  const row = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+  return pokemonStatLabels.reduce((stats, stat) => {
+    const numberValue = Number(row[stat.key] ?? 0);
+    if (!Number.isInteger(numberValue) || numberValue < 0) {
+      throw validationError(`${stat.label} must be a non-negative integer`);
+    }
+
+    return { ...stats, [stat.key]: numberValue };
+  }, {} as PokemonStats);
+}
+
+function cleanNonNegativeNumber(value: unknown, message: string): number {
+  const numberValue = Number(value ?? 0);
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
+    throw validationError(message);
+  }
+  return numberValue;
 }
 
 function cleanQuantities(value: unknown): IdQuantity[] {
@@ -687,6 +744,36 @@ function skillDropListValue(skills: Array<{ name: string; itemDrop?: { name: str
   return rows.length ? rows.join(' / ') : 'None';
 }
 
+function pokemonStatsValue(stats: PokemonStats | null | undefined): string {
+  return pokemonStatLabels.map((stat) => `${stat.label}: ${stats?.[stat.key] ?? 0}`).join(' / ');
+}
+
+function roundMeasure(value: number, precision: number): number {
+  const scale = 10 ** precision;
+  return Math.round(value * scale) / scale;
+}
+
+function formatFixedMeasure(value: number, precision: number): string {
+  return value.toFixed(precision);
+}
+
+function feetInchesValue(inches: number): string {
+  const totalInches = Math.round(inches);
+  const feet = Math.floor(totalInches / 12);
+  const remainingInches = totalInches - feet * 12;
+  return `${feet}'${remainingInches}"`;
+}
+
+function pokemonHeightValue(inches: number | null | undefined): string {
+  const value = inches ?? 0;
+  return `${feetInchesValue(value)} / ${formatFixedMeasure(roundMeasure(value * 0.0254, 2), 2)} m`;
+}
+
+function pokemonWeightValue(pounds: number | null | undefined): string {
+  const value = pounds ?? 0;
+  return `${formatFixedMeasure(roundMeasure(value, 1), 1)} lb / ${formatFixedMeasure(roundMeasure(value * 0.45359237, 2), 2)} kg`;
+}
+
 function appearanceListValue(
   rows: Array<{ name: string; time_of_day: string; weather: string; rarity: number; map: { name: string } }> | null | undefined
 ): string {
@@ -742,6 +829,7 @@ async function pokemonEditChanges(
 ): Promise<EditChange[]> {
   const changes: EditChange[] = [];
   const environmentNames = await entityNameMap(client, 'environments', [after.environmentId]);
+  const typeNames = await entityNameMap(client, 'pokemon_types', after.typeIds);
   const skillNames = await entityNameMap(client, 'skills', after.skillIds);
   const favoriteThingNames = await entityNameMap(client, 'favorite_things', after.favoriteThingIds);
   const dropSkillNames = await entityNameMap(client, 'skills', after.skillItemDrops.map((drop) => drop.skillId));
@@ -757,6 +845,12 @@ async function pokemonEditChanges(
     .join(' / ');
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Genus', before.genus, after.genus);
+  pushChange(changes, 'Details', before.details, after.details);
+  pushChange(changes, 'Height', pokemonHeightValue(before.heightInches), pokemonHeightValue(after.heightInches));
+  pushChange(changes, 'Weight', pokemonWeightValue(before.weightPounds), pokemonWeightValue(after.weightPounds));
+  pushChange(changes, 'Types', namedListValue(before.types), namesFromIds(after.typeIds, typeNames));
+  pushChange(changes, 'Stats', pokemonStatsValue(before.stats), pokemonStatsValue(after.stats));
   pushChange(changes, 'Ideal Habitat', before.environment.name, environmentNames.get(after.environmentId));
   pushChange(changes, 'Specialities', namedListValue(before.skills), namesFromIds(after.skillIds, skillNames));
   pushChange(changes, 'Favourites', namedListValue(before.favorite_things), namesFromIds(after.favoriteThingIds, favoriteThingNames));
@@ -853,6 +947,9 @@ function getEditHistory(entityType: string, entityId: number): Promise<EditHisto
 
 function pokemonProjection(locale: string): string {
   const pokemonName = localizedName('pokemon', 'p', locale);
+  const pokemonGenus = localizedField('pokemon', 'p.id', 'p.genus', 'genus', locale);
+  const pokemonDetails = localizedField('pokemon', 'p.id', 'p.details', 'details', locale);
+  const typeName = localizedName('pokemon-types', 'pt', locale);
   const environmentName = localizedName('environments', 'e', locale);
   const skillName = localizedName('skills', 's', locale);
   const favoriteThingName = localizedName('favorite-things', 'ft', locale);
@@ -862,9 +959,31 @@ function pokemonProjection(locale: string): string {
       p.id,
       ${pokemonName} AS name,
       p.name AS "baseName",
+      ${pokemonGenus} AS genus,
+      p.genus AS "baseGenus",
+      ${pokemonDetails} AS details,
+      p.details AS "baseDetails",
+      p.height_inches AS "heightInches",
+      round((p.height_inches * 0.0254)::numeric, 2)::double precision AS "heightMeters",
+      p.weight_pounds AS "weightPounds",
+      round((p.weight_pounds * 0.45359237)::numeric, 2)::double precision AS "weightKg",
+      json_build_object(
+        'hp', p.hp,
+        'attack', p.attack,
+        'defense', p.defense,
+        'specialAttack', p.special_attack,
+        'specialDefense', p.special_defense,
+        'speed', p.speed
+      ) AS stats,
       ${translationsSelect('pokemon', 'p.id')} AS translations,
       ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
       json_build_object('id', e.id, 'name', ${environmentName}) AS environment,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', pt.id, 'name', ${typeName}) ORDER BY ppt.slot_order)
+        FROM pokemon_pokemon_types ppt
+        JOIN pokemon_types pt ON pt.id = ppt.type_id
+        WHERE ppt.pokemon_id = p.id
+      ), '[]'::json) AS types,
       COALESCE((
         SELECT json_agg(json_build_object('id', s.id, 'name', ${skillName}, 'hasItemDrop', s.has_item_drop) ORDER BY ${orderByEntity('s')})
         FROM pokemon_skills ps
@@ -885,6 +1004,7 @@ function pokemonProjection(locale: string): string {
 
 export async function getOptions(locale = defaultLocale) {
   const [
+    pokemonTypes,
     skills,
     environments,
     favoriteThings,
@@ -893,6 +1013,7 @@ export async function getOptions(locale = defaultLocale) {
     acquisitionMethods,
     maps
   ] = await Promise.all([
+    optionSelect('pokemon_types', 'pokemon-types', locale),
     skillOptions(locale),
     optionSelect('environments', 'environments', locale),
     optionSelect('favorite_things', 'favorite-things', locale),
@@ -903,6 +1024,7 @@ export async function getOptions(locale = defaultLocale) {
   ]);
 
   return {
+    pokemonTypes,
     skills,
     environments,
     favoriteThings,
@@ -1344,11 +1466,19 @@ export async function getPokemon(id: number, locale = defaultLocale) {
 }
 
 function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
+  const cleanTypeIds = cleanIds(payload.typeIds);
+  const typeIds = cleanTypeIds.slice(0, 2);
   const skillIds = cleanIds(payload.skillIds);
   const favoriteThingIds = cleanIds(payload.favoriteThingIds);
   const selectedSkillIds = new Set(skillIds);
   const skillItemDrops = new Map<string, SkillItemDrop>();
 
+  if (typeIds.length === 0) {
+    throw validationError('Choose at least 1 type');
+  }
+  if (cleanTypeIds.length > 2) {
+    throw validationError('Choose at most 2 types');
+  }
   if (skillIds.length > 2) {
     throw validationError('Choose at most 2 specialities');
   }
@@ -1377,7 +1507,13 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   return {
     id: requirePositiveInteger(payload.id, 'Pokemon ID is required'),
     name: cleanName(payload.name, 'Pokemon name is required'),
-    translations: cleanTranslations(payload.translations, ['name']),
+    genus: cleanOptionalText(payload.genus),
+    details: cleanOptionalText(payload.details),
+    heightInches: cleanNonNegativeNumber(payload.heightInches, 'Height must be a non-negative number'),
+    weightPounds: cleanNonNegativeNumber(payload.weightPounds, 'Weight must be a non-negative number'),
+    translations: cleanTranslations(payload.translations, ['name', 'details', 'genus']),
+    typeIds,
+    stats: cleanPokemonStats(payload.stats),
     environmentId: requirePositiveInteger(payload.environmentId, 'Ideal Habitat is required'),
     skillIds,
     favoriteThingIds,
@@ -1387,8 +1523,17 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
 
 async function replacePokemonRelations(client: DbClient, pokemonId: number, payload: PokemonPayload): Promise<void> {
   await client.query('DELETE FROM pokemon_skill_item_drops WHERE pokemon_id = $1', [pokemonId]);
+  await client.query('DELETE FROM pokemon_pokemon_types WHERE pokemon_id = $1', [pokemonId]);
   await client.query('DELETE FROM pokemon_skills WHERE pokemon_id = $1', [pokemonId]);
   await client.query('DELETE FROM pokemon_favorite_things WHERE pokemon_id = $1', [pokemonId]);
+
+  for (const [index, typeId] of payload.typeIds.entries()) {
+    await client.query('INSERT INTO pokemon_pokemon_types (pokemon_id, type_id, slot_order) VALUES ($1, $2, $3)', [
+      pokemonId,
+      typeId,
+      index + 1
+    ]);
+  }
 
   for (const skillId of payload.skillIds) {
     await client.query('INSERT INTO pokemon_skills (pokemon_id, skill_id) VALUES ($1, $2)', [pokemonId, skillId]);
@@ -1428,13 +1573,46 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
     const sortOrder = await nextSortOrder(client, 'pokemon');
     await client.query(
       `
-        INSERT INTO pokemon (id, name, environment_id, sort_order, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $3, $4, $5, $5)
+        INSERT INTO pokemon (
+          id,
+          name,
+          genus,
+          details,
+          height_inches,
+          weight_pounds,
+          environment_id,
+          hp,
+          attack,
+          defense,
+          special_attack,
+          special_defense,
+          speed,
+          sort_order,
+          created_by_user_id,
+          updated_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
       `,
-      [cleanPayload.id, cleanPayload.name, cleanPayload.environmentId, sortOrder, userId]
+      [
+        cleanPayload.id,
+        cleanPayload.name,
+        cleanPayload.genus,
+        cleanPayload.details,
+        cleanPayload.heightInches,
+        cleanPayload.weightPounds,
+        cleanPayload.environmentId,
+        cleanPayload.stats.hp,
+        cleanPayload.stats.attack,
+        cleanPayload.stats.defense,
+        cleanPayload.stats.specialAttack,
+        cleanPayload.stats.specialDefense,
+        cleanPayload.stats.speed,
+        sortOrder,
+        userId
+      ]
     );
     await replacePokemonRelations(client, cleanPayload.id, cleanPayload);
-    await replaceEntityTranslations(client, 'pokemon', cleanPayload.id, cleanPayload.translations, ['name']);
+    await replaceEntityTranslations(client, 'pokemon', cleanPayload.id, cleanPayload.translations, ['name', 'details', 'genus']);
     await recordEditLog(client, 'pokemon', cleanPayload.id, 'create', userId);
     return cleanPayload.id;
   });
@@ -1449,16 +1627,45 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
     const result = await client.query(
       `
         UPDATE pokemon
-        SET name = $1, environment_id = $2, updated_by_user_id = $3, updated_at = now()
-        WHERE id = $4
+        SET
+          name = $1,
+          genus = $2,
+          details = $3,
+          height_inches = $4,
+          weight_pounds = $5,
+          environment_id = $6,
+          hp = $7,
+          attack = $8,
+          defense = $9,
+          special_attack = $10,
+          special_defense = $11,
+          speed = $12,
+          updated_by_user_id = $13,
+          updated_at = now()
+        WHERE id = $14
       `,
-      [cleanPayload.name, cleanPayload.environmentId, userId, id]
+      [
+        cleanPayload.name,
+        cleanPayload.genus,
+        cleanPayload.details,
+        cleanPayload.heightInches,
+        cleanPayload.weightPounds,
+        cleanPayload.environmentId,
+        cleanPayload.stats.hp,
+        cleanPayload.stats.attack,
+        cleanPayload.stats.defense,
+        cleanPayload.stats.specialAttack,
+        cleanPayload.stats.specialDefense,
+        cleanPayload.stats.speed,
+        userId,
+        id
+      ]
     );
     if (result.rowCount === 0) {
       return false;
     }
     await replacePokemonRelations(client, id, cleanPayload);
-    await replaceEntityTranslations(client, 'pokemon', id, cleanPayload.translations, ['name']);
+    await replaceEntityTranslations(client, 'pokemon', id, cleanPayload.translations, ['name', 'details', 'genus']);
     const changes = before ? await pokemonEditChanges(client, before as unknown as PokemonChangeSource, cleanPayload) : [];
     await recordEditLog(client, 'pokemon', id, 'update', userId, changes);
     return true;

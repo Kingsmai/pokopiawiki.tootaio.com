@@ -66,6 +66,7 @@ const tabs = computed<Array<{ key: AdminTab; label: string }>>(() => [
 ]);
 
 const configTypes = computed<Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean }>>(() => [
+  { key: 'pokemon-types', label: t('config.pokemonTypes') },
   { key: 'skills', label: t('config.skills'), supportsItemDrop: true },
   { key: 'environments', label: t('config.environments') },
   { key: 'favorite-things', label: t('config.favoriteThings') },

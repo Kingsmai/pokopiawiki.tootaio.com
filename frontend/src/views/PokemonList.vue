@@ -145,6 +145,7 @@ watch(query, loadPokemon);
         :to="`/pokemon/${item.id}`"
       >
         <EditMeta :entity="item" />
+        <EntityChips v-if="item.types.length" :items="item.types" />
         <EntityChips :items="item.skills" />
         <EntityChips :items="item.favorite_things" />
       </EntityCard>

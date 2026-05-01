@@ -49,6 +49,7 @@
 - 支持翻译的实体：
   - Pokemon
   - 特长
+  - Pokemon Types
   - 喜欢的环境
   - 喜欢的东西 / 标签
   - 物品分类
@@ -61,7 +62,9 @@
 - 支持翻译的字段：
   - `name`
   - `title`
-- 实体仍保留基础 `name` 或 `title` 字段，默认语言内容以基础字段为准。
+  - `details`：仅 Pokemon 介绍使用
+  - `genus`：仅 Pokemon Genus 使用
+- 实体仍保留基础 `name`、`title`、`details` 或 `genus` 字段，默认语言内容以基础字段为准。
 - API 返回展示名称时按当前语言解析，回退顺序为：请求语言翻译 -> 默认语言翻译 -> 基础字段。
 - 编辑表单必须避免本地化 UI 覆盖基础名称；翻译字段只展示当前需要编辑的语言。
 
@@ -126,6 +129,12 @@
 - 已移除 `subcategory` 字段。
 - 当特长允许掉落物时，Pokemon 编辑中可为该 Pokemon + 特长配置一个掉落物品。
 
+### Pokemon Types
+
+- 名称
+- 用于 Pokemon 属性配置。
+- Pokemon 可选择 1 到 2 个 Type，用于表达双属性。
+
 ### 喜欢的环境
 
 - 名称
@@ -163,10 +172,23 @@ Pokemon 可配置：
 
 - ID
 - 名称
+- Genus：可为空，支持翻译
+- 介绍 / Details：可为空，支持翻译
+- Height：默认输入 `ft/in`，可切换输入 `m`；详情页同时展示 `ft/in` 与 `m`
+- Weight：默认输入磅 `lb`，可切换输入 `kg`；详情页同时展示 `lbs` 与 `kg`
+- Height / Weight 换算结果四舍五入；`m` / `kg` 保留 2 位小数，`in` 取整数，`lb` 保留 1 位小数。
+- Types：可多选，最多 2 个
 - 喜欢的环境：单选
 - 特长：可多选，最多 2 个
 - 特长掉落物品：按 Pokemon + 特长配置，单选物品
 - 喜欢的东西：可多选，最多 6 个
+- 六维：
+  - HP
+  - Attack
+  - Defense
+  - Special Attack
+  - Special Defense
+  - Speed
 - 出现的栖息地：由栖息地出现配置反向展示
 - 翻译
 - 排序
@@ -186,6 +208,11 @@ Pokemon 列表功能：
 Pokemon 详情页展示：
 
 - 基本信息
+- 主内容顶部按以下布局展示：
+  - 左上：Genus & Details；无区块标题；如有 Genus，先展示 Genus，再以分割线连接 Details 内容
+  - 左下：Height / Weight 与 Types 按 2:1 比例并排；Height / Weight 无区块标题，在 Dimension 区内左右并排展示并以中间分割线隔开，每组按英制、分割线、公制、标签上下排列；Types 不显示 Type 1 / Type 2 文案，上下布局并居中展示
+  - 右侧：六维 Stats
+- 六维使用 ProgressBar 展示，最大值按 150 计算。
 - 特长
 - 特长掉落物品
 - 喜欢的环境
@@ -193,7 +220,7 @@ Pokemon 详情页展示：
 - 关联喜欢的东西的物品
 - 出现的栖息地
 - 最后编辑信息
-- 编辑历史
+- 编辑历史：保留在右侧 Sidebar 展示
 
 ## 物品
 

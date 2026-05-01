@@ -4,12 +4,22 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Modal from '../components/Modal.vue';
+import PokemonStatsFields from '../components/PokemonStatsFields.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import TranslationFields from '../components/TranslationFields.vue';
 import { iconCancel, iconSave } from '../icons';
-import { api, type ConfigType, type Language, type NamedEntity, type Options, type PokemonPayload, type TranslationMap } from '../services/api';
+import {
+  api,
+  type ConfigType,
+  type Language,
+  type NamedEntity,
+  type Options,
+  type PokemonPayload,
+  type PokemonStats,
+  type TranslationMap
+} from '../services/api';
 
 type SkillItemDropForm = {
   skillId: string;
@@ -26,10 +36,30 @@ const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
+const heightUnit = ref<'imperial' | 'metric'>('imperial');
+const weightUnit = ref<'imperial' | 'metric'>('imperial');
+
+function defaultPokemonStats(): PokemonStats {
+  return {
+    hp: 0,
+    attack: 0,
+    defense: 0,
+    specialAttack: 0,
+    specialDefense: 0,
+    speed: 0
+  };
+}
+
 const pokemonForm = ref({
   id: '',
   name: '',
+  genus: '',
+  details: '',
+  heightInches: 0,
+  weightPounds: 0,
   translations: {} as TranslationMap,
+  typeIds: [] as string[],
+  stats: defaultPokemonStats(),
   environmentId: '',
   skillIds: [] as string[],
   favoriteThingIds: [] as string[],
@@ -47,9 +77,45 @@ const cancelTo = computed(() => (isEditing.value ? `/pokemon/${routeId.value}` :
 const selectedSkillDropRows = computed(() =>
   pokemonForm.value.skillItemDrops.filter((row) => pokemonForm.value.skillIds.includes(row.skillId) && skillSupportsItemDrop(row.skillId))
 );
+const totalHeightInchesValue = computed(() => Math.round(pokemonForm.value.heightInches));
+const heightFeetValue = computed(() => Math.floor(totalHeightInchesValue.value / 12));
+const heightInchesValue = computed(() => totalHeightInchesValue.value - heightFeetValue.value * 12);
+const heightMetersValue = computed(() => roundMeasurement(pokemonForm.value.heightInches * 0.0254, 2));
+const weightPoundsValue = computed(() => roundMeasurement(pokemonForm.value.weightPounds, 1));
+const weightKgValue = computed(() => roundMeasurement(pokemonForm.value.weightPounds * 0.45359237, 2));
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function numericInputValue(event: Event): number {
+  const value = event.target instanceof HTMLInputElement ? Number(event.target.value) : 0;
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function roundMeasurement(value: number, precision: number): number {
+  const scale = 10 ** precision;
+  return Math.round(value * scale) / scale;
+}
+
+function updateHeightFeet(event: Event) {
+  pokemonForm.value.heightInches = Math.round(numericInputValue(event) * 12 + heightInchesValue.value);
+}
+
+function updateHeightInches(event: Event) {
+  pokemonForm.value.heightInches = Math.round(heightFeetValue.value * 12 + numericInputValue(event));
+}
+
+function updateHeightMeters(event: Event) {
+  pokemonForm.value.heightInches = roundMeasurement(numericInputValue(event) / 0.0254, 2);
+}
+
+function updateWeightPounds(event: Event) {
+  pokemonForm.value.weightPounds = roundMeasurement(numericInputValue(event), 1);
+}
+
+function updateWeightKg(event: Event) {
+  pokemonForm.value.weightPounds = roundMeasurement(numericInputValue(event) / 0.45359237, 1);
 }
 
 function errorText(error: unknown, fallback: string) {
@@ -113,7 +179,13 @@ async function loadEditor() {
       pokemonForm.value = {
         id: String(pokemon.id),
         name: pokemon.baseName ?? pokemon.name,
+        genus: pokemon.baseGenus ?? pokemon.genus,
+        details: pokemon.baseDetails ?? pokemon.details,
+        heightInches: pokemon.heightInches,
+        weightPounds: pokemon.weightPounds,
         translations: pokemon.translations ?? {},
+        typeIds: pokemon.types.map((type) => String(type.id)),
+        stats: pokemon.stats,
         environmentId: String(pokemon.environment.id),
         skillIds: pokemon.skills.map((skill) => String(skill.id)),
         favoriteThingIds: pokemon.favorite_things.map((thing) => String(thing.id)),
@@ -176,7 +248,13 @@ async function savePokemon() {
     const payload: PokemonPayload = {
       id: Number(isEditing.value ? routeId.value : pokemonForm.value.id),
       name: pokemonNameForSave(),
+      genus: pokemonForm.value.genus,
+      details: pokemonForm.value.details,
+      heightInches: pokemonForm.value.heightInches,
+      weightPounds: pokemonForm.value.weightPounds,
       translations: pokemonForm.value.translations,
+      typeIds: toIds(pokemonForm.value.typeIds.slice(0, 2)),
+      stats: pokemonForm.value.stats,
       environmentId: Number(pokemonForm.value.environmentId),
       skillIds: toIds(pokemonForm.value.skillIds.slice(0, 2)),
       favoriteThingIds: toIds(pokemonForm.value.favoriteThingIds.slice(0, 6)),
@@ -219,6 +297,96 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
         :languages="languages"
         required
       />
+
+      <TranslationFields
+        id-prefix="pokemon-genus"
+        v-model:base-value="pokemonForm.genus"
+        v-model:translations="pokemonForm.translations"
+        field="genus"
+        :label="t('pages.pokemon.genus')"
+        :languages="languages"
+      />
+
+      <TranslationFields
+        id-prefix="pokemon-details"
+        v-model:base-value="pokemonForm.details"
+        v-model:translations="pokemonForm.translations"
+        field="details"
+        :label="t('pages.pokemon.details')"
+        :languages="languages"
+        multiline
+        :rows="5"
+      />
+
+      <div class="field">
+        <span id="pokemon-height-label" class="field-label">{{ t('pages.pokemon.height') }}</span>
+        <div class="segmented" aria-labelledby="pokemon-height-label">
+          <button :class="{ active: heightUnit === 'imperial' }" type="button" @click="heightUnit = 'imperial'">
+            {{ t('pages.pokemon.heightImperial') }}
+          </button>
+          <button :class="{ active: heightUnit === 'metric' }" type="button" @click="heightUnit = 'metric'">
+            {{ t('pages.pokemon.heightMetric') }}
+          </button>
+        </div>
+
+        <div v-if="heightUnit === 'imperial'" class="pokemon-measurement-fields">
+          <div class="field">
+            <label for="pokemon-height-feet">{{ t('pages.pokemon.feet') }}</label>
+            <input id="pokemon-height-feet" :value="heightFeetValue" min="0" step="1" type="number" inputmode="numeric" @input="updateHeightFeet" />
+          </div>
+
+          <div class="field">
+            <label for="pokemon-height-inches">{{ t('pages.pokemon.inches') }}</label>
+            <input id="pokemon-height-inches" :value="heightInchesValue" min="0" step="1" type="number" inputmode="numeric" @input="updateHeightInches" />
+          </div>
+        </div>
+
+        <div v-else class="field">
+          <label for="pokemon-height-meters">{{ t('pages.pokemon.meters') }}</label>
+          <input id="pokemon-height-meters" :value="heightMetersValue" min="0" step="0.01" type="number" inputmode="decimal" @input="updateHeightMeters" />
+        </div>
+      </div>
+
+      <div class="field">
+        <span id="pokemon-weight-label" class="field-label">{{ t('pages.pokemon.weight') }}</span>
+        <div class="segmented" aria-labelledby="pokemon-weight-label">
+          <button :class="{ active: weightUnit === 'imperial' }" type="button" @click="weightUnit = 'imperial'">
+            {{ t('pages.pokemon.pounds') }}
+          </button>
+          <button :class="{ active: weightUnit === 'metric' }" type="button" @click="weightUnit = 'metric'">
+            {{ t('pages.pokemon.kilograms') }}
+          </button>
+        </div>
+
+        <div v-if="weightUnit === 'imperial'" class="field">
+          <label for="pokemon-weight-pounds">{{ t('pages.pokemon.pounds') }}</label>
+          <input id="pokemon-weight-pounds" :value="weightPoundsValue" min="0" step="0.1" type="number" inputmode="decimal" @input="updateWeightPounds" />
+        </div>
+
+        <div v-else class="field">
+          <label for="pokemon-weight-kg">{{ t('pages.pokemon.kilograms') }}</label>
+          <input id="pokemon-weight-kg" :value="weightKgValue" min="0" step="0.01" type="number" inputmode="decimal" @input="updateWeightKg" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="pokemon-types">{{ t('pages.pokemon.types') }}</label>
+        <TagsSelect
+          id="pokemon-types"
+          v-model="pokemonForm.typeIds"
+          :options="options.pokemonTypes"
+          :max="2"
+          allow-create
+          :creating="creatingSelect === 'pokemon-types'"
+          :placeholder="t('pages.pokemon.searchTypes')"
+          @create="createMultiOption('pokemon-types', 'pokemon-types', $event, pokemonForm.typeIds, 2)"
+        />
+      </div>
+
+      <div class="field">
+        <span class="field-label">{{ t('pages.pokemon.statsTitle') }}</span>
+        <PokemonStatsFields id-prefix="pokemon-stats" v-model="pokemonForm.stats" />
+      </div>
 
       <div class="field">
         <label for="pokemon-environment">{{ t('pages.pokemon.environment') }}</label>

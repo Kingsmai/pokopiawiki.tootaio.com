@@ -4,7 +4,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 const authTokenKey = 'pokopia_auth_token';
 const authChangeEvent = 'pokopia-auth-change';
 
-export type TranslationField = 'name' | 'title';
+export type TranslationField = 'name' | 'title' | 'details' | 'genus';
 export type TranslationMap = Record<string, Partial<Record<TranslationField, string>>>;
 
 export interface Language {
@@ -24,6 +24,15 @@ export interface NamedEntity {
 
 export interface Skill extends NamedEntity {
   hasItemDrop: boolean;
+}
+
+export interface PokemonStats {
+  hp: number;
+  attack: number;
+  defense: number;
+  specialAttack: number;
+  specialDefense: number;
+  speed: number;
 }
 
 export interface UserSummary {
@@ -57,7 +66,17 @@ export interface Pokemon extends EditInfo {
   id: number;
   name: string;
   baseName?: string;
+  genus: string;
+  baseGenus?: string;
+  details: string;
+  baseDetails?: string;
+  heightInches: number;
+  heightMeters: number;
+  weightPounds: number;
+  weightKg: number;
   translations?: TranslationMap;
+  types: NamedEntity[];
+  stats: PokemonStats;
   environment: NamedEntity;
   skills: Skill[];
   favorite_things: NamedEntity[];
@@ -161,6 +180,7 @@ export interface RecipeDetail extends Recipe {
 }
 
 export interface Options {
+  pokemonTypes: NamedEntity[];
   skills: Skill[];
   environments: NamedEntity[];
   favoriteThings: NamedEntity[];
@@ -193,6 +213,7 @@ export interface AuthResponse {
 }
 
 export type ConfigType =
+  | 'pokemon-types'
   | 'skills'
   | 'environments'
   | 'favorite-things'
@@ -204,7 +225,13 @@ export type ConfigType =
 export interface PokemonPayload {
   id: number;
   name: string;
+  genus: string;
+  details: string;
+  heightInches: number;
+  weightPounds: number;
   translations?: TranslationMap;
+  typeIds: number[];
+  stats: PokemonStats;
   environmentId: number;
   skillIds: number[];
   favoriteThingIds: number[];

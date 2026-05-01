@@ -7,6 +7,7 @@ import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
+import PokemonStatsPanel from '../components/PokemonStatsPanel.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit } from '../icons';
@@ -122,6 +123,24 @@ const favoriteThingItems = computed(() => {
 
   return items.filter((item) => String(item.category.id) === itemCategoryTab.value);
 });
+const typeSlotClass = computed(() => ({
+  'pokemon-type-slots--single': (pokemon.value?.types.length ?? 0) === 1
+}));
+
+function formatMetricMeasure(value: number): string {
+  return value.toFixed(2);
+}
+
+function formatPoundsMeasure(value: number): string {
+  return (Math.round(value * 10) / 10).toFixed(1);
+}
+
+function formatImperialHeight(inches: number): string {
+  const totalInches = Math.round(inches);
+  const feet = Math.floor(totalInches / 12);
+  const remainingInches = totalInches - feet * 12;
+  return `${feet}'${remainingInches}"`;
+}
 
 async function loadPokemonDetail() {
   pokemon.value = await api.pokemonDetail(String(route.params.id));
@@ -223,6 +242,51 @@ watch(
 
     <div class="detail-with-sidebar">
       <div class="detail-grid detail-grid--stack">
+        <div class="pokemon-profile-grid">
+          <div class="pokemon-profile-main">
+            <section class="detail-section pokemon-profile-card" :aria-label="t('pages.pokemon.details')">
+              <p v-if="pokemon.genus" class="pokemon-genus">{{ pokemon.genus }}</p>
+              <div v-if="pokemon.genus && pokemon.details.trim()" class="pokemon-profile-divider"></div>
+              <p v-if="pokemon.details.trim()" class="detail-text">{{ pokemon.details }}</p>
+              <p v-if="!pokemon.genus && !pokemon.details.trim()" class="meta-line">{{ t('common.none') }}</p>
+            </section>
+
+            <div class="pokemon-profile-row">
+              <section class="detail-section pokemon-profile-card" :aria-label="t('pages.pokemon.measurements')">
+                <div class="pokemon-measurement-display">
+                  <div class="pokemon-measurement-item" :title="`${formatImperialHeight(pokemon.heightInches)} / ${formatMetricMeasure(pokemon.heightMeters)} m`">
+                    <div class="pokemon-measurement-stack">
+                      <strong class="pokemon-measurement-value">{{ formatImperialHeight(pokemon.heightInches) }}</strong>
+                      <span class="pokemon-measurement-divider" aria-hidden="true"></span>
+                      <strong class="pokemon-measurement-value">{{ formatMetricMeasure(pokemon.heightMeters) }} m</strong>
+                      <span class="pokemon-measurement-label">{{ t('pages.pokemon.height') }}</span>
+                    </div>
+                  </div>
+                  <div class="pokemon-measurement-item" :title="`${formatPoundsMeasure(pokemon.weightPounds)} lbs / ${formatMetricMeasure(pokemon.weightKg)} kg`">
+                    <div class="pokemon-measurement-stack">
+                      <strong class="pokemon-measurement-value">{{ formatPoundsMeasure(pokemon.weightPounds) }} lbs</strong>
+                      <span class="pokemon-measurement-divider" aria-hidden="true"></span>
+                      <strong class="pokemon-measurement-value">{{ formatMetricMeasure(pokemon.weightKg) }} kg</strong>
+                      <span class="pokemon-measurement-label">{{ t('pages.pokemon.weight') }}</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="detail-section pokemon-profile-card pokemon-types-card" :aria-label="t('pages.pokemon.types')">
+                <div v-if="pokemon.types.length" class="pokemon-type-slots" :class="typeSlotClass">
+                  <span v-for="type in pokemon.types.slice(0, 2)" :key="type.id" class="chip">{{ type.name }}</span>
+                </div>
+                <p v-else class="meta-line">{{ t('common.none') }}</p>
+              </section>
+            </div>
+          </div>
+
+          <DetailSection class="pokemon-profile-stats" :title="t('pages.pokemon.statsTitle')">
+            <PokemonStatsPanel :stats="pokemon.stats" />
+          </DetailSection>
+        </div>
+
         <DetailSection :title="t('pages.pokemon.skills')">
           <EntityChips :items="pokemon.skills" />
         </DetailSection>
@@ -287,7 +351,9 @@ watch(
         </DetailSection>
       </div>
 
-      <EditHistoryPanel :entity="pokemon" :history="pokemon.editHistory" />
+      <aside class="pokemon-detail-sidebar">
+        <EditHistoryPanel :entity="pokemon" :history="pokemon.editHistory" />
+      </aside>
     </div>
   </section>
 

@@ -1509,7 +1509,7 @@ export async function listLifePosts(
   const search = asString(paramsQuery.search)?.trim();
   const tagIdValue = asString(paramsQuery.tagId)?.trim();
   const params: unknown[] = [];
-  const conditions: string[] = [];
+  const conditions: string[] = ['lp.deleted_at IS NULL'];
 
   if (search) {
     params.push(`%${search}%`);
@@ -1562,6 +1562,7 @@ async function getLifePostById(id: number, userId: number | null = null, locale 
     `
       ${lifePostProjection(locale)}
       WHERE lp.id = $1
+        AND lp.deleted_at IS NULL
     `,
     [id]
   );
@@ -1620,6 +1621,7 @@ export async function updateLifePost(id: number, payload: Record<string, unknown
         SET body = $1, updated_by_user_id = $2, updated_at = now()
         WHERE id = $3
           AND created_by_user_id = $2
+          AND deleted_at IS NULL
         RETURNING id
       `,
       [cleanPayload.body, userId, id]
@@ -1640,9 +1642,14 @@ export async function updateLifePost(id: number, payload: Record<string, unknown
 export async function deleteLifePost(id: number, userId: number) {
   const result = await queryOne<{ id: number }>(
     `
-      DELETE FROM life_posts
+      UPDATE life_posts
+      SET deleted_at = now(),
+          deleted_by_user_id = $2,
+          updated_by_user_id = $2,
+          updated_at = now()
       WHERE id = $1
         AND created_by_user_id = $2
+        AND deleted_at IS NULL
       RETURNING id
     `,
     [id, userId]
@@ -1663,7 +1670,12 @@ export async function setLifePostReaction(
     `
       INSERT INTO life_post_reactions (post_id, user_id, reaction_type)
       SELECT $1, $2, $3
-      WHERE EXISTS (SELECT 1 FROM life_posts WHERE id = $1)
+      WHERE EXISTS (
+        SELECT 1
+        FROM life_posts
+        WHERE id = $1
+          AND deleted_at IS NULL
+      )
       ON CONFLICT (post_id, user_id)
       DO UPDATE SET reaction_type = EXCLUDED.reaction_type, updated_at = now()
       RETURNING post_id AS "postId"
@@ -1680,6 +1692,12 @@ export async function deleteLifePostReaction(postId: number, userId: number, loc
       DELETE FROM life_post_reactions
       WHERE post_id = $1
         AND user_id = $2
+        AND EXISTS (
+          SELECT 1
+          FROM life_posts
+          WHERE id = $1
+            AND deleted_at IS NULL
+        )
       RETURNING post_id AS "postId"
     `,
     [postId, userId]
@@ -1695,7 +1713,12 @@ export async function createLifeComment(postId: number, payload: Record<string, 
     `
       INSERT INTO life_post_comments (post_id, body, created_by_user_id)
       SELECT $1, $2, $3
-      WHERE EXISTS (SELECT 1 FROM life_posts WHERE id = $1)
+      WHERE EXISTS (
+        SELECT 1
+        FROM life_posts
+        WHERE id = $1
+          AND deleted_at IS NULL
+      )
       RETURNING id
     `,
     [postId, cleanPayload.body, userId]
@@ -1717,10 +1740,12 @@ export async function createLifeCommentReply(
       INSERT INTO life_post_comments (post_id, parent_comment_id, body, created_by_user_id)
       SELECT lc.post_id, lc.id, $3, $4
       FROM life_post_comments lc
+      JOIN life_posts lp ON lp.id = lc.post_id
       WHERE lc.post_id = $1
         AND lc.id = $2
         AND lc.parent_comment_id IS NULL
         AND lc.deleted_at IS NULL
+        AND lp.deleted_at IS NULL
       RETURNING id
     `,
     [postId, commentId, cleanPayload.body, userId]

@@ -378,10 +378,11 @@ Life Post 可配置：
 - 所有人都可以浏览 Life 信息流。
 - 信息流按创建时间倒序展示。
 - 已注册并完成邮箱验证的用户可以发布 Life Post。
-- 作者本人可以编辑、删除自己的 Life Post。
+- 作者本人可以编辑、删除自己的 Life Post；删除 Life Post 使用软删除。
 - 已注册并完成邮箱验证的用户发布或编辑 Life Post 时可以选择一个或多个 Life 标签。
 - 已注册并完成邮箱验证的用户可以评论 Life Post，并回复顶层评论。
 - 评论作者可以删除自己的评论；删除评论后正文不再展示，已有回复保留在原位置。
+- 已软删除的 Life Post 不出现在信息流、搜索或标签筛选结果中，也不能继续编辑、评论或设置 Reaction。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
 - 已注册并完成邮箱验证的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
@@ -399,6 +400,7 @@ API 暴露边界：
 - Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
 - Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。
 - API 不返回邮箱、token/hash、内部调试字段或不必要的审计 payload。
+- API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
 - 非作者不能编辑或删除其他用户的 Life Post。
 - 非作者不能删除其他用户的 Life Comment。
 

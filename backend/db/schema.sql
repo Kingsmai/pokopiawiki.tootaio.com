@@ -136,15 +136,23 @@ CREATE TABLE IF NOT EXISTS life_posts (
   body text NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
   created_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
   updated_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+  deleted_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 ALTER TABLE life_posts DROP COLUMN IF EXISTS link_url;
 ALTER TABLE life_posts DROP COLUMN IF EXISTS link_title;
+ALTER TABLE life_posts ADD COLUMN IF NOT EXISTS deleted_by_user_id integer REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE life_posts ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 
 CREATE INDEX IF NOT EXISTS life_posts_created_at_idx
   ON life_posts(created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS life_posts_active_created_at_idx
+  ON life_posts(created_at DESC, id DESC)
+  WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS life_post_tags (
   post_id integer NOT NULL REFERENCES life_posts(id) ON DELETE CASCADE,

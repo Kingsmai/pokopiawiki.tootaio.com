@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PageHeader from '../components/PageHeader.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import { iconMail } from '../icons';
 import { api } from '../services/api';
 
 const email = ref('');
@@ -67,6 +69,7 @@ async function submitRegister() {
         <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
 
         <button class="ui-button ui-button--primary" :disabled="busy" type="submit">
+          <Icon :icon="iconMail" class="ui-icon" aria-hidden="true" />
           {{ busy ? t('auth.sending') : t('auth.sendVerification') }}
         </button>
       </form>

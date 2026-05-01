@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -9,6 +10,7 @@ import FilterPanel from '../components/FilterPanel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import TagsSelect from '../components/TagsSelect.vue';
+import { iconAdd } from '../icons';
 import { api, type Options, type Pokemon } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
@@ -55,7 +57,10 @@ watch(query, loadPokemon);
     <PageHeader :title="t('pages.pokemon.title')" :subtitle="t('pages.pokemon.subtitle')">
       <template #kicker>Pokédex</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">{{ t('common.add') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('common.add') }}
+        </RouterLink>
       </template>
     </PageHeader>
 

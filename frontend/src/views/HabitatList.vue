@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -7,6 +8,7 @@ import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import { iconAdd, iconHabitat } from '../icons';
 import { api, type Habitat } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
@@ -28,7 +30,10 @@ onMounted(async () => {
     <PageHeader :title="t('pages.habitats.title')" :subtitle="t('pages.habitats.subtitle')">
       <template #kicker>Habitats</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/habitats/new">{{ t('common.add') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/habitats/new">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('common.add') }}
+        </RouterLink>
       </template>
     </PageHeader>
 
@@ -48,7 +53,7 @@ onMounted(async () => {
       </article>
     </div>
     <div v-else class="entity-grid">
-      <EntityCard v-for="item in habitats" :key="item.id" :title="item.name" :to="`/habitats/${item.id}`" marker="◎">
+      <EntityCard v-for="item in habitats" :key="item.id" :title="item.name" :to="`/habitats/${item.id}`" :icon="iconHabitat">
         <EditMeta :entity="item" />
         <EntityChips :items="item.recipe" />
         <EntityChips :items="item.pokemon ?? []" />

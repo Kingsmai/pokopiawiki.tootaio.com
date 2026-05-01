@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -8,6 +9,7 @@ import StatusMessage from '../components/StatusMessage.vue';
 import SwitchGroup from '../components/SwitchGroup.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import TranslationFields from '../components/TranslationFields.vue';
+import { iconAdd, iconCancel, iconDelete, iconPokemon, iconSave } from '../icons';
 import {
   api,
   type ConfigType,
@@ -252,9 +254,15 @@ onMounted(() => {
             :search-placeholder="t('pages.pokemon.searchItems')"
           />
           <input v-model.number="row.quantity" :aria-label="t('common.quantity')" type="number" min="1" />
-          <button type="button" @click="habitatForm.recipeItems.splice(index, 1)">{{ t('common.delete') }}</button>
+          <button type="button" @click="habitatForm.recipeItems.splice(index, 1)">
+            <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+            {{ t('common.delete') }}
+          </button>
         </div>
-        <button type="button" class="plain-button" @click="addHabitatRecipeItem">{{ t('pages.habitats.addItem') }}</button>
+        <button type="button" class="plain-button" @click="addHabitatRecipeItem">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.habitats.addItem') }}
+        </button>
       </div>
 
       <div class="field">
@@ -281,6 +289,7 @@ onMounted(() => {
             </div>
 
             <button type="button" class="appearance-row__delete" @click="habitatForm.pokemonAppearances.splice(index, 1)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
           </div>
@@ -298,7 +307,10 @@ onMounted(() => {
             />
           </div>
         </div>
-        <button type="button" class="plain-button" @click="addPokemonAppearance">{{ t('pages.habitats.addPokemon') }}</button>
+        <button type="button" class="plain-button" @click="addPokemonAppearance">
+          <Icon :icon="iconPokemon" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.habitats.addPokemon') }}
+        </button>
       </div>
     </form>
 
@@ -310,8 +322,14 @@ onMounted(() => {
     </section>
 
     <template v-if="!loading && options" #footer>
-      <button type="submit" form="habitat-edit-form" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">{{ t('common.cancel') }}</button>
+      <button type="submit" form="habitat-edit-form" class="link-button" :disabled="busy">
+        <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+        {{ busy ? t('common.saving') : t('common.save') }}
+      </button>
+      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">
+        <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+        {{ t('common.cancel') }}
+      </button>
     </template>
   </Modal>
 </template>

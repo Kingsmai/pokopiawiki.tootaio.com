@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -7,6 +8,7 @@ import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import { iconBack, iconEdit } from '../icons';
 import { api, type HabitatDetail } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
@@ -174,8 +176,14 @@ watch(
     <PageHeader :title="habitat.name" :subtitle="t('pages.habitats.detailSubtitle')">
       <template #kicker>Habitat Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">{{ t('common.edit') }}</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">{{ t('common.backToList') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">
+          <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+          {{ t('common.edit') }}
+        </RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">
+          <Icon :icon="iconBack" class="ui-icon" aria-hidden="true" />
+          {{ t('common.backToList') }}
+        </RouterLink>
       </template>
     </PageHeader>
 

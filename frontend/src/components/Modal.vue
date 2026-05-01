@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue';
+import { iconClose } from '../icons';
 
 const props = withDefaults(
   defineProps<{
@@ -235,7 +237,7 @@ watch(
             <p v-if="subtitle">{{ subtitle }}</p>
           </div>
           <button ref="closeButton" class="modal-close-button" type="button" :aria-label="closeLabel" @click="requestClose">
-            ×
+            <Icon :icon="iconClose" class="ui-icon" aria-hidden="true" />
           </button>
         </div>
 

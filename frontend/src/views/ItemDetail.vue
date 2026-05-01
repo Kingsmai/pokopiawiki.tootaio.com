@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -7,6 +8,7 @@ import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import { iconAdd, iconBack, iconEdit } from '../icons';
 import { api, type ItemDetail } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
@@ -110,8 +112,14 @@ watch(
     <PageHeader :title="item.name" :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name">
       <template #kicker>Item Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">{{ t('common.edit') }}</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">{{ t('common.backToList') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">
+          <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+          {{ t('common.edit') }}
+        </RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">
+          <Icon :icon="iconBack" class="ui-icon" aria-hidden="true" />
+          {{ t('common.backToList') }}
+        </RouterLink>
       </template>
     </PageHeader>
 
@@ -141,6 +149,7 @@ watch(
           <template v-else>
             <p class="meta-line">{{ t('common.none') }}</p>
             <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/new?itemId=${item.id}`">
+              <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
               {{ t('pages.items.createRecipe') }}
             </RouterLink>
           </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -6,6 +7,7 @@ import Modal from '../components/Modal.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
+import { iconAdd, iconCancel, iconDelete, iconSave } from '../icons';
 import { api, type ConfigType, type Item, type Options, type RecipePayload } from '../services/api';
 
 const route = useRoute();
@@ -186,9 +188,15 @@ onMounted(() => {
             :search-placeholder="t('pages.pokemon.searchItems')"
           />
           <input v-model.number="row.quantity" :aria-label="t('common.quantity')" type="number" min="1" />
-          <button type="button" @click="recipeForm.materials.splice(index, 1)">{{ t('common.delete') }}</button>
+          <button type="button" @click="recipeForm.materials.splice(index, 1)">
+            <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+            {{ t('common.delete') }}
+          </button>
         </div>
-        <button type="button" class="plain-button" @click="addRecipeMaterial">{{ t('pages.recipes.addMaterial') }}</button>
+        <button type="button" class="plain-button" @click="addRecipeMaterial">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.recipes.addMaterial') }}
+        </button>
       </div>
     </form>
 
@@ -200,8 +208,14 @@ onMounted(() => {
     </section>
 
     <template v-if="!loading && options" #footer>
-      <button type="submit" form="recipe-edit-form" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">{{ t('common.cancel') }}</button>
+      <button type="submit" form="recipe-edit-form" class="link-button" :disabled="busy">
+        <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+        {{ busy ? t('common.saving') : t('common.save') }}
+      </button>
+      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">
+        <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+        {{ t('common.cancel') }}
+      </button>
     </template>
   </Modal>
 </template>

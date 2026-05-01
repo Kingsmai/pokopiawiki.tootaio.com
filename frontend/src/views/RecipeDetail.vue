@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -7,6 +8,7 @@ import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import { iconBack, iconEdit } from '../icons';
 import { api, type RecipeDetail } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
@@ -72,8 +74,14 @@ watch(
     <PageHeader :title="recipe.name" :subtitle="t('pages.recipes.detailSubtitle')">
       <template #kicker>Recipe Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">{{ t('common.edit') }}</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/recipes">{{ t('common.backToList') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">
+          <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+          {{ t('common.edit') }}
+        </RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/recipes">
+          <Icon :icon="iconBack" class="ui-icon" aria-hidden="true" />
+          {{ t('common.backToList') }}
+        </RouterLink>
       </template>
     </PageHeader>
 

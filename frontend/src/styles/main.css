@@ -92,6 +92,12 @@ svg {
   max-width: 100%;
 }
 
+.ui-icon {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+}
+
 :focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
@@ -163,6 +169,7 @@ svg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 8px 10px;
   border-radius: var(--radius-control);
   color: var(--ink-soft);
@@ -179,6 +186,11 @@ svg {
 .nav-links a.router-link-active {
   background: var(--pokemon-blue);
   color: #ffffff;
+}
+
+.nav-links__icon {
+  width: 17px;
+  height: 17px;
 }
 
 .auth-actions {
@@ -625,10 +637,12 @@ button:disabled,
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--ink);
-  font-size: 24px;
-  font-weight: 900;
-  line-height: 1;
   cursor: pointer;
+}
+
+.modal-close-button .ui-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .modal-body {
@@ -727,6 +741,11 @@ button:disabled,
   cursor: pointer;
 }
 
+.tags-select__remove .ui-icon {
+  width: 14px;
+  height: 14px;
+}
+
 .tags-select__remove:hover {
   background: rgba(42, 117, 187, 0.14);
 }
@@ -738,8 +757,13 @@ button:disabled,
 .tags-select__arrow {
   flex: 0 0 auto;
   color: var(--muted);
-  font-size: 18px;
-  line-height: 1;
+  width: 18px;
+  height: 18px;
+  transition: transform 0.14s ease;
+}
+
+.tags-select__trigger.open .tags-select__arrow {
+  transform: rotate(180deg);
 }
 
 .tags-select__dropdown {
@@ -808,10 +832,18 @@ button:disabled,
 }
 
 .tags-select__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: 0 0 auto;
   color: var(--pokemon-blue);
   font-size: 12px;
   font-weight: 850;
+}
+
+.tags-select__state .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .tags-select__empty {
@@ -1052,6 +1084,11 @@ button:disabled,
   font-weight: 950;
 }
 
+.entity-card__icon {
+  width: 26px;
+  height: 26px;
+}
+
 .entity-card__content {
   display: grid;
   align-content: start;
@@ -1204,6 +1241,11 @@ button:disabled,
 .drag-handle:disabled {
   cursor: not-allowed;
   opacity: 0.54;
+}
+
+.drag-handle .ui-icon {
+  width: 22px;
+  height: 22px;
 }
 
 .reorderable-row-title {
@@ -1685,14 +1727,12 @@ button:disabled,
   visibility: hidden;
 }
 
-.status-message::before {
-  content: "";
-  width: 12px;
-  height: 12px;
+.status-message__icon {
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--status-accent, var(--pokemon-blue));
+  margin-top: 2px;
+  color: var(--status-accent, var(--pokemon-blue));
 }
 
 .status-message--success {

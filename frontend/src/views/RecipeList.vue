@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -9,6 +10,7 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
+import { iconAdd, iconNoRecipe, iconRecipe } from '../icons';
 import { api, type Item, type Options } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
@@ -52,12 +54,12 @@ function createRecipeTarget(item: Item) {
   return `/recipes/new?itemId=${item.id}`;
 }
 
-function itemMarker(item: Item) {
+function itemIcon(item: Item) {
   if (item.recipe) {
-    return '▦';
+    return iconRecipe;
   }
 
-  return item.noRecipe ? '×' : '＋';
+  return item.noRecipe ? iconNoRecipe : iconAdd;
 }
 
 async function loadItems() {
@@ -79,7 +81,10 @@ watch(itemQuery, loadItems);
     <PageHeader :title="t('pages.recipes.title')" :subtitle="t('pages.recipes.subtitle')">
       <template #kicker>Recipes</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/recipes/new">{{ t('common.add') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/recipes/new">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('common.add') }}
+        </RouterLink>
       </template>
     </PageHeader>
 
@@ -145,10 +150,11 @@ watch(itemQuery, loadItems);
         :title="item.name"
         :subtitle="itemSubtitle(item)"
         :to="recipeTarget(item)"
-        :marker="itemMarker(item)"
+        :icon="itemIcon(item)"
       >
         <EditMeta v-if="item.recipe" :entity="item.recipe" />
         <RouterLink v-else-if="!item.noRecipe" class="ui-button ui-button--primary ui-button--small" :to="createRecipeTarget(item)">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('pages.items.createRecipe') }}
         </RouterLink>
       </EntityCard>

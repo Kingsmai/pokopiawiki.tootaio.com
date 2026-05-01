@@ -1,5 +1,7 @@
 <script setup lang="ts" generic="T">
+import { Icon } from '@iconify/vue';
 import { ref, shallowRef } from 'vue';
+import { iconDragHandle } from '../icons';
 
 const props = withDefaults(defineProps<{
   items: T[];
@@ -209,7 +211,7 @@ function handleKeydown(item: T, event: KeyboardEvent) {
         @dragend="endDrag"
         @keydown="handleKeydown(item, $event)"
       >
-        <span aria-hidden="true">⋮⋮</span>
+        <Icon :icon="iconDragHandle" class="ui-icon" aria-hidden="true" />
       </button>
       <slot :item="item" />
     </li>

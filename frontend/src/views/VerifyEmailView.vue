@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import { iconLogin } from '../icons';
 import { api } from '../services/api';
 
 const route = useRoute();
@@ -48,7 +50,10 @@ onMounted(async () => {
       <StatusMessage v-else-if="message" variant="success">{{ message }}</StatusMessage>
       <StatusMessage v-else variant="danger">{{ errorMessage }}</StatusMessage>
 
-      <RouterLink v-if="!busy" class="ui-button ui-button--primary" to="/login">{{ t('auth.goLogin') }}</RouterLink>
+      <RouterLink v-if="!busy" class="ui-button ui-button--primary" to="/login">
+        <Icon :icon="iconLogin" class="ui-icon" aria-hidden="true" />
+        {{ t('auth.goLogin') }}
+      </RouterLink>
     </div>
   </section>
 </template>

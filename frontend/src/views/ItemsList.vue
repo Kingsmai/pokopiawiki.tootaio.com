@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -10,6 +11,7 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
+import { iconAdd, iconItem } from '../icons';
 import { api, type Item, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
@@ -59,7 +61,10 @@ watch(itemQuery, loadItems);
     <PageHeader :title="t('pages.items.title')" :subtitle="t('pages.items.subtitle')">
       <template #kicker>Bag</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/items/new">{{ t('common.add') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/items/new">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('common.add') }}
+        </RouterLink>
       </template>
     </PageHeader>
 
@@ -132,7 +137,7 @@ watch(itemQuery, loadItems);
         :title="item.name"
         :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name"
         :to="`/items/${item.id}`"
-        marker="＋"
+        :icon="iconItem"
       >
         <EditMeta :entity="item" />
         <EntityChips :items="item.tags" />

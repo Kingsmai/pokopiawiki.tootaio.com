@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import { iconLogin } from '../icons';
 import { api, setAuthToken } from '../services/api';
 
 const route = useRoute();
@@ -59,6 +61,7 @@ async function submitLogin() {
         <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
 
         <button class="ui-button ui-button--primary" :disabled="busy" type="submit">
+          <Icon :icon="iconLogin" class="ui-icon" aria-hidden="true" />
           {{ busy ? t('auth.loggingIn') : t('nav.login') }}
         </button>
       </form>

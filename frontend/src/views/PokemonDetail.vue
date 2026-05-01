@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -8,6 +9,7 @@ import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
+import { iconBack, iconEdit } from '../icons';
 import { api, type PokemonDetail } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
@@ -208,8 +210,14 @@ watch(
     <PageHeader :title="`#${pokemon.id} ${pokemon.name}`" :subtitle="t('pages.pokemon.environmentPrefix', { name: pokemon.environment.name })">
       <template #kicker>Pokédex Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">{{ t('common.edit') }}</RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">{{ t('common.backToList') }}</RouterLink>
+        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">
+          <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+          {{ t('common.edit') }}
+        </RouterLink>
+        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">
+          <Icon :icon="iconBack" class="ui-icon" aria-hidden="true" />
+          {{ t('common.backToList') }}
+        </RouterLink>
       </template>
     </PageHeader>
 

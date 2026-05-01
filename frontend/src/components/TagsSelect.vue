@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { iconCheck, iconChevronDown, iconClose } from '../icons';
 
 export type TagsSelectOption = {
   id: number | string;
@@ -259,14 +261,14 @@ watch(candidateRows, clampActiveIndex);
               @keydown.enter.stop.prevent="remove(option.value)"
               @keydown.space.stop.prevent="remove(option.value)"
             >
-              ×
+              <Icon :icon="iconClose" class="ui-icon" aria-hidden="true" />
             </span>
           </span>
         </template>
         <span v-else class="tags-select__single-value">{{ selectedLabel }}</span>
       </span>
       <span v-else class="tags-select__placeholder">{{ placeholderText }}</span>
-      <span class="tags-select__arrow" aria-hidden="true">⌄</span>
+      <Icon :icon="iconChevronDown" class="tags-select__arrow" aria-hidden="true" />
     </button>
 
     <div v-if="isOpen" class="tags-select__dropdown">
@@ -299,7 +301,10 @@ watch(candidateRows, clampActiveIndex);
           @click="selectOption(option.value)"
         >
           <span>{{ option.label }}</span>
-          <span v-if="selectedValues.has(option.value)" class="tags-select__state">{{ t('common.selected') }}</span>
+          <span v-if="selectedValues.has(option.value)" class="tags-select__state">
+            <Icon :icon="iconCheck" class="ui-icon" aria-hidden="true" />
+            {{ t('common.selected') }}
+          </span>
         </button>
         <button
           v-if="canCreate"

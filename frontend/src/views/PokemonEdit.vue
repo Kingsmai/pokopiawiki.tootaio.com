@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -7,6 +8,7 @@ import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import TranslationFields from '../components/TranslationFields.vue';
+import { iconCancel, iconSave } from '../icons';
 import { api, type ConfigType, type Language, type NamedEntity, type Options, type PokemonPayload, type TranslationMap } from '../services/api';
 
 type SkillItemDropForm = {
@@ -287,8 +289,14 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
     </section>
 
     <template v-if="!loading && options" #footer>
-      <button type="submit" form="pokemon-edit-form" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">{{ t('common.cancel') }}</button>
+      <button type="submit" form="pokemon-edit-form" class="link-button" :disabled="busy">
+        <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+        {{ busy ? t('common.saving') : t('common.save') }}
+      </button>
+      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">
+        <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+        {{ t('common.cancel') }}
+      </button>
     </template>
   </Modal>
 </template>

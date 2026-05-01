@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Modal from '../components/Modal.vue';
@@ -8,6 +9,21 @@ import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TranslationFields from '../components/TranslationFields.vue';
+import {
+  iconAdd,
+  iconAdmin,
+  iconCancel,
+  iconChecklist,
+  iconDelete,
+  iconEdit,
+  iconHabitat,
+  iconItem,
+  iconPokemon,
+  iconRecipe,
+  iconSave,
+  iconTranslate,
+  type AppIcon
+} from '../icons';
 import { defaultLocale, getCurrentLocale, setCurrentLocale } from '../i18n';
 import {
   api,
@@ -26,6 +42,16 @@ import {
 
 type AdminTab = 'config' | 'languages' | 'checklist' | 'pokemon' | 'items' | 'recipes' | 'habitats';
 type EditableConfig = (NamedEntity | Skill) & { hasItemDrop?: boolean };
+
+const adminTabIcons: Record<AdminTab, AppIcon> = {
+  config: iconAdmin,
+  languages: iconTranslate,
+  checklist: iconChecklist,
+  pokemon: iconPokemon,
+  items: iconItem,
+  recipes: iconRecipe,
+  habitats: iconHabitat
+};
 
 const { locale, t } = useI18n();
 
@@ -570,6 +596,7 @@ onMounted(() => {
 
     <div v-if="canEdit" class="tabs" role="tablist" :aria-label="t('pages.admin.modules')">
       <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" type="button" @click="setTab(tab.key)">
+        <Icon :icon="adminTabIcons[tab.key]" class="ui-icon" aria-hidden="true" />
         {{ tab.label }}
       </button>
     </div>
@@ -592,6 +619,7 @@ onMounted(() => {
       <div class="detail-section__header">
         <h2>{{ t('pages.admin.checklist') }}</h2>
         <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewChecklistItem">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.new') }}
         </button>
       </div>
@@ -612,8 +640,14 @@ onMounted(() => {
         <template #default="{ item }">
           <span class="reorderable-row-title">{{ item.title }}</span>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="editChecklistItem(item)">{{ t('common.edit') }}</button>
-            <button type="button" :disabled="busy" @click="removeChecklistItem(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="editChecklistItem(item)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button type="button" :disabled="busy" @click="removeChecklistItem(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
           </span>
         </template>
       </ReorderableList>
@@ -624,6 +658,7 @@ onMounted(() => {
       <div class="detail-section__header">
         <h2>{{ t('pages.admin.config') }}</h2>
         <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewConfig">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.new') }}
         </button>
       </div>
@@ -647,8 +682,14 @@ onMounted(() => {
             {{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span>
           </span>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="editConfig(item)">{{ t('common.edit') }}</button>
-            <button type="button" :disabled="busy" @click="removeConfig(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="editConfig(item)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button type="button" :disabled="busy" @click="removeConfig(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
           </span>
         </template>
       </ReorderableList>
@@ -659,6 +700,7 @@ onMounted(() => {
       <div class="detail-section__header">
         <h2>{{ t('pages.admin.languages') }}</h2>
         <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewLanguage">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.new') }}
         </button>
       </div>
@@ -681,8 +723,14 @@ onMounted(() => {
             <span v-if="item.isDefault" class="config-flag">{{ t('pages.admin.defaultLanguage') }}</span>
           </span>
           <span class="row-actions">
-            <button type="button" @click="editLanguage(item)">{{ t('common.edit') }}</button>
-            <button type="button" :disabled="item.isDefault" @click="removeLanguage(item.code)">{{ t('common.delete') }}</button>
+            <button type="button" @click="editLanguage(item)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button type="button" :disabled="item.isDefault" @click="removeLanguage(item.code)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
           </span>
         </template>
       </ReorderableList>
@@ -707,7 +755,10 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/pokemon/${item.id}`">#{{ item.id }} {{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removePokemon(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removePokemon(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
           </span>
         </template>
       </ReorderableList>
@@ -732,7 +783,10 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removeItem(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removeItem(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
           </span>
         </template>
       </ReorderableList>
@@ -757,7 +811,10 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/recipes/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removeRecipe(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removeRecipe(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
           </span>
         </template>
       </ReorderableList>
@@ -782,7 +839,10 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/habitats/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removeHabitat(item.id)">{{ t('common.delete') }}</button>
+            <button type="button" :disabled="busy" @click="removeHabitat(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
           </span>
         </template>
       </ReorderableList>
@@ -804,9 +864,13 @@ onMounted(() => {
 
       <template #footer>
         <button type="submit" form="admin-checklist-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>
-        <button type="button" class="plain-button" :disabled="busy" @click="closeChecklistModal">{{ t('common.cancel') }}</button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeChecklistModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
       </template>
     </Modal>
 
@@ -826,9 +890,13 @@ onMounted(() => {
 
       <template #footer>
         <button type="submit" form="admin-config-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>
-        <button type="button" class="plain-button" :disabled="busy" @click="closeConfigModal">{{ t('common.cancel') }}</button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeConfigModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
       </template>
     </Modal>
 
@@ -853,9 +921,13 @@ onMounted(() => {
 
       <template #footer>
         <button type="submit" form="admin-language-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>
-        <button type="button" class="plain-button" :disabled="busy" @click="closeLanguageModal">{{ t('common.cancel') }}</button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeLanguageModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
       </template>
     </Modal>
   </section>

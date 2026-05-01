@@ -6,12 +6,21 @@ import { useRoute } from 'vue-router';
 import { iconClose, iconLogin, iconLogout, iconMenu, iconRegister, iconTranslate, type AppIcon } from '../icons';
 import type { AuthUser, Language } from '../services/api';
 import PokeBallMark from './PokeBallMark.vue';
+import StatusBadge from './StatusBadge.vue';
 
 defineProps<{
   currentUser: AuthUser | null;
   languages: Language[];
   locale: string;
-  navItems: Array<{ label: string; to: string; icon?: AppIcon }>;
+  navItems: Array<{
+    label: string;
+    to: string;
+    icon?: AppIcon;
+    badge?: {
+      label: string;
+      tone?: 'info' | 'success' | 'warning' | 'danger' | 'neutral';
+    };
+  }>;
 }>();
 
 const emit = defineEmits<{
@@ -132,7 +141,14 @@ onBeforeUnmount(() => {
             @click="closeSidebar"
           >
             <Icon v-if="item.icon" :icon="item.icon" class="ui-icon side-nav__icon" aria-hidden="true" />
-            <span>{{ item.label }}</span>
+            <span class="side-nav__label">{{ item.label }}</span>
+            <StatusBadge
+              v-if="item.badge"
+              class="side-nav__badge"
+              :label="item.badge.label"
+              :tone="item.badge.tone"
+              compact
+            />
           </RouterLink>
         </nav>
 

@@ -35,6 +35,7 @@ const messages = {
       noMatches: 'No matches',
       createNamed: 'Add "{name}"',
       creating: 'Adding',
+      inDev: 'In-Dev',
       removeNamed: 'Remove {name}',
       quantity: 'Quantity',
       required: 'Required'
@@ -44,6 +45,11 @@ const messages = {
       habitats: 'Habitats',
       items: 'Items',
       recipes: 'Recipes',
+      dish: 'Dish',
+      events: 'Events',
+      actions: 'Actions',
+      dreamIsland: 'Dream Island',
+      clothes: 'Clothes',
       checklist: 'CheckList',
       life: 'Life',
       admin: 'Admin',
@@ -213,6 +219,68 @@ const messages = {
         item: 'Item',
         materials: 'Materials',
         addMaterial: 'Add material'
+      },
+      comingSoon: {
+        status: 'In development',
+        heading: 'This wiki section is being prepared.',
+        previewLabel: 'Section preview',
+        sections: {
+          dish: {
+            kicker: 'Dish',
+            title: 'Dish',
+            subtitle: 'A future home for cooked dishes and food discoveries.',
+            body: 'Dish pages are being shaped for clear browsing, source notes, and useful ingredient links.',
+            preview: {
+              one: 'Dish records will focus on names, effects, and discovery context.',
+              two: 'Ingredient relationships will connect back to items and recipes where useful.',
+              three: 'The page will stay browse-first so community edits can grow naturally.'
+            }
+          },
+          events: {
+            kicker: 'Events',
+            title: 'Events',
+            subtitle: 'Seasonal and limited-time game activity records are coming later.',
+            body: 'Events will collect timing, rewards, and participation details once the section is ready.',
+            preview: {
+              one: 'Event cards will make dates and active windows easy to scan.',
+              two: 'Rewards and related items will sit close to the event summary.',
+              three: 'Archived activities will remain readable after they end.'
+            }
+          },
+          actions: {
+            kicker: 'Actions',
+            title: 'Actions',
+            subtitle: 'Game shortcut actions such as waving and dancing will be documented here.',
+            body: 'Actions are being prepared as a quick reference for expressive in-game gestures and shortcuts.',
+            preview: {
+              one: 'Each action will describe the gesture or shortcut in player-facing language.',
+              two: 'Common examples include waving, dancing, and other social actions.',
+              three: 'Related unlock or usage details can be linked when the data model is ready.'
+            }
+          },
+          dreamIsland: {
+            kicker: 'Dream Island',
+            title: 'Dream Island',
+            subtitle: 'Dream Island information is being organized for future browsing.',
+            body: 'This area will present island details with a calm, destination-style layout when content is ready.',
+            preview: {
+              one: 'Island notes will prioritize location, availability, and notable discoveries.',
+              two: 'Related Pokemon, items, or activities can be connected from the page.',
+              three: 'The layout will support browsing without adding another management flow yet.'
+            }
+          },
+          clothes: {
+            kicker: 'Clothes',
+            title: 'Clothes',
+            subtitle: 'Outfit and clothing references are being prepared.',
+            body: 'Clothes pages will make it easy to compare appearance, acquisition, and customization details.',
+            preview: {
+              one: 'Clothing entries will focus on display names and visual categories.',
+              two: 'Acquisition and customization details can be connected when available.',
+              three: 'The page will keep item-like details readable without mixing them into the item list.'
+            }
+          }
+        }
       },
       checklist: {
         title: 'Daily checklist',
@@ -396,6 +464,7 @@ const messages = {
       noMatches: '没有匹配项',
       createNamed: '添加「{name}」',
       creating: '添加中',
+      inDev: '开发中',
       removeNamed: '移除{name}',
       quantity: '数量',
       required: '必填'
@@ -405,6 +474,11 @@ const messages = {
       habitats: '栖息地',
       items: '物品',
       recipes: '材料单',
+      dish: '料理',
+      events: '活动',
+      actions: '动作',
+      dreamIsland: 'Dream Island',
+      clothes: '服装',
       checklist: 'CheckList',
       life: 'Life',
       admin: '管理',
@@ -574,6 +648,68 @@ const messages = {
         item: '物品',
         materials: '需要材料',
         addMaterial: '添加材料'
+      },
+      comingSoon: {
+        status: '正在开发中',
+        heading: '这个 Wiki 分区正在准备中。',
+        previewLabel: '分区预览',
+        sections: {
+          dish: {
+            kicker: 'Dish',
+            title: '料理',
+            subtitle: '未来会用于整理料理和食物相关发现。',
+            body: '料理页面会围绕清晰浏览、来源记录和材料关联来设计。',
+            preview: {
+              one: '料理记录会优先呈现名称、效果和发现方式。',
+              two: '需要时会把材料关系连接回物品和材料单。',
+              three: '页面会先保持浏览友好，后续再自然承接社区编辑内容。'
+            }
+          },
+          events: {
+            kicker: 'Events',
+            title: '活动',
+            subtitle: '季节活动和限时内容资料会在这里整理。',
+            body: '活动分区会在准备好后集中展示时间、奖励和参与信息。',
+            preview: {
+              one: '活动卡片会让日期和开放时间更容易浏览。',
+              two: '奖励与关联物品会靠近活动摘要展示。',
+              three: '活动结束后，历史记录也会保持可读。'
+            }
+          },
+          actions: {
+            kicker: 'Actions',
+            title: '动作',
+            subtitle: '挥手、跳舞等游戏内快捷动作会记录在这里。',
+            body: '动作分区会作为游戏内表情、社交动作和快捷动作的快速参考。',
+            preview: {
+              one: '每个动作会用面向玩家的语言说明动作或快捷方式。',
+              two: '常见内容包括挥手、跳舞和其他社交动作。',
+              three: '后续可在数据模型准备好后补充解锁或使用条件。'
+            }
+          },
+          dreamIsland: {
+            kicker: 'Dream Island',
+            title: 'Dream Island',
+            subtitle: 'Dream Island 相关资料正在整理。',
+            body: '这个区域未来会用更像目的地资料页的方式展示岛屿信息。',
+            preview: {
+              one: '岛屿记录会优先整理地点、开放状态和重要发现。',
+              two: '可关联的 Pokemon、物品或活动会从页面中连接出来。',
+              three: '目前先保持公开浏览入口，不额外增加管理流程。'
+            }
+          },
+          clothes: {
+            kicker: 'Clothes',
+            title: '服装',
+            subtitle: '外观和服装资料正在准备。',
+            body: '服装页面会用于对比外观、入手方式和自定义信息。',
+            preview: {
+              one: '服装条目会优先整理展示名称和视觉分类。',
+              two: '入手方式与自定义信息会在资料可用后接入。',
+              three: '页面会保持服装资料清晰，不和普通物品列表混在一起。'
+            }
+          }
+        }
       },
       checklist: {
         title: '每日清单',

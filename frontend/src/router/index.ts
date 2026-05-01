@@ -9,6 +9,7 @@ import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
 import LifeView from '../views/LifeView.vue';
+import ComingSoonView from '../views/ComingSoonView.vue';
 import AdminView from '../views/AdminView.vue';
 import LoginView from '../views/LoginView.vue';
 import RegisterView from '../views/RegisterView.vue';
@@ -35,6 +36,11 @@ export const router = createRouter({
     { path: '/recipes/new', name: 'recipe-new', component: RecipeList, meta: { requiresVerified: true, editorModal: true } },
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeDetail, meta: { requiresVerified: true, editorModal: true } },
     { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetail },
+    { path: '/dish', name: 'dish', component: ComingSoonView, props: { page: 'dish' } },
+    { path: '/events', name: 'events', component: ComingSoonView, props: { page: 'events' } },
+    { path: '/actions', name: 'actions', component: ComingSoonView, props: { page: 'actions' } },
+    { path: '/dream-island', name: 'dream-island', component: ComingSoonView, props: { page: 'dreamIsland' } },
+    { path: '/clothes', name: 'clothes', component: ComingSoonView, props: { page: 'clothes' } },
     { path: '/checklist', component: DailyChecklistView },
     { path: '/life', component: LifeView },
     { path: '/admin', component: AdminView, meta: { requiresVerified: true } },

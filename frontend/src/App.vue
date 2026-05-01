@@ -3,7 +3,20 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import AppShell from './components/AppShell.vue';
-import { iconAdmin, iconChecklist, iconHabitat, iconItem, iconLife, iconPokemon, iconRecipe } from './icons';
+import {
+  iconAction,
+  iconAdmin,
+  iconChecklist,
+  iconClothes,
+  iconDish,
+  iconDreamIsland,
+  iconEvent,
+  iconHabitat,
+  iconItem,
+  iconLife,
+  iconPokemon,
+  iconRecipe
+} from './icons';
 import { getCurrentLocale, onLocaleChange, setCurrentLocale } from './i18n';
 import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser, type Language } from './services/api';
 
@@ -18,11 +31,20 @@ const languages = ref<Language[]>([
 let removeAuthListener: (() => void) | null = null;
 let removeLocaleListener: (() => void) | null = null;
 
+function inDevBadge() {
+  return { label: t('common.inDev'), tone: 'info' as const };
+}
+
 const navItems = computed(() => [
   { label: t('nav.pokemon'), to: '/pokemon', icon: iconPokemon },
   { label: t('nav.habitats'), to: '/habitats', icon: iconHabitat },
   { label: t('nav.items'), to: '/items', icon: iconItem },
   { label: t('nav.recipes'), to: '/recipes', icon: iconRecipe },
+  { label: t('nav.dish'), to: '/dish', icon: iconDish, badge: inDevBadge() },
+  { label: t('nav.events'), to: '/events', icon: iconEvent, badge: inDevBadge() },
+  { label: t('nav.actions'), to: '/actions', icon: iconAction, badge: inDevBadge() },
+  { label: t('nav.dreamIsland'), to: '/dream-island', icon: iconDreamIsland, badge: inDevBadge() },
+  { label: t('nav.clothes'), to: '/clothes', icon: iconClothes, badge: inDevBadge() },
   { label: t('nav.checklist'), to: '/checklist', icon: iconChecklist },
   { label: t('nav.life'), to: '/life', icon: iconLife },
   { label: t('nav.admin'), to: '/admin', icon: iconAdmin }

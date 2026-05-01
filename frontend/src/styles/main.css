@@ -208,9 +208,30 @@ svg {
   box-shadow: 0 2px 0 var(--line-strong);
 }
 
+.side-nav__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .side-nav__icon {
   width: 19px;
   height: 19px;
+}
+
+.side-nav__badge {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.side-nav__link.router-link-active .status-badge {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.side-nav__link.router-link-active .status-badge__dot {
+  background: var(--pokemon-yellow);
 }
 
 .auth-actions {
@@ -1902,6 +1923,222 @@ button:disabled,
   font-weight: 800;
 }
 
+.status-badge {
+  --status-color: var(--muted);
+  width: fit-content;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 34%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status-color) 10%, var(--surface-soft));
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-badge--compact {
+  min-height: 22px;
+  gap: 4px;
+  padding: 3px 6px;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.status-badge__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--status-color);
+}
+
+.status-badge__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-badge--info {
+  --status-color: var(--pokemon-blue);
+}
+
+.status-badge--success {
+  --status-color: var(--success);
+}
+
+.status-badge--warning {
+  --status-color: var(--warning);
+}
+
+.status-badge--danger {
+  --status-color: var(--danger);
+}
+
+.status-badge--neutral {
+  --status-color: var(--muted);
+}
+
+.coming-soon-panel {
+  --soon-accent: var(--pokemon-blue);
+  --soon-accent-soft: color-mix(in srgb, var(--soon-accent) 14%, var(--surface));
+  position: relative;
+  min-height: 300px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(160px, 0.32fr);
+  align-items: center;
+  gap: 20px;
+  overflow: hidden;
+  padding: 24px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(135deg, var(--soon-accent-soft), transparent 62%),
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
+  box-shadow: var(--shadow-control);
+}
+
+.coming-soon-panel--dish {
+  --soon-accent: var(--pokemon-yellow);
+}
+
+.coming-soon-panel--events {
+  --soon-accent: var(--pokemon-red);
+}
+
+.coming-soon-panel--actions {
+  --soon-accent: var(--pokemon-blue);
+}
+
+.coming-soon-panel--dream {
+  --soon-accent: var(--success);
+}
+
+.coming-soon-panel--clothes {
+  --soon-accent: var(--type-psychic);
+}
+
+.coming-soon-panel__icon {
+  width: clamp(76px, 11vw, 118px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--soon-accent);
+  box-shadow: 0 5px 0 var(--line-strong);
+  color: #172036;
+}
+
+.coming-soon-panel--events .coming-soon-panel__icon,
+.coming-soon-panel--actions .coming-soon-panel__icon,
+.coming-soon-panel--dream .coming-soon-panel__icon,
+.coming-soon-panel--clothes .coming-soon-panel__icon {
+  color: #ffffff;
+}
+
+.coming-soon-panel__icon .ui-icon {
+  width: 54%;
+  height: 54%;
+}
+
+.coming-soon-panel__copy {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.coming-soon-panel__copy h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 46px);
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.coming-soon-panel__copy p {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.coming-soon-panel__signal {
+  height: 100%;
+  min-height: 180px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 8px;
+}
+
+.coming-soon-panel__signal span {
+  display: block;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--soon-accent) 72%, #ffffff), var(--soon-accent)),
+    var(--soon-accent);
+  box-shadow: 0 3px 0 var(--line-strong);
+}
+
+.coming-soon-panel__signal span:nth-child(1) {
+  height: 46%;
+}
+
+.coming-soon-panel__signal span:nth-child(2) {
+  height: 72%;
+}
+
+.coming-soon-panel__signal span:nth-child(3) {
+  height: 58%;
+}
+
+.coming-soon-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.coming-soon-preview__item {
+  min-height: 128px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.coming-soon-preview__index {
+  width: 42px;
+  min-height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--surface-soft);
+  color: var(--pokemon-blue-deep);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.coming-soon-preview__item p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 .reorderable-row {
   position: relative;
   flex-wrap: wrap;
@@ -3077,6 +3314,19 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 
+  .coming-soon-panel {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .coming-soon-panel__signal {
+    grid-column: 1 / -1;
+    min-height: 94px;
+  }
+
+  .coming-soon-preview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .appearance-row__main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3106,12 +3356,22 @@ button:disabled,
   .filter-panel,
   .toolbar,
   .entity-grid,
-  .grid {
+  .grid,
+  .coming-soon-preview {
     grid-template-columns: 1fr;
   }
 
   .entity-card {
     grid-template-columns: 1fr;
+  }
+
+  .coming-soon-panel {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .coming-soon-panel__signal {
+    min-height: 76px;
   }
 
   .life-post__header {

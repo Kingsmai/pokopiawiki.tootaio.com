@@ -23,7 +23,8 @@ type EntityType =
   | 'items'
   | 'maps'
   | 'habitats'
-  | 'daily-checklist-items';
+  | 'daily-checklist-items'
+  | 'life-tags';
 
 type ConfigType =
   | 'pokemon-types'
@@ -33,7 +34,8 @@ type ConfigType =
   | 'item-categories'
   | 'item-usages'
   | 'acquisition-methods'
-  | 'maps';
+  | 'maps'
+  | 'life-tags';
 
 type ConfigDefinition = {
   table: string;
@@ -107,6 +109,7 @@ type DailyChecklistPayload = {
 
 type LifePostPayload = {
   body: string;
+  tagIds: number[];
 };
 
 type LifeCommentPayload = {
@@ -139,6 +142,7 @@ type LifePostRow = {
   updatedAt: Date;
   author: { id: number; displayName: string } | null;
   updatedBy: { id: number; displayName: string } | null;
+  tags: Array<{ id: number; name: string }>;
 };
 
 type LifePost = Omit<LifePostRow, 'createdAtCursor'> & {
@@ -248,7 +252,8 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'item-categories': { table: 'item_categories', entityType: 'item-categories' },
   'item-usages': { table: 'item_usages', entityType: 'item-usages' },
   'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
-  maps: { table: 'maps', entityType: 'maps' }
+  maps: { table: 'maps', entityType: 'maps' },
+  'life-tags': { table: 'life_tags', entityType: 'life-tags' }
 };
 
 const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
@@ -1068,7 +1073,8 @@ export async function getOptions(locale = defaultLocale) {
     itemCategories,
     itemUsages,
     acquisitionMethods,
-    maps
+    maps,
+    lifeTags
   ] = await Promise.all([
     optionSelect('pokemon_types', 'pokemon-types', locale),
     skillOptions(locale),
@@ -1077,7 +1083,8 @@ export async function getOptions(locale = defaultLocale) {
     optionSelect('item_categories', 'item-categories', locale),
     optionSelect('item_usages', 'item-usages', locale),
     optionSelect('acquisition_methods', 'acquisition-methods', locale),
-    optionSelect('maps', 'maps', locale)
+    optionSelect('maps', 'maps', locale),
+    optionSelect('life_tags', 'life-tags', locale)
   ]);
 
   return {
@@ -1089,7 +1096,8 @@ export async function getOptions(locale = defaultLocale) {
     itemUsages,
     acquisitionMethods,
     itemTags: favoriteThings,
-    maps
+    maps,
+    lifeTags
   };
 }
 
@@ -1231,7 +1239,10 @@ function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload
     throw validationError('Post is too long');
   }
 
-  return { body };
+  return {
+    body,
+    tagIds: cleanIds(payload.tagIds)
+  };
 }
 
 function cleanLifeCommentPayload(payload: Record<string, unknown>): LifeCommentPayload {
@@ -1264,7 +1275,9 @@ function cleanLifeReactionType(value: unknown): LifeReactionType {
   return value;
 }
 
-function lifePostProjection(): string {
+function lifePostProjection(locale = defaultLocale): string {
+  const tagName = localizedName('life-tags', 'lt', locale);
+
   return `
     SELECT
       lp.id,
@@ -1279,7 +1292,13 @@ function lifePostProjection(): string {
       CASE
         WHEN updated_user.id IS NULL THEN NULL
         ELSE json_build_object('id', updated_user.id, 'displayName', updated_user.display_name)
-      END AS "updatedBy"
+      END AS "updatedBy",
+      COALESCE((
+        SELECT json_agg(json_build_object('id', lt.id, 'name', ${tagName}) ORDER BY ${orderByEntity('lt')})
+        FROM life_post_tags lpt
+        JOIN life_tags lt ON lt.id = lpt.tag_id
+        WHERE lpt.post_id = lp.id
+      ), '[]'::json) AS tags
     FROM life_posts lp
     LEFT JOIN users created_user ON created_user.id = lp.created_by_user_id
     LEFT JOIN users updated_user ON updated_user.id = lp.updated_by_user_id
@@ -1337,6 +1356,7 @@ function hydrateLifePost(
     updatedAt: post.updatedAt,
     author: post.author,
     updatedBy: post.updatedBy,
+    tags: post.tags,
     comments: commentsByPost.get(post.id) ?? [],
     reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
     myReaction: myReactionsByPost.get(post.id) ?? null
@@ -1479,16 +1499,32 @@ async function getLifeCommentById(id: number): Promise<LifeComment | null> {
   return row ? { ...row, replies: [] } : null;
 }
 
-export async function listLifePosts(paramsQuery: QueryParams = {}, userId: number | null = null): Promise<LifePostsPage> {
+export async function listLifePosts(
+  paramsQuery: QueryParams = {},
+  userId: number | null = null,
+  locale = defaultLocale
+): Promise<LifePostsPage> {
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
   const search = asString(paramsQuery.search)?.trim();
+  const tagIdValue = asString(paramsQuery.tagId)?.trim();
   const params: unknown[] = [];
   const conditions: string[] = [];
 
   if (search) {
     params.push(`%${search}%`);
     conditions.push(`lp.body ILIKE $${params.length}`);
+  }
+
+  if (tagIdValue) {
+    const tagId = requirePositiveInteger(tagIdValue, 'Tag is invalid');
+    params.push(tagId);
+    conditions.push(`EXISTS (
+      SELECT 1
+      FROM life_post_tags lpt_filter
+      WHERE lpt_filter.post_id = lp.id
+        AND lpt_filter.tag_id = $${params.length}
+    )`);
   }
 
   if (cursor) {
@@ -1500,7 +1536,7 @@ export async function listLifePosts(paramsQuery: QueryParams = {}, userId: numbe
   params.push(limit + 1);
   const rows = await query<LifePostRow>(
     `
-      ${lifePostProjection()}
+      ${lifePostProjection(locale)}
       ${whereClause}
       ORDER BY lp.created_at DESC, lp.id DESC
       LIMIT $${params.length}
@@ -1521,10 +1557,10 @@ export async function listLifePosts(paramsQuery: QueryParams = {}, userId: numbe
   };
 }
 
-async function getLifePostById(id: number, userId: number | null = null): Promise<LifePost | null> {
+async function getLifePostById(id: number, userId: number | null = null, locale = defaultLocale): Promise<LifePost | null> {
   const post = await queryOne<LifePostRow>(
     `
-      ${lifePostProjection()}
+      ${lifePostProjection(locale)}
       WHERE lp.id = $1
     `,
     [id]
@@ -1539,36 +1575,66 @@ async function getLifePostById(id: number, userId: number | null = null): Promis
   return hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost);
 }
 
-export async function createLifePost(payload: Record<string, unknown>, userId: number) {
-  const cleanPayload = cleanLifePostPayload(payload);
+async function replaceLifePostTags(client: DbClient, postId: number, tagIds: number[]): Promise<void> {
+  await client.query('DELETE FROM life_post_tags WHERE post_id = $1', [postId]);
 
-  const result = await queryOne<{ id: number }>(
-    `
-      INSERT INTO life_posts (body, created_by_user_id, updated_by_user_id)
-      VALUES ($1, $2, $2)
-      RETURNING id
-    `,
-    [cleanPayload.body, userId]
-  );
-
-  return getLifePostById(result?.id ?? 0, userId);
+  for (const tagId of tagIds) {
+    await client.query(
+      `
+        INSERT INTO life_post_tags (post_id, tag_id)
+        VALUES ($1, $2)
+      `,
+      [postId, tagId]
+    );
+  }
 }
 
-export async function updateLifePost(id: number, payload: Record<string, unknown>, userId: number) {
+export async function createLifePost(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanLifePostPayload(payload);
 
-  const result = await queryOne<{ id: number }>(
-    `
-      UPDATE life_posts
-      SET body = $1, updated_by_user_id = $2, updated_at = now()
-      WHERE id = $3
-        AND created_by_user_id = $2
-      RETURNING id
-    `,
-    [cleanPayload.body, userId, id]
-  );
+  const id = await withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO life_posts (body, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $2)
+        RETURNING id
+      `,
+      [cleanPayload.body, userId]
+    );
 
-  return result ? getLifePostById(result.id, userId) : null;
+    const createdId = result.rows[0].id;
+    await replaceLifePostTags(client, createdId, cleanPayload.tagIds);
+    return createdId;
+  });
+
+  return getLifePostById(id, userId, locale);
+}
+
+export async function updateLifePost(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const cleanPayload = cleanLifePostPayload(payload);
+
+  const updatedId = await withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>(
+      `
+        UPDATE life_posts
+        SET body = $1, updated_by_user_id = $2, updated_at = now()
+        WHERE id = $3
+          AND created_by_user_id = $2
+        RETURNING id
+      `,
+      [cleanPayload.body, userId, id]
+    );
+
+    const resultId = result.rows[0]?.id ?? null;
+    if (resultId === null) {
+      return null;
+    }
+
+    await replaceLifePostTags(client, resultId, cleanPayload.tagIds);
+    return resultId;
+  });
+
+  return updatedId ? getLifePostById(updatedId, userId, locale) : null;
 }
 
 export async function deleteLifePost(id: number, userId: number) {
@@ -1585,7 +1651,12 @@ export async function deleteLifePost(id: number, userId: number) {
   return Boolean(result);
 }
 
-export async function setLifePostReaction(postId: number, payload: Record<string, unknown>, userId: number) {
+export async function setLifePostReaction(
+  postId: number,
+  payload: Record<string, unknown>,
+  userId: number,
+  locale = defaultLocale
+) {
   const reactionType = cleanLifeReactionType(payload.reactionType);
 
   const result = await queryOne<{ postId: number }>(
@@ -1600,10 +1671,10 @@ export async function setLifePostReaction(postId: number, payload: Record<string
     [postId, userId, reactionType]
   );
 
-  return result ? getLifePostById(result.postId, userId) : null;
+  return result ? getLifePostById(result.postId, userId, locale) : null;
 }
 
-export async function deleteLifePostReaction(postId: number, userId: number) {
+export async function deleteLifePostReaction(postId: number, userId: number, locale = defaultLocale) {
   await queryOne<{ postId: number }>(
     `
       DELETE FROM life_post_reactions
@@ -1614,7 +1685,7 @@ export async function deleteLifePostReaction(postId: number, userId: number) {
     [postId, userId]
   );
 
-  return getLifePostById(postId, userId);
+  return getLifePostById(postId, userId, locale);
 }
 
 export async function createLifeComment(postId: number, payload: Record<string, unknown>, userId: number) {

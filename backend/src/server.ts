@@ -195,12 +195,14 @@ app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(reque
 
 app.get('/api/life-posts', async (request) => {
   const user = await optionalUser(request);
-  return listLifePosts(request.query as Record<string, string | string[] | undefined>, user?.id ?? null);
+  return listLifePosts(request.query as Record<string, string | string[] | undefined>, user?.id ?? null, requestLocale(request));
 });
 
 app.post('/api/life-posts', async (request, reply) => {
   const user = await requireVerifiedUser(request, reply);
-  return user ? reply.code(201).send(await createLifePost(request.body as Record<string, unknown>, user.id)) : undefined;
+  return user
+    ? reply.code(201).send(await createLifePost(request.body as Record<string, unknown>, user.id, requestLocale(request)))
+    : undefined;
 });
 
 app.post('/api/life-posts/:postId/comments', async (request, reply) => {
@@ -234,7 +236,7 @@ app.put('/api/life-posts/:id', async (request, reply) => {
     return;
   }
   const { id } = request.params as { id: string };
-  const post = await updateLifePost(Number(id), request.body as Record<string, unknown>, user.id);
+  const post = await updateLifePost(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
   return post ? post : reply.code(404).send({ message: 'Not found' });
 });
 
@@ -244,7 +246,7 @@ app.put('/api/life-posts/:id/reaction', async (request, reply) => {
     return;
   }
   const { id } = request.params as { id: string };
-  const post = await setLifePostReaction(Number(id), request.body as Record<string, unknown>, user.id);
+  const post = await setLifePostReaction(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
   return post ? post : reply.code(404).send({ message: 'Not found' });
 });
 
@@ -254,7 +256,7 @@ app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
     return;
   }
   const { id } = request.params as { id: string };
-  const post = await deleteLifePostReaction(Number(id), user.id);
+  const post = await deleteLifePostReaction(Number(id), user.id, requestLocale(request));
   return post ? post : reply.code(404).send({ message: 'Not found' });
 });
 

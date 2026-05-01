@@ -73,7 +73,8 @@ const configTypes = computed<Array<{ key: ConfigType; label: string; supportsIte
   { key: 'item-categories', label: t('config.itemCategories') },
   { key: 'item-usages', label: t('config.itemUsages') },
   { key: 'acquisition-methods', label: t('config.acquisitionMethods') },
-  { key: 'maps', label: t('config.maps') }
+  { key: 'maps', label: t('config.maps') },
+  { key: 'life-tags', label: t('config.lifeTags') }
 ]);
 
 const activeTab = ref<AdminTab>('config');

@@ -798,9 +798,16 @@ button:disabled,
   box-shadow: var(--shadow-raised);
 }
 
+.tags-select__dropdown--fixed {
+  position: fixed;
+  top: auto;
+  left: auto;
+  z-index: 80;
+}
+
 .tags-select__options {
   display: grid;
-  max-height: 240px;
+  max-height: var(--tags-select-options-max-height, 240px);
   overflow: auto;
 }
 
@@ -1200,6 +1207,10 @@ button:disabled,
   min-height: 44px;
 }
 
+.life-tag-tabs {
+  max-width: 100%;
+}
+
 .life-composer,
 .life-post {
   display: grid;
@@ -1339,6 +1350,30 @@ button:disabled,
   line-height: 1.65;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.life-post__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.life-post__tag {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--pokemon-blue) 38%, var(--line));
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--pokemon-blue) 9%, var(--surface));
+  color: var(--pokemon-blue-deep);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+[data-theme="night"] .life-post__tag {
+  color: var(--pokemon-yellow);
 }
 
 .life-post__engagement {

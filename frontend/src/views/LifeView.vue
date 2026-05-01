@@ -7,6 +7,8 @@ import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import TagsSelect from '../components/TagsSelect.vue';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
 import {
   iconAdd,
   iconCancel,
@@ -30,11 +32,13 @@ import {
   type AuthUser,
   type LifeComment,
   type LifePost,
-  type LifeReactionType
+  type LifeReactionType,
+  type NamedEntity
 } from '../services/api';
 
 const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
+const lifeTags = ref<NamedEntity[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
 const loadingMore = ref(false);
@@ -42,7 +46,9 @@ const authReady = ref(false);
 const busy = ref(false);
 const searchDraft = ref('');
 const submittedSearch = ref('');
+const activeTagId = ref('all');
 const body = ref('');
+const selectedTagIds = ref<string[]>([]);
 const editingPostId = ref<number | null>(null);
 const postModalOpen = ref(false);
 const formError = ref('');
@@ -67,6 +73,7 @@ let postsRequestId = 0;
 const nextCursor = ref<string | null>(null);
 const hasMorePosts = ref(false);
 const loadMorePaused = ref(false);
+const allTagValue = 'all';
 
 const reactionOptions = [
   { type: 'like', icon: iconReactionLike, labelKey: 'pages.life.reactionLike' },
@@ -79,6 +86,14 @@ const canPost = computed(() => currentUser.value?.emailVerified === true);
 const charactersLeft = computed(() => Math.max(0, 2000 - body.value.length));
 const isEditing = computed(() => editingPostId.value !== null);
 const searchQuery = computed(() => submittedSearch.value.trim());
+const selectedFeedTagId = computed(() => {
+  const tagId = Number(activeTagId.value);
+  return activeTagId.value === allTagValue || !Number.isInteger(tagId) || tagId <= 0 ? undefined : tagId;
+});
+const tagTabs = computed<TabOption[]>(() => [
+  { value: allTagValue, label: t('pages.life.allTags') },
+  ...lifeTags.value.map((tag) => ({ value: String(tag.id), label: tag.name }))
+]);
 const postModalTitle = computed(() => (isEditing.value ? t('pages.life.editPost') : t('pages.life.newPost')));
 const submitLabel = computed(() => {
   if (busy.value) return isEditing.value ? t('pages.life.updating') : t('pages.life.publishing');
@@ -105,6 +120,19 @@ async function loadCurrentUser() {
   }
 }
 
+async function loadLifeTags() {
+  try {
+    const options = await api.options();
+    lifeTags.value = options.lifeTags;
+
+    if (activeTagId.value !== allTagValue && !lifeTags.value.some((tag) => String(tag.id) === activeTagId.value)) {
+      activeTagId.value = allTagValue;
+    }
+  } catch (error) {
+    loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+  }
+}
+
 async function loadPosts() {
   const requestId = ++postsRequestId;
   loading.value = true;
@@ -115,7 +143,7 @@ async function loadPosts() {
   loadMorePaused.value = false;
 
   try {
-    const page = await api.lifePosts({ limit: lifePostPageSize, search: searchQuery.value });
+    const page = await api.lifePosts({ limit: lifePostPageSize, search: searchQuery.value, tagId: selectedFeedTagId.value });
     if (requestId !== postsRequestId) {
       return;
     }
@@ -149,7 +177,7 @@ async function loadMorePosts() {
   loadError.value = '';
 
   try {
-    const page = await api.lifePosts({ cursor, limit: lifePostPageSize, search: searchQuery.value });
+    const page = await api.lifePosts({ cursor, limit: lifePostPageSize, search: searchQuery.value, tagId: selectedFeedTagId.value });
     if (requestId !== postsRequestId) {
       return;
     }
@@ -172,13 +200,15 @@ async function loadMorePosts() {
 
 function resetForm() {
   body.value = '';
+  selectedTagIds.value = [];
   editingPostId.value = null;
   formError.value = '';
 }
 
 function payload() {
   return {
-    body: body.value.trim()
+    body: body.value.trim(),
+    tagIds: selectedTagIds.value.map((tagId) => Number(tagId)).filter((tagId) => Number.isInteger(tagId) && tagId > 0)
   };
 }
 
@@ -192,9 +222,12 @@ function submitSearch() {
   void loadPosts();
 }
 
-function matchesCurrentSearch(post: LifePost) {
+function matchesCurrentFilters(post: LifePost) {
   const keyword = searchQuery.value.toLowerCase();
-  return keyword === '' || post.body.toLowerCase().includes(keyword);
+  const tagId = selectedFeedTagId.value;
+  const matchesSearch = keyword === '' || post.body.toLowerCase().includes(keyword);
+  const matchesTag = tagId === undefined || post.tags.some((tag) => tag.id === tagId);
+  return matchesSearch && matchesTag;
 }
 
 function openCreatePostModal() {
@@ -228,7 +261,7 @@ async function submitPost() {
       replacePost(updated);
     } else {
       const created = await api.createLifePost(payload());
-      if (matchesCurrentSearch(created)) {
+      if (matchesCurrentFilters(created)) {
         posts.value = [created, ...posts.value];
       }
     }
@@ -294,7 +327,7 @@ function reactionCountLabel(post: LifePost, type: LifeReactionType) {
 }
 
 function replacePost(updatedPost: LifePost) {
-  if (!matchesCurrentSearch(updatedPost)) {
+  if (!matchesCurrentFilters(updatedPost)) {
     posts.value = posts.value.filter((post) => post.id !== updatedPost.id);
     return;
   }
@@ -410,6 +443,7 @@ async function toggleReaction(post: LifePost, reactionType: LifeReactionType) {
 function startEdit(post: LifePost) {
   editingPostId.value = post.id;
   body.value = post.body;
+  selectedTagIds.value = post.tags.map((tag) => String(tag.id));
   formError.value = '';
   postModalOpen.value = true;
   void nextTick(() => bodyInput.value?.focus());
@@ -573,9 +607,17 @@ function observeLoadMore() {
 }
 
 watch([loadMoreSentinel, hasMorePosts, loading, loadingMore, loadMorePaused], observeLoadMore, { flush: 'post' });
+watch(activeTagId, () => {
+  void loadPosts();
+});
+watch(locale, () => {
+  void loadLifeTags();
+  void loadPosts();
+});
 
 onMounted(() => {
   void loadCurrentUser();
+  void loadLifeTags();
   void loadPosts();
   removeAuthListener = onAuthTokenChange(() => {
     void loadCurrentUser();
@@ -615,6 +657,8 @@ onUnmounted(() => {
       </div>
     </FilterPanel>
 
+    <Tabs id="life-tag-filter" v-model="activeTagId" class="life-tag-tabs" :tabs="tagTabs" :label="t('pages.life.tags')" />
+
     <StatusMessage v-if="loadError" variant="danger" :duration="0">{{ loadError }}</StatusMessage>
 
     <Modal
@@ -622,6 +666,7 @@ onUnmounted(() => {
       :title="postModalTitle"
       :subtitle="t('pages.life.composerPrompt')"
       :close-label="t('common.close')"
+      size="wide"
       @close="closePostModal"
     >
       <div v-if="!authReady" class="life-composer__auth-skeleton" aria-hidden="true">
@@ -641,6 +686,18 @@ onUnmounted(() => {
             required
           ></textarea>
           <span class="life-form__counter">{{ t('pages.life.charactersLeft', { count: charactersLeft }) }}</span>
+        </div>
+
+        <div class="field">
+          <label for="life-post-tags">{{ t('pages.life.tags') }}</label>
+          <TagsSelect
+            id="life-post-tags"
+            v-model="selectedTagIds"
+            :options="lifeTags"
+            :placeholder="t('pages.life.tagPlaceholder')"
+            :search-placeholder="t('pages.life.searchTags')"
+            dropdown-strategy="fixed"
+          />
         </div>
 
         <p v-if="formError" class="life-form__error" role="alert">{{ formError }}</p>
@@ -706,6 +763,10 @@ onUnmounted(() => {
           </header>
 
           <p class="life-post__body">{{ post.body }}</p>
+
+          <div v-if="post.tags.length" class="life-post__tags" :aria-label="t('pages.life.tags')">
+            <span v-for="tag in post.tags" :key="tag.id" class="life-post__tag">{{ tag.name }}</span>
+          </div>
 
           <div class="life-post__engagement">
             <div class="life-post__engagement-actions">

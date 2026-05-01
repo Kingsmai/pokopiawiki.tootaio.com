@@ -230,6 +230,10 @@ const messages = {
         bodyLabel: 'Post',
         bodyPlaceholder: 'Share a thought, tip, or discovery...',
         newPost: 'New Post',
+        tags: 'Tags',
+        allTags: 'All',
+        tagPlaceholder: 'Select tags',
+        searchTags: 'Search tags',
         search: 'Search Life',
         searchPlaceholder: 'Search post content...',
         searchEmpty: 'No posts match your search',
@@ -319,7 +323,8 @@ const messages = {
       itemCategories: 'Item categories',
       itemUsages: 'Item usages',
       acquisitionMethods: 'Acquisition methods',
-      maps: 'Maps'
+      maps: 'Maps',
+      lifeTags: 'Life tags'
     },
     appearance: {
       time: 'Time',
@@ -577,6 +582,10 @@ const messages = {
         bodyLabel: '动态内容',
         bodyPlaceholder: '分享一段想法、心得或发现……',
         newPost: 'New Post',
+        tags: '标签',
+        allTags: '全部',
+        tagPlaceholder: '选择标签',
+        searchTags: '搜索标签',
         search: '搜索动态',
         searchPlaceholder: '搜索动态内容……',
         searchEmpty: '没有匹配的动态',
@@ -666,7 +675,8 @@ const messages = {
       itemCategories: '物品分类',
       itemUsages: '物品用途',
       acquisitionMethods: '入手方式',
-      maps: '地图'
+      maps: '地图',
+      lifeTags: 'Life 标签'
     },
     appearance: {
       time: '时段',

@@ -183,6 +183,7 @@ export interface LifePost {
   updatedAt: string;
   author: UserSummary | null;
   updatedBy: UserSummary | null;
+  tags: NamedEntity[];
   comments: LifeComment[];
   reactionCounts: LifeReactionCounts;
   myReaction: LifeReactionType | null;
@@ -198,6 +199,7 @@ export interface LifePostsParams {
   cursor?: string | null;
   limit?: number;
   search?: string;
+  tagId?: string | number;
 }
 
 export interface LifeComment {
@@ -228,6 +230,7 @@ export interface Options {
   acquisitionMethods: NamedEntity[];
   itemTags: NamedEntity[];
   maps: NamedEntity[];
+  lifeTags: NamedEntity[];
 }
 
 export interface AuthUser {
@@ -259,7 +262,8 @@ export type ConfigType =
   | 'item-categories'
   | 'item-usages'
   | 'acquisition-methods'
-  | 'maps';
+  | 'maps'
+  | 'life-tags';
 
 export interface PokemonPayload {
   id: number;
@@ -316,6 +320,7 @@ export interface DailyChecklistPayload {
 
 export interface LifePostPayload {
   body: string;
+  tagIds?: number[];
 }
 
 export interface LifeCommentPayload {
@@ -466,7 +471,12 @@ export const api = {
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),
   lifePosts: (params: LifePostsParams = {}) =>
     getJson<LifePostsPage>(
-      `/api/life-posts${buildQuery({ cursor: params.cursor ?? undefined, limit: params.limit, search: params.search?.trim() })}`
+      `/api/life-posts${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit,
+        search: params.search?.trim(),
+        tagId: params.tagId
+      })}`
     ),
   createLifePost: (payload: LifePostPayload) => sendJson<LifePost>('/api/life-posts', 'POST', payload),
   updateLifePost: (id: string | number, payload: LifePostPayload) =>

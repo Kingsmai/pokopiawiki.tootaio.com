@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { iconCheck, iconChevronDown, iconClose } from '../icons';
 
@@ -17,6 +17,7 @@ type OptionRow = {
 };
 
 type CandidateRow = { type: 'option'; id: string; value: string; label: string } | { type: 'create'; id: string };
+type DropdownStrategy = 'absolute' | 'fixed';
 
 const props = withDefaults(
   defineProps<{
@@ -31,12 +32,14 @@ const props = withDefaults(
     allowCreate?: boolean;
     creating?: boolean;
     createLabel?: string;
+    dropdownStrategy?: DropdownStrategy;
   }>(),
   {
     multiple: true,
     max: 0,
     allowCreate: false,
-    creating: false
+    creating: false,
+    dropdownStrategy: 'absolute'
   }
 );
 
@@ -47,10 +50,14 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const root = ref<HTMLElement | null>(null);
+const trigger = ref<HTMLButtonElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const isOpen = ref(false);
 const search = ref('');
 const activeIndex = ref(-1);
+const dropdownStyle = ref<CSSProperties>({});
+const dropdownPlacement = ref<'top' | 'bottom'>('bottom');
+let positionFrame = 0;
 
 const optionRows = computed(() =>
   props.options.map((option, index) => ({
@@ -104,6 +111,7 @@ const candidateRows = computed<CandidateRow[]>(() => {
 });
 const activeCandidate = computed(() => candidateRows.value[activeIndex.value]);
 const activeDescendant = computed(() => activeCandidate.value?.id);
+const usesFixedDropdown = computed(() => props.dropdownStrategy === 'fixed');
 
 function setDefaultActiveIndex() {
   const keyword = createName.value.toLowerCase();
@@ -130,6 +138,8 @@ function clampActiveIndex() {
 async function openDropdown() {
   isOpen.value = true;
   await nextTick();
+  updateDropdownPosition();
+  addPositionListeners();
   setDefaultActiveIndex();
   searchInput.value?.focus();
 }
@@ -138,6 +148,8 @@ function closeDropdown() {
   isOpen.value = false;
   search.value = '';
   activeIndex.value = -1;
+  dropdownStyle.value = {};
+  removePositionListeners();
 }
 
 function toggleDropdown() {
@@ -168,11 +180,13 @@ function selectOption(value: string) {
     updateValue([...modelValues.value, value]);
     search.value = '';
     setDefaultActiveIndex();
+    scheduleDropdownPositionUpdate();
   }
 }
 
 function remove(value: string) {
   updateValue(modelValues.value.filter((item) => item !== value));
+  scheduleDropdownPositionUpdate();
 }
 
 function createOption() {
@@ -225,22 +239,107 @@ function onDocumentPointerDown(event: PointerEvent) {
   }
 }
 
+function scheduleDropdownPositionUpdate() {
+  if (!usesFixedDropdown.value || !isOpen.value || positionFrame) {
+    return;
+  }
+
+  positionFrame = window.requestAnimationFrame(() => {
+    positionFrame = 0;
+    updateDropdownPosition();
+  });
+}
+
+function updateDropdownPosition() {
+  if (!usesFixedDropdown.value || !isOpen.value || !trigger.value) {
+    dropdownStyle.value = {};
+    return;
+  }
+
+  const viewportPadding = 12;
+  const dropdownGap = 6;
+  const dropdownChromeHeight = 72;
+  const triggerRect = trigger.value.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const width = Math.min(triggerRect.width, viewportWidth - viewportPadding * 2);
+  const left = Math.min(Math.max(triggerRect.left, viewportPadding), viewportWidth - width - viewportPadding);
+  const spaceBelow = viewportHeight - triggerRect.bottom - viewportPadding - dropdownGap;
+  const spaceAbove = triggerRect.top - viewportPadding - dropdownGap;
+  const placeAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+  const availableSpace = Math.max(144, placeAbove ? spaceAbove : spaceBelow);
+  const optionsMaxHeight = Math.max(96, Math.min(240, availableSpace - dropdownChromeHeight));
+  const nextStyle = {
+    left: `${left}px`,
+    width: `${width}px`,
+    '--tags-select-options-max-height': `${optionsMaxHeight}px`
+  } as CSSProperties;
+
+  if (placeAbove) {
+    dropdownPlacement.value = 'top';
+    dropdownStyle.value = {
+      ...nextStyle,
+      bottom: `${viewportHeight - triggerRect.top + dropdownGap}px`
+    };
+    return;
+  }
+
+  dropdownPlacement.value = 'bottom';
+  dropdownStyle.value = {
+    ...nextStyle,
+    top: `${triggerRect.bottom + dropdownGap}px`
+  };
+}
+
+function addPositionListeners() {
+  if (!usesFixedDropdown.value) {
+    return;
+  }
+
+  window.addEventListener('resize', scheduleDropdownPositionUpdate);
+  window.addEventListener('scroll', scheduleDropdownPositionUpdate, true);
+}
+
+function removePositionListeners() {
+  window.removeEventListener('resize', scheduleDropdownPositionUpdate);
+  window.removeEventListener('scroll', scheduleDropdownPositionUpdate, true);
+
+  if (positionFrame) {
+    window.cancelAnimationFrame(positionFrame);
+    positionFrame = 0;
+  }
+}
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown);
+  removePositionListeners();
 });
 
 watch(search, setDefaultActiveIndex);
 watch(candidateRows, clampActiveIndex);
+watch(
+  () => props.dropdownStrategy,
+  () => {
+    if (!isOpen.value) return;
+
+    removePositionListeners();
+    void nextTick(() => {
+      updateDropdownPosition();
+      addPositionListeners();
+    });
+  }
+);
 </script>
 
 <template>
   <div ref="root" class="tags-select" :class="{ 'tags-select--single': !multiple }" @keydown="onRootKeydown">
     <button
       :id="id"
+      ref="trigger"
       type="button"
       class="tags-select__trigger"
       :class="{ open: isOpen }"
@@ -271,7 +370,15 @@ watch(candidateRows, clampActiveIndex);
       <Icon :icon="iconChevronDown" class="tags-select__arrow" aria-hidden="true" />
     </button>
 
-    <div v-if="isOpen" class="tags-select__dropdown">
+    <div
+      v-if="isOpen"
+      class="tags-select__dropdown"
+      :class="{
+        'tags-select__dropdown--fixed': usesFixedDropdown,
+        'tags-select__dropdown--top': usesFixedDropdown && dropdownPlacement === 'top'
+      }"
+      :style="dropdownStyle"
+    >
       <input
         ref="searchInput"
         v-model="search"

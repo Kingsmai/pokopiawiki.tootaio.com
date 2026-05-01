@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
@@ -10,8 +11,10 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Item, type Options } from '../services/api';
+import ItemEdit from './ItemEdit.vue';
 
 const options = ref<Options | null>(null);
+const route = useRoute();
 const { t } = useI18n();
 const items = ref<Item[]>([]);
 const loading = ref(true);
@@ -35,6 +38,7 @@ const itemQuery = computed(() => ({
   usageId: usageId.value,
   tagIds: tagIds.value.join(',')
 }));
+const showEditor = computed(() => route.name === 'item-new');
 
 async function loadItems() {
   loading.value = true;
@@ -134,5 +138,7 @@ watch(itemQuery, loadItems);
         <EntityChips :items="item.tags" />
       </EntityCard>
     </div>
+
+    <ItemEdit v-if="showEditor" />
   </section>
 </template>

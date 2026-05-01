@@ -211,7 +211,8 @@ function commitSearch() {
 }
 
 function onRootKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && isOpen.value) {
+    event.stopPropagation();
     closeDropdown();
   }
 }

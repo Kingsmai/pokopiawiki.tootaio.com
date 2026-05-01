@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import ReorderableList from '../components/ReorderableList.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -65,6 +66,9 @@ const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, ha
 const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
 const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
 const editingLanguageCode = ref('');
+const configModalOpen = ref(false);
+const checklistModalOpen = ref(false);
+const languageModalOpen = ref(false);
 
 const selectedConfig = computed(() => configTypes.value.find((item) => item.key === activeConfigType.value) ?? configTypes.value[0]);
 const configTabs = computed<TabOption[]>(() => configTypes.value.map((item) => ({ value: item.key, label: item.label })));
@@ -95,13 +99,18 @@ const activeConfigTab = computed({
     if (!nextConfig || nextConfig.key === activeConfigType.value) return;
 
     activeConfigType.value = nextConfig.key;
-    resetConfigForm();
+    closeConfigModal();
     void run(loadConfig);
   }
 });
 const canEdit = computed(() => currentUser.value?.emailVerified === true);
 const showAdminSkeleton = computed(() => busy.value && !message.value && (!currentUser.value || contentLoading.value));
 const canSetLanguageDefault = computed(() => languageForm.value.code === 'en');
+const configModalTitle = computed(() =>
+  configForm.value.id ? t('pages.admin.editConfig', { name: selectedConfig.value.label }) : t('pages.admin.newConfig', { name: selectedConfig.value.label })
+);
+const checklistModalTitle = computed(() => (checklistForm.value.id ? t('pages.checklist.editTask') : t('pages.checklist.newTask')));
+const languageModalTitle = computed(() => (editingLanguageCode.value ? t('pages.admin.editLanguage') : t('pages.admin.newLanguage')));
 const checklistKey = (item: DailyChecklistItem) => item.id;
 const checklistLabel = (item: DailyChecklistItem) => item.title;
 const languageKey = (item: Language) => item.code;
@@ -159,12 +168,44 @@ function resetLanguageForm() {
   editingLanguageCode.value = '';
 }
 
+function openNewConfig() {
+  resetConfigForm();
+  configModalOpen.value = true;
+}
+
+function closeConfigModal() {
+  configModalOpen.value = false;
+  resetConfigForm();
+}
+
 function editConfig(item: EditableConfig) {
   configForm.value = { id: item.id, name: item.baseName ?? item.name, translations: item.translations ?? {}, hasItemDrop: item.hasItemDrop === true };
+  configModalOpen.value = true;
+}
+
+function openNewChecklistItem() {
+  resetChecklistForm();
+  checklistModalOpen.value = true;
+}
+
+function closeChecklistModal() {
+  checklistModalOpen.value = false;
+  resetChecklistForm();
 }
 
 function editChecklistItem(item: DailyChecklistItem) {
   checklistForm.value = { id: item.id, title: item.title, translations: item.translations ?? {} };
+  checklistModalOpen.value = true;
+}
+
+function openNewLanguage() {
+  resetLanguageForm();
+  languageModalOpen.value = true;
+}
+
+function closeLanguageModal() {
+  languageModalOpen.value = false;
+  resetLanguageForm();
 }
 
 function editLanguage(item: Language) {
@@ -176,6 +217,7 @@ function editLanguage(item: Language) {
     isDefault: item.isDefault,
     sortOrder: item.sortOrder
   };
+  languageModalOpen.value = true;
 }
 
 function updateConfigTranslation(localeCode: string, value: string) {
@@ -332,8 +374,8 @@ async function saveConfig() {
       await api.createConfig(activeConfigType.value, payload);
     }
 
-    resetConfigForm();
     await loadConfig();
+    closeConfigModal();
   });
 }
 
@@ -359,7 +401,7 @@ async function saveChecklistItem() {
     }
 
     await loadChecklist();
-    resetChecklistForm();
+    closeChecklistModal();
   });
 }
 
@@ -376,7 +418,7 @@ async function saveLanguage() {
     languageRows.value = editingLanguageCode.value
       ? await api.updateLanguage(editingLanguageCode.value, payload)
       : await api.createLanguage(payload);
-    resetLanguageForm();
+    closeLanguageModal();
     setCurrentLocale(getCurrentLocale());
   });
 }
@@ -451,7 +493,7 @@ async function removeLanguage(code: string) {
   await run(async () => {
     await api.deleteLanguage(code);
     if (editingLanguageCode.value === code) {
-      resetLanguageForm();
+      closeLanguageModal();
     }
     await loadLanguages();
     setCurrentLocale(getCurrentLocale());
@@ -462,7 +504,7 @@ async function removeConfig(id: number) {
   await run(async () => {
     await api.deleteConfig(activeConfigType.value, id);
     if (configForm.value.id === id) {
-      resetConfigForm();
+      closeConfigModal();
     }
     await loadConfig();
   });
@@ -472,7 +514,7 @@ async function removeChecklistItem(id: number) {
   await run(async () => {
     await api.deleteDailyChecklistItem(id);
     if (checklistForm.value.id === id) {
-      resetChecklistForm();
+      closeChecklistModal();
     }
     await loadChecklist();
   });
@@ -538,25 +580,12 @@ onMounted(() => {
     </section>
 
     <section v-else-if="canEdit && activeTab === 'checklist'" class="detail-section">
-      <h2>{{ t('pages.admin.checklist') }}</h2>
-
-      <form class="detail-section__body" @submit.prevent="saveChecklistItem">
-        <h3 class="section-subtitle">{{ checklistForm.id ? t('pages.checklist.editTask') : t('pages.checklist.newTask') }}</h3>
-        <TranslationFields
-          id-prefix="checklist-title"
-          v-model:base-value="checklistForm.title"
-          v-model:translations="checklistForm.translations"
-          field="title"
-          :label="t('pages.checklist.task')"
-          :languages="languageRows"
-          required
-        />
-        <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-          <button type="button" class="plain-button" :disabled="busy" @click="resetChecklistForm">{{ t('common.new') }}</button>
-        </div>
-      </form>
-
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.checklist') }}</h2>
+        <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewChecklistItem">
+          {{ t('common.new') }}
+        </button>
+      </div>
       <h3 class="section-subtitle">{{ t('pages.checklist.sectionTitle') }}</h3>
       <ReorderableList
         v-if="checklistRows.length"
@@ -583,29 +612,13 @@ onMounted(() => {
     </section>
 
     <section v-else-if="canEdit && activeTab === 'config'" class="detail-section">
-      <h2>{{ t('pages.admin.config') }}</h2>
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.config') }}</h2>
+        <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewConfig">
+          {{ t('common.new') }}
+        </button>
+      </div>
       <Tabs id="admin-config-type" v-model="activeConfigTab" :tabs="configTabs" :label="t('pages.admin.configType')" />
-
-      <form class="detail-section__body" @submit.prevent="saveConfig">
-        <h3 class="section-subtitle">
-          {{ configForm.id ? t('pages.admin.editConfig', { name: selectedConfig.label }) : t('pages.admin.newConfig', { name: selectedConfig.label }) }}
-        </h3>
-        <div class="field">
-          <label for="config-name">{{ t('common.name') }}</label>
-          <input id="config-name" v-model="configNameInput" :required="configNameRequired" />
-        </div>
-        <div v-if="selectedConfig.supportsItemDrop" class="check-row">
-          <label>
-            <input v-model="configForm.hasItemDrop" type="checkbox" />
-            {{ t('pages.admin.hasItemDrop') }}
-          </label>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-          <button type="button" class="plain-button" :disabled="busy" @click="resetConfigForm">{{ t('common.new') }}</button>
-        </div>
-      </form>
-
       <h3 class="section-subtitle">{{ selectedConfig.label }}</h3>
       <ReorderableList
         v-if="configRows.length"
@@ -634,31 +647,12 @@ onMounted(() => {
     </section>
 
     <section v-else-if="canEdit && activeTab === 'languages'" class="detail-section">
-      <h2>{{ t('pages.admin.languages') }}</h2>
-
-      <form class="detail-section__body" @submit.prevent="saveLanguage">
-        <h3 class="section-subtitle">{{ editingLanguageCode ? t('pages.admin.editLanguage') : t('pages.admin.newLanguage') }}</h3>
-        <div class="field">
-          <label for="language-code">{{ t('pages.admin.languageCode') }}</label>
-          <input id="language-code" v-model="languageForm.code" :disabled="Boolean(editingLanguageCode)" required />
-        </div>
-        <div class="field">
-          <label for="language-name">{{ t('pages.admin.languageName') }}</label>
-          <input id="language-name" v-model="languageForm.name" required />
-        </div>
-        <div class="check-row">
-          <label><input v-model="languageForm.enabled" type="checkbox" /> {{ t('pages.admin.enabled') }}</label>
-          <label>
-            <input v-model="languageForm.isDefault" type="checkbox" :disabled="!canSetLanguageDefault" />
-            {{ t('pages.admin.defaultLanguage') }}
-          </label>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-          <button type="button" class="plain-button" :disabled="busy" @click="resetLanguageForm">{{ t('common.new') }}</button>
-        </div>
-      </form>
-
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.languages') }}</h2>
+        <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewLanguage">
+          {{ t('common.new') }}
+        </button>
+      </div>
       <ReorderableList
         v-if="languageRows.length"
         :items="languageRows"
@@ -785,5 +779,75 @@ onMounted(() => {
       </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
+
+    <Modal v-if="checklistModalOpen" :title="checklistModalTitle" :close-label="t('common.close')" size="wide" @close="closeChecklistModal">
+      <form id="admin-checklist-form" class="modal-edit-form" @submit.prevent="saveChecklistItem">
+        <TranslationFields
+          id-prefix="checklist-title"
+          v-model:base-value="checklistForm.title"
+          v-model:translations="checklistForm.translations"
+          field="title"
+          :label="t('pages.checklist.task')"
+          :languages="languageRows"
+          required
+        />
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-checklist-form" class="link-button" :disabled="busy">
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeChecklistModal">{{ t('common.cancel') }}</button>
+      </template>
+    </Modal>
+
+    <Modal v-if="configModalOpen" :title="configModalTitle" :close-label="t('common.close')" @close="closeConfigModal">
+      <form id="admin-config-form" class="modal-edit-form" @submit.prevent="saveConfig">
+        <div class="field">
+          <label for="config-name">{{ t('common.name') }}</label>
+          <input id="config-name" v-model="configNameInput" :required="configNameRequired" />
+        </div>
+        <div v-if="selectedConfig.supportsItemDrop" class="check-row">
+          <label>
+            <input v-model="configForm.hasItemDrop" type="checkbox" />
+            {{ t('pages.admin.hasItemDrop') }}
+          </label>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-config-form" class="link-button" :disabled="busy">
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeConfigModal">{{ t('common.cancel') }}</button>
+      </template>
+    </Modal>
+
+    <Modal v-if="languageModalOpen" :title="languageModalTitle" :close-label="t('common.close')" @close="closeLanguageModal">
+      <form id="admin-language-form" class="modal-edit-form" @submit.prevent="saveLanguage">
+        <div class="field">
+          <label for="language-code">{{ t('pages.admin.languageCode') }}</label>
+          <input id="language-code" v-model="languageForm.code" :disabled="Boolean(editingLanguageCode)" required />
+        </div>
+        <div class="field">
+          <label for="language-name">{{ t('pages.admin.languageName') }}</label>
+          <input id="language-name" v-model="languageForm.name" required />
+        </div>
+        <div class="check-row">
+          <label><input v-model="languageForm.enabled" type="checkbox" /> {{ t('pages.admin.enabled') }}</label>
+          <label>
+            <input v-model="languageForm.isDefault" type="checkbox" :disabled="!canSetLanguageDefault" />
+            {{ t('pages.admin.defaultLanguage') }}
+          </label>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-language-form" class="link-button" :disabled="busy">
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeLanguageModal">{{ t('common.cancel') }}</button>
+      </template>
+    </Modal>
   </section>
 </template>

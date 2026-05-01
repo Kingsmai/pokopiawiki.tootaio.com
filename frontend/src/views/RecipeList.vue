@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import EditMeta from '../components/EditMeta.vue';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
@@ -9,8 +10,10 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Item, type Options } from '../services/api';
+import RecipeEdit from './RecipeEdit.vue';
 
 const options = ref<Options | null>(null);
+const route = useRoute();
 const { t } = useI18n();
 const items = ref<Item[]>([]);
 const loading = ref(true);
@@ -35,6 +38,7 @@ const itemQuery = computed(() => ({
   tagIds: tagIds.value.join(','),
   recipeOrder: 1
 }));
+const showEditor = computed(() => route.name === 'recipe-new');
 
 function recipeTarget(item: Item) {
   return item.recipe ? `/recipes/${item.recipe.id}` : undefined;
@@ -149,5 +153,7 @@ watch(itemQuery, loadItems);
         </RouterLink>
       </EntityCard>
     </div>
+
+    <RecipeEdit v-if="showEditor" />
   </section>
 </template>

@@ -66,6 +66,10 @@ body {
     linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 100%);
 }
 
+body.lock-scroll {
+  overflow: hidden;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -543,6 +547,106 @@ button:disabled,
   border-color: var(--pokemon-blue);
   box-shadow: 0 0 0 4px rgba(42, 117, 187, 0.16);
   outline: none;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  display: none;
+  place-items: center;
+  padding: 22px;
+  background: rgba(8, 13, 22, 0.56);
+}
+
+.modal-backdrop.is-open {
+  display: grid;
+}
+
+.modal {
+  width: min(var(--modal-width, 560px), 100%);
+  max-height: min(100%, calc(100vh - 44px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+
+.modal--wide {
+  --modal-width: 980px;
+}
+
+.modal-header,
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface-soft);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-header__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.modal-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.modal-close-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-body {
+  min-width: 0;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+}
+
+.modal-edit-form {
+  display: grid;
+  gap: 12px;
+}
+
+.modal-footer {
+  border-top: 1px solid var(--line);
+  justify-content: flex-end;
 }
 
 .tags-select {
@@ -2007,5 +2111,15 @@ button:disabled,
 
   .appearance-row__main {
     grid-template-columns: 1fr;
+  }
+
+  .modal-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .modal-footer .link-button,
+  .modal-footer .plain-button {
+    width: 100%;
   }
 }

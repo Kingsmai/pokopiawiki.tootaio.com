@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { api, type Habitat } from '../services/api';
+import HabitatEdit from './HabitatEdit.vue';
 
 const habitats = ref<Habitat[]>([]);
+const route = useRoute();
 const { t } = useI18n();
 const loading = ref(true);
 const skeletonCardCount = 6;
+const showEditor = computed(() => route.name === 'habitat-new');
 
 onMounted(async () => {
   habitats.value = await api.habitats();
@@ -50,5 +54,7 @@ onMounted(async () => {
         <EntityChips :items="item.pokemon ?? []" />
       </EntityCard>
     </div>
+
+    <HabitatEdit v-if="showEditor" />
   </section>
 </template>

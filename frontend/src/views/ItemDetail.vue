@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
@@ -8,10 +8,12 @@ import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { api, type ItemDetail } from '../services/api';
+import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
 const item = ref<ItemDetail | null>(null);
+const showEditor = computed(() => route.name === 'item-edit');
 
 const customization = computed(() => {
   if (!item.value) {
@@ -25,9 +27,30 @@ const customization = computed(() => {
   ].filter(Boolean);
 });
 
-onMounted(async () => {
+async function loadItemDetail() {
   item.value = await api.itemDetail(String(route.params.id));
+}
+
+onMounted(async () => {
+  await loadItemDetail();
 });
+
+watch(
+  () => route.name,
+  (name, oldName) => {
+    if (oldName === 'item-edit' && name === 'item-detail') {
+      void loadItemDetail();
+    }
+  }
+);
+
+watch(
+  () => route.params.id,
+  () => {
+    item.value = null;
+    void loadItemDetail();
+  }
+);
 </script>
 
 <template>
@@ -157,4 +180,6 @@ onMounted(async () => {
       <EditHistoryPanel :entity="item" :history="item.editHistory" />
     </div>
   </section>
+
+  <ItemEdit v-if="showEditor" />
 </template>

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import PageHeader from '../components/PageHeader.vue';
+import Modal from '../components/Modal.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
@@ -51,6 +51,10 @@ function toQuantityRows(rows: Array<{ itemId: string; quantity: number }>) {
 
 function errorText(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function closeEditor() {
+  void router.push(cancelTo.value);
 }
 
 function preselectedItemId() {
@@ -141,17 +145,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="page-stack">
-    <PageHeader :title="pageTitle" :subtitle="t('pages.recipes.editSubtitle')">
-      <template #kicker>Recipe Edit</template>
-      <template #actions>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">{{ t('common.back') }}</RouterLink>
-      </template>
-    </PageHeader>
-
+  <Modal :title="pageTitle" :subtitle="t('pages.recipes.editSubtitle')" :close-label="t('common.close')" size="wide" @close="closeEditor">
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
-    <form v-if="!loading && options" class="detail-section" @submit.prevent="saveRecipe">
+    <form v-if="!loading && options" id="recipe-edit-form" class="modal-edit-form" @submit.prevent="saveRecipe">
       <div class="field">
         <label for="recipe-item">{{ t('pages.recipes.item') }}</label>
         <TagsSelect
@@ -193,18 +190,18 @@ onMounted(() => {
         </div>
         <button type="button" class="plain-button" @click="addRecipeMaterial">{{ t('pages.recipes.addMaterial') }}</button>
       </div>
-
-      <div class="form-actions">
-        <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-        <RouterLink class="plain-button" :to="cancelTo">{{ t('common.cancel') }}</RouterLink>
-      </div>
     </form>
 
-    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.recipes.loadingEdit')">
+    <section v-else class="modal-edit-form skeleton-detail-section" aria-busy="true" :aria-label="t('pages.recipes.loadingEdit')">
       <div v-for="index in 4" :key="index" class="field">
         <Skeleton :width="index === 1 ? '52px' : '88px'" />
         <Skeleton variant="box" height="44px" />
       </div>
     </section>
-  </section>
+
+    <template v-if="!loading && options" #footer>
+      <button type="submit" form="recipe-edit-form" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">{{ t('common.cancel') }}</button>
+    </template>
+  </Modal>
 </template>

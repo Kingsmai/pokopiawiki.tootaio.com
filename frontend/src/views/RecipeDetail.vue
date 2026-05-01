@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
@@ -8,14 +8,37 @@ import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { api, type RecipeDetail } from '../services/api';
+import RecipeEdit from './RecipeEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
 const recipe = ref<RecipeDetail | null>(null);
+const showEditor = computed(() => route.name === 'recipe-edit');
+
+async function loadRecipeDetail() {
+  recipe.value = await api.recipeDetail(String(route.params.id));
+}
 
 onMounted(async () => {
-  recipe.value = await api.recipeDetail(String(route.params.id));
+  await loadRecipeDetail();
 });
+
+watch(
+  () => route.name,
+  (name, oldName) => {
+    if (oldName === 'recipe-edit' && name === 'recipe-detail') {
+      void loadRecipeDetail();
+    }
+  }
+);
+
+watch(
+  () => route.params.id,
+  () => {
+    recipe.value = null;
+    void loadRecipeDetail();
+  }
+);
 </script>
 
 <template>
@@ -68,4 +91,6 @@ onMounted(async () => {
       <EditHistoryPanel :entity="recipe" :history="recipe.editHistory" />
     </div>
   </section>
+
+  <RecipeEdit v-if="showEditor" />
 </template>

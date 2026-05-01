@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import EditMeta from '../components/EditMeta.vue';
 import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
@@ -9,8 +10,10 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { api, type Options, type Pokemon } from '../services/api';
+import PokemonEdit from './PokemonEdit.vue';
 
 const options = ref<Options | null>(null);
+const route = useRoute();
 const { t } = useI18n();
 const pokemon = ref<Pokemon[]>([]);
 const loading = ref(true);
@@ -31,6 +34,7 @@ const query = computed(() => ({
   favoriteThingIds: favoriteThingIds.value.join(','),
   favoriteThingMode: favoriteThingMode.value
 }));
+const showEditor = computed(() => route.name === 'pokemon-new');
 
 async function loadPokemon() {
   loading.value = true;
@@ -140,5 +144,7 @@ watch(query, loadPokemon);
         <EntityChips :items="item.favorite_things" />
       </EntityCard>
     </div>
+
+    <PokemonEdit v-if="showEditor" />
   </section>
 </template>

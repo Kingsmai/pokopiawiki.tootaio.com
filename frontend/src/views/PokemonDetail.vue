@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
@@ -9,6 +9,7 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { api, type PokemonDetail } from '../services/api';
+import PokemonEdit from './PokemonEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -98,6 +99,7 @@ const habitatRows = computed<HabitatRow[]>(() => {
   }));
 });
 const skillDropRows = computed(() => pokemon.value?.skills.filter((skill) => skill.itemDrop) ?? []);
+const showEditor = computed(() => route.name === 'pokemon-edit');
 const itemCategoryTabs = computed<TabOption[]>(() => {
   const categories = new Map<string, string>();
 
@@ -119,9 +121,30 @@ const favoriteThingItems = computed(() => {
   return items.filter((item) => String(item.category.id) === itemCategoryTab.value);
 });
 
-onMounted(async () => {
+async function loadPokemonDetail() {
   pokemon.value = await api.pokemonDetail(String(route.params.id));
+}
+
+onMounted(async () => {
+  await loadPokemonDetail();
 });
+
+watch(
+  () => route.name,
+  (name, oldName) => {
+    if (oldName === 'pokemon-edit' && name === 'pokemon-detail') {
+      void loadPokemonDetail();
+    }
+  }
+);
+
+watch(
+  () => route.params.id,
+  () => {
+    pokemon.value = null;
+    void loadPokemonDetail();
+  }
+);
 </script>
 
 <template>
@@ -259,4 +282,6 @@ onMounted(async () => {
       <EditHistoryPanel :entity="pokemon" :history="pokemon.editHistory" />
     </div>
   </section>
+
+  <PokemonEdit v-if="showEditor" />
 </template>

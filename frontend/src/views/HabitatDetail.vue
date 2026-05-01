@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
@@ -8,12 +8,14 @@ import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { api, type HabitatDetail } from '../services/api';
+import HabitatEdit from './HabitatEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
 const habitat = ref<HabitatDetail | null>(null);
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
+const showEditor = computed(() => route.name === 'habitat-edit');
 
 type PokemonRow = {
   id: number;
@@ -96,9 +98,30 @@ const pokemonRows = computed<PokemonRow[]>(() => {
   }));
 });
 
-onMounted(async () => {
+async function loadHabitatDetail() {
   habitat.value = await api.habitatDetail(String(route.params.id));
+}
+
+onMounted(async () => {
+  await loadHabitatDetail();
 });
+
+watch(
+  () => route.name,
+  (name, oldName) => {
+    if (oldName === 'habitat-edit' && name === 'habitat-detail') {
+      void loadHabitatDetail();
+    }
+  }
+);
+
+watch(
+  () => route.params.id,
+  () => {
+    habitat.value = null;
+    void loadHabitatDetail();
+  }
+);
 </script>
 
 <template>
@@ -192,4 +215,6 @@ onMounted(async () => {
       <EditHistoryPanel :entity="habitat" :history="habitat.editHistory" />
     </div>
   </section>
+
+  <HabitatEdit v-if="showEditor" />
 </template>

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import PageHeader from '../components/PageHeader.vue';
+import Modal from '../components/Modal.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
@@ -85,6 +85,10 @@ function skillSupportsItemDrop(skillId: string) {
 function skillDropLabel(skillId: string) {
   const name = skillName(skillId);
   return name ? t('pages.pokemon.skillDrop', { name }) : t('pages.pokemon.dropItem');
+}
+
+function closeEditor() {
+  void router.push(cancelTo.value);
 }
 
 async function loadEditor() {
@@ -186,17 +190,10 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
 </script>
 
 <template>
-  <section class="page-stack">
-    <PageHeader :title="pageTitle" :subtitle="t('pages.pokemon.editSubtitle')">
-      <template #kicker>Pokédex Edit</template>
-      <template #actions>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="cancelTo">{{ t('common.back') }}</RouterLink>
-      </template>
-    </PageHeader>
-
+  <Modal :title="pageTitle" :subtitle="t('pages.pokemon.editSubtitle')" :close-label="t('common.close')" size="wide" @close="closeEditor">
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
-    <form v-if="!loading && options" class="detail-section" @submit.prevent="savePokemon">
+    <form v-if="!loading && options" id="pokemon-edit-form" class="modal-edit-form" @submit.prevent="savePokemon">
       <div class="field">
         <label for="pokemon-id">ID</label>
         <input id="pokemon-id" v-model="pokemonForm.id" :disabled="isEditing" min="1" required type="number" />
@@ -271,18 +268,18 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
           </div>
         </div>
       </div>
-
-      <div class="form-actions">
-        <button type="submit" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
-        <RouterLink class="plain-button" :to="cancelTo">{{ t('common.cancel') }}</RouterLink>
-      </div>
     </form>
 
-    <section v-else class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.pokemon.loadingEdit')">
+    <section v-else class="modal-edit-form skeleton-detail-section" aria-busy="true" :aria-label="t('pages.pokemon.loadingEdit')">
       <div v-for="index in 5" :key="index" class="field">
         <Skeleton :width="index === 1 ? '52px' : '88px'" />
         <Skeleton variant="box" height="44px" />
       </div>
     </section>
-  </section>
+
+    <template v-if="!loading && options" #footer>
+      <button type="submit" form="pokemon-edit-form" class="link-button" :disabled="busy">{{ busy ? t('common.saving') : t('common.save') }}</button>
+      <button type="button" class="plain-button" :disabled="busy" @click="closeEditor">{{ t('common.cancel') }}</button>
+    </template>
+  </Modal>
 </template>

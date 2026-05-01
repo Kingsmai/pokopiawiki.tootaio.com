@@ -1,16 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import PokemonList from '../views/PokemonList.vue';
 import PokemonDetail from '../views/PokemonDetail.vue';
-import PokemonEdit from '../views/PokemonEdit.vue';
 import HabitatList from '../views/HabitatList.vue';
 import HabitatDetail from '../views/HabitatDetail.vue';
-import HabitatEdit from '../views/HabitatEdit.vue';
 import ItemsList from '../views/ItemsList.vue';
 import ItemDetail from '../views/ItemDetail.vue';
-import ItemEdit from '../views/ItemEdit.vue';
 import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
-import RecipeEdit from '../views/RecipeEdit.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
 import AdminView from '../views/AdminView.vue';
 import LoginView from '../views/LoginView.vue';
@@ -22,29 +18,33 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/pokemon' },
-    { path: '/pokemon', component: PokemonList },
-    { path: '/pokemon/new', component: PokemonEdit, meta: { requiresVerified: true } },
-    { path: '/pokemon/:id/edit', component: PokemonEdit, meta: { requiresVerified: true } },
-    { path: '/pokemon/:id', component: PokemonDetail },
-    { path: '/habitats', component: HabitatList },
-    { path: '/habitats/new', component: HabitatEdit, meta: { requiresVerified: true } },
-    { path: '/habitats/:id/edit', component: HabitatEdit, meta: { requiresVerified: true } },
-    { path: '/habitats/:id', component: HabitatDetail },
-    { path: '/items', component: ItemsList },
-    { path: '/items/new', component: ItemEdit, meta: { requiresVerified: true } },
-    { path: '/items/:id/edit', component: ItemEdit, meta: { requiresVerified: true } },
-    { path: '/items/:id', component: ItemDetail },
-    { path: '/recipes', component: RecipeList },
-    { path: '/recipes/new', component: RecipeEdit, meta: { requiresVerified: true } },
-    { path: '/recipes/:id/edit', component: RecipeEdit, meta: { requiresVerified: true } },
-    { path: '/recipes/:id', component: RecipeDetail },
+    { path: '/pokemon', name: 'pokemon-list', component: PokemonList },
+    { path: '/pokemon/new', name: 'pokemon-new', component: PokemonList, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/pokemon/:id/edit', name: 'pokemon-edit', component: PokemonDetail, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/pokemon/:id', name: 'pokemon-detail', component: PokemonDetail },
+    { path: '/habitats', name: 'habitat-list', component: HabitatList },
+    { path: '/habitats/new', name: 'habitat-new', component: HabitatList, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/habitats/:id/edit', name: 'habitat-edit', component: HabitatDetail, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/habitats/:id', name: 'habitat-detail', component: HabitatDetail },
+    { path: '/items', name: 'item-list', component: ItemsList },
+    { path: '/items/new', name: 'item-new', component: ItemsList, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/items/:id/edit', name: 'item-edit', component: ItemDetail, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/items/:id', name: 'item-detail', component: ItemDetail },
+    { path: '/recipes', name: 'recipe-list', component: RecipeList },
+    { path: '/recipes/new', name: 'recipe-new', component: RecipeList, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeDetail, meta: { requiresVerified: true, editorModal: true } },
+    { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetail },
     { path: '/checklist', component: DailyChecklistView },
     { path: '/admin', component: AdminView, meta: { requiresVerified: true } },
     { path: '/login', component: LoginView },
     { path: '/register', component: RegisterView },
     { path: '/verify-email', component: VerifyEmailView }
   ],
-  scrollBehavior: () => ({ top: 0 })
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition;
+    if (to.meta.editorModal === true || from.meta.editorModal === true) return false;
+    return { top: 0 };
+  }
 });
 
 router.beforeEach(async (to) => {

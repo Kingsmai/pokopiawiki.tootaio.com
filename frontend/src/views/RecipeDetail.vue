@@ -8,6 +8,7 @@ import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit } from '../icons';
 import { api, type RecipeDetail } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
@@ -15,7 +16,12 @@ import RecipeEdit from './RecipeEdit.vue';
 const route = useRoute();
 const { t } = useI18n();
 const recipe = ref<RecipeDetail | null>(null);
+const detailTab = ref('details');
 const showEditor = computed(() => route.name === 'recipe-edit');
+const detailTabs = computed<TabOption[]>(() => [
+  { value: 'details', label: t('common.details') },
+  { value: 'history', label: t('history.editHistory') }
+]);
 
 async function loadRecipeDetail() {
   recipe.value = await api.recipeDetail(String(route.params.id));
@@ -38,6 +44,7 @@ watch(
   () => route.params.id,
   () => {
     recipe.value = null;
+    detailTab.value = 'details';
     void loadRecipeDetail();
   }
 );
@@ -85,8 +92,10 @@ watch(
       </template>
     </PageHeader>
 
-    <div class="detail-with-sidebar">
-      <div class="detail-grid">
+    <div class="detail-tabs">
+      <Tabs id="recipe-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
+
+      <div v-if="detailTab === 'details'" class="detail-grid">
         <DetailSection :title="t('pages.items.acquisitionMethods')">
           <EntityChips :items="recipe.acquisition_methods" />
         </DetailSection>
@@ -96,7 +105,9 @@ watch(
         </DetailSection>
       </div>
 
-      <EditHistoryPanel :entity="recipe" :history="recipe.editHistory" />
+      <div v-else class="detail-tab-panel">
+        <EditHistoryPanel :entity="recipe" :history="recipe.editHistory" />
+      </div>
     </div>
   </section>
 

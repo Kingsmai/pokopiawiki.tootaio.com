@@ -8,6 +8,7 @@ import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit } from '../icons';
 import { api, type HabitatDetail } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
@@ -15,9 +16,14 @@ import HabitatEdit from './HabitatEdit.vue';
 const route = useRoute();
 const { t } = useI18n();
 const habitat = ref<HabitatDetail | null>(null);
+const detailTab = ref('details');
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const showEditor = computed(() => route.name === 'habitat-edit');
+const detailTabs = computed<TabOption[]>(() => [
+  { value: 'details', label: t('common.details') },
+  { value: 'history', label: t('history.editHistory') }
+]);
 
 type PokemonRow = {
   id: number;
@@ -121,6 +127,7 @@ watch(
   () => route.params.id,
   () => {
     habitat.value = null;
+    detailTab.value = 'details';
     void loadHabitatDetail();
   }
 );
@@ -187,8 +194,10 @@ watch(
       </template>
     </PageHeader>
 
-    <div class="detail-with-sidebar">
-      <div class="habitat-detail-stack">
+    <div class="detail-tabs">
+      <Tabs id="habitat-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
+
+      <div v-if="detailTab === 'details'" class="habitat-detail-stack">
         <DetailSection :title="t('pages.habitats.recipeList')">
           <EntityChips :items="habitat.recipe" />
         </DetailSection>
@@ -220,7 +229,9 @@ watch(
         </DetailSection>
       </div>
 
-      <EditHistoryPanel :entity="habitat" :history="habitat.editHistory" />
+      <div v-else class="detail-tab-panel">
+        <EditHistoryPanel :entity="habitat" :history="habitat.editHistory" />
+      </div>
     </div>
   </section>
 

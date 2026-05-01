@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { iconLogin, iconLogout, iconRegister, iconTranslate, type AppIcon } from '../icons';
+import { useRoute } from 'vue-router';
+import { iconClose, iconLogin, iconLogout, iconMenu, iconRegister, iconTranslate, type AppIcon } from '../icons';
 import type { AuthUser, Language } from '../services/api';
 import PokeBallMark from './PokeBallMark.vue';
 
@@ -19,12 +20,24 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const route = useRoute();
 const languageMenu = ref<HTMLElement | null>(null);
 const languageMenuButton = ref<HTMLButtonElement | null>(null);
 const languageMenuOpen = ref(false);
+const sidebarOpen = ref(false);
 
 function closeLanguageMenu() {
   languageMenuOpen.value = false;
+}
+
+function closeSidebar() {
+  sidebarOpen.value = false;
+  closeLanguageMenu();
+}
+
+function toggleSidebar() {
+  sidebarOpen.value = !sidebarOpen.value;
+  closeLanguageMenu();
 }
 
 function toggleLanguageMenu() {
@@ -51,20 +64,57 @@ function onLanguageMenuKeydown(event: KeyboardEvent) {
   }
 }
 
+function requestLogout() {
+  closeSidebar();
+  emit('logout');
+}
+
+function isNavActive(path: string) {
+  return route.path === path || route.path.startsWith(`${path}/`);
+}
+
+watch(sidebarOpen, (open) => {
+  document.body.classList.toggle('lock-scroll', open);
+});
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown);
+  document.body.classList.remove('lock-scroll');
 });
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="site-header">
-      <div class="container top-nav">
-        <RouterLink class="brand-lockup" to="/pokemon" aria-label="Pokopia Wiki">
+  <div class="app-shell" :class="{ 'app-shell--sidebar-open': sidebarOpen }">
+    <header class="mobile-topbar">
+      <button
+        class="sidebar-toggle"
+        type="button"
+        :aria-label="sidebarOpen ? t('nav.closeMenu') : t('nav.openMenu')"
+        :aria-expanded="sidebarOpen"
+        aria-controls="app-sidebar"
+        @click="toggleSidebar"
+      >
+        <Icon :icon="sidebarOpen ? iconClose : iconMenu" class="ui-icon" aria-hidden="true" />
+      </button>
+
+      <RouterLink class="brand-lockup brand-lockup--mobile" to="/pokemon" aria-label="Pokopia Wiki" @click="closeSidebar">
+        <PokeBallMark size="34px" />
+        <span>
+          <span class="pokemon-word">Pokopia</span>
+          <span class="brand-subtitle">Community Wiki</span>
+        </span>
+      </RouterLink>
+    </header>
+
+    <button class="site-sidebar-scrim" type="button" :aria-label="t('nav.closeMenu')" @click="closeSidebar"></button>
+
+    <aside id="app-sidebar" class="site-sidebar" :aria-label="t('nav.main')">
+      <div class="site-sidebar__inner">
+        <RouterLink class="brand-lockup" to="/pokemon" aria-label="Pokopia Wiki" @click="closeSidebar">
           <PokeBallMark size="42px" />
           <span>
             <span class="pokemon-word">Pokopia</span>
@@ -72,10 +122,17 @@ onBeforeUnmount(() => {
           </span>
         </RouterLink>
 
-        <nav class="nav-links" :aria-label="t('nav.main')">
-          <RouterLink v-for="item in navItems" :key="item.to" :to="item.to">
-            <Icon v-if="item.icon" :icon="item.icon" class="ui-icon nav-links__icon" aria-hidden="true" />
-            {{ item.label }}
+        <nav class="side-nav" :aria-label="t('nav.main')">
+          <RouterLink
+            v-for="item in navItems"
+            :key="item.to"
+            class="side-nav__link"
+            :class="{ 'router-link-active': isNavActive(item.to) }"
+            :to="item.to"
+            @click="closeSidebar"
+          >
+            <Icon v-if="item.icon" :icon="item.icon" class="ui-icon side-nav__icon" aria-hidden="true" />
+            <span>{{ item.label }}</span>
           </RouterLink>
         </nav>
 
@@ -112,24 +169,24 @@ onBeforeUnmount(() => {
           </div>
           <template v-if="currentUser">
             <span class="auth-user">{{ currentUser.displayName || currentUser.email }}</span>
-            <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="$emit('logout')">
+            <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="requestLogout">
               <Icon :icon="iconLogout" class="ui-icon" aria-hidden="true" />
               {{ t('nav.logout') }}
             </button>
           </template>
           <template v-else>
-            <RouterLink class="ui-button ui-button--ghost ui-button--small" to="/login">
+            <RouterLink class="ui-button ui-button--ghost ui-button--small" to="/login" @click="closeSidebar">
               <Icon :icon="iconLogin" class="ui-icon" aria-hidden="true" />
               {{ t('nav.login') }}
             </RouterLink>
-            <RouterLink class="ui-button ui-button--primary ui-button--small" to="/register">
+            <RouterLink class="ui-button ui-button--primary ui-button--small" to="/register" @click="closeSidebar">
               <Icon :icon="iconRegister" class="ui-icon" aria-hidden="true" />
               {{ t('nav.register') }}
             </RouterLink>
           </template>
         </div>
       </div>
-    </header>
+    </aside>
 
     <main class="page">
       <slot></slot>

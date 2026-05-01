@@ -8,6 +8,7 @@ import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconAdd, iconBack, iconEdit } from '../icons';
 import { api, type ItemDetail } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
@@ -15,7 +16,12 @@ import ItemEdit from './ItemEdit.vue';
 const route = useRoute();
 const { t } = useI18n();
 const item = ref<ItemDetail | null>(null);
+const detailTab = ref('details');
 const showEditor = computed(() => route.name === 'item-edit');
+const detailTabs = computed<TabOption[]>(() => [
+  { value: 'details', label: t('common.details') },
+  { value: 'history', label: t('history.editHistory') }
+]);
 
 const customization = computed(() => {
   if (!item.value) {
@@ -50,6 +56,7 @@ watch(
   () => route.params.id,
   () => {
     item.value = null;
+    detailTab.value = 'details';
     void loadItemDetail();
   }
 );
@@ -123,8 +130,10 @@ watch(
       </template>
     </PageHeader>
 
-    <div class="detail-with-sidebar">
-      <div class="detail-grid">
+    <div class="detail-tabs">
+      <Tabs id="item-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
+
+      <div v-if="detailTab === 'details'" class="detail-grid">
         <DetailSection :title="t('pages.items.acquisitionMethods')">
           <EntityChips :items="item.acquisitionMethods" />
         </DetailSection>
@@ -186,7 +195,9 @@ watch(
         </DetailSection>
       </div>
 
-      <EditHistoryPanel :entity="item" :history="item.editHistory" />
+      <div v-else class="detail-tab-panel">
+        <EditHistoryPanel :entity="item" :history="item.editHistory" />
+      </div>
     </div>
   </section>
 

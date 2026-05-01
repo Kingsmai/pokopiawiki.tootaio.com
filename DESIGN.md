@@ -226,7 +226,7 @@ Pokemon 详情页展示：
 - 关联喜欢的东西的物品
 - 出现的栖息地
 - 最后编辑信息
-- 编辑历史：保留在右侧 Sidebar 展示
+- 编辑历史：通过详情页 Tabs 展示
 
 ## 物品
 
@@ -387,7 +387,7 @@ Life Post 可配置：
 - 已注册并完成邮箱验证的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
-- Feed 在桌面端通过侧边栏展示 Life 标签筛选，在移动端展示紧凑筛选条；包含 All 和后台配置的 Life 标签；点击标签后按该标签筛选，搜索和标签筛选可以同时生效。
+- Feed 使用 Tabs 展示 Life 标签筛选；包含 All 和后台配置的 Life 标签；点击标签后按该标签筛选，搜索和标签筛选可以同时生效。
 - 信息流分页加载，初始展示最新一页，滚动到底部自动加载更多。
 - 当前没有图片上传、转发、置顶或单独审核流程。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
@@ -408,6 +408,8 @@ API 暴露边界：
 
 - UI 风格以 `DesignGuidelines.html` 为准。
 - 页面结构以 `AppShell`、`PageHeader`、列表、详情区和管理区为核心。
+- 全局主导航使用 `AppShell` 侧边栏；移动端通过导航按钮打开侧边栏抽屉。
+- 页面级分类、筛选或辅助内容切换使用 Tabs，避免在内容页继续增加侧边栏。
 - 导航和主要操作使用图标增强识别。
 - 数据加载状态使用 Skeleton，避免裸文本 loading。
 - 分类切换使用 Tabs。

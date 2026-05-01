@@ -107,7 +107,7 @@ function formatDateTime(value: string): string {
 </script>
 
 <template>
-  <aside class="edit-history-panel" aria-labelledby="edit-history-panel-title">
+  <section class="edit-history-panel" aria-labelledby="edit-history-panel-title">
     <div class="edit-history-panel__header">
       <h2 id="edit-history-panel-title">{{ t('history.title') }}</h2>
     </div>
@@ -174,5 +174,5 @@ function formatDateTime(value: string): string {
       </ol>
       <p v-else class="meta-line">{{ t('history.empty') }}</p>
     </section>
-  </aside>
+  </section>
 </template>

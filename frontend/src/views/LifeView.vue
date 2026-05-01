@@ -7,6 +7,7 @@ import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import {
   iconAdd,
@@ -93,7 +94,7 @@ const selectedFeedTagId = computed(() => {
   const tagId = Number(activeTagId.value);
   return activeTagId.value === allTagValue || !Number.isInteger(tagId) || tagId <= 0 ? undefined : tagId;
 });
-const tagFilterOptions = computed(() => [
+const tagFilterOptions = computed<TabOption[]>(() => [
   { value: allTagValue, label: t('pages.life.allTags') },
   ...lifeTags.value.map((tag) => ({ value: String(tag.id), label: tag.name }))
 ]);
@@ -242,12 +243,6 @@ function clearSearch() {
 function retryLoadMore() {
   loadMorePaused.value = false;
   void loadMorePosts();
-}
-
-function selectTagFilter(value: string) {
-  if (value !== activeTagId.value) {
-    activeTagId.value = value;
-  }
 }
 
 function matchesCurrentFilters(post: LifePost) {
@@ -783,27 +778,9 @@ onUnmounted(() => {
       </div>
     </Modal>
 
-    <div class="life-layout">
-      <aside class="life-sidebar" aria-labelledby="life-tag-filter-title">
-        <div class="life-sidebar__header">
-          <h2 id="life-tag-filter-title">{{ t('pages.life.tags') }}</h2>
-        </div>
-        <div class="life-tag-filter" role="group" :aria-label="t('pages.life.tags')">
-          <button
-            v-for="option in tagFilterOptions"
-            :key="option.value"
-            class="life-tag-filter__button"
-            :class="{ 'is-active': activeTagId === option.value }"
-            type="button"
-            :aria-pressed="activeTagId === option.value"
-            @click="selectTagFilter(option.value)"
-          >
-            <span>{{ option.label }}</span>
-          </button>
-        </div>
-      </aside>
+    <Tabs id="life-tag-filter" v-model="activeTagId" :tabs="tagFilterOptions" :label="t('pages.life.tags')" />
 
-      <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
+    <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
         <div v-if="loading" class="life-feed__list" :aria-label="t('pages.life.loading')">
           <article v-for="index in skeletonPostCount" :key="index" class="life-post life-post--skeleton">
             <div class="life-post__header">
@@ -1149,7 +1126,6 @@ onUnmounted(() => {
             {{ t('pages.life.newPost') }}
           </button>
         </div>
-      </section>
-    </div>
+    </section>
   </section>
 </template>

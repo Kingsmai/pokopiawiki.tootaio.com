@@ -18,6 +18,7 @@ const route = useRoute();
 const { t } = useI18n();
 const pokemon = ref<PokemonDetail | null>(null);
 const itemCategoryTab = ref('');
+const detailTab = ref('details');
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 
@@ -103,6 +104,10 @@ const habitatRows = computed<HabitatRow[]>(() => {
 });
 const skillDropRows = computed(() => pokemon.value?.skills.filter((skill) => skill.itemDrop) ?? []);
 const showEditor = computed(() => route.name === 'pokemon-edit');
+const detailTabs = computed<TabOption[]>(() => [
+  { value: 'details', label: t('common.details') },
+  { value: 'history', label: t('history.editHistory') }
+]);
 const itemCategoryTabs = computed<TabOption[]>(() => {
   const categories = new Map<string, string>();
 
@@ -163,6 +168,7 @@ watch(
   () => route.params.id,
   () => {
     pokemon.value = null;
+    detailTab.value = 'details';
     void loadPokemonDetail();
   }
 );
@@ -240,8 +246,10 @@ watch(
       </template>
     </PageHeader>
 
-    <div class="detail-with-sidebar">
-      <div class="detail-grid detail-grid--stack">
+    <div class="detail-tabs">
+      <Tabs id="pokemon-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
+
+      <div v-if="detailTab === 'details'" class="detail-grid detail-grid--stack">
         <div class="pokemon-profile-grid">
           <div class="pokemon-profile-main">
             <section class="detail-section pokemon-profile-card" :aria-label="t('pages.pokemon.details')">
@@ -351,9 +359,9 @@ watch(
         </DetailSection>
       </div>
 
-      <aside class="pokemon-detail-sidebar">
+      <div v-else class="detail-tab-panel">
         <EditHistoryPanel :entity="pokemon" :history="pokemon.editHistory" />
-      </aside>
+      </div>
     </div>
   </section>
 

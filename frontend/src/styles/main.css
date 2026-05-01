@@ -107,6 +107,8 @@ svg {
 
 .app-shell {
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
 }
 
 .container {
@@ -115,28 +117,36 @@ svg {
   padding: 0 24px;
 }
 
-.site-header {
+.mobile-topbar,
+.site-sidebar-scrim {
+  display: none;
+}
+
+.site-sidebar {
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid rgba(31, 42, 59, 0.12);
+  align-self: start;
+  height: 100dvh;
+  border-right: 1px solid rgba(31, 42, 59, 0.12);
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   backdrop-filter: blur(18px);
 }
 
-.top-nav {
-  min-height: 70px;
+.site-sidebar__inner {
+  height: 100%;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 22px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  padding: 18px 14px;
 }
 
 .brand-lockup {
-  min-width: 216px;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  width: fit-content;
 }
 
 .pokemon-word {
@@ -159,51 +169,70 @@ svg {
   text-transform: uppercase;
 }
 
-.nav-links {
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-  overflow-x: auto;
+.side-nav {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 2px 0;
 }
 
-.nav-links a {
-  min-height: 38px;
-  display: inline-flex;
+.side-nav__link {
+  min-height: 44px;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 10px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
   border-radius: var(--radius-control);
   color: var(--ink-soft);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 850;
+  line-height: 1.2;
   white-space: nowrap;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    box-shadow 0.14s ease;
 }
 
-.nav-links a:hover {
+.side-nav__link:hover {
   background: rgba(255, 203, 5, 0.24);
   color: var(--ink);
 }
 
-.nav-links a.router-link-active {
+.side-nav__link.router-link-active {
   background: var(--pokemon-blue);
   color: #ffffff;
+  box-shadow: 0 2px 0 var(--line-strong);
 }
 
-.nav-links__icon {
-  width: 17px;
-  height: 17px;
+.side-nav__icon {
+  width: 19px;
+  height: 19px;
 }
 
 .auth-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  display: grid;
+  align-content: end;
   gap: 8px;
+  min-width: 0;
+}
+
+.auth-actions .ui-button {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .language-menu {
   position: relative;
+}
+
+.site-sidebar .language-menu__trigger {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
 }
 
 .language-menu__trigger {
@@ -265,6 +294,14 @@ svg {
   box-shadow: var(--shadow-raised);
 }
 
+.site-sidebar .language-menu__dropdown {
+  top: auto;
+  bottom: calc(100% + 6px);
+  right: auto;
+  left: 0;
+  width: min(220px, calc(100vw - 40px));
+}
+
 .language-menu__item {
   display: flex;
   align-items: center;
@@ -306,7 +343,7 @@ svg {
 }
 
 .auth-user {
-  max-width: 180px;
+  max-width: 100%;
   overflow: hidden;
   color: var(--ink-soft);
   font-size: 14px;
@@ -1245,75 +1282,6 @@ button:disabled,
   min-height: 44px;
 }
 
-.life-layout {
-  display: grid;
-  grid-template-columns: minmax(184px, 240px) minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-}
-
-.life-sidebar {
-  position: sticky;
-  top: 92px;
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 2px solid var(--line-strong);
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  box-shadow: var(--shadow-control);
-}
-
-.life-sidebar__header h2 {
-  margin: 0;
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 950;
-  line-height: 1.15;
-}
-
-.life-tag-filter {
-  display: grid;
-  gap: 8px;
-}
-
-.life-tag-filter__button {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 2px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--surface-soft);
-  color: var(--ink-soft);
-  font-weight: 900;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background 0.14s ease,
-    border-color 0.14s ease,
-    color 0.14s ease,
-    box-shadow 0.14s ease;
-}
-
-.life-tag-filter__button span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.life-tag-filter__button:hover,
-.life-tag-filter__button.is-active {
-  border-color: var(--line-strong);
-  background: var(--pokemon-yellow);
-  box-shadow: 0 2px 0 var(--line-strong);
-  color: #172036;
-}
-
 .life-composer,
 .life-post {
   display: grid;
@@ -2034,7 +2002,6 @@ button:disabled,
   .life-page .ui-button,
   .life-icon-button,
   .life-metric-button,
-  .life-tag-filter__button,
   .life-reaction-option,
   .life-action-tooltip,
   .life-search-control__clear,
@@ -2094,14 +2061,8 @@ button:disabled,
   grid-template-columns: 1fr;
 }
 
-.detail-with-sidebar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  gap: 16px;
-  align-items: start;
-}
-
-.pokemon-detail-sidebar {
+.detail-tabs,
+.detail-tab-panel {
   display: grid;
   gap: 16px;
   min-width: 0;
@@ -2157,8 +2118,6 @@ button:disabled,
 }
 
 .edit-history-panel {
-  position: sticky;
-  top: 92px;
   display: grid;
   gap: 16px;
   padding: 18px;
@@ -3027,26 +2986,79 @@ button:disabled,
 }
 
 @media (max-width: 900px) {
-  .top-nav {
-    grid-template-columns: 1fr;
+  .app-shell {
+    display: block;
+    padding-top: 64px;
+  }
+
+  .mobile-topbar {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 55;
+    min-height: 64px;
+    display: flex;
+    align-items: center;
     gap: 12px;
-    padding-top: 14px;
-    padding-bottom: 14px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(31, 42, 59, 0.12);
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    backdrop-filter: blur(18px);
   }
 
-  .brand-lockup,
-  .auth-actions,
-  .nav-links {
-    justify-content: flex-start;
-    min-width: 0;
+  .sidebar-toggle {
+    width: 44px;
+    min-height: 44px;
+    display: inline-grid;
+    place-items: center;
+    border: 2px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
   }
 
-  .nav-links {
-    width: 100%;
+  .sidebar-toggle:hover {
+    border-color: var(--pokemon-blue);
+    color: var(--pokemon-blue-deep);
   }
 
-  .auth-actions {
-    flex-wrap: wrap;
+  .brand-lockup--mobile .pokemon-word {
+    font-size: 24px;
+  }
+
+  .brand-lockup--mobile .brand-subtitle {
+    font-size: 11px;
+  }
+
+  .site-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 70;
+    width: min(82vw, 300px);
+    max-width: calc(100vw - 48px);
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-raised);
+    transition: transform 0.18s ease;
+  }
+
+  .app-shell--sidebar-open .site-sidebar {
+    transform: translateX(0);
+  }
+
+  .site-sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: block;
+    background: rgba(21, 25, 35, 0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+
+  .app-shell--sidebar-open .site-sidebar-scrim {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .page-header {
@@ -3058,42 +3070,11 @@ button:disabled,
     justify-content: flex-start;
   }
 
-  .life-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .life-sidebar {
-    position: static;
-  }
-
-  .life-sidebar__header {
-    display: none;
-  }
-
-  .life-tag-filter {
-    display: flex;
-    gap: 8px;
-    max-width: 100%;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: thin;
-  }
-
-  .life-tag-filter__button {
-    flex: 0 0 auto;
-    max-width: 180px;
-  }
-
   .detail-grid,
-  .detail-with-sidebar,
   .pokemon-profile-grid,
   .pokemon-profile-row,
   .admin-layout {
     grid-template-columns: 1fr;
-  }
-
-  .edit-history-panel {
-    position: static;
   }
 
   .appearance-row__main {

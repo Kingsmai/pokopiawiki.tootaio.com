@@ -173,6 +173,15 @@ export interface DailyChecklistItem {
   translations?: TranslationMap;
 }
 
+export interface LifePost {
+  id: number;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  author: UserSummary | null;
+  updatedBy: UserSummary | null;
+}
+
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];
   editHistory: EditHistoryEntry[];
@@ -273,6 +282,10 @@ export interface HabitatPayload {
 export interface DailyChecklistPayload {
   title: string;
   translations?: TranslationMap;
+}
+
+export interface LifePostPayload {
+  body: string;
 }
 
 export function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -404,6 +417,11 @@ export const api = {
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),
+  lifePosts: () => getJson<LifePost[]>('/api/life-posts'),
+  createLifePost: (payload: LifePostPayload) => sendJson<LifePost>('/api/life-posts', 'POST', payload),
+  updateLifePost: (id: string | number, payload: LifePostPayload) =>
+    sendJson<LifePost>(`/api/life-posts/${id}`, 'PUT', payload),
+  deleteLifePost: (id: string | number) => deleteJson(`/api/life-posts/${id}`),
   createDailyChecklistItem: (payload: DailyChecklistPayload) =>
     sendJson<DailyChecklistItem>('/api/admin/daily-checklist', 'POST', payload),
   updateDailyChecklistItem: (id: string | number, payload: DailyChecklistPayload) =>

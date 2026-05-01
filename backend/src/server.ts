@@ -10,6 +10,7 @@ import {
   createHabitat,
   createItem,
   createLanguage,
+  createLifePost,
   createPokemon,
   createRecipe,
   deleteConfig,
@@ -17,6 +18,7 @@ import {
   deleteHabitat,
   deleteItem,
   deleteLanguage,
+  deleteLifePost,
   deletePokemon,
   deleteRecipe,
   getHabitat,
@@ -30,6 +32,7 @@ import {
   listHabitats,
   listItems,
   listLanguages,
+  listLifePosts,
   listPokemon,
   listRecipes,
   reorderConfig,
@@ -44,6 +47,7 @@ import {
   updateHabitat,
   updateItem,
   updateLanguage,
+  updateLifePost,
   updatePokemon,
   updateRecipe
 } from './queries.ts';
@@ -170,6 +174,33 @@ app.get('/api/languages', async () => listLanguages());
 app.get('/api/options', async (request) => getOptions(requestLocale(request)));
 
 app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(requestLocale(request)));
+
+app.get('/api/life-posts', async () => listLifePosts());
+
+app.post('/api/life-posts', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reply.code(201).send(await createLifePost(request.body as Record<string, unknown>, user.id)) : undefined;
+});
+
+app.put('/api/life-posts/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const post = await updateLifePost(Number(id), request.body as Record<string, unknown>, user.id);
+  return post ? post : reply.code(404).send({ message: 'Not found' });
+});
+
+app.delete('/api/life-posts/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteLifePost(Number(id), user.id);
+  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+});
 
 app.get('/api/pokemon', async (request) =>
   listPokemon(request.query as Record<string, string | string[] | undefined>, requestLocale(request))

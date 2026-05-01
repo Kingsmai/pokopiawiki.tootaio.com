@@ -104,6 +104,10 @@ type DailyChecklistPayload = {
   translations: TranslationInput;
 };
 
+type LifePostPayload = {
+  body: string;
+};
+
 type HabitatPayload = {
   name: string;
   translations: TranslationInput;
@@ -1166,6 +1170,99 @@ export async function deleteDailyChecklistItem(id: number, userId: number) {
     await recordEditLog(client, 'daily-checklist-items', id, 'delete', userId);
     return true;
   });
+}
+
+function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload {
+  const body = cleanName(payload.body, 'Please enter a post');
+  if (body.length > 2000) {
+    throw validationError('Post is too long');
+  }
+
+  return { body };
+}
+
+function lifePostProjection(): string {
+  return `
+    SELECT
+      lp.id,
+      lp.body,
+      lp.created_at AS "createdAt",
+      lp.updated_at AS "updatedAt",
+      CASE
+        WHEN created_user.id IS NULL THEN NULL
+        ELSE json_build_object('id', created_user.id, 'displayName', created_user.display_name)
+      END AS author,
+      CASE
+        WHEN updated_user.id IS NULL THEN NULL
+        ELSE json_build_object('id', updated_user.id, 'displayName', updated_user.display_name)
+      END AS "updatedBy"
+    FROM life_posts lp
+    LEFT JOIN users created_user ON created_user.id = lp.created_by_user_id
+    LEFT JOIN users updated_user ON updated_user.id = lp.updated_by_user_id
+  `;
+}
+
+export function listLifePosts() {
+  return query(`
+    ${lifePostProjection()}
+    ORDER BY lp.created_at DESC, lp.id DESC
+  `);
+}
+
+async function getLifePostById(id: number) {
+  return queryOne(
+    `
+      ${lifePostProjection()}
+      WHERE lp.id = $1
+    `,
+    [id]
+  );
+}
+
+export async function createLifePost(payload: Record<string, unknown>, userId: number) {
+  const cleanPayload = cleanLifePostPayload(payload);
+
+  const result = await queryOne<{ id: number }>(
+    `
+      INSERT INTO life_posts (body, created_by_user_id, updated_by_user_id)
+      VALUES ($1, $2, $2)
+      RETURNING id
+    `,
+    [cleanPayload.body, userId]
+  );
+
+  return getLifePostById(result?.id ?? 0);
+}
+
+export async function updateLifePost(id: number, payload: Record<string, unknown>, userId: number) {
+  const cleanPayload = cleanLifePostPayload(payload);
+
+  const result = await queryOne<{ id: number }>(
+    `
+      UPDATE life_posts
+      SET body = $1, updated_by_user_id = $2, updated_at = now()
+      WHERE id = $3
+        AND created_by_user_id = $2
+      RETURNING id
+    `,
+    [cleanPayload.body, userId, id]
+  );
+
+  return result ? getLifePostById(result.id) : null;
+}
+
+export async function deleteLifePost(id: number, userId: number) {
+  const result = await queryOne<{ id: number }>(
+    `
+      DELETE FROM life_posts
+      WHERE id = $1
+        AND created_by_user_id = $2
+      RETURNING id
+    `,
+    [id, userId]
+  );
+
+  return Boolean(result);
 }
 
 export function isConfigType(type: string): type is ConfigType {

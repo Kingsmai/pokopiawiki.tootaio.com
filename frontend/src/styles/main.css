@@ -1179,6 +1179,143 @@ button:disabled,
   justify-content: flex-start;
 }
 
+.life-composer,
+.life-post {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+.life-composer__header {
+  display: grid;
+  gap: 4px;
+}
+
+.life-composer__header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.life-composer__header p,
+.life-form__counter {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.life-composer__auth-skeleton,
+.life-form,
+.life-feed__list {
+  display: grid;
+  gap: 14px;
+}
+
+.life-form__counter {
+  justify-self: end;
+}
+
+.life-form__error {
+  margin: 0;
+  color: var(--danger);
+  font-weight: 850;
+}
+
+.life-form__actions,
+.life-auth-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.life-auth-note {
+  justify-content: space-between;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.life-auth-note p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-weight: 850;
+}
+
+.life-post {
+  box-shadow: var(--shadow-soft);
+}
+
+.life-post__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.life-post__avatar {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--pokemon-yellow);
+  box-shadow: 0 3px 0 var(--line-strong);
+  color: #172036;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.life-post__byline {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.life-post__byline strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.life-post__byline span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.life-post__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.life-post__actions .ui-button {
+  min-height: 44px;
+}
+
+.life-post__body {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .reorderable-row {
   position: relative;
   flex-wrap: wrap;
@@ -2342,6 +2479,15 @@ button:disabled,
 
   .entity-card {
     grid-template-columns: 1fr;
+  }
+
+  .life-post__header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .life-post__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 
   .appearance-list li {

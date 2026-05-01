@@ -8,6 +8,7 @@ import ItemDetail from '../views/ItemDetail.vue';
 import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
+import LifeView from '../views/LifeView.vue';
 import AdminView from '../views/AdminView.vue';
 import LoginView from '../views/LoginView.vue';
 import RegisterView from '../views/RegisterView.vue';
@@ -35,6 +36,7 @@ export const router = createRouter({
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeDetail, meta: { requiresVerified: true, editorModal: true } },
     { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetail },
     { path: '/checklist', component: DailyChecklistView },
+    { path: '/life', component: LifeView },
     { path: '/admin', component: AdminView, meta: { requiresVerified: true } },
     { path: '/login', component: LoginView },
     { path: '/register', component: RegisterView },

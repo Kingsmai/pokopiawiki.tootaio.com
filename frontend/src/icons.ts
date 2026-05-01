@@ -15,6 +15,7 @@ export const iconError: AppIcon = 'mdi:close-circle-outline';
 export const iconHabitat: AppIcon = 'mdi:pine-tree';
 export const iconInfo: AppIcon = 'mdi:information-outline';
 export const iconItem: AppIcon = 'mdi:bag-personal-outline';
+export const iconLife: AppIcon = 'mdi:post-outline';
 export const iconLogin: AppIcon = 'mdi:login';
 export const iconLogout: AppIcon = 'mdi:logout';
 export const iconMail: AppIcon = 'mdi:email-fast-outline';

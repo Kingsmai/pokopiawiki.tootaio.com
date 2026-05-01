@@ -5,7 +5,7 @@
 - Pokopia Wiki 是一个面向 Pokopia 游戏资料的社区 Wiki。
 - 所有人都可以浏览 Wiki 内容。
 - 已注册并完成邮箱验证的用户可以创建、编辑、删除 Wiki 内容。
-- 前台以 Pokemon、栖息地、物品、材料单、每日 CheckList 为主要浏览入口。
+- 前台以 Pokemon、栖息地、物品、材料单、每日 CheckList、Life 为主要浏览入口。
 - 管理入口用于维护全局配置、语言、列表排序和每日 CheckList。
 
 ## 技术栈
@@ -354,6 +354,30 @@ Pokemon 出现配置：
 - 已验证用户可新增、编辑、删除 Task。
 - 已验证用户可通过 Handle 拖拽排序。
 
+## Life
+
+Life 是社区生活分享信息流，类似轻量社交动态。
+
+Life Post 可配置：
+
+- Post 内容正文
+- 创建者、最后编辑者、创建时间、最后编辑时间
+
+前台行为：
+
+- 所有人都可以浏览 Life 信息流。
+- 信息流按创建时间倒序展示。
+- 已注册并完成邮箱验证的用户可以发布 Life Post。
+- 作者本人可以编辑、删除自己的 Life Post。
+- 当前没有点赞、评论、图片上传、转发、分页、置顶或单独审核流程。
+- Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
+
+API 暴露边界：
+
+- Life Post 作者信息只返回 `id` 和 `displayName`。
+- API 不返回邮箱、token/hash、内部调试字段或不必要的审计 payload。
+- 非作者不能编辑或删除其他用户的 Life Post。
+
 ## 前端交互与 UI
 
 - UI 风格以 `DesignGuidelines.html` 为准。
@@ -372,6 +396,7 @@ Pokemon 出现配置：
   - `/items/:id/edit`
   - `/recipes/new`
   - `/recipes/:id/edit`
+- Life 使用信息流内联发布与编辑，不使用路由驱动 Modal。
 - 进入或关闭编辑 Modal 时应保留底层页面上下文，不进行不必要的滚动跳转。
 - 用户界面不得展示内部字段名、调试数据、计划说明或“已修改某字段”一类实现说明。
 
@@ -390,6 +415,7 @@ Pokemon 出现配置：
 - `GET /api/items/:id`
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
+- `GET /api/life-posts`
 
 认证 API：
 
@@ -402,6 +428,10 @@ Pokemon 出现配置：
 已验证用户编辑 API：
 
 - Pokemon、栖息地、物品、材料单的创建、更新、删除。
+- Life Post 的创建，以及作者本人对 Life Post 的更新、删除。
+  - `POST /api/life-posts`
+  - `PUT /api/life-posts/:id`
+  - `DELETE /api/life-posts/:id`
 - 每日 CheckList 的创建、更新、删除、排序。
 - 全局配置项的创建、更新、删除、排序。
 - 语言的创建、更新、删除、排序。

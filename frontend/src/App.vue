@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import AppShell from './components/AppShell.vue';
-import { iconAdmin, iconChecklist, iconHabitat, iconItem, iconPokemon, iconRecipe } from './icons';
+import { iconAdmin, iconChecklist, iconHabitat, iconItem, iconLife, iconPokemon, iconRecipe } from './icons';
 import { getCurrentLocale, onLocaleChange, setCurrentLocale } from './i18n';
 import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser, type Language } from './services/api';
 
@@ -24,6 +24,7 @@ const navItems = computed(() => [
   { label: t('nav.items'), to: '/items', icon: iconItem },
   { label: t('nav.recipes'), to: '/recipes', icon: iconRecipe },
   { label: t('nav.checklist'), to: '/checklist', icon: iconChecklist },
+  { label: t('nav.life'), to: '/life', icon: iconLife },
   { label: t('nav.admin'), to: '/admin', icon: iconAdmin }
 ]);
 

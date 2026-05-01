@@ -362,6 +362,8 @@ Life Post 可配置：
 
 - Post 内容正文
 - 创建者、最后编辑者、创建时间、最后编辑时间
+- 评论
+- 评论回复：仅支持回复顶层评论，不做无限嵌套
 
 前台行为：
 
@@ -369,14 +371,19 @@ Life Post 可配置：
 - 信息流按创建时间倒序展示。
 - 已注册并完成邮箱验证的用户可以发布 Life Post。
 - 作者本人可以编辑、删除自己的 Life Post。
-- 当前没有点赞、评论、图片上传、转发、分页、置顶或单独审核流程。
+- 已注册并完成邮箱验证的用户可以评论 Life Post，并回复顶层评论。
+- 评论作者可以删除自己的评论；删除评论后正文不再展示，已有回复保留在原位置。
+- 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
+- 当前没有点赞、图片上传、转发、分页、置顶或单独审核流程。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 
 API 暴露边界：
 
 - Life Post 作者信息只返回 `id` 和 `displayName`。
+- Life Comment 作者信息只返回 `id` 和 `displayName`。
 - API 不返回邮箱、token/hash、内部调试字段或不必要的审计 payload。
 - 非作者不能编辑或删除其他用户的 Life Post。
+- 非作者不能删除其他用户的 Life Comment。
 
 ## 前端交互与 UI
 
@@ -432,6 +439,10 @@ API 暴露边界：
   - `POST /api/life-posts`
   - `PUT /api/life-posts/:id`
   - `DELETE /api/life-posts/:id`
+- Life Comment 的创建，以及作者本人对 Life Comment 的删除。
+  - `POST /api/life-posts/:postId/comments`
+  - `POST /api/life-posts/:postId/comments/:commentId/replies`
+  - `DELETE /api/life-comments/:id`
 - 每日 CheckList 的创建、更新、删除、排序。
 - 全局配置项的创建、更新、删除、排序。
 - 语言的创建、更新、删除、排序。

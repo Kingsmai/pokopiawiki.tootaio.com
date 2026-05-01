@@ -180,6 +180,19 @@ export interface LifePost {
   updatedAt: string;
   author: UserSummary | null;
   updatedBy: UserSummary | null;
+  comments: LifeComment[];
+}
+
+export interface LifeComment {
+  id: number;
+  postId: number;
+  parentCommentId: number | null;
+  body: string;
+  deleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  author: UserSummary | null;
+  replies: LifeComment[];
 }
 
 export interface RecipeDetail extends Recipe {
@@ -285,6 +298,10 @@ export interface DailyChecklistPayload {
 }
 
 export interface LifePostPayload {
+  body: string;
+}
+
+export interface LifeCommentPayload {
   body: string;
 }
 
@@ -422,6 +439,11 @@ export const api = {
   updateLifePost: (id: string | number, payload: LifePostPayload) =>
     sendJson<LifePost>(`/api/life-posts/${id}`, 'PUT', payload),
   deleteLifePost: (id: string | number) => deleteJson(`/api/life-posts/${id}`),
+  createLifeComment: (postId: string | number, payload: LifeCommentPayload) =>
+    sendJson<LifeComment>(`/api/life-posts/${postId}/comments`, 'POST', payload),
+  createLifeCommentReply: (postId: string | number, commentId: string | number, payload: LifeCommentPayload) =>
+    sendJson<LifeComment>(`/api/life-posts/${postId}/comments/${commentId}/replies`, 'POST', payload),
+  deleteLifeComment: (id: string | number) => deleteJson(`/api/life-comments/${id}`),
   createDailyChecklistItem: (payload: DailyChecklistPayload) =>
     sendJson<DailyChecklistItem>('/api/admin/daily-checklist', 'POST', payload),
   updateDailyChecklistItem: (id: string | number, payload: DailyChecklistPayload) =>

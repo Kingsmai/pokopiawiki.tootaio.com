@@ -1316,6 +1316,212 @@ button:disabled,
   white-space: pre-wrap;
 }
 
+.life-post__engagement {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.life-post__engagement-button,
+.life-post__comment-count {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.life-post__engagement-button:hover,
+.life-post__comment-count:hover,
+.life-post__engagement-button[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--pokemon-blue) 10%, var(--surface-soft));
+  color: var(--pokemon-blue-deep);
+}
+
+.life-post__engagement-button .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.life-post__comment-count {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.life-comments {
+  display: grid;
+  gap: 12px;
+}
+
+.life-comments__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.life-comments__header h3 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.life-comments__header span {
+  min-width: 32px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.life-comment-form {
+  display: grid;
+  gap: 8px;
+}
+
+.life-comment-form textarea {
+  min-height: 78px;
+}
+
+.life-comment-form--reply {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 3px solid color-mix(in srgb, var(--pokemon-blue) 34%, var(--line));
+}
+
+.life-comment-list,
+.life-comment-replies {
+  display: grid;
+  gap: 10px;
+}
+
+.life-comment {
+  min-width: 0;
+}
+
+.life-comment__main,
+.life-comment--reply {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.life-comment-replies {
+  margin-top: 10px;
+  padding-left: 16px;
+  border-left: 2px solid var(--line);
+}
+
+.life-comment__avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--pokemon-blue-deep);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.life-comment.is-deleted .life-comment__avatar {
+  color: var(--muted);
+}
+
+.life-comment__content {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.life-comment__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.life-comment__meta strong {
+  color: var(--ink);
+  font-weight: 950;
+}
+
+.life-comment.is-deleted .life-comment__meta strong {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.life-comment__meta time {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.life-comment__body {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.life-comment.is-deleted .life-comment__body,
+.life-comments__empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.life-comment__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.life-comment__link-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0;
+  background: transparent;
+  color: var(--pokemon-blue);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.life-comment__link-button:hover {
+  color: var(--pokemon-blue-deep);
+  text-decoration: underline;
+}
+
+.life-comment__link-button .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.life-comments__empty {
+  margin: 0;
+}
+
 .reorderable-row {
   position: relative;
   flex-wrap: wrap;
@@ -2488,6 +2694,15 @@ button:disabled,
   .life-post__actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
+  }
+
+  .life-comment-replies {
+    padding-left: 10px;
+  }
+
+  .life-comment__main,
+  .life-comment--reply {
+    gap: 8px;
   }
 
   .appearance-list li {

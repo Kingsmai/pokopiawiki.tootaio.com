@@ -5,13 +5,14 @@ import { useI18n } from 'vue-i18n';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
-import { iconCancel, iconDelete, iconEdit, iconLife, iconSave } from '../icons';
+import { iconCancel, iconComment, iconDelete, iconEdit, iconLife, iconReply, iconSave } from '../icons';
 import {
   api,
   getAuthToken,
   onAuthTokenChange,
   setAuthToken,
   type AuthUser,
+  type LifeComment,
   type LifePost
 } from '../services/api';
 
@@ -25,6 +26,12 @@ const body = ref('');
 const editingPostId = ref<number | null>(null);
 const formError = ref('');
 const loadError = ref('');
+const commentBodies = ref<Record<number, string>>({});
+const replyBodies = ref<Record<number, string>>({});
+const replyTargetId = ref<number | null>(null);
+const expandedComments = ref<Record<number, boolean>>({});
+const commentBusyKey = ref('');
+const commentErrors = ref<Record<string, string>>({});
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
 const skeletonPostCount = 3;
 let removeAuthListener: (() => void) | null = null;
@@ -117,6 +124,60 @@ function canManage(post: LifePost) {
   return currentUser.value?.id === post.author?.id;
 }
 
+function canManageComment(comment: LifeComment) {
+  return !comment.deleted && currentUser.value?.id === comment.author?.id;
+}
+
+function commentKey(postId: number) {
+  return `post-${postId}`;
+}
+
+function replyKey(commentId: number) {
+  return `reply-${commentId}`;
+}
+
+function commentCount(post: LifePost) {
+  return post.comments.reduce((count, comment) => count + 1 + comment.replies.length, 0);
+}
+
+function areCommentsExpanded(postId: number) {
+  return expandedComments.value[postId] === true;
+}
+
+function setCommentsExpanded(postId: number, expanded: boolean) {
+  expandedComments.value = {
+    ...expandedComments.value,
+    [postId]: expanded
+  };
+}
+
+function toggleComments(postId: number) {
+  setCommentsExpanded(postId, !areCommentsExpanded(postId));
+}
+
+function isCommentBusy(key: string) {
+  return commentBusyKey.value === key;
+}
+
+function commentAuthorName(comment: LifeComment) {
+  return comment.deleted ? t('pages.life.commentDeleted') : comment.author?.displayName ?? t('pages.life.byUnknown');
+}
+
+function commentInitial(comment: LifeComment) {
+  const name = commentAuthorName(comment);
+  return name.slice(0, 1).toUpperCase();
+}
+
+function setCommentError(key: string, message: string) {
+  commentErrors.value = { ...commentErrors.value, [key]: message };
+}
+
+function clearCommentError(key: string) {
+  const nextErrors = { ...commentErrors.value };
+  delete nextErrors[key];
+  commentErrors.value = nextErrors;
+}
+
 function startEdit(post: LifePost) {
   editingPostId.value = post.id;
   body.value = post.body;
@@ -139,6 +200,99 @@ async function deletePost(post: LifePost) {
     }
   } catch (error) {
     formError.value = error instanceof Error && error.message ? error.message : t('pages.life.deleteFailed');
+  }
+}
+
+function startReply(comment: LifeComment) {
+  replyTargetId.value = comment.id;
+  clearCommentError(replyKey(comment.id));
+}
+
+function cancelReply(commentId: number) {
+  replyTargetId.value = null;
+  replyBodies.value[commentId] = '';
+  clearCommentError(replyKey(commentId));
+}
+
+async function submitComment(post: LifePost) {
+  const key = commentKey(post.id);
+  const nextBody = (commentBodies.value[post.id] ?? '').trim();
+  if (!nextBody) {
+    setCommentError(key, t('pages.life.commentRequired'));
+    return;
+  }
+
+  commentBusyKey.value = key;
+  clearCommentError(key);
+
+  try {
+    const comment = await api.createLifeComment(post.id, { body: nextBody });
+    post.comments.push(comment);
+    commentBodies.value[post.id] = '';
+    setCommentsExpanded(post.id, true);
+  } catch (error) {
+    setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.commentFailed'));
+  } finally {
+    commentBusyKey.value = '';
+  }
+}
+
+async function submitReply(post: LifePost, comment: LifeComment) {
+  const key = replyKey(comment.id);
+  const nextBody = (replyBodies.value[comment.id] ?? '').trim();
+  if (!nextBody) {
+    setCommentError(key, t('pages.life.commentRequired'));
+    return;
+  }
+
+  commentBusyKey.value = key;
+  clearCommentError(key);
+
+  try {
+    const reply = await api.createLifeCommentReply(post.id, comment.id, { body: nextBody });
+    comment.replies.push(reply);
+    setCommentsExpanded(post.id, true);
+    cancelReply(comment.id);
+  } catch (error) {
+    setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.replyFailed'));
+  } finally {
+    commentBusyKey.value = '';
+  }
+}
+
+function markCommentDeleted(comments: LifeComment[], id: number): boolean {
+  for (const comment of comments) {
+    if (comment.id === id) {
+      comment.deleted = true;
+      comment.body = '';
+      comment.author = null;
+      return true;
+    }
+
+    if (markCommentDeleted(comment.replies, id)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function deleteComment(post: LifePost, comment: LifeComment) {
+  if (!window.confirm(t('pages.life.deleteCommentConfirm'))) {
+    return;
+  }
+
+  const key = replyKey(comment.id);
+  clearCommentError(key);
+
+  try {
+    await api.deleteLifeComment(comment.id);
+    markCommentDeleted(post.comments, comment.id);
+    if (replyTargetId.value === comment.id) {
+      cancelReply(comment.id);
+    }
+  } catch (error) {
+    setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.deleteCommentFailed'));
   }
 }
 
@@ -268,6 +422,162 @@ onUnmounted(() => {
           </header>
 
           <p class="life-post__body">{{ post.body }}</p>
+
+          <div class="life-post__engagement">
+            <button
+              class="life-post__engagement-button"
+              type="button"
+              :aria-controls="`life-comments-${post.id}`"
+              :aria-expanded="areCommentsExpanded(post.id)"
+              @click="toggleComments(post.id)"
+            >
+              <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+              {{ areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment') }}
+            </button>
+            <button
+              class="life-post__comment-count"
+              type="button"
+              :aria-controls="`life-comments-${post.id}`"
+              :aria-expanded="areCommentsExpanded(post.id)"
+              @click="toggleComments(post.id)"
+            >
+              {{ t('pages.life.commentsCount', { count: commentCount(post) }) }}
+            </button>
+          </div>
+
+          <section
+            v-if="areCommentsExpanded(post.id)"
+            :id="`life-comments-${post.id}`"
+            class="life-comments"
+            :aria-label="t('pages.life.comments')"
+          >
+            <div class="life-comments__header">
+              <h3>{{ t('pages.life.comments') }}</h3>
+              <span>{{ commentCount(post) }}</span>
+            </div>
+
+            <form v-if="canPost" class="life-comment-form" @submit.prevent="submitComment(post)">
+              <div class="field">
+                <label :for="`life-comment-${post.id}`">{{ t('pages.life.comment') }}</label>
+                <textarea
+                  :id="`life-comment-${post.id}`"
+                  v-model="commentBodies[post.id]"
+                  maxlength="1000"
+                  :placeholder="t('pages.life.commentPlaceholder')"
+                ></textarea>
+              </div>
+              <p v-if="commentErrors[commentKey(post.id)]" class="life-form__error" role="alert">
+                {{ commentErrors[commentKey(post.id)] }}
+              </p>
+              <button
+                class="ui-button ui-button--ghost ui-button--small"
+                :disabled="isCommentBusy(commentKey(post.id)) || !(commentBodies[post.id] ?? '').trim()"
+                type="submit"
+              >
+                <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+                {{ isCommentBusy(commentKey(post.id)) ? t('pages.life.postingComment') : t('pages.life.postComment') }}
+              </button>
+            </form>
+
+            <div v-if="post.comments.length" class="life-comment-list">
+              <article
+                v-for="comment in post.comments"
+                :key="comment.id"
+                class="life-comment"
+                :class="{ 'is-deleted': comment.deleted }"
+              >
+                <div class="life-comment__main">
+                  <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(comment) }}</div>
+                  <div class="life-comment__content">
+                    <div class="life-comment__meta">
+                      <strong>{{ commentAuthorName(comment) }}</strong>
+                      <time :datetime="comment.createdAt">{{ formatPostTime(comment.createdAt) }}</time>
+                    </div>
+                    <p v-if="!comment.deleted" class="life-comment__body">{{ comment.body }}</p>
+
+                    <div v-if="!comment.deleted" class="life-comment__actions">
+                      <button v-if="canPost" class="life-comment__link-button" type="button" @click="startReply(comment)">
+                        <Icon :icon="iconReply" class="ui-icon" aria-hidden="true" />
+                        {{ t('pages.life.reply') }}
+                      </button>
+                      <button
+                        v-if="canManageComment(comment)"
+                        class="life-comment__link-button"
+                        type="button"
+                        @click="deleteComment(post, comment)"
+                      >
+                        <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+                        {{ t('pages.life.deleteComment') }}
+                      </button>
+                    </div>
+
+                    <p v-if="commentErrors[replyKey(comment.id)]" class="life-form__error" role="alert">
+                      {{ commentErrors[replyKey(comment.id)] }}
+                    </p>
+
+                    <form
+                      v-if="canPost && replyTargetId === comment.id"
+                      class="life-comment-form life-comment-form--reply"
+                      @submit.prevent="submitReply(post, comment)"
+                    >
+                      <div class="field">
+                        <label :for="`life-reply-${comment.id}`">{{ t('pages.life.reply') }}</label>
+                        <textarea
+                          :id="`life-reply-${comment.id}`"
+                          v-model="replyBodies[comment.id]"
+                          maxlength="1000"
+                          :placeholder="t('pages.life.commentReplyPlaceholder')"
+                        ></textarea>
+                      </div>
+                      <div class="life-form__actions">
+                        <button
+                          class="ui-button ui-button--ghost ui-button--small"
+                          :disabled="isCommentBusy(replyKey(comment.id)) || !(replyBodies[comment.id] ?? '').trim()"
+                          type="submit"
+                        >
+                          <Icon :icon="iconReply" class="ui-icon" aria-hidden="true" />
+                          {{ isCommentBusy(replyKey(comment.id)) ? t('pages.life.postingReply') : t('pages.life.postReply') }}
+                        </button>
+                        <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="cancelReply(comment.id)">
+                          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+                          {{ t('pages.life.cancelReply') }}
+                        </button>
+                      </div>
+                    </form>
+
+                    <div v-if="comment.replies.length" class="life-comment-replies">
+                      <article
+                        v-for="reply in comment.replies"
+                        :key="reply.id"
+                        class="life-comment life-comment--reply"
+                        :class="{ 'is-deleted': reply.deleted }"
+                      >
+                        <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(reply) }}</div>
+                        <div class="life-comment__content">
+                          <div class="life-comment__meta">
+                            <strong>{{ commentAuthorName(reply) }}</strong>
+                            <time :datetime="reply.createdAt">{{ formatPostTime(reply.createdAt) }}</time>
+                          </div>
+                          <p v-if="!reply.deleted" class="life-comment__body">{{ reply.body }}</p>
+                          <div v-if="canManageComment(reply)" class="life-comment__actions">
+                            <button class="life-comment__link-button" type="button" @click="deleteComment(post, reply)">
+                              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+                              {{ t('pages.life.deleteComment') }}
+                            </button>
+                          </div>
+                          <p v-if="commentErrors[replyKey(reply.id)]" class="life-form__error" role="alert">
+                            {{ commentErrors[replyKey(reply.id)] }}
+                          </p>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <p v-else class="life-comments__empty">{{ t('pages.life.noComments') }}</p>
+          </section>
         </article>
       </div>
 

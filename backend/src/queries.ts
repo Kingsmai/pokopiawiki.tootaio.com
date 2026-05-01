@@ -108,6 +108,38 @@ type LifePostPayload = {
   body: string;
 };
 
+type LifeCommentPayload = {
+  body: string;
+};
+
+type LifeCommentRow = {
+  id: number;
+  postId: number;
+  parentCommentId: number | null;
+  body: string;
+  deleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  author: { id: number; displayName: string } | null;
+};
+
+type LifeComment = LifeCommentRow & {
+  replies: LifeComment[];
+};
+
+type LifePostRow = {
+  id: number;
+  body: string;
+  createdAt: Date;
+  updatedAt: Date;
+  author: { id: number; displayName: string } | null;
+  updatedBy: { id: number; displayName: string } | null;
+};
+
+type LifePost = LifePostRow & {
+  comments: LifeComment[];
+};
+
 type HabitatPayload = {
   name: string;
   translations: TranslationInput;
@@ -1181,6 +1213,15 @@ function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload
   return { body };
 }
 
+function cleanLifeCommentPayload(payload: Record<string, unknown>): LifeCommentPayload {
+  const body = cleanName(payload.body, 'Please enter a comment');
+  if (body.length > 1000) {
+    throw validationError('Comment is too long');
+  }
+
+  return { body };
+}
+
 function lifePostProjection(): string {
   return `
     SELECT
@@ -1202,21 +1243,115 @@ function lifePostProjection(): string {
   `;
 }
 
-export function listLifePosts() {
-  return query(`
+function lifeCommentProjection(whereClause: string): string {
+  return `
+    SELECT
+      lc.id,
+      lc.post_id AS "postId",
+      lc.parent_comment_id AS "parentCommentId",
+      CASE WHEN lc.deleted_at IS NULL THEN lc.body ELSE '' END AS body,
+      lc.deleted_at IS NOT NULL AS deleted,
+      lc.created_at AS "createdAt",
+      lc.updated_at AS "updatedAt",
+      CASE
+        WHEN lc.deleted_at IS NOT NULL OR comment_user.id IS NULL THEN NULL
+        ELSE json_build_object('id', comment_user.id, 'displayName', comment_user.display_name)
+      END AS author
+    FROM life_post_comments lc
+    LEFT JOIN users comment_user ON comment_user.id = lc.created_by_user_id
+    ${whereClause}
+  `;
+}
+
+function buildLifeCommentTree(rows: LifeCommentRow[]): LifeComment[] {
+  const comments = new Map<number, LifeComment>();
+  const topLevelComments: LifeComment[] = [];
+
+  for (const row of rows) {
+    comments.set(row.id, { ...row, replies: [] });
+  }
+
+  for (const comment of comments.values()) {
+    if (comment.parentCommentId === null) {
+      topLevelComments.push(comment);
+      continue;
+    }
+
+    const parent = comments.get(comment.parentCommentId);
+    if (parent?.parentCommentId === null) {
+      parent.replies.push(comment);
+    } else {
+      topLevelComments.push(comment);
+    }
+  }
+
+  return topLevelComments;
+}
+
+async function lifeCommentsForPosts(postIds: number[]): Promise<Map<number, LifeComment[]>> {
+  const commentsByPost = new Map<number, LifeComment[]>();
+  if (postIds.length === 0) {
+    return commentsByPost;
+  }
+
+  const rows = await query<LifeCommentRow>(
+    `
+      ${lifeCommentProjection('WHERE lc.post_id = ANY($1::integer[])')}
+      ORDER BY lc.created_at, lc.id
+    `,
+    [postIds]
+  );
+
+  for (const postId of postIds) {
+    commentsByPost.set(postId, buildLifeCommentTree(rows.filter((comment) => comment.postId === postId)));
+  }
+
+  return commentsByPost;
+}
+
+async function getLifeCommentById(id: number): Promise<LifeComment | null> {
+  const row = await queryOne<LifeCommentRow>(
+    `
+      ${lifeCommentProjection('WHERE lc.id = $1')}
+    `,
+    [id]
+  );
+
+  return row ? { ...row, replies: [] } : null;
+}
+
+export async function listLifePosts(): Promise<LifePost[]> {
+  const posts = await query<LifePostRow>(`
     ${lifePostProjection()}
     ORDER BY lp.created_at DESC, lp.id DESC
   `);
+
+  const commentsByPost = await lifeCommentsForPosts(posts.map((post) => post.id));
+
+  return posts.map((post) => ({
+    ...post,
+    comments: commentsByPost.get(post.id) ?? []
+  }));
 }
 
-async function getLifePostById(id: number) {
-  return queryOne(
+async function getLifePostById(id: number): Promise<LifePost | null> {
+  const post = await queryOne<LifePostRow>(
     `
       ${lifePostProjection()}
       WHERE lp.id = $1
     `,
     [id]
   );
+
+  if (!post) {
+    return null;
+  }
+
+  const commentsByPost = await lifeCommentsForPosts([post.id]);
+  return {
+    ...post,
+    comments: commentsByPost.get(post.id) ?? []
+  };
 }
 
 export async function createLifePost(payload: Record<string, unknown>, userId: number) {
@@ -1257,6 +1392,63 @@ export async function deleteLifePost(id: number, userId: number) {
       DELETE FROM life_posts
       WHERE id = $1
         AND created_by_user_id = $2
+      RETURNING id
+    `,
+    [id, userId]
+  );
+
+  return Boolean(result);
+}
+
+export async function createLifeComment(postId: number, payload: Record<string, unknown>, userId: number) {
+  const cleanPayload = cleanLifeCommentPayload(payload);
+
+  const result = await queryOne<{ id: number }>(
+    `
+      INSERT INTO life_post_comments (post_id, body, created_by_user_id)
+      SELECT $1, $2, $3
+      WHERE EXISTS (SELECT 1 FROM life_posts WHERE id = $1)
+      RETURNING id
+    `,
+    [postId, cleanPayload.body, userId]
+  );
+
+  return result ? getLifeCommentById(result.id) : null;
+}
+
+export async function createLifeCommentReply(
+  postId: number,
+  commentId: number,
+  payload: Record<string, unknown>,
+  userId: number
+) {
+  const cleanPayload = cleanLifeCommentPayload(payload);
+
+  const result = await queryOne<{ id: number }>(
+    `
+      INSERT INTO life_post_comments (post_id, parent_comment_id, body, created_by_user_id)
+      SELECT lc.post_id, lc.id, $3, $4
+      FROM life_post_comments lc
+      WHERE lc.post_id = $1
+        AND lc.id = $2
+        AND lc.parent_comment_id IS NULL
+        AND lc.deleted_at IS NULL
+      RETURNING id
+    `,
+    [postId, commentId, cleanPayload.body, userId]
+  );
+
+  return result ? getLifeCommentById(result.id) : null;
+}
+
+export async function deleteLifeComment(id: number, userId: number) {
+  const result = await queryOne<{ id: number }>(
+    `
+      UPDATE life_post_comments
+      SET deleted_at = now(), deleted_by_user_id = $2, updated_at = now()
+      WHERE id = $1
+        AND created_by_user_id = $2
+        AND deleted_at IS NULL
       RETURNING id
     `,
     [id, userId]

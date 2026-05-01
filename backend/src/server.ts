@@ -10,6 +10,8 @@ import {
   createHabitat,
   createItem,
   createLanguage,
+  createLifeComment,
+  createLifeCommentReply,
   createLifePost,
   createPokemon,
   createRecipe,
@@ -18,6 +20,7 @@ import {
   deleteHabitat,
   deleteItem,
   deleteLanguage,
+  deleteLifeComment,
   deleteLifePost,
   deletePokemon,
   deleteRecipe,
@@ -182,6 +185,31 @@ app.post('/api/life-posts', async (request, reply) => {
   return user ? reply.code(201).send(await createLifePost(request.body as Record<string, unknown>, user.id)) : undefined;
 });
 
+app.post('/api/life-posts/:postId/comments', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { postId } = request.params as { postId: string };
+  const comment = await createLifeComment(Number(postId), request.body as Record<string, unknown>, user.id);
+  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+});
+
+app.post('/api/life-posts/:postId/comments/:commentId/replies', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { postId, commentId } = request.params as { postId: string; commentId: string };
+  const comment = await createLifeCommentReply(
+    Number(postId),
+    Number(commentId),
+    request.body as Record<string, unknown>,
+    user.id
+  );
+  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+});
+
 app.put('/api/life-posts/:id', async (request, reply) => {
   const user = await requireVerifiedUser(request, reply);
   if (!user) {
@@ -199,6 +227,16 @@ app.delete('/api/life-posts/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteLifePost(Number(id), user.id);
+  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+});
+
+app.delete('/api/life-comments/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteLifeComment(Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 

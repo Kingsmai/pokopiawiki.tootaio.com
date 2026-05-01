@@ -60,6 +60,10 @@ type RecipePayload = {
   materials: IdQuantity[];
 };
 
+type DailyChecklistPayload = {
+  title: string;
+};
+
 type HabitatPayload = {
   name: string;
   recipeItems: IdQuantity[];
@@ -520,6 +524,127 @@ export async function getOptions() {
     itemTags: favoriteThings,
     maps
   };
+}
+
+function cleanDailyChecklistPayload(payload: Record<string, unknown>): DailyChecklistPayload {
+  return {
+    title: cleanName(payload.title, '请输入 Task')
+  };
+}
+
+export async function listDailyChecklistItems() {
+  return query(
+    `
+      SELECT c.id, c.title
+      FROM daily_checklist_items c
+      ORDER BY c.sort_order, c.id
+    `
+  );
+}
+
+async function getDailyChecklistItemById(id: number) {
+  return queryOne(
+    `
+      SELECT c.id, c.title
+      FROM daily_checklist_items c
+      WHERE c.id = $1
+    `,
+    [id]
+  );
+}
+
+export async function createDailyChecklistItem(payload: Record<string, unknown>, userId: number) {
+  const cleanPayload = cleanDailyChecklistPayload(payload);
+
+  const id = await withTransaction(async (client) => {
+    const orderResult = await client.query<{ sortOrder: number }>(
+      'SELECT COALESCE(MAX(sort_order), 0) + 10 AS "sortOrder" FROM daily_checklist_items'
+    );
+    const sortOrder = orderResult.rows[0]?.sortOrder ?? 10;
+
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO daily_checklist_items (title, sort_order, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $3)
+        RETURNING id
+      `,
+      [cleanPayload.title, sortOrder, userId]
+    );
+
+    const createdId = result.rows[0].id;
+    await recordEditLog(client, 'daily-checklist-items', createdId, 'create', userId);
+    return createdId;
+  });
+
+  return getDailyChecklistItemById(id);
+}
+
+export async function updateDailyChecklistItem(id: number, payload: Record<string, unknown>, userId: number) {
+  const cleanPayload = cleanDailyChecklistPayload(payload);
+
+  const updated = await withTransaction(async (client) => {
+    const result = await client.query(
+      `
+        UPDATE daily_checklist_items
+        SET title = $1, updated_by_user_id = $2, updated_at = now()
+        WHERE id = $3
+      `,
+      [cleanPayload.title, userId, id]
+    );
+
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, 'daily-checklist-items', id, 'update', userId);
+    return true;
+  });
+
+  return updated ? getDailyChecklistItemById(id) : null;
+}
+
+export async function reorderDailyChecklistItems(payload: Record<string, unknown>, userId: number) {
+  const ids = cleanIds(payload.ids);
+  if (ids.length === 0) {
+    throw validationError('请选择 Task');
+  }
+
+  await withTransaction(async (client) => {
+    const existing = await client.query<{ id: number }>(
+      'SELECT id FROM daily_checklist_items WHERE id = ANY($1::integer[])',
+      [ids]
+    );
+
+    if (existing.rowCount !== ids.length) {
+      throw validationError('Task 不存在');
+    }
+
+    for (const [index, id] of ids.entries()) {
+      await client.query(
+        `
+          UPDATE daily_checklist_items
+          SET sort_order = $1, updated_by_user_id = $2, updated_at = now()
+          WHERE id = $3
+        `,
+        [(index + 1) * 10, userId, id]
+      );
+      await recordEditLog(client, 'daily-checklist-items', id, 'update', userId);
+    }
+  });
+
+  return listDailyChecklistItems();
+}
+
+export async function deleteDailyChecklistItem(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>('DELETE FROM daily_checklist_items WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await recordEditLog(client, 'daily-checklist-items', id, 'delete', userId);
+    return true;
+  });
 }
 
 export function isConfigType(type: string): type is ConfigType {

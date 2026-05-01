@@ -126,6 +126,11 @@ export interface Recipe extends EditInfo {
   materials: Array<NamedEntity & { quantity: number }>;
 }
 
+export interface DailyChecklistItem {
+  id: number;
+  title: string;
+}
+
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];
   editHistory: EditHistoryEntry[];
@@ -210,6 +215,10 @@ export interface HabitatPayload {
     weathers: string[];
     rarity: number;
   }>;
+}
+
+export interface DailyChecklistPayload {
+  title: string;
 }
 
 export function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -329,6 +338,14 @@ export const api = {
   me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
+  dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),
+  createDailyChecklistItem: (payload: DailyChecklistPayload) =>
+    sendJson<DailyChecklistItem>('/api/admin/daily-checklist', 'POST', payload),
+  updateDailyChecklistItem: (id: string | number, payload: DailyChecklistPayload) =>
+    sendJson<DailyChecklistItem>(`/api/admin/daily-checklist/${id}`, 'PUT', payload),
+  reorderDailyChecklistItems: (ids: number[]) =>
+    sendJson<DailyChecklistItem[]>('/api/admin/daily-checklist/order', 'PUT', { ids }),
+  deleteDailyChecklistItem: (id: string | number) => deleteJson(`/api/admin/daily-checklist/${id}`),
   config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
   createConfig: (type: ConfigType, payload: { name: string; hasItemDrop?: boolean }) =>
     sendJson<Skill | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),

@@ -874,6 +874,175 @@ button:disabled,
   font-weight: 750;
 }
 
+.checklist-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist-item {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.checklist-check {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.checklist-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--pokemon-blue);
+}
+
+.checklist-check span {
+  overflow-wrap: anywhere;
+}
+
+.checklist-item.is-checked .checklist-check span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.checklist-skeleton-list li {
+  justify-content: flex-start;
+}
+
+.admin-checklist-row {
+  position: relative;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  border-radius: var(--radius-card);
+  transition:
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.admin-checklist-row.is-dragging {
+  z-index: 2;
+  background: color-mix(in srgb, var(--pokemon-yellow) 12%, var(--surface));
+  box-shadow: var(--shadow-soft);
+  opacity: 0.68;
+  transform: scale(0.99);
+}
+
+.admin-checklist-row.is-drop-target::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--pokemon-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pokemon-blue) 18%, transparent);
+}
+
+.admin-checklist-row.is-drop-before::before {
+  top: -2px;
+}
+
+.admin-checklist-row.is-drop-after::before {
+  bottom: -2px;
+}
+
+.admin-checklist-move,
+.admin-checklist-enter-active,
+.admin-checklist-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.admin-checklist-enter-from,
+.admin-checklist-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.admin-checklist-leave-active {
+  position: absolute;
+  right: 0;
+  left: 0;
+}
+
+.drag-handle {
+  width: 44px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: grab;
+  touch-action: manipulation;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    transform 0.14s ease;
+}
+
+.drag-handle:hover,
+.drag-handle:focus-visible {
+  border-color: var(--pokemon-blue);
+  background: color-mix(in srgb, var(--pokemon-blue) 9%, var(--surface));
+  color: var(--pokemon-blue-deep);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  transform: scale(0.96);
+}
+
+.drag-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.admin-checklist-title {
+  flex: 1 1 180px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-checklist-row,
+  .admin-checklist-move,
+  .admin-checklist-enter-active,
+  .admin-checklist-leave-active,
+  .drag-handle {
+    transition: none;
+  }
+
+  .admin-checklist-row.is-dragging,
+  .admin-checklist-enter-from,
+  .admin-checklist-leave-to,
+  .drag-handle:active {
+    transform: none;
+  }
+}
+
 .config-flag {
   display: inline-flex;
   align-items: center;

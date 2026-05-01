@@ -11,6 +11,7 @@ import ItemEdit from '../views/ItemEdit.vue';
 import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import RecipeEdit from '../views/RecipeEdit.vue';
+import DailyChecklistView from '../views/DailyChecklistView.vue';
 import AdminView from '../views/AdminView.vue';
 import LoginView from '../views/LoginView.vue';
 import RegisterView from '../views/RegisterView.vue';
@@ -37,6 +38,7 @@ export const router = createRouter({
     { path: '/recipes/new', component: RecipeEdit, meta: { requiresVerified: true } },
     { path: '/recipes/:id/edit', component: RecipeEdit, meta: { requiresVerified: true } },
     { path: '/recipes/:id', component: RecipeDetail },
+    { path: '/checklist', component: DailyChecklistView },
     { path: '/admin', component: AdminView, meta: { requiresVerified: true } },
     { path: '/login', component: LoginView },
     { path: '/register', component: RegisterView },

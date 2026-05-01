@@ -5,11 +5,13 @@ import { getUserBySessionToken, loginUser, logoutSession, registerUser, verifyEm
 import { initializeDatabase, pool } from './db.ts';
 import {
   createConfig,
+  createDailyChecklistItem,
   createHabitat,
   createItem,
   createPokemon,
   createRecipe,
   deleteConfig,
+  deleteDailyChecklistItem,
   deleteHabitat,
   deleteItem,
   deletePokemon,
@@ -21,11 +23,14 @@ import {
   getRecipe,
   isConfigType,
   listConfig,
+  listDailyChecklistItems,
   listHabitats,
   listItems,
   listPokemon,
   listRecipes,
+  reorderDailyChecklistItems,
   updateConfig,
+  updateDailyChecklistItem,
   updateHabitat,
   updateItem,
   updatePokemon,
@@ -118,6 +123,8 @@ app.post('/api/auth/logout', async (request, reply) => {
 });
 
 app.get('/api/options', async () => getOptions());
+
+app.get('/api/daily-checklist', async () => listDailyChecklistItems());
 
 app.get('/api/pokemon', async (request) => listPokemon(request.query as Record<string, string | string[] | undefined>));
 
@@ -288,6 +295,36 @@ app.delete('/api/recipes/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteRecipe(Number(id), user.id);
+  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+});
+
+app.post('/api/admin/daily-checklist', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reply.code(201).send(await createDailyChecklistItem(request.body as Record<string, unknown>, user.id)) : undefined;
+});
+
+app.put('/api/admin/daily-checklist/order', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? reorderDailyChecklistItems(request.body as Record<string, unknown>, user.id) : undefined;
+});
+
+app.put('/api/admin/daily-checklist/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const item = await updateDailyChecklistItem(Number(id), request.body as Record<string, unknown>, user.id);
+  return item ? item : reply.code(404).send({ message: 'Not found' });
+});
+
+app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteDailyChecklistItem(Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 

@@ -9,6 +9,7 @@ const navItems = [
   { label: '栖息地', to: '/habitats' },
   { label: '物品', to: '/items' },
   { label: '材料单', to: '/recipes' },
+  { label: 'CheckList', to: '/checklist' },
   { label: '管理', to: '/admin' }
 ];
 

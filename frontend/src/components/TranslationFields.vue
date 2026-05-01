@@ -18,9 +18,21 @@ const emit = defineEmits<{
   'update:translations': [value: TranslationMap];
 }>();
 
-const { t } = useI18n();
+const { locale, t } = useI18n();
+const fallbackLanguage: Language = { code: 'en', name: 'English', enabled: true, isDefault: true, sortOrder: 0 };
 const visibleLanguages = computed(() => props.languages.filter((language) => language.enabled));
-const defaultLanguage = computed(() => visibleLanguages.value.find((language) => language.isDefault) ?? visibleLanguages.value[0]);
+const defaultLanguage = computed(() => visibleLanguages.value.find((language) => language.isDefault) ?? visibleLanguages.value[0] ?? fallbackLanguage);
+const currentLanguage = computed(() => {
+  const currentLocale = String(locale.value || defaultLanguage.value.code);
+  return visibleLanguages.value.find((language) => language.code === currentLocale) ?? defaultLanguage.value;
+});
+const isDefaultLanguage = computed(() => currentLanguage.value.code === defaultLanguage.value.code);
+const currentValue = computed({
+  get: () => fieldValue(currentLanguage.value),
+  set: (value: string) => updateField(currentLanguage.value, value)
+});
+const currentPlaceholder = computed(() => fieldPlaceholder(currentLanguage.value));
+const currentRequired = computed(() => Boolean(props.required && (isDefaultLanguage.value || props.baseValue.trim() === '')));
 
 function fieldValue(language: Language): string {
   if (language.code === defaultLanguage.value?.code) {
@@ -58,23 +70,19 @@ function updateField(language: Language, value: string) {
   emit('update:translations', nextTranslations);
 }
 
-function inputValue(event: Event): string {
-  return event.target instanceof HTMLInputElement ? event.target.value : '';
-}
 </script>
 
 <template>
   <div class="translation-fields">
-    <div v-for="language in visibleLanguages" :key="language.code" class="field">
-      <label :for="`${idPrefix}-${language.code}`">
-        {{ t('common.fieldForLanguage', { field: label, language: language.name }) }}
+    <div class="field">
+      <label :for="`${idPrefix}-${currentLanguage.code}`">
+        {{ t('common.fieldForLanguage', { field: label, language: currentLanguage.name }) }}
       </label>
       <input
-        :id="`${idPrefix}-${language.code}`"
-        :value="fieldValue(language)"
-        :placeholder="fieldPlaceholder(language)"
-        :required="required && language.code === defaultLanguage?.code"
-        @input="updateField(language, inputValue($event))"
+        :id="`${idPrefix}-${currentLanguage.code}`"
+        v-model="currentValue"
+        :placeholder="currentPlaceholder"
+        :required="currentRequired"
       />
     </div>
   </div>

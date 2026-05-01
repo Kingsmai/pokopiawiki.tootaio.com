@@ -16,7 +16,7 @@ type SkillItemDropForm = {
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 const options = ref<Options | null>(null);
 const itemOptions = ref<NamedEntity[]>([]);
 const languages = ref<Language[]>([]);
@@ -85,6 +85,15 @@ function skillSupportsItemDrop(skillId: string) {
 function skillDropLabel(skillId: string) {
   const name = skillName(skillId);
   return name ? t('pages.pokemon.skillDrop', { name }) : t('pages.pokemon.dropItem');
+}
+
+function pokemonNameForSave() {
+  const baseName = pokemonForm.value.name.trim();
+  if (baseName !== '') {
+    return pokemonForm.value.name;
+  }
+
+  return pokemonForm.value.translations[String(locale.value || '')]?.name ?? '';
 }
 
 function closeEditor() {
@@ -164,7 +173,7 @@ async function savePokemon() {
   try {
     const payload: PokemonPayload = {
       id: Number(isEditing.value ? routeId.value : pokemonForm.value.id),
-      name: pokemonForm.value.name,
+      name: pokemonNameForSave(),
       translations: pokemonForm.value.translations,
       environmentId: Number(pokemonForm.value.environmentId),
       skillIds: toIds(pokemonForm.value.skillIds.slice(0, 2)),

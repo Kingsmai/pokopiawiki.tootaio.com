@@ -11,7 +11,7 @@ import { api, type ConfigType, type ItemPayload, type Language, type Options, ty
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 const options = ref<Options | null>(null);
 const languages = ref<Language[]>([]);
 const loading = ref(true);
@@ -51,6 +51,15 @@ function errorText(error: unknown, fallback: string) {
 
 function closeEditor() {
   void router.push(cancelTo.value);
+}
+
+function itemNameForSave() {
+  const baseName = itemForm.value.name.trim();
+  if (baseName !== '') {
+    return itemForm.value.name;
+  }
+
+  return itemForm.value.translations[String(locale.value || '')]?.name ?? '';
 }
 
 async function loadOptions() {
@@ -131,7 +140,7 @@ async function saveItem() {
 
   try {
     const payload: ItemPayload = {
-      name: itemForm.value.name,
+      name: itemNameForSave(),
       translations: itemForm.value.translations,
       categoryId: Number(itemForm.value.categoryId),
       usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,

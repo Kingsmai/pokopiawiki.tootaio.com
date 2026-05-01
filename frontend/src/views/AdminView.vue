@@ -248,6 +248,14 @@ function configBaseNameForSave() {
   return configForm.value.translations[currentConfigLocale.value]?.name ?? '';
 }
 
+function checklistTitleForSave() {
+  if (checklistForm.value.title.trim() !== '') {
+    return checklistForm.value.title;
+  }
+
+  return checklistForm.value.translations[currentConfigLocale.value]?.title ?? '';
+}
+
 function previewChecklistOrder(rows: DailyChecklistItem[]) {
   checklistRows.value = rows;
 }
@@ -391,7 +399,7 @@ async function loadChecklist() {
 async function saveChecklistItem() {
   await run(async () => {
     const payload = {
-      title: checklistForm.value.title,
+      title: checklistTitleForSave(),
       translations: checklistForm.value.translations
     };
 

@@ -30,7 +30,7 @@ type HabitatAppearanceForm = {
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 const options = ref<Options | null>(null);
 const itemRows = ref<Item[]>([]);
 const pokemonRows = ref<Pokemon[]>([]);
@@ -127,6 +127,15 @@ function closeEditor() {
   void router.push(cancelTo.value);
 }
 
+function habitatNameForSave() {
+  const baseName = habitatForm.value.name.trim();
+  if (baseName !== '') {
+    return habitatForm.value.name;
+  }
+
+  return habitatForm.value.translations[String(locale.value || '')]?.name ?? '';
+}
+
 async function loadEditor() {
   loading.value = true;
   message.value = '';
@@ -189,7 +198,7 @@ async function saveHabitat() {
 
   try {
     const payload: HabitatPayload = {
-      name: habitatForm.value.name,
+      name: habitatNameForSave(),
       translations: habitatForm.value.translations,
       recipeItems: toQuantityRows(habitatForm.value.recipeItems),
       pokemonAppearances: habitatForm.value.pokemonAppearances

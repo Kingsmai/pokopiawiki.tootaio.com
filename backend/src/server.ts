@@ -22,6 +22,7 @@ import {
   deleteLanguage,
   deleteLifeComment,
   deleteLifePost,
+  deleteLifePostReaction,
   deletePokemon,
   deleteRecipe,
   getHabitat,
@@ -45,6 +46,7 @@ import {
   reorderLanguages,
   reorderPokemon,
   reorderRecipes,
+  setLifePostReaction,
   updateConfig,
   updateDailyChecklistItem,
   updateHabitat,
@@ -144,6 +146,19 @@ async function requireVerifiedUser(request: FastifyRequest, reply: FastifyReply)
   return user;
 }
 
+async function optionalUser(request: FastifyRequest): Promise<AuthUser | null> {
+  const token = getBearerToken(request.headers.authorization);
+  if (!token) {
+    return null;
+  }
+
+  try {
+    return await getUserBySessionToken(token);
+  } catch {
+    return null;
+  }
+}
+
 app.post('/api/auth/register', async (request, reply) =>
   reply.code(201).send(await registerUser(request.body as Record<string, unknown>, requestLocale(request)))
 );
@@ -178,7 +193,10 @@ app.get('/api/options', async (request) => getOptions(requestLocale(request)));
 
 app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(requestLocale(request)));
 
-app.get('/api/life-posts', async () => listLifePosts());
+app.get('/api/life-posts', async (request) => {
+  const user = await optionalUser(request);
+  return listLifePosts(user?.id ?? null);
+});
 
 app.post('/api/life-posts', async (request, reply) => {
   const user = await requireVerifiedUser(request, reply);
@@ -217,6 +235,26 @@ app.put('/api/life-posts/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const post = await updateLifePost(Number(id), request.body as Record<string, unknown>, user.id);
+  return post ? post : reply.code(404).send({ message: 'Not found' });
+});
+
+app.put('/api/life-posts/:id/reaction', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const post = await setLifePostReaction(Number(id), request.body as Record<string, unknown>, user.id);
+  return post ? post : reply.code(404).send({ message: 'Not found' });
+});
+
+app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const post = await deleteLifePostReaction(Number(id), user.id);
   return post ? post : reply.code(404).send({ message: 'Not found' });
 });
 

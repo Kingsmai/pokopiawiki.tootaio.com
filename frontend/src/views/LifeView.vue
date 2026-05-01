@@ -5,7 +5,19 @@ import { useI18n } from 'vue-i18n';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
-import { iconCancel, iconComment, iconDelete, iconEdit, iconLife, iconReply, iconSave } from '../icons';
+import {
+  iconCancel,
+  iconComment,
+  iconDelete,
+  iconEdit,
+  iconLife,
+  iconReactionFun,
+  iconReactionHelpful,
+  iconReactionLike,
+  iconReactionThanks,
+  iconReply,
+  iconSave
+} from '../icons';
 import {
   api,
   getAuthToken,
@@ -13,7 +25,8 @@ import {
   setAuthToken,
   type AuthUser,
   type LifeComment,
-  type LifePost
+  type LifePost,
+  type LifeReactionType
 } from '../services/api';
 
 const { locale, t } = useI18n();
@@ -32,9 +45,19 @@ const replyTargetId = ref<number | null>(null);
 const expandedComments = ref<Record<number, boolean>>({});
 const commentBusyKey = ref('');
 const commentErrors = ref<Record<string, string>>({});
+const reactionPickerPostId = ref<number | null>(null);
+const reactionBusyPostId = ref<number | null>(null);
+const reactionErrors = ref<Record<number, string>>({});
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
 const skeletonPostCount = 3;
 let removeAuthListener: (() => void) | null = null;
+
+const reactionOptions = [
+  { type: 'like', icon: iconReactionLike, labelKey: 'pages.life.reactionLike' },
+  { type: 'helpful', icon: iconReactionHelpful, labelKey: 'pages.life.reactionHelpful' },
+  { type: 'fun', icon: iconReactionFun, labelKey: 'pages.life.reactionFun' },
+  { type: 'thanks', icon: iconReactionThanks, labelKey: 'pages.life.reactionThanks' }
+] as const satisfies ReadonlyArray<{ type: LifeReactionType; icon: string; labelKey: string }>;
 
 const canPost = computed(() => currentUser.value?.emailVerified === true);
 const charactersLeft = computed(() => Math.max(0, 2000 - body.value.length));
@@ -102,7 +125,7 @@ async function submitPost() {
   try {
     if (editingPostId.value !== null) {
       const updated = await api.updateLifePost(editingPostId.value, payload());
-      posts.value = posts.value.map((post) => (post.id === updated.id ? updated : post));
+      replacePost(updated);
     } else {
       const created = await api.createLifePost(payload());
       posts.value = [created, ...posts.value];
@@ -140,6 +163,37 @@ function commentCount(post: LifePost) {
   return post.comments.reduce((count, comment) => count + 1 + comment.replies.length, 0);
 }
 
+function reactionTotal(post: LifePost) {
+  return reactionOptions.reduce((count, option) => count + (post.reactionCounts[option.type] ?? 0), 0);
+}
+
+function reactionLabel(type: LifeReactionType) {
+  return t(reactionOptions.find((option) => option.type === type)?.labelKey ?? 'pages.life.react');
+}
+
+function reactionIcon(type: LifeReactionType | null) {
+  return reactionOptions.find((option) => option.type === type)?.icon ?? iconReactionLike;
+}
+
+function reactionButtonLabel(post: LifePost) {
+  return post.myReaction ? reactionLabel(post.myReaction) : t('pages.life.reactionLike');
+}
+
+function reactionOptionLabel(post: LifePost, type: LifeReactionType) {
+  return post.myReaction === type ? t('pages.life.removeReaction') : reactionLabel(type);
+}
+
+function reactionCountLabel(post: LifePost, type: LifeReactionType) {
+  return t('pages.life.reactionCountLabel', {
+    reaction: reactionLabel(type),
+    count: post.reactionCounts[type] ?? 0
+  });
+}
+
+function replacePost(updatedPost: LifePost) {
+  posts.value = posts.value.map((post) => (post.id === updatedPost.id ? updatedPost : post));
+}
+
 function areCommentsExpanded(postId: number) {
   return expandedComments.value[postId] === true;
 }
@@ -159,6 +213,10 @@ function isCommentBusy(key: string) {
   return commentBusyKey.value === key;
 }
 
+function isReactionBusy(postId: number) {
+  return reactionBusyPostId.value === postId;
+}
+
 function commentAuthorName(comment: LifeComment) {
   return comment.deleted ? t('pages.life.commentDeleted') : comment.author?.displayName ?? t('pages.life.byUnknown');
 }
@@ -176,6 +234,69 @@ function clearCommentError(key: string) {
   const nextErrors = { ...commentErrors.value };
   delete nextErrors[key];
   commentErrors.value = nextErrors;
+}
+
+function setReactionError(postId: number, message: string) {
+  reactionErrors.value = { ...reactionErrors.value, [postId]: message };
+}
+
+function clearReactionError(postId: number) {
+  const nextErrors = { ...reactionErrors.value };
+  delete nextErrors[postId];
+  reactionErrors.value = nextErrors;
+}
+
+function canUseReactions() {
+  return canPost.value && reactionBusyPostId.value === null;
+}
+
+function toggleReactionPicker(postId: number) {
+  if (!canUseReactions()) {
+    return;
+  }
+
+  clearReactionError(postId);
+  reactionPickerPostId.value = reactionPickerPostId.value === postId ? null : postId;
+}
+
+function handleReactionContextMenu(event: MouseEvent, postId: number) {
+  event.preventDefault();
+  toggleReactionPicker(postId);
+}
+
+function handleReactionKeydown(event: KeyboardEvent, postId: number) {
+  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
+    return;
+  }
+
+  event.preventDefault();
+  toggleReactionPicker(postId);
+}
+
+async function toggleDefaultReaction(post: LifePost) {
+  await toggleReaction(post, 'like');
+}
+
+async function toggleReaction(post: LifePost, reactionType: LifeReactionType) {
+  if (!canUseReactions()) {
+    return;
+  }
+
+  reactionBusyPostId.value = post.id;
+  clearReactionError(post.id);
+
+  try {
+    const updatedPost =
+      post.myReaction === reactionType
+        ? await api.deleteLifeReaction(post.id)
+        : await api.setLifeReaction(post.id, reactionType);
+    replacePost(updatedPost);
+    reactionPickerPostId.value = null;
+  } catch (error) {
+    setReactionError(post.id, error instanceof Error && error.message ? error.message : t('pages.life.reactionFailed'));
+  } finally {
+    reactionBusyPostId.value = null;
+  }
 }
 
 function startEdit(post: LifePost) {
@@ -318,6 +439,7 @@ onMounted(() => {
   void loadPosts();
   removeAuthListener = onAuthTokenChange(() => {
     void loadCurrentUser();
+    void loadPosts();
   });
 });
 
@@ -424,26 +546,102 @@ onUnmounted(() => {
           <p class="life-post__body">{{ post.body }}</p>
 
           <div class="life-post__engagement">
-            <button
-              class="life-post__engagement-button"
-              type="button"
-              :aria-controls="`life-comments-${post.id}`"
-              :aria-expanded="areCommentsExpanded(post.id)"
-              @click="toggleComments(post.id)"
-            >
-              <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
-              {{ areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment') }}
-            </button>
-            <button
-              class="life-post__comment-count"
-              type="button"
-              :aria-controls="`life-comments-${post.id}`"
-              :aria-expanded="areCommentsExpanded(post.id)"
-              @click="toggleComments(post.id)"
-            >
-              {{ t('pages.life.commentsCount', { count: commentCount(post) }) }}
-            </button>
+            <div class="life-post__engagement-actions">
+              <div class="life-reactions">
+                <button
+                  class="life-post__engagement-button life-reaction-trigger"
+                  :class="{ 'is-active': post.myReaction !== null }"
+                  type="button"
+                  :aria-controls="`life-reactions-${post.id}`"
+                  :aria-expanded="reactionPickerPostId === post.id"
+                  :aria-label="reactionButtonLabel(post)"
+                  :aria-describedby="`life-reaction-tooltip-${post.id}`"
+                  :disabled="!canPost || reactionBusyPostId !== null"
+                  @click="toggleDefaultReaction(post)"
+                  @contextmenu="handleReactionContextMenu($event, post.id)"
+                  @keydown="handleReactionKeydown($event, post.id)"
+                >
+                  <Icon :icon="reactionIcon(post.myReaction)" class="ui-icon" aria-hidden="true" />
+                  <span :id="`life-reaction-tooltip-${post.id}`" class="life-reaction-tooltip" role="tooltip">
+                    {{ reactionButtonLabel(post) }}
+                  </span>
+                </button>
+
+                <div
+                  v-if="reactionPickerPostId === post.id && canPost"
+                  :id="`life-reactions-${post.id}`"
+                  class="life-reaction-picker"
+                  role="group"
+                  :aria-label="t('pages.life.reactions')"
+                >
+                  <button
+                    v-for="option in reactionOptions"
+                    :key="option.type"
+                    class="life-reaction-option"
+                    :class="{ 'is-active': post.myReaction === option.type }"
+                    type="button"
+                    :aria-pressed="post.myReaction === option.type"
+                    :aria-label="reactionOptionLabel(post, option.type)"
+                    :aria-describedby="`life-reaction-option-tooltip-${post.id}-${option.type}`"
+                    :disabled="isReactionBusy(post.id)"
+                    @click="toggleReaction(post, option.type)"
+                  >
+                    <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
+                    <span
+                      :id="`life-reaction-option-tooltip-${post.id}-${option.type}`"
+                      class="life-reaction-tooltip"
+                      role="tooltip"
+                    >
+                      {{ reactionOptionLabel(post, option.type) }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <button
+                class="life-post__engagement-button"
+                type="button"
+                :aria-controls="`life-comments-${post.id}`"
+                :aria-expanded="areCommentsExpanded(post.id)"
+                @click="toggleComments(post.id)"
+              >
+                <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+                {{ areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment') }}
+              </button>
+            </div>
+
+            <div class="life-post__metrics">
+              <div
+                v-if="reactionTotal(post) > 0"
+                class="life-reaction-summary"
+                :aria-label="t('pages.life.reactionsCount', { count: reactionTotal(post) })"
+              >
+                <template v-for="option in reactionOptions" :key="option.type">
+                  <span
+                    v-if="post.reactionCounts[option.type] > 0"
+                    class="life-reaction-summary__item"
+                    :aria-label="reactionCountLabel(post, option.type)"
+                  >
+                    <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
+                    {{ post.reactionCounts[option.type] }}
+                    <span class="life-reaction-tooltip" role="tooltip">{{ reactionCountLabel(post, option.type) }}</span>
+                  </span>
+                </template>
+              </div>
+
+              <button
+                class="life-post__comment-count"
+                type="button"
+                :aria-controls="`life-comments-${post.id}`"
+                :aria-expanded="areCommentsExpanded(post.id)"
+                @click="toggleComments(post.id)"
+              >
+                {{ t('pages.life.commentsCount', { count: commentCount(post) }) }}
+              </button>
+            </div>
           </div>
+
+          <p v-if="reactionErrors[post.id]" class="life-form__error" role="alert">{{ reactionErrors[post.id] }}</p>
 
           <section
             v-if="areCommentsExpanded(post.id)"

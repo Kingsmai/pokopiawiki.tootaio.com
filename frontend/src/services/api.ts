@@ -173,6 +173,9 @@ export interface DailyChecklistItem {
   translations?: TranslationMap;
 }
 
+export type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
+export type LifeReactionCounts = Record<LifeReactionType, number>;
+
 export interface LifePost {
   id: number;
   body: string;
@@ -181,6 +184,8 @@ export interface LifePost {
   author: UserSummary | null;
   updatedBy: UserSummary | null;
   comments: LifeComment[];
+  reactionCounts: LifeReactionCounts;
+  myReaction: LifeReactionType | null;
 }
 
 export interface LifeComment {
@@ -417,6 +422,19 @@ async function deleteJson(path: string): Promise<void> {
   }
 }
 
+async function deleteAndGetJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'DELETE',
+    headers: requestHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return response.json() as Promise<T>;
+}
+
 export const api = {
   languages: () => getJson<Language[]>('/api/languages'),
   adminLanguages: () => getJson<Language[]>('/api/admin/languages'),
@@ -439,6 +457,9 @@ export const api = {
   updateLifePost: (id: string | number, payload: LifePostPayload) =>
     sendJson<LifePost>(`/api/life-posts/${id}`, 'PUT', payload),
   deleteLifePost: (id: string | number) => deleteJson(`/api/life-posts/${id}`),
+  setLifeReaction: (id: string | number, reactionType: LifeReactionType) =>
+    sendJson<LifePost>(`/api/life-posts/${id}/reaction`, 'PUT', { reactionType }),
+  deleteLifeReaction: (id: string | number) => deleteAndGetJson<LifePost>(`/api/life-posts/${id}/reaction`),
   createLifeComment: (postId: string | number, payload: LifeCommentPayload) =>
     sendJson<LifeComment>(`/api/life-posts/${postId}/comments`, 'POST', payload),
   createLifeCommentReply: (postId: string | number, commentId: string | number, payload: LifeCommentPayload) =>

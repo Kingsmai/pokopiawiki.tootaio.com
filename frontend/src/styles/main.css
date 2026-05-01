@@ -1326,6 +1326,19 @@ button:disabled,
   border-top: 1px solid var(--line);
 }
 
+.life-post__engagement-actions,
+.life-post__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.life-post__metrics {
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .life-post__engagement-button,
 .life-post__comment-count {
   min-height: 44px;
@@ -1342,7 +1355,8 @@ button:disabled,
 
 .life-post__engagement-button:hover,
 .life-post__comment-count:hover,
-.life-post__engagement-button[aria-expanded="true"] {
+.life-post__engagement-button[aria-expanded="true"],
+.life-post__engagement-button.is-active {
   background: color-mix(in srgb, var(--pokemon-blue) 10%, var(--surface-soft));
   color: var(--pokemon-blue-deep);
 }
@@ -1355,6 +1369,136 @@ button:disabled,
 .life-post__comment-count {
   color: var(--muted);
   font-size: 14px;
+}
+
+.life-reactions {
+  position: relative;
+}
+
+.life-reaction-trigger {
+  position: relative;
+  width: 44px;
+  justify-content: center;
+  padding: 7px;
+}
+
+.life-reaction-picker {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max-content;
+  max-width: calc(100vw - 48px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+.life-reaction-option {
+  position: relative;
+  width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.life-reaction-option:hover,
+.life-reaction-option.is-active {
+  border-color: color-mix(in srgb, var(--pokemon-blue) 50%, var(--line));
+  background: color-mix(in srgb, var(--pokemon-blue) 12%, var(--surface-soft));
+  color: var(--pokemon-blue-deep);
+}
+
+.life-reaction-option .ui-icon,
+.life-reaction-summary .ui-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.life-reaction-summary {
+  min-height: 44px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.life-reaction-summary__item {
+  position: relative;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+.life-reaction-tooltip {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  min-width: max-content;
+  max-width: 220px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--ink);
+  box-shadow: var(--shadow-soft);
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, 4px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.life-reaction-tooltip::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--ink);
+  content: '';
+  transform: translate(-50%, -4px) rotate(45deg);
+}
+
+.life-reaction-trigger:hover .life-reaction-tooltip,
+.life-reaction-trigger:focus-visible .life-reaction-tooltip,
+.life-reaction-option:hover .life-reaction-tooltip,
+.life-reaction-option:focus-visible .life-reaction-tooltip,
+.life-reaction-summary__item:hover .life-reaction-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
 }
 
 .life-comments {
@@ -2693,6 +2837,10 @@ button:disabled,
 
   .life-post__actions {
     grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .life-post__metrics {
     justify-content: flex-start;
   }
 

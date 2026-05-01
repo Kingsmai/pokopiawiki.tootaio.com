@@ -364,6 +364,7 @@ Life Post 可配置：
 - 创建者、最后编辑者、创建时间、最后编辑时间
 - 评论
 - 评论回复：仅支持回复顶层评论，不做无限嵌套
+- Reactions：`like`、`helpful`、`fun`、`thanks`
 
 前台行为：
 
@@ -374,13 +375,16 @@ Life Post 可配置：
 - 已注册并完成邮箱验证的用户可以评论 Life Post，并回复顶层评论。
 - 评论作者可以删除自己的评论；删除评论后正文不再展示，已有回复保留在原位置。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
-- 当前没有点赞、图片上传、转发、分页、置顶或单独审核流程。
+- 已注册并完成邮箱验证的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
+- Life Reaction 的其他类型通过右键 / context menu 打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
+- 当前没有图片上传、转发、分页、置顶或单独审核流程。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 
 API 暴露边界：
 
 - Life Post 作者信息只返回 `id` 和 `displayName`。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
+- Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
 - API 不返回邮箱、token/hash、内部调试字段或不必要的审计 payload。
 - 非作者不能编辑或删除其他用户的 Life Post。
 - 非作者不能删除其他用户的 Life Comment。
@@ -443,6 +447,9 @@ API 暴露边界：
   - `POST /api/life-posts/:postId/comments`
   - `POST /api/life-posts/:postId/comments/:commentId/replies`
   - `DELETE /api/life-comments/:id`
+- Life Reaction 的设置、替换和取消。
+  - `PUT /api/life-posts/:id/reaction`
+  - `DELETE /api/life-posts/:id/reaction`
 - 每日 CheckList 的创建、更新、删除、排序。
 - 全局配置项的创建、更新、删除、排序。
 - 语言的创建、更新、删除、排序。

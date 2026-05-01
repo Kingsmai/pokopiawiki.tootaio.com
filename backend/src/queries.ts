@@ -112,6 +112,9 @@ type LifeCommentPayload = {
   body: string;
 };
 
+type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
+type LifeReactionCounts = Record<LifeReactionType, number>;
+
 type LifeCommentRow = {
   id: number;
   postId: number;
@@ -138,6 +141,8 @@ type LifePostRow = {
 
 type LifePost = LifePostRow & {
   comments: LifeComment[];
+  reactionCounts: LifeReactionCounts;
+  myReaction: LifeReactionType | null;
 };
 
 type HabitatPayload = {
@@ -210,6 +215,7 @@ const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const defaultLocale = 'en';
 const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
+const lifeReactionTypes = ['like', 'helpful', 'fun', 'thanks'] as const;
 const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
   { key: 'hp', label: 'HP' },
   { key: 'attack', label: 'Attack' },
@@ -1222,6 +1228,27 @@ function cleanLifeCommentPayload(payload: Record<string, unknown>): LifeCommentP
   return { body };
 }
 
+function emptyLifeReactionCounts(): LifeReactionCounts {
+  return {
+    like: 0,
+    helpful: 0,
+    fun: 0,
+    thanks: 0
+  };
+}
+
+function isLifeReactionType(value: unknown): value is LifeReactionType {
+  return typeof value === 'string' && lifeReactionTypes.includes(value as LifeReactionType);
+}
+
+function cleanLifeReactionType(value: unknown): LifeReactionType {
+  if (!isLifeReactionType(value)) {
+    throw validationError('Reaction is invalid');
+  }
+
+  return value;
+}
+
 function lifePostProjection(): string {
   return `
     SELECT
@@ -1309,6 +1336,65 @@ async function lifeCommentsForPosts(postIds: number[]): Promise<Map<number, Life
   return commentsByPost;
 }
 
+async function lifeReactionsForPosts(
+  postIds: number[],
+  userId: number | null
+): Promise<{
+  countsByPost: Map<number, LifeReactionCounts>;
+  myReactionsByPost: Map<number, LifeReactionType>;
+}> {
+  const countsByPost = new Map<number, LifeReactionCounts>();
+  const myReactionsByPost = new Map<number, LifeReactionType>();
+
+  for (const postId of postIds) {
+    countsByPost.set(postId, emptyLifeReactionCounts());
+  }
+
+  if (postIds.length === 0) {
+    return { countsByPost, myReactionsByPost };
+  }
+
+  const countRows = await query<{ postId: number; reactionType: LifeReactionType; count: number }>(
+    `
+      SELECT
+        post_id AS "postId",
+        reaction_type AS "reactionType",
+        COUNT(*)::integer AS count
+      FROM life_post_reactions
+      WHERE post_id = ANY($1::integer[])
+      GROUP BY post_id, reaction_type
+    `,
+    [postIds]
+  );
+
+  for (const row of countRows) {
+    const counts = countsByPost.get(row.postId);
+    if (counts && isLifeReactionType(row.reactionType)) {
+      counts[row.reactionType] = row.count;
+    }
+  }
+
+  if (userId !== null) {
+    const myRows = await query<{ postId: number; reactionType: LifeReactionType }>(
+      `
+        SELECT post_id AS "postId", reaction_type AS "reactionType"
+        FROM life_post_reactions
+        WHERE post_id = ANY($1::integer[])
+          AND user_id = $2
+      `,
+      [postIds, userId]
+    );
+
+    for (const row of myRows) {
+      if (isLifeReactionType(row.reactionType)) {
+        myReactionsByPost.set(row.postId, row.reactionType);
+      }
+    }
+  }
+
+  return { countsByPost, myReactionsByPost };
+}
+
 async function getLifeCommentById(id: number): Promise<LifeComment | null> {
   const row = await queryOne<LifeCommentRow>(
     `
@@ -1320,21 +1406,25 @@ async function getLifeCommentById(id: number): Promise<LifeComment | null> {
   return row ? { ...row, replies: [] } : null;
 }
 
-export async function listLifePosts(): Promise<LifePost[]> {
+export async function listLifePosts(userId: number | null = null): Promise<LifePost[]> {
   const posts = await query<LifePostRow>(`
     ${lifePostProjection()}
     ORDER BY lp.created_at DESC, lp.id DESC
   `);
 
-  const commentsByPost = await lifeCommentsForPosts(posts.map((post) => post.id));
+  const postIds = posts.map((post) => post.id);
+  const commentsByPost = await lifeCommentsForPosts(postIds);
+  const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, userId);
 
   return posts.map((post) => ({
     ...post,
-    comments: commentsByPost.get(post.id) ?? []
+    comments: commentsByPost.get(post.id) ?? [],
+    reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
+    myReaction: myReactionsByPost.get(post.id) ?? null
   }));
 }
 
-async function getLifePostById(id: number): Promise<LifePost | null> {
+async function getLifePostById(id: number, userId: number | null = null): Promise<LifePost | null> {
   const post = await queryOne<LifePostRow>(
     `
       ${lifePostProjection()}
@@ -1348,9 +1438,12 @@ async function getLifePostById(id: number): Promise<LifePost | null> {
   }
 
   const commentsByPost = await lifeCommentsForPosts([post.id]);
+  const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts([post.id], userId);
   return {
     ...post,
-    comments: commentsByPost.get(post.id) ?? []
+    comments: commentsByPost.get(post.id) ?? [],
+    reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
+    myReaction: myReactionsByPost.get(post.id) ?? null
   };
 }
 
@@ -1366,7 +1459,7 @@ export async function createLifePost(payload: Record<string, unknown>, userId: n
     [cleanPayload.body, userId]
   );
 
-  return getLifePostById(result?.id ?? 0);
+  return getLifePostById(result?.id ?? 0, userId);
 }
 
 export async function updateLifePost(id: number, payload: Record<string, unknown>, userId: number) {
@@ -1383,7 +1476,7 @@ export async function updateLifePost(id: number, payload: Record<string, unknown
     [cleanPayload.body, userId, id]
   );
 
-  return result ? getLifePostById(result.id) : null;
+  return result ? getLifePostById(result.id, userId) : null;
 }
 
 export async function deleteLifePost(id: number, userId: number) {
@@ -1398,6 +1491,38 @@ export async function deleteLifePost(id: number, userId: number) {
   );
 
   return Boolean(result);
+}
+
+export async function setLifePostReaction(postId: number, payload: Record<string, unknown>, userId: number) {
+  const reactionType = cleanLifeReactionType(payload.reactionType);
+
+  const result = await queryOne<{ postId: number }>(
+    `
+      INSERT INTO life_post_reactions (post_id, user_id, reaction_type)
+      SELECT $1, $2, $3
+      WHERE EXISTS (SELECT 1 FROM life_posts WHERE id = $1)
+      ON CONFLICT (post_id, user_id)
+      DO UPDATE SET reaction_type = EXCLUDED.reaction_type, updated_at = now()
+      RETURNING post_id AS "postId"
+    `,
+    [postId, userId, reactionType]
+  );
+
+  return result ? getLifePostById(result.postId, userId) : null;
+}
+
+export async function deleteLifePostReaction(postId: number, userId: number) {
+  await queryOne<{ postId: number }>(
+    `
+      DELETE FROM life_post_reactions
+      WHERE post_id = $1
+        AND user_id = $2
+      RETURNING post_id AS "postId"
+    `,
+    [postId, userId]
+  );
+
+  return getLifePostById(postId, userId);
 }
 
 export async function createLifeComment(postId: number, payload: Record<string, unknown>, userId: number) {

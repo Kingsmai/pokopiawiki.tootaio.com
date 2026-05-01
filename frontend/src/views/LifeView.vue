@@ -8,7 +8,6 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
-import Tabs, { type TabOption } from '../components/Tabs.vue';
 import {
   iconAdd,
   iconCancel,
@@ -94,7 +93,7 @@ const selectedFeedTagId = computed(() => {
   const tagId = Number(activeTagId.value);
   return activeTagId.value === allTagValue || !Number.isInteger(tagId) || tagId <= 0 ? undefined : tagId;
 });
-const tagTabs = computed<TabOption[]>(() => [
+const tagFilterOptions = computed(() => [
   { value: allTagValue, label: t('pages.life.allTags') },
   ...lifeTags.value.map((tag) => ({ value: String(tag.id), label: tag.name }))
 ]);
@@ -243,6 +242,12 @@ function clearSearch() {
 function retryLoadMore() {
   loadMorePaused.value = false;
   void loadMorePosts();
+}
+
+function selectTagFilter(value: string) {
+  if (value !== activeTagId.value) {
+    activeTagId.value = value;
+  }
 }
 
 function matchesCurrentFilters(post: LifePost) {
@@ -715,8 +720,6 @@ onUnmounted(() => {
       </div>
     </FilterPanel>
 
-    <Tabs id="life-tag-filter" v-model="activeTagId" class="life-tag-tabs" :tabs="tagTabs" :label="t('pages.life.tags')" />
-
     <StatusMessage v-if="loadError" variant="danger" :duration="0">{{ loadError }}</StatusMessage>
 
     <Modal
@@ -780,328 +783,373 @@ onUnmounted(() => {
       </div>
     </Modal>
 
-    <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
-      <div v-if="loading" class="life-feed__list" :aria-label="t('pages.life.loading')">
-        <article v-for="index in skeletonPostCount" :key="index" class="life-post life-post--skeleton">
-          <div class="life-post__header">
-            <Skeleton variant="box" width="46px" height="46px" />
-            <div class="life-post__byline">
-              <Skeleton width="138px" />
-              <Skeleton width="96px" />
-            </div>
-          </div>
-          <Skeleton width="94%" />
-          <Skeleton width="76%" />
-          <Skeleton width="52%" />
-        </article>
-      </div>
-
-      <div v-else-if="posts.length" class="life-feed__list">
-        <article v-for="post in posts" :key="post.id" class="life-post">
-          <header class="life-post__header">
-            <div class="life-post__avatar" aria-hidden="true">{{ authorInitial(post) }}</div>
-            <div class="life-post__byline">
-              <strong>{{ post.author?.displayName ?? t('pages.life.byUnknown') }}</strong>
-              <span>
-                <time :datetime="post.createdAt">{{ formatPostTime(post.createdAt) }}</time>
-                <template v-if="post.updatedAt !== post.createdAt"> - {{ t('pages.life.edited') }}</template>
-              </span>
-            </div>
-
-            <div v-if="canManage(post)" class="life-post__actions">
-              <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="startEdit(post)">
-                <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
-                {{ t('pages.life.editPost') }}
-              </button>
-              <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="deletePost(post)">
-                <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
-                {{ t('pages.life.deletePost') }}
-              </button>
-            </div>
-          </header>
-
-          <p class="life-post__body">{{ post.body }}</p>
-
-          <div v-if="post.tags.length" class="life-post__tags" :aria-label="t('pages.life.tags')">
-            <span v-for="tag in post.tags" :key="tag.id" class="life-post__tag">{{ tag.name }}</span>
-          </div>
-
-          <div class="life-post__engagement">
-            <div class="life-post__engagement-actions">
-              <div class="life-reactions">
-                <div class="life-reaction-control">
-                  <button
-                    class="life-post__engagement-button life-reaction-trigger"
-                    :class="{ 'is-active': post.myReaction !== null }"
-                    type="button"
-                    :aria-controls="`life-reactions-${post.id}`"
-                    :aria-expanded="reactionPickerPostId === post.id"
-                    :aria-label="reactionButtonLabel(post)"
-                    :disabled="!canPost || reactionBusyPostId !== null"
-                    @click="toggleDefaultReaction(post)"
-                    @contextmenu="handleReactionContextMenu($event, post.id)"
-                    @keydown="handleReactionKeydown($event, post.id)"
-                  >
-                    <Icon :icon="reactionIcon(post.myReaction)" class="ui-icon" aria-hidden="true" />
-                    <span class="life-reaction-trigger__label">{{ reactionButtonLabel(post) }}</span>
-                  </button>
-
-                  <button
-                    class="life-reaction-menu-button"
-                    type="button"
-                    :aria-controls="`life-reactions-${post.id}`"
-                    :aria-expanded="reactionPickerPostId === post.id"
-                    :aria-label="t('pages.life.chooseReaction')"
-                    :disabled="!canPost || reactionBusyPostId !== null"
-                    @click="toggleReactionPicker(post.id)"
-                    @contextmenu="handleReactionContextMenu($event, post.id)"
-                    @keydown="handleReactionKeydown($event, post.id)"
-                  >
-                    <Icon :icon="iconChevronDown" class="ui-icon" aria-hidden="true" />
-                  </button>
-                </div>
-
-                <div
-                  v-if="reactionPickerPostId === post.id && canPost"
-                  :id="`life-reactions-${post.id}`"
-                  class="life-reaction-picker"
-                  role="group"
-                  :aria-label="t('pages.life.reactionMenu')"
-                >
-                  <button
-                    v-for="option in reactionOptions"
-                    :key="option.type"
-                    class="life-reaction-option"
-                    :class="{ 'is-active': post.myReaction === option.type }"
-                    type="button"
-                    :aria-pressed="post.myReaction === option.type"
-                    :aria-label="reactionOptionLabel(post, option.type)"
-                    :disabled="isReactionBusy(post.id)"
-                    @click="toggleReaction(post, option.type)"
-                  >
-                    <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
-                    <span>{{ reactionLabel(option.type) }}</span>
-                  </button>
-                </div>
-              </div>
-
-              <button
-                class="life-post__engagement-button"
-                type="button"
-                :aria-controls="`life-comments-${post.id}`"
-                :aria-expanded="areCommentsExpanded(post.id)"
-                @click="toggleComments(post.id)"
-              >
-                <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
-                {{ areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment') }}
-              </button>
-            </div>
-
-            <div class="life-post__metrics">
-              <div
-                v-if="reactionTotal(post) > 0"
-                class="life-reaction-summary"
-                :aria-label="t('pages.life.reactionsCount', { count: reactionTotal(post) })"
-              >
-                <template v-for="option in reactionOptions" :key="option.type">
-                  <span
-                    v-if="post.reactionCounts[option.type] > 0"
-                    class="life-reaction-summary__item"
-                    :aria-label="reactionCountLabel(post, option.type)"
-                  >
-                    <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
-                    {{ post.reactionCounts[option.type] }}
-                    <span class="life-reaction-tooltip" role="tooltip">{{ reactionCountLabel(post, option.type) }}</span>
-                  </span>
-                </template>
-              </div>
-
-              <button
-                class="life-post__comment-count"
-                type="button"
-                :aria-controls="`life-comments-${post.id}`"
-                :aria-expanded="areCommentsExpanded(post.id)"
-                @click="toggleComments(post.id)"
-              >
-                {{ t('pages.life.commentsCount', { count: commentCount(post) }) }}
-              </button>
-            </div>
-          </div>
-
-          <p v-if="reactionErrors[post.id]" class="life-form__error" role="alert">{{ reactionErrors[post.id] }}</p>
-
-          <section
-            v-if="areCommentsExpanded(post.id)"
-            :id="`life-comments-${post.id}`"
-            class="life-comments"
-            :aria-label="t('pages.life.comments')"
+    <div class="life-layout">
+      <aside class="life-sidebar" aria-labelledby="life-tag-filter-title">
+        <div class="life-sidebar__header">
+          <h2 id="life-tag-filter-title">{{ t('pages.life.tags') }}</h2>
+        </div>
+        <div class="life-tag-filter" role="group" :aria-label="t('pages.life.tags')">
+          <button
+            v-for="option in tagFilterOptions"
+            :key="option.value"
+            class="life-tag-filter__button"
+            :class="{ 'is-active': activeTagId === option.value }"
+            type="button"
+            :aria-pressed="activeTagId === option.value"
+            @click="selectTagFilter(option.value)"
           >
-            <div class="life-comments__header">
-              <h3>{{ t('pages.life.comments') }}</h3>
-              <span>{{ commentCount(post) }}</span>
-            </div>
-
-            <form v-if="canPost" class="life-comment-form" @submit.prevent="submitComment(post)">
-              <div class="field">
-                <label :for="`life-comment-${post.id}`">{{ t('pages.life.comment') }}</label>
-                <textarea
-                  :id="`life-comment-${post.id}`"
-                  v-model="commentBodies[post.id]"
-                  :maxlength="commentMaxLength"
-                  :placeholder="t('pages.life.commentPlaceholder')"
-                ></textarea>
-              </div>
-              <p v-if="commentErrors[commentKey(post.id)]" class="life-form__error" role="alert">
-                {{ commentErrors[commentKey(post.id)] }}
-              </p>
-              <button
-                class="ui-button ui-button--ghost ui-button--small"
-                :disabled="isCommentBusy(commentKey(post.id)) || !(commentBodies[post.id] ?? '').trim()"
-                type="submit"
-              >
-                <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
-                {{ isCommentBusy(commentKey(post.id)) ? t('pages.life.postingComment') : t('pages.life.postComment') }}
-              </button>
-            </form>
-
-            <div v-if="post.comments.length" class="life-comment-list">
-              <article
-                v-for="comment in post.comments"
-                :key="comment.id"
-                class="life-comment"
-                :class="{ 'is-deleted': comment.deleted }"
-              >
-                <div class="life-comment__main">
-                  <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(comment) }}</div>
-                  <div class="life-comment__content">
-                    <div class="life-comment__meta">
-                      <strong>{{ commentAuthorName(comment) }}</strong>
-                      <time :datetime="comment.createdAt">{{ formatPostTime(comment.createdAt) }}</time>
-                    </div>
-                    <p v-if="!comment.deleted" class="life-comment__body">{{ comment.body }}</p>
-
-                    <div v-if="!comment.deleted" class="life-comment__actions">
-                      <button v-if="canPost" class="life-comment__link-button" type="button" @click="startReply(comment)">
-                        <Icon :icon="iconReply" class="ui-icon" aria-hidden="true" />
-                        {{ t('pages.life.reply') }}
-                      </button>
-                      <button
-                        v-if="canManageComment(comment)"
-                        class="life-comment__link-button"
-                        type="button"
-                        @click="deleteComment(post, comment)"
-                      >
-                        <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
-                        {{ t('pages.life.deleteComment') }}
-                      </button>
-                    </div>
-
-                    <p v-if="commentErrors[replyKey(comment.id)]" class="life-form__error" role="alert">
-                      {{ commentErrors[replyKey(comment.id)] }}
-                    </p>
-
-                    <form
-                      v-if="canPost && replyTargetId === comment.id"
-                      class="life-comment-form life-comment-form--reply"
-                      @submit.prevent="submitReply(post, comment)"
-                    >
-                      <div class="field">
-                        <label :for="`life-reply-${comment.id}`">{{ t('pages.life.reply') }}</label>
-                        <textarea
-                          :id="`life-reply-${comment.id}`"
-                          v-model="replyBodies[comment.id]"
-                          :maxlength="commentMaxLength"
-                          :placeholder="t('pages.life.commentReplyPlaceholder')"
-                        ></textarea>
-                      </div>
-                      <div class="life-form__actions">
-                        <button
-                          class="ui-button ui-button--ghost ui-button--small"
-                          :disabled="isCommentBusy(replyKey(comment.id)) || !(replyBodies[comment.id] ?? '').trim()"
-                          type="submit"
-                        >
-                          <Icon :icon="iconReply" class="ui-icon" aria-hidden="true" />
-                          {{ isCommentBusy(replyKey(comment.id)) ? t('pages.life.postingReply') : t('pages.life.postReply') }}
-                        </button>
-                        <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="cancelReply(comment.id)">
-                          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
-                          {{ t('pages.life.cancelReply') }}
-                        </button>
-                      </div>
-                    </form>
-
-                    <div v-if="comment.replies.length" class="life-comment-replies">
-                      <article
-                        v-for="reply in comment.replies"
-                        :key="reply.id"
-                        class="life-comment life-comment--reply"
-                        :class="{ 'is-deleted': reply.deleted }"
-                      >
-                        <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(reply) }}</div>
-                        <div class="life-comment__content">
-                          <div class="life-comment__meta">
-                            <strong>{{ commentAuthorName(reply) }}</strong>
-                            <time :datetime="reply.createdAt">{{ formatPostTime(reply.createdAt) }}</time>
-                          </div>
-                          <p v-if="!reply.deleted" class="life-comment__body">{{ reply.body }}</p>
-                          <div v-if="canManageComment(reply)" class="life-comment__actions">
-                            <button class="life-comment__link-button" type="button" @click="deleteComment(post, reply)">
-                              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
-                              {{ t('pages.life.deleteComment') }}
-                            </button>
-                          </div>
-                          <p v-if="commentErrors[replyKey(reply.id)]" class="life-form__error" role="alert">
-                            {{ commentErrors[replyKey(reply.id)] }}
-                          </p>
-                        </div>
-                      </article>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <p v-else class="life-comments__empty">{{ t('pages.life.noComments') }}</p>
-          </section>
-        </article>
-
-        <article v-for="index in loadingMore ? loadingMoreSkeletonCount : 0" :key="`life-more-${index}`" class="life-post life-post--skeleton">
-          <div class="life-post__header">
-            <Skeleton variant="box" width="46px" height="46px" />
-            <div class="life-post__byline">
-              <Skeleton width="138px" />
-              <Skeleton width="96px" />
-            </div>
-          </div>
-          <Skeleton width="94%" />
-          <Skeleton width="76%" />
-          <Skeleton width="52%" />
-        </article>
-
-        <div v-if="hasMorePosts" ref="loadMoreSentinel" class="life-feed__sentinel" aria-hidden="true"></div>
-        <div v-if="loadMorePaused && hasMorePosts" class="life-feed__retry">
-          <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="retryLoadMore">
-            <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
-            {{ t('pages.life.retryFeed') }}
+            <span>{{ option.label }}</span>
           </button>
         </div>
-      </div>
+      </aside>
 
-      <div v-else class="life-empty">
-        <Icon :icon="searchQuery ? iconSearch : iconLife" class="life-empty__icon" aria-hidden="true" />
-        <div class="life-empty__copy">
-          <h2>{{ searchQuery ? t('pages.life.searchEmpty') : t('pages.life.empty') }}</h2>
-          <p>{{ searchQuery ? t('pages.life.searchEmptyHint') : t('pages.life.emptyHint') }}</p>
+      <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
+        <div v-if="loading" class="life-feed__list" :aria-label="t('pages.life.loading')">
+          <article v-for="index in skeletonPostCount" :key="index" class="life-post life-post--skeleton">
+            <div class="life-post__header">
+              <Skeleton variant="box" width="46px" height="46px" />
+              <div class="life-post__byline">
+                <Skeleton width="138px" />
+                <Skeleton width="96px" />
+              </div>
+            </div>
+            <Skeleton width="94%" />
+            <Skeleton width="76%" />
+            <Skeleton width="52%" />
+          </article>
         </div>
-        <button v-if="searchQuery" class="ui-button ui-button--ghost" type="button" @click="clearSearch">
-          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
-          {{ t('pages.life.clearSearch') }}
-        </button>
-        <button v-else class="ui-button ui-button--primary" :disabled="!authReady" type="button" @click="openCreatePostModal">
-          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
-          {{ t('pages.life.newPost') }}
-        </button>
-      </div>
-    </section>
+
+        <div v-else-if="posts.length" class="life-feed__list">
+          <article v-for="post in posts" :key="post.id" class="life-post">
+            <header class="life-post__header">
+              <div class="life-post__avatar" aria-hidden="true">{{ authorInitial(post) }}</div>
+              <div class="life-post__byline">
+                <strong>{{ post.author?.displayName ?? t('pages.life.byUnknown') }}</strong>
+                <span>
+                  <time :datetime="post.createdAt">{{ formatPostTime(post.createdAt) }}</time>
+                  <template v-if="post.updatedAt !== post.createdAt"> - {{ t('pages.life.edited') }}</template>
+                </span>
+              </div>
+
+              <div v-if="canManage(post)" class="life-post__actions">
+                <button class="life-icon-button" type="button" :aria-label="t('pages.life.editPost')" @click="startEdit(post)">
+                  <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+                  <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.editPost') }}</span>
+                </button>
+                <button
+                  class="life-icon-button life-icon-button--danger"
+                  type="button"
+                  :aria-label="t('pages.life.deletePost')"
+                  @click="deletePost(post)"
+                >
+                  <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+                  <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deletePost') }}</span>
+                </button>
+              </div>
+            </header>
+
+            <p class="life-post__body">{{ post.body }}</p>
+
+            <div v-if="post.tags.length" class="life-post__tags" :aria-label="t('pages.life.tags')">
+              <span v-for="tag in post.tags" :key="tag.id" class="life-post__tag">{{ tag.name }}</span>
+            </div>
+
+            <div class="life-post__engagement">
+              <div class="life-post__engagement-actions">
+                <div class="life-reactions">
+                  <div class="life-reaction-control">
+                    <button
+                      class="life-icon-button life-reaction-trigger"
+                      :class="{ 'is-active': post.myReaction !== null }"
+                      type="button"
+                      :aria-controls="`life-reactions-${post.id}`"
+                      :aria-expanded="reactionPickerPostId === post.id"
+                      :aria-label="reactionButtonLabel(post)"
+                      :disabled="!canPost || reactionBusyPostId !== null"
+                      @click="toggleDefaultReaction(post)"
+                      @contextmenu="handleReactionContextMenu($event, post.id)"
+                      @keydown="handleReactionKeydown($event, post.id)"
+                    >
+                      <Icon :icon="reactionIcon(post.myReaction)" class="ui-icon" aria-hidden="true" />
+                      <span class="life-action-tooltip" role="tooltip">{{ reactionButtonLabel(post) }}</span>
+                    </button>
+
+                    <button
+                      class="life-icon-button life-reaction-menu-button"
+                      type="button"
+                      :aria-controls="`life-reactions-${post.id}`"
+                      :aria-expanded="reactionPickerPostId === post.id"
+                      :aria-label="t('pages.life.chooseReaction')"
+                      :disabled="!canPost || reactionBusyPostId !== null"
+                      @click="toggleReactionPicker(post.id)"
+                      @contextmenu="handleReactionContextMenu($event, post.id)"
+                      @keydown="handleReactionKeydown($event, post.id)"
+                    >
+                      <Icon :icon="iconChevronDown" class="ui-icon" aria-hidden="true" />
+                      <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.chooseReaction') }}</span>
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="reactionPickerPostId === post.id && canPost"
+                    :id="`life-reactions-${post.id}`"
+                    class="life-reaction-picker"
+                    role="group"
+                    :aria-label="t('pages.life.reactionMenu')"
+                  >
+                    <button
+                      v-for="option in reactionOptions"
+                      :key="option.type"
+                      class="life-reaction-option"
+                      :class="{ 'is-active': post.myReaction === option.type }"
+                      type="button"
+                      :aria-pressed="post.myReaction === option.type"
+                      :aria-label="reactionOptionLabel(post, option.type)"
+                      :disabled="isReactionBusy(post.id)"
+                      @click="toggleReaction(post, option.type)"
+                    >
+                      <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
+                      <span>{{ reactionLabel(option.type) }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  class="life-icon-button"
+                  type="button"
+                  :aria-controls="`life-comments-${post.id}`"
+                  :aria-expanded="areCommentsExpanded(post.id)"
+                  :aria-label="areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment')"
+                  @click="toggleComments(post.id)"
+                >
+                  <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+                  <span class="life-action-tooltip" role="tooltip">
+                    {{ areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment') }}
+                  </span>
+                </button>
+              </div>
+
+              <div class="life-post__metrics">
+                <div
+                  v-if="reactionTotal(post) > 0"
+                  class="life-reaction-summary"
+                  :aria-label="t('pages.life.reactionsCount', { count: reactionTotal(post) })"
+                >
+                  <template v-for="option in reactionOptions" :key="option.type">
+                    <span
+                      v-if="post.reactionCounts[option.type] > 0"
+                      class="life-reaction-summary__item"
+                      :aria-label="reactionCountLabel(post, option.type)"
+                    >
+                      <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
+                      {{ post.reactionCounts[option.type] }}
+                      <span class="life-action-tooltip" role="tooltip">{{ reactionCountLabel(post, option.type) }}</span>
+                    </span>
+                  </template>
+                </div>
+
+                <button
+                  class="life-metric-button"
+                  type="button"
+                  :aria-controls="`life-comments-${post.id}`"
+                  :aria-expanded="areCommentsExpanded(post.id)"
+                  :aria-label="t('pages.life.commentsCount', { count: commentCount(post) })"
+                  @click="toggleComments(post.id)"
+                >
+                  <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+                  <span>{{ commentCount(post) }}</span>
+                  <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.commentsCount', { count: commentCount(post) }) }}</span>
+                </button>
+              </div>
+            </div>
+
+            <p v-if="reactionErrors[post.id]" class="life-form__error" role="alert">{{ reactionErrors[post.id] }}</p>
+
+            <section
+              v-if="areCommentsExpanded(post.id)"
+              :id="`life-comments-${post.id}`"
+              class="life-comments"
+              :aria-label="t('pages.life.comments')"
+            >
+              <div class="life-comments__header">
+                <h3>{{ t('pages.life.comments') }}</h3>
+                <span>{{ commentCount(post) }}</span>
+              </div>
+
+              <form v-if="canPost" class="life-comment-form" @submit.prevent="submitComment(post)">
+                <div class="field">
+                  <label :for="`life-comment-${post.id}`">{{ t('pages.life.comment') }}</label>
+                  <textarea
+                    :id="`life-comment-${post.id}`"
+                    v-model="commentBodies[post.id]"
+                    :maxlength="commentMaxLength"
+                    :placeholder="t('pages.life.commentPlaceholder')"
+                  ></textarea>
+                </div>
+                <p v-if="commentErrors[commentKey(post.id)]" class="life-form__error" role="alert">
+                  {{ commentErrors[commentKey(post.id)] }}
+                </p>
+                <button
+                  class="ui-button ui-button--ghost ui-button--small"
+                  :disabled="isCommentBusy(commentKey(post.id)) || !(commentBodies[post.id] ?? '').trim()"
+                  type="submit"
+                >
+                  <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+                  {{ isCommentBusy(commentKey(post.id)) ? t('pages.life.postingComment') : t('pages.life.postComment') }}
+                </button>
+              </form>
+
+              <div v-if="post.comments.length" class="life-comment-list">
+                <article
+                  v-for="comment in post.comments"
+                  :key="comment.id"
+                  class="life-comment"
+                  :class="{ 'is-deleted': comment.deleted }"
+                >
+                  <div class="life-comment__main">
+                    <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(comment) }}</div>
+                    <div class="life-comment__content">
+                      <div class="life-comment__meta">
+                        <strong>{{ commentAuthorName(comment) }}</strong>
+                        <time :datetime="comment.createdAt">{{ formatPostTime(comment.createdAt) }}</time>
+                      </div>
+                      <p v-if="!comment.deleted" class="life-comment__body">{{ comment.body }}</p>
+
+                      <div v-if="!comment.deleted" class="life-comment__actions">
+                        <button
+                          v-if="canPost"
+                          class="life-icon-button life-icon-button--flat"
+                          type="button"
+                          :aria-label="t('pages.life.reply')"
+                          @click="startReply(comment)"
+                        >
+                          <Icon :icon="iconReply" class="ui-icon" aria-hidden="true" />
+                          <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.reply') }}</span>
+                        </button>
+                        <button
+                          v-if="canManageComment(comment)"
+                          class="life-icon-button life-icon-button--flat life-icon-button--danger"
+                          type="button"
+                          :aria-label="t('pages.life.deleteComment')"
+                          @click="deleteComment(post, comment)"
+                        >
+                          <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+                          <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
+                        </button>
+                      </div>
+
+                      <p v-if="commentErrors[replyKey(comment.id)]" class="life-form__error" role="alert">
+                        {{ commentErrors[replyKey(comment.id)] }}
+                      </p>
+
+                      <form
+                        v-if="canPost && replyTargetId === comment.id"
+                        class="life-comment-form life-comment-form--reply"
+                        @submit.prevent="submitReply(post, comment)"
+                      >
+                        <div class="field">
+                          <label :for="`life-reply-${comment.id}`">{{ t('pages.life.reply') }}</label>
+                          <textarea
+                            :id="`life-reply-${comment.id}`"
+                            v-model="replyBodies[comment.id]"
+                            :maxlength="commentMaxLength"
+                            :placeholder="t('pages.life.commentReplyPlaceholder')"
+                          ></textarea>
+                        </div>
+                        <div class="life-form__actions">
+                          <button
+                            class="ui-button ui-button--ghost ui-button--small"
+                            :disabled="isCommentBusy(replyKey(comment.id)) || !(replyBodies[comment.id] ?? '').trim()"
+                            type="submit"
+                          >
+                            <Icon :icon="iconReply" class="ui-icon" aria-hidden="true" />
+                            {{ isCommentBusy(replyKey(comment.id)) ? t('pages.life.postingReply') : t('pages.life.postReply') }}
+                          </button>
+                          <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="cancelReply(comment.id)">
+                            <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+                            {{ t('pages.life.cancelReply') }}
+                          </button>
+                        </div>
+                      </form>
+
+                      <div v-if="comment.replies.length" class="life-comment-replies">
+                        <article
+                          v-for="reply in comment.replies"
+                          :key="reply.id"
+                          class="life-comment life-comment--reply"
+                          :class="{ 'is-deleted': reply.deleted }"
+                        >
+                          <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(reply) }}</div>
+                          <div class="life-comment__content">
+                            <div class="life-comment__meta">
+                              <strong>{{ commentAuthorName(reply) }}</strong>
+                              <time :datetime="reply.createdAt">{{ formatPostTime(reply.createdAt) }}</time>
+                            </div>
+                            <p v-if="!reply.deleted" class="life-comment__body">{{ reply.body }}</p>
+                            <div v-if="canManageComment(reply)" class="life-comment__actions">
+                              <button
+                                class="life-icon-button life-icon-button--flat life-icon-button--danger"
+                                type="button"
+                                :aria-label="t('pages.life.deleteComment')"
+                                @click="deleteComment(post, reply)"
+                              >
+                                <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+                                <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
+                              </button>
+                            </div>
+                            <p v-if="commentErrors[replyKey(reply.id)]" class="life-form__error" role="alert">
+                              {{ commentErrors[replyKey(reply.id)] }}
+                            </p>
+                          </div>
+                        </article>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <p v-else class="life-comments__empty">{{ t('pages.life.noComments') }}</p>
+            </section>
+          </article>
+
+          <article v-for="index in loadingMore ? loadingMoreSkeletonCount : 0" :key="`life-more-${index}`" class="life-post life-post--skeleton">
+            <div class="life-post__header">
+              <Skeleton variant="box" width="46px" height="46px" />
+              <div class="life-post__byline">
+                <Skeleton width="138px" />
+                <Skeleton width="96px" />
+              </div>
+            </div>
+            <Skeleton width="94%" />
+            <Skeleton width="76%" />
+            <Skeleton width="52%" />
+          </article>
+
+          <div v-if="hasMorePosts" ref="loadMoreSentinel" class="life-feed__sentinel" aria-hidden="true"></div>
+          <div v-if="loadMorePaused && hasMorePosts" class="life-feed__retry">
+            <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="retryLoadMore">
+              <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
+              {{ t('pages.life.retryFeed') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="life-empty">
+          <Icon :icon="searchQuery ? iconSearch : iconLife" class="life-empty__icon" aria-hidden="true" />
+          <div class="life-empty__copy">
+            <h2>{{ searchQuery ? t('pages.life.searchEmpty') : t('pages.life.empty') }}</h2>
+            <p>{{ searchQuery ? t('pages.life.searchEmptyHint') : t('pages.life.emptyHint') }}</p>
+          </div>
+          <button v-if="searchQuery" class="ui-button ui-button--ghost" type="button" @click="clearSearch">
+            <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.life.clearSearch') }}
+          </button>
+          <button v-else class="ui-button ui-button--primary" :disabled="!authReady" type="button" @click="openCreatePostModal">
+            <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.life.newPost') }}
+          </button>
+        </div>
+      </section>
+    </div>
   </section>
 </template>

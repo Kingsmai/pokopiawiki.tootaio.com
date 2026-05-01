@@ -387,7 +387,7 @@ Life Post 可配置：
 - 已注册并完成邮箱验证的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
-- Feed 顶部展示 Life 标签 Tabs，包含 All 和后台配置的 Life 标签；点击标签后按该标签筛选，搜索和标签筛选可以同时生效。
+- Feed 在桌面端通过侧边栏展示 Life 标签筛选，在移动端展示紧凑筛选条；包含 All 和后台配置的 Life 标签；点击标签后按该标签筛选，搜索和标签筛选可以同时生效。
 - 信息流分页加载，初始展示最新一页，滚动到底部自动加载更多。
 - 当前没有图片上传、转发、置顶或单独审核流程。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。

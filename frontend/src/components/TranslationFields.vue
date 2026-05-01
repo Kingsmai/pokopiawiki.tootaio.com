@@ -30,6 +30,10 @@ function fieldValue(language: Language): string {
   return props.translations[language.code]?.[props.field] ?? '';
 }
 
+function fieldPlaceholder(language: Language): string {
+  return language.code === defaultLanguage.value?.code ? '' : props.baseValue;
+}
+
 function updateField(language: Language, value: string) {
   if (language.code === defaultLanguage.value?.code) {
     emit('update:baseValue', value);
@@ -68,6 +72,7 @@ function inputValue(event: Event): string {
       <input
         :id="`${idPrefix}-${language.code}`"
         :value="fieldValue(language)"
+        :placeholder="fieldPlaceholder(language)"
         :required="required && language.code === defaultLanguage?.code"
         @input="updateField(language, inputValue($event))"
       />

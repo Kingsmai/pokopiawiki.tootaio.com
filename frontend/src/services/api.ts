@@ -56,6 +56,7 @@ export interface EditHistoryEntry {
 export interface Pokemon extends EditInfo {
   id: number;
   name: string;
+  baseName?: string;
   translations?: TranslationMap;
   environment: NamedEntity;
   skills: Skill[];
@@ -79,6 +80,7 @@ export interface PokemonDetail extends Pokemon {
 export interface Habitat extends EditInfo {
   id: number;
   name: string;
+  baseName?: string;
   translations?: TranslationMap;
   recipe: Array<NamedEntity & { quantity: number }>;
   pokemon?: NamedEntity[];
@@ -113,6 +115,7 @@ export interface HabitatUsage {
 export interface Item extends EditInfo {
   id: number;
   name: string;
+  baseName?: string;
   translations?: TranslationMap;
   category: NamedEntity;
   usage: NamedEntity | null;
@@ -147,6 +150,7 @@ export interface Recipe extends EditInfo {
 export interface DailyChecklistItem {
   id: number;
   title: string;
+  baseTitle?: string;
   translations?: TranslationMap;
 }
 

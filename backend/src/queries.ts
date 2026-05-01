@@ -861,6 +861,7 @@ function pokemonProjection(locale: string): string {
     SELECT
       p.id,
       ${pokemonName} AS name,
+      p.name AS "baseName",
       ${translationsSelect('pokemon', 'p.id')} AS translations,
       ${auditSelect('p', 'pokemon_created_user', 'pokemon_updated_user')},
       json_build_object('id', e.id, 'name', ${environmentName}) AS environment,
@@ -924,7 +925,7 @@ export async function listDailyChecklistItems(locale = defaultLocale) {
   const title = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
   return query(
     `
-      SELECT c.id, ${title} AS title, ${translationsSelect('daily-checklist-items', 'c.id')} AS translations
+      SELECT c.id, ${title} AS title, c.title AS "baseTitle", ${translationsSelect('daily-checklist-items', 'c.id')} AS translations
       FROM daily_checklist_items c
       ORDER BY c.sort_order, c.id
     `
@@ -935,7 +936,7 @@ async function getDailyChecklistItemById(id: number, locale = defaultLocale) {
   const title = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
   return queryOne(
     `
-      SELECT c.id, ${title} AS title, ${translationsSelect('daily-checklist-items', 'c.id')} AS translations
+      SELECT c.id, ${title} AS title, c.title AS "baseTitle", ${translationsSelect('daily-checklist-items', 'c.id')} AS translations
       FROM daily_checklist_items c
       WHERE c.id = $1
     `,
@@ -1442,7 +1443,7 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
 
 export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanPokemonPayload({ ...payload, id });
-  const before = await getPokemon(id, locale);
+  const before = await getPokemon(id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
@@ -1487,6 +1488,7 @@ export async function listHabitats(locale = defaultLocale) {
     SELECT
       h.id,
       ${habitatName} AS name,
+      h.name AS "baseName",
       ${translationsSelect('habitats', 'h.id')} AS translations,
       ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
       COALESCE((
@@ -1521,6 +1523,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
       SELECT
         h.id,
         ${habitatName} AS name,
+        h.name AS "baseName",
         ${translationsSelect('habitats', 'h.id')} AS translations,
         ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
         COALESCE((
@@ -1650,7 +1653,7 @@ export async function createHabitat(payload: Record<string, unknown>, userId: nu
 
 export async function updateHabitat(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanHabitatPayload(payload);
-  const before = await getHabitat(id, locale);
+  const before = await getHabitat(id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
@@ -1692,6 +1695,7 @@ function itemProjection(locale: string): string {
     SELECT
       i.id,
       ${itemName} AS name,
+      i.name AS "baseName",
       ${translationsSelect('items', 'i.id')} AS translations,
       ${auditSelect('i', 'item_created_user', 'item_updated_user')},
       json_build_object('id', c.id, 'name', ${categoryName}) AS category,
@@ -1980,7 +1984,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
 
 export async function updateItem(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanItemPayload(payload);
-  const before = await getItem(id, locale);
+  const before = await getItem(id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
     await ensureItemCanDisableRecipe(client, id, cleanPayload.noRecipe);
@@ -2170,7 +2174,7 @@ export async function createRecipe(payload: Record<string, unknown>, userId: num
 
 export async function updateRecipe(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanRecipePayload(payload);
-  const before = await getRecipe(id, locale);
+  const before = await getRecipe(id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
     await ensureItemCanHaveRecipe(client, cleanPayload.itemId);

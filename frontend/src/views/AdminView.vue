@@ -81,7 +81,7 @@ const configNameInput = computed({
       return configForm.value.name;
     }
 
-    return configForm.value.translations[currentConfigLocale.value]?.name ?? configForm.value.name;
+    return configForm.value.translations[currentConfigLocale.value]?.name ?? '';
   },
   set: (value: string) => {
     if (isConfigDefaultLocale.value) {
@@ -92,6 +92,7 @@ const configNameInput = computed({
     updateConfigTranslation(currentConfigLocale.value, value);
   }
 });
+const configNamePlaceholder = computed(() => (isConfigDefaultLocale.value ? '' : configForm.value.name));
 const activeConfigTab = computed({
   get: () => activeConfigType.value,
   set: (value: string) => {
@@ -194,7 +195,7 @@ function closeChecklistModal() {
 }
 
 function editChecklistItem(item: DailyChecklistItem) {
-  checklistForm.value = { id: item.id, title: item.title, translations: item.translations ?? {} };
+  checklistForm.value = { id: item.id, title: item.baseTitle ?? item.title, translations: item.translations ?? {} };
   checklistModalOpen.value = true;
 }
 
@@ -240,7 +241,7 @@ function updateConfigTranslation(localeCode: string, value: string) {
 }
 
 function configBaseNameForSave() {
-  if (configForm.value.name.trim() !== '' || isConfigDefaultLocale.value) {
+  if (configForm.value.name.trim() !== '') {
     return configForm.value.name;
   }
 
@@ -805,7 +806,7 @@ onMounted(() => {
       <form id="admin-config-form" class="modal-edit-form" @submit.prevent="saveConfig">
         <div class="field">
           <label for="config-name">{{ t('common.name') }}</label>
-          <input id="config-name" v-model="configNameInput" :required="configNameRequired" />
+          <input id="config-name" v-model="configNameInput" :placeholder="configNamePlaceholder" :required="configNameRequired" />
         </div>
         <div v-if="selectedConfig.supportsItemDrop" class="check-row">
           <label>

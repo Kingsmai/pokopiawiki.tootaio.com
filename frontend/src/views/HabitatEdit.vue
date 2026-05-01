@@ -146,7 +146,7 @@ async function loadEditor() {
     if (isEditing.value) {
       const habitat = await api.habitatDetail(routeId.value);
       habitatForm.value = {
-        name: habitat.name,
+        name: habitat.baseName ?? habitat.name,
         translations: habitat.translations ?? {},
         recipeItems: habitat.recipe.map((recipeItem) => ({ itemId: String(recipeItem.id), quantity: recipeItem.quantity })),
         pokemonAppearances: groupPokemonAppearances(habitat)

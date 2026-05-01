@@ -68,7 +68,7 @@ async function loadEditor() {
     if (isEditing.value) {
       const item = await api.itemDetail(routeId.value);
       itemForm.value = {
-        name: item.name,
+        name: item.baseName ?? item.name,
         translations: item.translations ?? {},
         categoryId: String(item.category.id),
         usageId: item.usage ? String(item.usage.id) : '',

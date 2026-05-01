@@ -101,7 +101,7 @@ async function loadEditor() {
       const pokemon = await api.pokemonDetail(routeId.value);
       pokemonForm.value = {
         id: String(pokemon.id),
-        name: pokemon.name,
+        name: pokemon.baseName ?? pokemon.name,
         translations: pokemon.translations ?? {},
         environmentId: String(pokemon.environment.id),
         skillIds: pokemon.skills.map((skill) => String(skill.id)),

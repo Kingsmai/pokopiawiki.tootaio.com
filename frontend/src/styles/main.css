@@ -1179,6 +1179,27 @@ button:disabled,
   justify-content: flex-start;
 }
 
+.life-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.life-toolbar__search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.life-toolbar__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.life-toolbar .ui-button {
+  min-height: 44px;
+}
+
 .life-composer,
 .life-post {
   display: grid;
@@ -2842,6 +2863,16 @@ button:disabled,
   .life-post__actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
+  }
+
+  .life-toolbar,
+  .life-toolbar__search {
+    grid-template-columns: 1fr;
+  }
+
+  .life-toolbar__actions,
+  .life-toolbar .ui-button {
+    width: 100%;
   }
 
   .life-post__metrics {

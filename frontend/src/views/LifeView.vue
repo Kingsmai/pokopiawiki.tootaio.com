@@ -2,10 +2,13 @@
 import { Icon } from '@iconify/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import FilterPanel from '../components/FilterPanel.vue';
+import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import {
+  iconAdd,
   iconCancel,
   iconComment,
   iconDelete,
@@ -16,7 +19,8 @@ import {
   iconReactionLike,
   iconReactionThanks,
   iconReply,
-  iconSave
+  iconSave,
+  iconSearch
 } from '../icons';
 import {
   api,
@@ -36,8 +40,11 @@ const loading = ref(true);
 const loadingMore = ref(false);
 const authReady = ref(false);
 const busy = ref(false);
+const searchDraft = ref('');
+const submittedSearch = ref('');
 const body = ref('');
 const editingPostId = ref<number | null>(null);
+const postModalOpen = ref(false);
 const formError = ref('');
 const loadError = ref('');
 const commentBodies = ref<Record<number, string>>({});
@@ -71,6 +78,8 @@ const reactionOptions = [
 const canPost = computed(() => currentUser.value?.emailVerified === true);
 const charactersLeft = computed(() => Math.max(0, 2000 - body.value.length));
 const isEditing = computed(() => editingPostId.value !== null);
+const searchQuery = computed(() => submittedSearch.value.trim());
+const postModalTitle = computed(() => (isEditing.value ? t('pages.life.editPost') : t('pages.life.newPost')));
 const submitLabel = computed(() => {
   if (busy.value) return isEditing.value ? t('pages.life.updating') : t('pages.life.publishing');
   return isEditing.value ? t('pages.life.update') : t('pages.life.publish');
@@ -99,13 +108,14 @@ async function loadCurrentUser() {
 async function loadPosts() {
   const requestId = ++postsRequestId;
   loading.value = true;
+  loadingMore.value = false;
   loadError.value = '';
   nextCursor.value = null;
   hasMorePosts.value = false;
   loadMorePaused.value = false;
 
   try {
-    const page = await api.lifePosts({ limit: lifePostPageSize });
+    const page = await api.lifePosts({ limit: lifePostPageSize, search: searchQuery.value });
     if (requestId !== postsRequestId) {
       return;
     }
@@ -139,7 +149,7 @@ async function loadMorePosts() {
   loadError.value = '';
 
   try {
-    const page = await api.lifePosts({ cursor, limit: lifePostPageSize });
+    const page = await api.lifePosts({ cursor, limit: lifePostPageSize, search: searchQuery.value });
     if (requestId !== postsRequestId) {
       return;
     }
@@ -172,6 +182,36 @@ function payload() {
   };
 }
 
+function submitSearch() {
+  const nextSearch = searchDraft.value.trim();
+  if (nextSearch === submittedSearch.value && !loadError.value) {
+    return;
+  }
+
+  submittedSearch.value = nextSearch;
+  void loadPosts();
+}
+
+function matchesCurrentSearch(post: LifePost) {
+  const keyword = searchQuery.value.toLowerCase();
+  return keyword === '' || post.body.toLowerCase().includes(keyword);
+}
+
+function openCreatePostModal() {
+  resetForm();
+  postModalOpen.value = true;
+  void nextTick(() => bodyInput.value?.focus());
+}
+
+function closePostModal() {
+  if (busy.value) {
+    return;
+  }
+
+  postModalOpen.value = false;
+  resetForm();
+}
+
 async function submitPost() {
   if (!body.value.trim()) {
     formError.value = t('pages.life.bodyRequired');
@@ -188,9 +228,12 @@ async function submitPost() {
       replacePost(updated);
     } else {
       const created = await api.createLifePost(payload());
-      posts.value = [created, ...posts.value];
+      if (matchesCurrentSearch(created)) {
+        posts.value = [created, ...posts.value];
+      }
     }
     resetForm();
+    postModalOpen.value = false;
   } catch (error) {
     formError.value =
       error instanceof Error && error.message
@@ -251,6 +294,11 @@ function reactionCountLabel(post: LifePost, type: LifeReactionType) {
 }
 
 function replacePost(updatedPost: LifePost) {
+  if (!matchesCurrentSearch(updatedPost)) {
+    posts.value = posts.value.filter((post) => post.id !== updatedPost.id);
+    return;
+  }
+
   posts.value = posts.value.map((post) => (post.id === updatedPost.id ? updatedPost : post));
 }
 
@@ -363,6 +411,7 @@ function startEdit(post: LifePost) {
   editingPostId.value = post.id;
   body.value = post.body;
   formError.value = '';
+  postModalOpen.value = true;
   void nextTick(() => bodyInput.value?.focus());
 }
 
@@ -371,16 +420,17 @@ async function deletePost(post: LifePost) {
     return;
   }
 
-  formError.value = '';
+  loadError.value = '';
 
   try {
     await api.deleteLifePost(post.id);
     posts.value = posts.value.filter((item) => item.id !== post.id);
     if (editingPostId.value === post.id) {
       resetForm();
+      postModalOpen.value = false;
     }
   } catch (error) {
-    formError.value = error instanceof Error && error.message ? error.message : t('pages.life.deleteFailed');
+    loadError.value = error instanceof Error && error.message ? error.message : t('pages.life.deleteFailed');
   }
 }
 
@@ -545,14 +595,35 @@ onUnmounted(() => {
       <template #kicker>{{ t('pages.life.kicker') }}</template>
     </PageHeader>
 
+    <FilterPanel class="life-toolbar">
+      <form class="life-toolbar__search" @submit.prevent="submitSearch">
+        <div class="field">
+          <label for="life-search">{{ t('pages.life.search') }}</label>
+          <input id="life-search" v-model="searchDraft" type="search" :placeholder="t('pages.life.searchPlaceholder')" />
+        </div>
+        <button class="ui-button ui-button--ghost" type="submit">
+          <Icon :icon="iconSearch" class="ui-icon" aria-hidden="true" />
+          {{ t('common.search') }}
+        </button>
+      </form>
+
+      <div class="life-toolbar__actions">
+        <button class="ui-button ui-button--primary" :disabled="!authReady" type="button" @click="openCreatePostModal">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.life.newPost') }}
+        </button>
+      </div>
+    </FilterPanel>
+
     <StatusMessage v-if="loadError" variant="danger" :duration="0">{{ loadError }}</StatusMessage>
 
-    <section class="life-composer" :aria-busy="!authReady || busy">
-      <div class="life-composer__header">
-        <h2>{{ t('pages.life.composerTitle') }}</h2>
-        <p>{{ t('pages.life.composerPrompt') }}</p>
-      </div>
-
+    <Modal
+      :open="postModalOpen"
+      :title="postModalTitle"
+      :subtitle="t('pages.life.composerPrompt')"
+      :close-label="t('common.close')"
+      @close="closePostModal"
+    >
       <div v-if="!authReady" class="life-composer__auth-skeleton" aria-hidden="true">
         <Skeleton variant="box" height="112px" />
         <Skeleton width="42%" />
@@ -579,9 +650,9 @@ onUnmounted(() => {
             <Icon :icon="isEditing ? iconSave : iconLife" class="ui-icon" aria-hidden="true" />
             {{ submitLabel }}
           </button>
-          <button v-if="isEditing" class="ui-button ui-button--ghost" :disabled="busy" type="button" @click="resetForm">
+          <button class="ui-button ui-button--ghost" :disabled="busy" type="button" @click="closePostModal">
             <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
-            {{ t('pages.life.cancelEdit') }}
+            {{ t('common.cancel') }}
           </button>
         </div>
       </form>
@@ -592,7 +663,7 @@ onUnmounted(() => {
           {{ t('nav.login') }}
         </RouterLink>
       </div>
-    </section>
+    </Modal>
 
     <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
       <div v-if="loading" class="life-feed__list" :aria-label="t('pages.life.loading')">
@@ -885,7 +956,7 @@ onUnmounted(() => {
         <div v-if="hasMorePosts" ref="loadMoreSentinel" class="life-feed__sentinel" aria-hidden="true"></div>
       </div>
 
-      <p v-else class="status">{{ t('pages.life.empty') }}</p>
+      <p v-else class="status">{{ searchQuery ? t('pages.life.searchEmpty') : t('pages.life.empty') }}</p>
     </section>
   </section>
 </template>

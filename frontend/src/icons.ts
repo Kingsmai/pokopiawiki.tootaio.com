@@ -30,6 +30,7 @@ export const iconReactionHelpful: AppIcon = 'mdi:lightbulb-on-outline';
 export const iconReactionLike: AppIcon = 'mdi:thumb-up-outline';
 export const iconReactionThanks: AppIcon = 'mdi:hand-heart-outline';
 export const iconSave: AppIcon = 'mdi:content-save-outline';
+export const iconSearch: AppIcon = 'mdi:magnify';
 export const iconSuccess: AppIcon = 'mdi:check-circle-outline';
 export const iconTranslate: AppIcon = 'mdi:translate';
 export const iconWarning: AppIcon = 'mdi:alert-outline';

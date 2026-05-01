@@ -377,6 +377,7 @@ Life Post 可配置：
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
 - 已注册并完成邮箱验证的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
+- 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
 - 信息流分页加载，初始展示最新一页，滚动到底部自动加载更多。
 - 当前没有图片上传、转发、置顶或单独审核流程。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
@@ -409,7 +410,7 @@ API 暴露边界：
   - `/items/:id/edit`
   - `/recipes/new`
   - `/recipes/:id/edit`
-- Life 使用信息流内联发布与编辑，不使用路由驱动 Modal。
+- Life 使用信息流顶部 New Post / 编辑按钮打开普通 Modal 发布与编辑，不使用路由驱动 Modal。
 - 进入或关闭编辑 Modal 时应保留底层页面上下文，不进行不必要的滚动跳转。
 - 用户界面不得展示内部字段名、调试数据、计划说明或“已修改某字段”一类实现说明。
 
@@ -428,7 +429,7 @@ API 暴露边界：
 - `GET /api/items/:id`
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
-- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取。
+- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索。
 
 认证 API：
 

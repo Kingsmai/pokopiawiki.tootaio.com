@@ -197,6 +197,7 @@ export interface LifePostsPage {
 export interface LifePostsParams {
   cursor?: string | null;
   limit?: number;
+  search?: string;
 }
 
 export interface LifeComment {
@@ -465,7 +466,7 @@ export const api = {
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),
   lifePosts: (params: LifePostsParams = {}) =>
     getJson<LifePostsPage>(
-      `/api/life-posts${buildQuery({ cursor: params.cursor ?? undefined, limit: params.limit })}`
+      `/api/life-posts${buildQuery({ cursor: params.cursor ?? undefined, limit: params.limit, search: params.search?.trim() })}`
     ),
   createLifePost: (payload: LifePostPayload) => sendJson<LifePost>('/api/life-posts', 'POST', payload),
   updateLifePost: (id: string | number, payload: LifePostPayload) =>

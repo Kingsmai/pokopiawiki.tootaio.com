@@ -1482,21 +1482,26 @@ async function getLifeCommentById(id: number): Promise<LifeComment | null> {
 export async function listLifePosts(paramsQuery: QueryParams = {}, userId: number | null = null): Promise<LifePostsPage> {
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
+  const search = asString(paramsQuery.search)?.trim();
   const params: unknown[] = [];
-  let cursorClause = '';
+  const conditions: string[] = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`lp.body ILIKE $${params.length}`);
+  }
 
   if (cursor) {
     params.push(cursor.createdAt, cursor.id);
-    cursorClause = `
-      WHERE (lp.created_at, lp.id) < ($${params.length - 1}::timestamptz, $${params.length}::integer)
-    `;
+    conditions.push(`(lp.created_at, lp.id) < ($${params.length - 1}::timestamptz, $${params.length}::integer)`);
   }
 
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   params.push(limit + 1);
   const rows = await query<LifePostRow>(
     `
       ${lifePostProjection()}
-      ${cursorClause}
+      ${whereClause}
       ORDER BY lp.created_at DESC, lp.id DESC
       LIMIT $${params.length}
     `,

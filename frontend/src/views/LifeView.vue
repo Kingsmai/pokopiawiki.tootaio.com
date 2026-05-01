@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -33,6 +33,7 @@ const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
+const loadingMore = ref(false);
 const authReady = ref(false);
 const busy = ref(false);
 const body = ref('');
@@ -49,8 +50,16 @@ const reactionPickerPostId = ref<number | null>(null);
 const reactionBusyPostId = ref<number | null>(null);
 const reactionErrors = ref<Record<number, string>>({});
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
+const loadMoreSentinel = ref<HTMLElement | null>(null);
+const lifePostPageSize = 20;
 const skeletonPostCount = 3;
+const loadingMoreSkeletonCount = 2;
 let removeAuthListener: (() => void) | null = null;
+let feedObserver: IntersectionObserver | null = null;
+let postsRequestId = 0;
+const nextCursor = ref<string | null>(null);
+const hasMorePosts = ref(false);
+const loadMorePaused = ref(false);
 
 const reactionOptions = [
   { type: 'like', icon: iconReactionLike, labelKey: 'pages.life.reactionLike' },
@@ -88,15 +97,66 @@ async function loadCurrentUser() {
 }
 
 async function loadPosts() {
+  const requestId = ++postsRequestId;
   loading.value = true;
+  loadError.value = '';
+  nextCursor.value = null;
+  hasMorePosts.value = false;
+  loadMorePaused.value = false;
+
+  try {
+    const page = await api.lifePosts({ limit: lifePostPageSize });
+    if (requestId !== postsRequestId) {
+      return;
+    }
+    posts.value = page.items;
+    nextCursor.value = page.nextCursor;
+    hasMorePosts.value = page.hasMore;
+  } catch (error) {
+    if (requestId === postsRequestId) {
+      loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+    }
+  } finally {
+    if (requestId === postsRequestId) {
+      loading.value = false;
+    }
+  }
+}
+
+async function loadMorePosts() {
+  if (loading.value || loadingMore.value || loadMorePaused.value || !hasMorePosts.value) {
+    return;
+  }
+
+  const cursor = nextCursor.value;
+  if (!cursor) {
+    hasMorePosts.value = false;
+    return;
+  }
+
+  const requestId = postsRequestId;
+  loadingMore.value = true;
   loadError.value = '';
 
   try {
-    posts.value = await api.lifePosts();
+    const page = await api.lifePosts({ cursor, limit: lifePostPageSize });
+    if (requestId !== postsRequestId) {
+      return;
+    }
+
+    const existingIds = new Set(posts.value.map((post) => post.id));
+    posts.value = [...posts.value, ...page.items.filter((post) => !existingIds.has(post.id))];
+    nextCursor.value = page.nextCursor;
+    hasMorePosts.value = page.hasMore;
   } catch (error) {
-    loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+    if (requestId === postsRequestId) {
+      loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+      loadMorePaused.value = true;
+    }
   } finally {
-    loading.value = false;
+    if (requestId === postsRequestId) {
+      loadingMore.value = false;
+    }
   }
 }
 
@@ -434,6 +494,36 @@ function authorInitial(post: LifePost) {
   return name.slice(0, 1).toUpperCase();
 }
 
+function disconnectFeedObserver() {
+  feedObserver?.disconnect();
+  feedObserver = null;
+}
+
+function observeLoadMore() {
+  disconnectFeedObserver();
+
+  if (loading.value || loadingMore.value || loadMorePaused.value || !hasMorePosts.value || !loadMoreSentinel.value) {
+    return;
+  }
+
+  if (typeof IntersectionObserver === 'undefined') {
+    void loadMorePosts();
+    return;
+  }
+
+  feedObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void loadMorePosts();
+      }
+    },
+    { rootMargin: '360px 0px' }
+  );
+  feedObserver.observe(loadMoreSentinel.value);
+}
+
+watch([loadMoreSentinel, hasMorePosts, loading, loadingMore, loadMorePaused], observeLoadMore, { flush: 'post' });
+
 onMounted(() => {
   void loadCurrentUser();
   void loadPosts();
@@ -444,6 +534,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  disconnectFeedObserver();
   removeAuthListener?.();
 });
 </script>
@@ -503,7 +594,7 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <section class="life-feed" :aria-busy="loading" :aria-label="t('pages.life.kicker')">
+    <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
       <div v-if="loading" class="life-feed__list" :aria-label="t('pages.life.loading')">
         <article v-for="index in skeletonPostCount" :key="index" class="life-post life-post--skeleton">
           <div class="life-post__header">
@@ -777,6 +868,21 @@ onUnmounted(() => {
             <p v-else class="life-comments__empty">{{ t('pages.life.noComments') }}</p>
           </section>
         </article>
+
+        <article v-for="index in loadingMore ? loadingMoreSkeletonCount : 0" :key="`life-more-${index}`" class="life-post life-post--skeleton">
+          <div class="life-post__header">
+            <Skeleton variant="box" width="46px" height="46px" />
+            <div class="life-post__byline">
+              <Skeleton width="138px" />
+              <Skeleton width="96px" />
+            </div>
+          </div>
+          <Skeleton width="94%" />
+          <Skeleton width="76%" />
+          <Skeleton width="52%" />
+        </article>
+
+        <div v-if="hasMorePosts" ref="loadMoreSentinel" class="life-feed__sentinel" aria-hidden="true"></div>
       </div>
 
       <p v-else class="status">{{ t('pages.life.empty') }}</p>

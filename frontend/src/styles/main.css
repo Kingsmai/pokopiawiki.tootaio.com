@@ -1219,6 +1219,10 @@ button:disabled,
   gap: 14px;
 }
 
+.life-feed__sentinel {
+  min-height: 1px;
+}
+
 .life-form__counter {
   justify-self: end;
 }

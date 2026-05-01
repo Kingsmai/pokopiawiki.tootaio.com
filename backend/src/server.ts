@@ -195,7 +195,7 @@ app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(reque
 
 app.get('/api/life-posts', async (request) => {
   const user = await optionalUser(request);
-  return listLifePosts(user?.id ?? null);
+  return listLifePosts(request.query as Record<string, string | string[] | undefined>, user?.id ?? null);
 });
 
 app.post('/api/life-posts', async (request, reply) => {

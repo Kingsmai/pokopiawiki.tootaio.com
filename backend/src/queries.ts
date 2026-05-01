@@ -1,5 +1,6 @@
 import { parseIdList, parseMatchMode, sqlForRelationFilter } from './filter.ts';
 import { pool, query, queryOne } from './db.ts';
+import { Buffer } from 'node:buffer';
 import type { PoolClient } from 'pg';
 
 type QueryValue = string | string[] | undefined;
@@ -134,15 +135,27 @@ type LifePostRow = {
   id: number;
   body: string;
   createdAt: Date;
+  createdAtCursor: string;
   updatedAt: Date;
   author: { id: number; displayName: string } | null;
   updatedBy: { id: number; displayName: string } | null;
 };
 
-type LifePost = LifePostRow & {
+type LifePost = Omit<LifePostRow, 'createdAtCursor'> & {
   comments: LifeComment[];
   reactionCounts: LifeReactionCounts;
   myReaction: LifeReactionType | null;
+};
+
+type LifePostCursor = {
+  createdAt: string;
+  id: number;
+};
+
+type LifePostsPage = {
+  items: LifePost[];
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 type HabitatPayload = {
@@ -215,6 +228,8 @@ const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const defaultLocale = 'en';
 const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
+const defaultLifePostLimit = 20;
+const maxLifePostLimit = 50;
 const lifeReactionTypes = ['like', 'helpful', 'fun', 'thanks'] as const;
 const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
   { key: 'hp', label: 'HP' },
@@ -1255,6 +1270,7 @@ function lifePostProjection(): string {
       lp.id,
       lp.body,
       lp.created_at AS "createdAt",
+      lp.created_at::text AS "createdAtCursor",
       lp.updated_at AS "updatedAt",
       CASE
         WHEN created_user.id IS NULL THEN NULL
@@ -1268,6 +1284,63 @@ function lifePostProjection(): string {
     LEFT JOIN users created_user ON created_user.id = lp.created_by_user_id
     LEFT JOIN users updated_user ON updated_user.id = lp.updated_by_user_id
   `;
+}
+
+function cleanLifePostLimit(value: QueryValue): number {
+  const rawLimit = asString(value);
+  if (rawLimit === undefined || rawLimit === '') {
+    return defaultLifePostLimit;
+  }
+
+  const limit = Number(rawLimit);
+  return Number.isInteger(limit) && limit > 0 ? Math.min(limit, maxLifePostLimit) : defaultLifePostLimit;
+}
+
+function decodeLifePostCursor(value: QueryValue): LifePostCursor | null {
+  const rawCursor = asString(value);
+  if (!rawCursor) {
+    return null;
+  }
+
+  try {
+    const cursor = JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8')) as Partial<LifePostCursor>;
+    const createdAt = typeof cursor.createdAt === 'string' ? cursor.createdAt : '';
+    const id = Number(cursor.id);
+
+    if (!createdAt || Number.isNaN(new Date(createdAt).getTime()) || !Number.isInteger(id) || id <= 0) {
+      throw validationError('Cursor is invalid');
+    }
+
+    return { createdAt, id };
+  } catch (error) {
+    if (error instanceof Error && 'statusCode' in error) {
+      throw error;
+    }
+    throw validationError('Cursor is invalid');
+  }
+}
+
+function encodeLifePostCursor(post: LifePostRow): string {
+  return Buffer.from(JSON.stringify({ createdAt: post.createdAtCursor, id: post.id }), 'utf8').toString('base64url');
+}
+
+function hydrateLifePost(
+  post: LifePostRow,
+  commentsByPost: Map<number, LifeComment[]>,
+  countsByPost: Map<number, LifeReactionCounts>,
+  myReactionsByPost: Map<number, LifeReactionType>
+): LifePost {
+  return {
+    id: post.id,
+    body: post.body,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    author: post.author,
+    updatedBy: post.updatedBy,
+    comments: commentsByPost.get(post.id) ?? [],
+    reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
+    myReaction: myReactionsByPost.get(post.id) ?? null
+  };
 }
 
 function lifeCommentProjection(whereClause: string): string {
@@ -1406,22 +1479,41 @@ async function getLifeCommentById(id: number): Promise<LifeComment | null> {
   return row ? { ...row, replies: [] } : null;
 }
 
-export async function listLifePosts(userId: number | null = null): Promise<LifePost[]> {
-  const posts = await query<LifePostRow>(`
-    ${lifePostProjection()}
-    ORDER BY lp.created_at DESC, lp.id DESC
-  `);
+export async function listLifePosts(paramsQuery: QueryParams = {}, userId: number | null = null): Promise<LifePostsPage> {
+  const cursor = decodeLifePostCursor(paramsQuery.cursor);
+  const limit = cleanLifePostLimit(paramsQuery.limit);
+  const params: unknown[] = [];
+  let cursorClause = '';
+
+  if (cursor) {
+    params.push(cursor.createdAt, cursor.id);
+    cursorClause = `
+      WHERE (lp.created_at, lp.id) < ($${params.length - 1}::timestamptz, $${params.length}::integer)
+    `;
+  }
+
+  params.push(limit + 1);
+  const rows = await query<LifePostRow>(
+    `
+      ${lifePostProjection()}
+      ${cursorClause}
+      ORDER BY lp.created_at DESC, lp.id DESC
+      LIMIT $${params.length}
+    `,
+    params
+  );
+  const hasMore = rows.length > limit;
+  const posts = hasMore ? rows.slice(0, limit) : rows;
 
   const postIds = posts.map((post) => post.id);
   const commentsByPost = await lifeCommentsForPosts(postIds);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, userId);
 
-  return posts.map((post) => ({
-    ...post,
-    comments: commentsByPost.get(post.id) ?? [],
-    reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
-    myReaction: myReactionsByPost.get(post.id) ?? null
-  }));
+  return {
+    items: posts.map((post) => hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost)),
+    nextCursor: hasMore && posts.length > 0 ? encodeLifePostCursor(posts[posts.length - 1]) : null,
+    hasMore
+  };
 }
 
 async function getLifePostById(id: number, userId: number | null = null): Promise<LifePost | null> {
@@ -1439,12 +1531,7 @@ async function getLifePostById(id: number, userId: number | null = null): Promis
 
   const commentsByPost = await lifeCommentsForPosts([post.id]);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts([post.id], userId);
-  return {
-    ...post,
-    comments: commentsByPost.get(post.id) ?? [],
-    reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
-    myReaction: myReactionsByPost.get(post.id) ?? null
-  };
+  return hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost);
 }
 
 export async function createLifePost(payload: Record<string, unknown>, userId: number) {

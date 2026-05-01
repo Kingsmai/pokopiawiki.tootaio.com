@@ -188,6 +188,17 @@ export interface LifePost {
   myReaction: LifeReactionType | null;
 }
 
+export interface LifePostsPage {
+  items: LifePost[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface LifePostsParams {
+  cursor?: string | null;
+  limit?: number;
+}
+
 export interface LifeComment {
   id: number;
   postId: number;
@@ -452,7 +463,10 @@ export const api = {
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),
-  lifePosts: () => getJson<LifePost[]>('/api/life-posts'),
+  lifePosts: (params: LifePostsParams = {}) =>
+    getJson<LifePostsPage>(
+      `/api/life-posts${buildQuery({ cursor: params.cursor ?? undefined, limit: params.limit })}`
+    ),
   createLifePost: (payload: LifePostPayload) => sendJson<LifePost>('/api/life-posts', 'POST', payload),
   updateLifePost: (id: string | number, payload: LifePostPayload) =>
     sendJson<LifePost>(`/api/life-posts/${id}`, 'PUT', payload),

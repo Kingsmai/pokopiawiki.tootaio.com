@@ -2630,22 +2630,50 @@ button:disabled,
   justify-content: flex-end;
 }
 
+.pokemon-related-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.pokemon-related-grid > .detail-section {
+  min-width: 0;
+}
+
 .related-pokemon-list li {
   display: block;
 }
 
 .related-pokemon-row {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
-.related-pokemon-row__header {
+.related-pokemon-row__summary {
+  display: grid;
+  grid-template-columns: minmax(112px, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.related-pokemon-row__traits {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.related-pokemon-row__skills {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.related-pokemon-row__skills.chips {
   min-width: 0;
 }
 
@@ -2653,7 +2681,9 @@ button:disabled,
   min-width: 0;
   color: var(--ink);
   font-weight: 900;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .related-pokemon-row__environment {
@@ -2667,31 +2697,15 @@ button:disabled,
   color: #172036;
 }
 
-.related-pokemon-row__content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 12px;
-  min-width: 0;
-}
-
-.related-pokemon-row__group {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  min-width: 0;
-}
-
-.related-pokemon-row__label {
-  color: var(--muted);
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
 .related-favourite-chip {
   gap: 6px;
   max-width: 100%;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.related-pokemon-row__favourites {
+  min-width: 0;
 }
 
 .detail-text {
@@ -3374,6 +3388,7 @@ button:disabled,
   .detail-grid,
   .pokemon-profile-grid,
   .pokemon-profile-row,
+  .pokemon-related-grid,
   .admin-layout {
     grid-template-columns: 1fr;
   }
@@ -3507,6 +3522,18 @@ button:disabled,
 
   .appearance-list li {
     grid-template-columns: 1fr;
+  }
+
+  .related-pokemon-row {
+    grid-template-columns: 1fr;
+  }
+
+  .related-pokemon-row__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .related-pokemon-row__traits {
+    justify-content: flex-start;
   }
 
   .appearance-summary div {

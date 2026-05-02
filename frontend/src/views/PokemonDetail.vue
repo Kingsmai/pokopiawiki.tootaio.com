@@ -346,77 +346,76 @@ watch(
           <EntityChips :items="pokemon.favorite_things" />
         </DetailSection>
 
-        <DetailSection :title="t('pages.pokemon.relatedPokemon')">
-          <template v-if="pokemon.relatedPokemon.length">
-            <Tabs
-              v-if="relatedHabitatTabs.length"
-              id="pokemon-related-habitats"
-              v-model="relatedHabitatTab"
-              :tabs="relatedHabitatTabs"
-              :label="t('pages.pokemon.relatedHabitat')"
-            />
-            <ul v-if="relatedPokemonRows.length" class="row-list related-pokemon-list">
-              <li v-for="related in relatedPokemonRows" :key="related.id">
-                <div class="related-pokemon-row">
-                  <div class="related-pokemon-row__header">
-                    <RouterLink class="related-pokemon-row__name" :to="`/pokemon/${related.id}`">#{{ related.id }} {{ related.name }}</RouterLink>
-                    <span
-                      class="chip related-pokemon-row__environment"
-                      :class="{ 'related-pokemon-row__environment--match': related.environment.id === pokemon.environment.id }"
-                    >
-                      {{ related.environment.name }}
-                    </span>
-                  </div>
-
-                  <div class="related-pokemon-row__content">
-                    <div class="related-pokemon-row__group">
-                      <span class="related-pokemon-row__label">{{ t('pages.pokemon.skills') }}</span>
-                      <EntityChips v-if="related.skills.length" :items="related.skills" />
-                      <span v-else class="meta-line">{{ t('common.none') }}</span>
-                    </div>
-
-                    <div class="related-pokemon-row__group">
-                      <span class="related-pokemon-row__label">{{ t('pages.pokemon.favoriteThings') }}</span>
-                      <div v-if="related.favorite_things.length" class="chips">
+        <div class="pokemon-related-grid">
+          <DetailSection :title="t('pages.pokemon.relatedPokemon')">
+            <template v-if="pokemon.relatedPokemon.length">
+              <Tabs
+                v-if="relatedHabitatTabs.length"
+                id="pokemon-related-habitats"
+                v-model="relatedHabitatTab"
+                :tabs="relatedHabitatTabs"
+                :label="t('pages.pokemon.relatedHabitat')"
+              />
+              <ul v-if="relatedPokemonRows.length" class="row-list related-pokemon-list">
+                <li v-for="related in relatedPokemonRows" :key="related.id">
+                  <div class="related-pokemon-row">
+                    <div class="related-pokemon-row__summary">
+                      <RouterLink class="related-pokemon-row__name" :to="`/pokemon/${related.id}`">#{{ related.id }} {{ related.name }}</RouterLink>
+                      <div class="related-pokemon-row__traits">
+                        <EntityChips
+                          v-if="related.skills.length"
+                          class="related-pokemon-row__skills"
+                          :items="related.skills"
+                        />
                         <span
-                          v-for="thing in related.favorite_things"
-                          :key="thing.id"
-                          class="chip related-favourite-chip"
-                          :class="{ 'related-favourite-chip--match': thing.matches }"
+                          class="chip related-pokemon-row__environment"
+                          :class="{ 'related-pokemon-row__environment--match': related.environment.id === pokemon.environment.id }"
                         >
-                          {{ thing.name }}
+                          {{ related.environment.name }}
                         </span>
                       </div>
-                      <span v-else class="meta-line">{{ t('common.none') }}</span>
+                    </div>
+                    <div
+                      v-if="related.favorite_things.length"
+                      class="chips related-pokemon-row__favourites"
+                    >
+                      <span
+                        v-for="thing in related.favorite_things"
+                        :key="thing.id"
+                        class="chip related-favourite-chip"
+                        :class="{ 'related-favourite-chip--match': thing.matches }"
+                      >
+                        {{ thing.name }}
+                      </span>
                     </div>
                   </div>
-                </div>
-              </li>
-            </ul>
+                </li>
+              </ul>
+              <p v-else class="meta-line">{{ t('common.none') }}</p>
+            </template>
             <p v-else class="meta-line">{{ t('common.none') }}</p>
-          </template>
-          <p v-else class="meta-line">{{ t('common.none') }}</p>
-        </DetailSection>
+          </DetailSection>
 
-        <DetailSection :title="t('pages.pokemon.relatedItems')">
-          <template v-if="pokemon.favoriteThingItems.length">
-            <Tabs
-              v-if="itemCategoryTabs.length"
-              id="pokemon-favorite-items"
-              v-model="itemCategoryTab"
-              :tabs="itemCategoryTabs"
-              :label="t('pages.pokemon.relatedItemCategory')"
-            />
-            <ul v-if="favoriteThingItems.length" class="row-list">
-              <li v-for="item in favoriteThingItems" :key="item.id">
-                <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
-                <EntityChips :items="item.tags" />
-              </li>
-            </ul>
+          <DetailSection :title="t('pages.pokemon.relatedItems')">
+            <template v-if="pokemon.favoriteThingItems.length">
+              <Tabs
+                v-if="itemCategoryTabs.length"
+                id="pokemon-favorite-items"
+                v-model="itemCategoryTab"
+                :tabs="itemCategoryTabs"
+                :label="t('pages.pokemon.relatedItemCategory')"
+              />
+              <ul v-if="favoriteThingItems.length" class="row-list">
+                <li v-for="item in favoriteThingItems" :key="item.id">
+                  <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
+                  <EntityChips :items="item.tags" />
+                </li>
+              </ul>
+              <p v-else class="meta-line">{{ t('common.none') }}</p>
+            </template>
             <p v-else class="meta-line">{{ t('common.none') }}</p>
-          </template>
-          <p v-else class="meta-line">{{ t('common.none') }}</p>
-        </DetailSection>
+          </DetailSection>
+        </div>
 
         <DetailSection :title="t('pages.pokemon.habitats')">
           <ul class="row-list appearance-list">

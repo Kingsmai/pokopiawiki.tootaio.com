@@ -18,9 +18,11 @@ const route = useRoute();
 const { t } = useI18n();
 const pokemon = ref<PokemonDetail | null>(null);
 const itemCategoryTab = ref('');
+const relatedHabitatTab = ref('');
 const detailTab = ref('details');
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
+const relatedPokemonLimit = 6;
 
 type HabitatRow = {
   id: number;
@@ -40,6 +42,10 @@ function sortByOrder(values: Set<string>, order: string[]) {
     if (indexB === -1) return -1;
     return indexA - indexB;
   });
+}
+
+function habitatTabValue(id: number): string {
+  return `habitat-${id}`;
 }
 
 function timeLabel(value: string): string {
@@ -128,6 +134,31 @@ const favoriteThingItems = computed(() => {
 
   return items.filter((item) => String(item.category.id) === itemCategoryTab.value);
 });
+const relatedHabitatTabs = computed<TabOption[]>(() => {
+  if (!pokemon.value?.relatedPokemon.length) {
+    return [];
+  }
+
+  const habitats = new Map<string, string>();
+  habitats.set(habitatTabValue(pokemon.value.environment.id), pokemon.value.environment.name);
+
+  pokemon.value.relatedPokemon.forEach((item) => {
+    habitats.set(habitatTabValue(item.environment.id), item.environment.name);
+  });
+
+  const tabs = [...habitats.entries()].map(([value, label]) => ({ value, label }));
+  return [...tabs, { value: 'all', label: t('common.all') }];
+});
+const relatedPokemonRows = computed(() => {
+  const rows = pokemon.value?.relatedPokemon ?? [];
+  const selectedTab = relatedHabitatTab.value || (pokemon.value ? habitatTabValue(pokemon.value.environment.id) : '');
+
+  if (selectedTab === 'all') {
+    return rows.slice(0, relatedPokemonLimit);
+  }
+
+  return rows.filter((item) => habitatTabValue(item.environment.id) === selectedTab).slice(0, relatedPokemonLimit);
+});
 const typeSlotClass = computed(() => ({
   'pokemon-type-slots--single': (pokemon.value?.types.length ?? 0) === 1
 }));
@@ -148,7 +179,9 @@ function formatImperialHeight(inches: number): string {
 }
 
 async function loadPokemonDetail() {
-  pokemon.value = await api.pokemonDetail(String(route.params.id));
+  const nextPokemon = await api.pokemonDetail(String(route.params.id));
+  pokemon.value = nextPokemon;
+  relatedHabitatTab.value = habitatTabValue(nextPokemon.environment.id);
 }
 
 onMounted(async () => {
@@ -168,6 +201,7 @@ watch(
   () => route.params.id,
   () => {
     pokemon.value = null;
+    relatedHabitatTab.value = '';
     detailTab.value = 'details';
     void loadPokemonDetail();
   }
@@ -310,6 +344,58 @@ watch(
 
         <DetailSection :title="t('pages.pokemon.favoriteThings')">
           <EntityChips :items="pokemon.favorite_things" />
+        </DetailSection>
+
+        <DetailSection :title="t('pages.pokemon.relatedPokemon')">
+          <template v-if="pokemon.relatedPokemon.length">
+            <Tabs
+              v-if="relatedHabitatTabs.length"
+              id="pokemon-related-habitats"
+              v-model="relatedHabitatTab"
+              :tabs="relatedHabitatTabs"
+              :label="t('pages.pokemon.relatedHabitat')"
+            />
+            <ul v-if="relatedPokemonRows.length" class="row-list related-pokemon-list">
+              <li v-for="related in relatedPokemonRows" :key="related.id">
+                <div class="related-pokemon-row">
+                  <div class="related-pokemon-row__header">
+                    <RouterLink class="related-pokemon-row__name" :to="`/pokemon/${related.id}`">#{{ related.id }} {{ related.name }}</RouterLink>
+                    <span
+                      class="chip related-pokemon-row__environment"
+                      :class="{ 'related-pokemon-row__environment--match': related.environment.id === pokemon.environment.id }"
+                    >
+                      {{ related.environment.name }}
+                    </span>
+                  </div>
+
+                  <div class="related-pokemon-row__content">
+                    <div class="related-pokemon-row__group">
+                      <span class="related-pokemon-row__label">{{ t('pages.pokemon.skills') }}</span>
+                      <EntityChips v-if="related.skills.length" :items="related.skills" />
+                      <span v-else class="meta-line">{{ t('common.none') }}</span>
+                    </div>
+
+                    <div class="related-pokemon-row__group">
+                      <span class="related-pokemon-row__label">{{ t('pages.pokemon.favoriteThings') }}</span>
+                      <div v-if="related.favorite_things.length" class="chips">
+                        <span
+                          v-for="thing in related.favorite_things"
+                          :key="thing.id"
+                          class="chip related-favourite-chip"
+                          :class="{ 'related-favourite-chip--match': thing.matches }"
+                        >
+                          {{ thing.name }}
+                        </span>
+                      </div>
+                      <span v-else class="meta-line">{{ t('common.none') }}</span>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <p v-else class="meta-line">{{ t('common.none') }}</p>
+          </template>
+          <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
 
         <DetailSection :title="t('pages.pokemon.relatedItems')">

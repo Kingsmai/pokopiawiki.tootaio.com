@@ -2000,8 +2000,12 @@ export async function getPokemon(id: number, locale = defaultLocale) {
   const itemName = localizedName('items', 'i', locale);
   const categoryName = localizedName('item-categories', 'c', locale);
   const tagName = localizedName('favorite-things', 'ft', locale);
+  const relatedPokemonName = localizedName('pokemon', 'related_pokemon', locale);
+  const relatedEnvironmentName = localizedName('environments', 'related_environment', locale);
+  const relatedSkillName = localizedName('skills', 'related_skill', locale);
+  const relatedFavoriteThingName = localizedName('favorite-things', 'related_favorite_thing', locale);
 
-  const [habitats, itemDrops, favoriteThingItems, editHistory] = await Promise.all([
+  const [habitats, itemDrops, favoriteThingItems, relatedPokemon, editHistory] = await Promise.all([
     query(
       `
         SELECT
@@ -2049,6 +2053,75 @@ export async function getPokemon(id: number, locale = defaultLocale) {
       `,
       [id]
     ),
+    query(
+      `
+        WITH current_pokemon AS (
+          SELECT p.id, p.environment_id
+          FROM pokemon p
+          WHERE p.id = $1
+        ),
+        current_favourites AS (
+          SELECT pft.favorite_thing_id
+          FROM pokemon_favorite_things pft
+          WHERE pft.pokemon_id = $1
+        ),
+        scored_pokemon AS (
+          SELECT
+            related_pokemon.id,
+            related_pokemon.sort_order,
+            (related_pokemon.environment_id = current_pokemon.environment_id) AS "environmentMatches",
+            COUNT(current_favourites.favorite_thing_id)::integer AS "favoriteThingMatchCount"
+          FROM current_pokemon
+          JOIN pokemon related_pokemon ON related_pokemon.id <> current_pokemon.id
+          LEFT JOIN pokemon_favorite_things related_pokemon_favourite
+            ON related_pokemon_favourite.pokemon_id = related_pokemon.id
+          LEFT JOIN current_favourites
+            ON current_favourites.favorite_thing_id = related_pokemon_favourite.favorite_thing_id
+          GROUP BY related_pokemon.id, related_pokemon.sort_order, related_pokemon.environment_id, current_pokemon.environment_id
+          HAVING related_pokemon.environment_id = current_pokemon.environment_id
+            OR COUNT(current_favourites.favorite_thing_id) > 0
+        )
+        SELECT
+          related_pokemon.id,
+          ${relatedPokemonName} AS name,
+          json_build_object('id', related_environment.id, 'name', ${relatedEnvironmentName}) AS environment,
+          COALESCE((
+            SELECT json_agg(
+              json_build_object(
+                'id', related_skill.id,
+                'name', ${relatedSkillName},
+                'hasItemDrop', related_skill.has_item_drop
+              )
+              ORDER BY ${orderByEntity('related_skill')}
+            )
+            FROM pokemon_skills related_pokemon_skill
+            JOIN skills related_skill ON related_skill.id = related_pokemon_skill.skill_id
+            WHERE related_pokemon_skill.pokemon_id = related_pokemon.id
+          ), '[]'::json) AS skills,
+          COALESCE((
+            SELECT json_agg(
+              json_build_object(
+                'id', related_favorite_thing.id,
+                'name', ${relatedFavoriteThingName},
+                'matches', EXISTS (
+                  SELECT 1
+                  FROM current_favourites
+                  WHERE current_favourites.favorite_thing_id = related_favorite_thing.id
+                )
+              )
+              ORDER BY ${orderByEntity('related_favorite_thing')}
+            )
+            FROM pokemon_favorite_things related_pokemon_favourite
+            JOIN favorite_things related_favorite_thing ON related_favorite_thing.id = related_pokemon_favourite.favorite_thing_id
+            WHERE related_pokemon_favourite.pokemon_id = related_pokemon.id
+          ), '[]'::json) AS favorite_things
+        FROM scored_pokemon
+        JOIN pokemon related_pokemon ON related_pokemon.id = scored_pokemon.id
+        JOIN environments related_environment ON related_environment.id = related_pokemon.environment_id
+        ORDER BY scored_pokemon."environmentMatches" DESC, scored_pokemon."favoriteThingMatchCount" DESC, scored_pokemon.sort_order, related_pokemon.id
+      `,
+      [id]
+    ),
     getEditHistory('pokemon', id)
   ]);
 
@@ -2064,7 +2137,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
       }))
     : [];
 
-  return { ...pokemon, skills, habitats, favoriteThingItems, editHistory };
+  return { ...pokemon, skills, habitats, favoriteThingItems, relatedPokemon, editHistory };
 }
 
 function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {

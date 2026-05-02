@@ -82,9 +82,18 @@ export interface Pokemon extends EditInfo {
   favorite_things: NamedEntity[];
 }
 
+export interface RelatedPokemon {
+  id: number;
+  name: string;
+  environment: NamedEntity;
+  skills: Skill[];
+  favorite_things: Array<NamedEntity & { matches: boolean }>;
+}
+
 export interface PokemonDetail extends Pokemon {
   skills: Array<Skill & { itemDrop: NamedEntity | null }>;
   favoriteThingItems: Array<NamedEntity & { category: NamedEntity; tags: NamedEntity[] }>;
+  relatedPokemon: RelatedPokemon[];
   editHistory: EditHistoryEntry[];
   habitats: Array<{
     id: number;

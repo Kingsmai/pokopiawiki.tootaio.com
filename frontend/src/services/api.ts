@@ -50,6 +50,15 @@ export interface PokemonStats {
   speed: number;
 }
 
+export interface PokemonImage {
+  path: string;
+  url: string;
+  style: string;
+  version: string;
+  variant: string;
+  description: string;
+}
+
 export interface UserSummary {
   id: number;
   displayName: string;
@@ -89,6 +98,7 @@ export interface Pokemon extends EditInfo {
   heightMeters: number;
   weightPounds: number;
   weightKg: number;
+  image: PokemonImage | null;
   translations?: TranslationMap;
   types: NamedEntity[];
   stats: PokemonStats;
@@ -303,6 +313,7 @@ export interface PokemonPayload {
   skillIds: number[];
   favoriteThingIds: number[];
   skillItemDrops: Array<{ skillId: number; itemId: number }>;
+  imagePath: string;
 }
 
 export interface PokemonFetchResult {
@@ -321,6 +332,12 @@ export interface PokemonFetchOption {
   id: number;
   identifier: string;
   name: string;
+}
+
+export interface PokemonImageOptionsResult {
+  id: number;
+  identifier: string;
+  images: PokemonImage[];
 }
 
 export interface ItemPayload {
@@ -591,6 +608,8 @@ export const api = {
   pokemonFetchOptions: (search: string, signal?: AbortSignal) =>
     getJson<PokemonFetchOption[]>(`/api/pokemon/fetch-options${buildQuery({ search: search.trim() })}`, signal),
   fetchPokemonData: (identifier: string) => sendJson<PokemonFetchResult>('/api/pokemon/fetch', 'POST', { identifier }),
+  fetchPokemonImageOptions: (identifier: string) =>
+    sendJson<PokemonImageOptionsResult>('/api/pokemon/image-options', 'POST', { identifier }),
   createPokemon: (payload: PokemonPayload) => sendJson<PokemonDetail>('/api/pokemon', 'POST', payload),
   updatePokemon: (id: string | number, payload: PokemonPayload) =>
     sendJson<PokemonDetail>(`/api/pokemon/${id}`, 'PUT', payload),

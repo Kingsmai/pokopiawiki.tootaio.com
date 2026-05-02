@@ -35,6 +35,7 @@ const legacyMessageKeys = new Map<string, string>([
   ['Pokemon identifier is required', 'server.validation.pokemonIdentifierRequired'],
   ['Pokemon type data is unavailable', 'server.validation.pokemonTypeDataUnavailable'],
   ['Pokemon data was not found', 'server.validation.pokemonDataNotFound'],
+  ['Pokemon image path is invalid', 'server.validation.pokemonImagePathInvalid'],
   ['Please enter a task', 'server.validation.taskRequired'],
   ['Please select a task', 'server.validation.selectTask'],
   ['Task does not exist', 'server.validation.taskDoesNotExist'],

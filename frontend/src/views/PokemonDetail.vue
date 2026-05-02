@@ -184,6 +184,14 @@ function pokemonTypeIconSrc(typeId: number): string | null {
   return typeId >= 1 && typeId <= 19 ? `/types/small/${typeId}.png` : null;
 }
 
+function pokemonImageAlt() {
+  return pokemon.value?.image ? t('pages.pokemon.imageAlt', { name: pokemon.value.name, variant: pokemon.value.image.variant }) : '';
+}
+
+function pokemonImageLabel() {
+  return pokemon.value?.image ? `${pokemon.value.image.version} - ${pokemon.value.image.variant}` : '';
+}
+
 async function loadPokemonDetail() {
   const nextPokemon = await api.pokemonDetail(String(route.params.id));
   pokemon.value = nextPokemon;
@@ -290,6 +298,17 @@ watch(
       <Tabs id="pokemon-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
 
       <div v-if="detailTab === 'details'" class="detail-grid detail-grid--stack">
+        <section v-if="pokemon.image" class="detail-section pokemon-image-detail" :aria-label="t('pages.pokemon.image')">
+          <div class="pokemon-image-detail__screen">
+            <img :src="pokemon.image.url" :alt="pokemonImageAlt()" />
+          </div>
+          <div class="pokemon-image-detail__caption">
+            <strong>{{ pokemonImageLabel() }}</strong>
+            <span>{{ pokemon.image.style }}</span>
+            <p>{{ pokemon.image.description }}</p>
+          </div>
+        </section>
+
         <div class="pokemon-profile-grid">
           <div class="pokemon-profile-main">
             <section class="detail-section pokemon-profile-card" :aria-label="t('pages.pokemon.details')">

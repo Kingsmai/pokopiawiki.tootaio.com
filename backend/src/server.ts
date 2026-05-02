@@ -29,6 +29,7 @@ import {
   deletePokemon,
   deleteRecipe,
   fetchPokemonData,
+  fetchPokemonImageOptions,
   getHabitat,
   getItem,
   getOptions,
@@ -370,6 +371,11 @@ app.post('/api/pokemon', async (request, reply) => {
 app.post('/api/pokemon/fetch', async (request, reply) => {
   const user = await requireVerifiedUser(request, reply);
   return user ? fetchPokemonData(request.body as Record<string, unknown>, user.id) : undefined;
+});
+
+app.post('/api/pokemon/image-options', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? fetchPokemonImageOptions(request.body as Record<string, unknown>) : undefined;
 });
 
 app.put('/api/pokemon/:id', async (request, reply) => {

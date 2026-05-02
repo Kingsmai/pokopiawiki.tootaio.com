@@ -232,19 +232,28 @@ Pokemon 可配置：
 Pokemon 编辑表单使用标签页组织字段：
 
 - 编辑表单提供 Fetch data 功能：
-  - 已验证用户可输入 data identifier 或 Pokemon ID，从仓库 `data/` CSV 查询基础资料并填入当前表单。
+  - 已验证用户可输入 data identifier 或 Pokemon ID，从同一个搜索输入查询基础资料或图片候选。
+  - Fetch data 从仓库 `data/` CSV 查询基础资料并填入当前表单。
   - Fetch 输入框提供 data 列表搜索，搜索范围包含 Pokemon ID、identifier、当前语言名称和默认语言名称；结果只展示 `#ID`、名称和 identifier。
+  - Fetch 搜索结果默认关闭，只在用户主动点击输入框或输入内容时展开；Escape、失焦 / 点击外部、选择结果后关闭。
   - Fetch 搜索不使用防抖或节流；前端在每次新搜索时取消上一条搜索请求，并且只渲染最新请求结果。
   - Fetch 只填入 CSV 可提供的字段：ID、名称、Genus、Height、Weight、Types、六维和名称/Genus 翻译；不填入 Details、喜欢的环境、特长、特长掉落物品或喜欢的东西。
   - Fetch 不直接创建或更新 Pokemon；用户仍需通过 Save 保存，保存时沿用现有编辑审计。
   - Fetch 根据 `languages.code` 自动匹配 CSV 语言列：`en`、`ja`、`ko`、`fr`、`de`、`es`、`it` 使用同名列；`zh-CN` / `zh-SG` 等简体语言使用 `zh_hans`；`zh-TW` / `zh-HK` / `zh-MO` 使用 `zh_hant`。
   - Fetch 会自动确保 canonical Pokemon Types 存在于 `pokemon_types`，Type ID 与 `data/localized_type_name.csv` 和 `frontend/public/types` 图标文件保持一致；用户不需要为 Fetch 手工创建 Type 配置。
   - Type 展示使用 `frontend/public/types/small/{typeId}.png` 图标并保留文字名称。
+- 编辑表单提供 Pokemon 图片选择功能：
+  - 已验证用户通过 Fetch data 的同一个 data identifier / Pokemon ID 输入框，从 `https://pokesprite.tootaio.com/sprites/` 静态图片树查询对应 Pokemon 的可用图片候选。
+  - 图片候选只使用 `/sprites/pokemon/...` 相对路径，后端按固定资源族生成候选并用 `HEAD` 校验存在性；不保存任意外部 URL。
+  - 图片选择不直接创建或更新 Pokemon；用户仍需通过 Save 保存，保存时沿用现有编辑审计。
+  - 图片选择界面使用 Pokédex 风格：上方显示当前选择的大图，大图下方显示版本、状态和描述，再下方以缩略图网格展示同一 Pokemon 的不同风格 / 版本 / 状态。
+  - Pokemon 保存显示图片的相对路径、风格、版本、状态和描述；API 对外返回可直接展示的图片 URL，但不暴露内部校验状态。
 - 基础标签页：
   - 第一行：ID、名称
   - 第二行：喜欢的环境、特长
   - 第三行：喜欢的东西
   - 特长掉落物品随已选择且支持掉落物的特长显示
+  - Pokemon 图片选择区
 - Advance 标签页：
   - 第一行：Genus
   - 第二行：Details
@@ -263,10 +272,12 @@ Pokemon 列表功能：
   - 满足任意条件
   - 满足全部条件
 - 按自定义排序展示
+- Pokemon 卡片在已配置图片时展示所选图片缩略图；未配置图片时保留默认 Poké Ball 标记。
 
 Pokemon 详情页展示：
 
 - 基本信息
+- 已配置图片时，详情主内容顶部展示 Pokédex 风格图片区，包含大图和图片版本说明；未配置图片时不显示图片区。
 - 主内容顶部按以下布局展示：
   - 左上：Genus & Details；无区块标题；如有 Genus，先展示 Genus，再以分割线连接 Details 内容
   - 左下：Height / Weight 与 Types 按 2:1 比例并排；Height / Weight 无区块标题，在 Dimension 区内左右并排展示并以中间分割线隔开，每组按英制、分割线、公制、标签上下排列；Types 不显示 Type 1 / Type 2 文案，上下布局并居中展示
@@ -530,6 +541,7 @@ API 暴露边界：
 - Pokemon、栖息地、物品、材料单的创建、更新、删除。
 - `GET /api/pokemon/fetch-options`：按搜索词返回 Pokemon CSV data 搜索结果；需要已验证用户；只返回 `id`、`identifier`、`name`。
 - `POST /api/pokemon/fetch`：按 data identifier 或 Pokemon ID 查询 CSV 资料并填充 Pokemon 编辑表单；需要已验证用户；不直接保存 Pokemon。
+- `POST /api/pokemon/image-options`：按 data identifier 或 Pokemon ID 查询 pokesprite 可用图片候选；需要已验证用户；只返回 `id`、`identifier` 和图片候选列表。
 - Life Post 的创建，以及作者本人对 Life Post 的更新、删除。
   - `POST /api/life-posts`
   - `PUT /api/life-posts/:id`

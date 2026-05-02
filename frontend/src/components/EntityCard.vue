@@ -9,13 +9,15 @@ defineProps<{
   to?: string;
   icon?: AppIcon;
   marker?: string;
+  image?: { src: string; alt: string };
 }>();
 </script>
 
 <template>
   <RouterLink v-if="to" class="entity-card entity-card--link" :to="to">
-    <span class="entity-card__mark">
-      <Icon v-if="icon" :icon="icon" class="entity-card__icon" aria-hidden="true" />
+    <span class="entity-card__mark" :class="{ 'entity-card__mark--image': image }">
+      <img v-if="image" class="entity-card__image" :src="image.src" :alt="image.alt" loading="lazy" />
+      <Icon v-else-if="icon" :icon="icon" class="entity-card__icon" aria-hidden="true" />
       <PokeBallMark v-else-if="!marker" size="30px" />
       <span v-else>{{ marker }}</span>
     </span>
@@ -27,8 +29,9 @@ defineProps<{
   </RouterLink>
 
   <article v-else class="entity-card">
-    <span class="entity-card__mark">
-      <Icon v-if="icon" :icon="icon" class="entity-card__icon" aria-hidden="true" />
+    <span class="entity-card__mark" :class="{ 'entity-card__mark--image': image }">
+      <img v-if="image" class="entity-card__image" :src="image.src" :alt="image.alt" loading="lazy" />
+      <Icon v-else-if="icon" :icon="icon" class="entity-card__icon" aria-hidden="true" />
       <PokeBallMark v-else-if="!marker" size="30px" />
       <span v-else>{{ marker }}</span>
     </span>

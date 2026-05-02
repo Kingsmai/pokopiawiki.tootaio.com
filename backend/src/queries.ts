@@ -70,6 +70,23 @@ type PokemonStats = {
   speed: number;
 };
 
+type PokemonImage = {
+  path: string;
+  url: string;
+  style: string;
+  version: string;
+  variant: string;
+  description: string;
+};
+
+type PokemonImageCandidate = Omit<PokemonImage, 'url'>;
+
+type PokemonImageOptionsResult = {
+  id: number;
+  identifier: string;
+  images: PokemonImage[];
+};
+
 type PokemonPayload = {
   id: number;
   name: string;
@@ -84,6 +101,7 @@ type PokemonPayload = {
   skillIds: number[];
   favoriteThingIds: number[];
   skillItemDrops: SkillItemDrop[];
+  image: PokemonImage | null;
 };
 
 type PokemonFetchResult = {
@@ -255,6 +273,7 @@ type PokemonChangeSource = {
   details: string;
   heightInches: number;
   weightPounds: number;
+  image: PokemonImage | null;
   types: Array<{ name: string }>;
   stats: PokemonStats;
   environment: { name: string };
@@ -289,6 +308,8 @@ const defaultLifePostLimit = 20;
 const maxLifePostLimit = 50;
 const lifeReactionTypes = ['like', 'helpful', 'fun', 'thanks'] as const;
 const pokemonTypeIconIds = new Set(Array.from({ length: 19 }, (_value, index) => index + 1));
+const pokemonSpriteBaseUrl = 'https://pokesprite.tootaio.com';
+const pokemonSpriteRequestTimeoutMs = 2500;
 const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
   { key: 'hp', label: 'HP' },
   { key: 'attack', label: 'Attack' },
@@ -1013,6 +1034,231 @@ function defaultCsvText(row: CsvRow, languages: LanguagePayload[], fallback: str
   return localizedCsvText(row, defaultCode) || localizedCsvText(row, defaultLocale) || fallback;
 }
 
+function pokemonSpriteUrl(path: string): string {
+  return `${pokemonSpriteBaseUrl}${path}`;
+}
+
+function pokemonImageWithUrl(candidate: PokemonImageCandidate): PokemonImage {
+  return { ...candidate, url: pokemonSpriteUrl(candidate.path) };
+}
+
+function pokemonImageCandidates(id: number): PokemonImageCandidate[] {
+  return [
+    {
+      path: `/sprites/pokemon/other/official-artwork/${id}.png`,
+      style: 'Official artwork',
+      version: 'Official artwork',
+      variant: 'Default',
+      description: 'Large official artwork'
+    },
+    {
+      path: `/sprites/pokemon/other/official-artwork/shiny/${id}.png`,
+      style: 'Official artwork',
+      version: 'Official artwork',
+      variant: 'Shiny',
+      description: 'Large shiny official artwork'
+    },
+    {
+      path: `/sprites/pokemon/other/home/${id}.png`,
+      style: 'Pokemon HOME',
+      version: 'HOME',
+      variant: 'Default',
+      description: 'Modern HOME render'
+    },
+    {
+      path: `/sprites/pokemon/other/home/shiny/${id}.png`,
+      style: 'Pokemon HOME',
+      version: 'HOME',
+      variant: 'Shiny',
+      description: 'Modern shiny HOME render'
+    },
+    {
+      path: `/sprites/pokemon/other/home/female/${id}.png`,
+      style: 'Pokemon HOME',
+      version: 'HOME',
+      variant: 'Female',
+      description: 'Modern female HOME render'
+    },
+    {
+      path: `/sprites/pokemon/other/home/shiny/female/${id}.png`,
+      style: 'Pokemon HOME',
+      version: 'HOME',
+      variant: 'Shiny female',
+      description: 'Modern shiny female HOME render'
+    },
+    {
+      path: `/sprites/pokemon/other/dream-world/${id}.svg`,
+      style: 'Dream World',
+      version: 'Dream World',
+      variant: 'Default',
+      description: 'Dream World SVG artwork'
+    },
+    {
+      path: `/sprites/pokemon/other/dream-world/female/${id}.svg`,
+      style: 'Dream World',
+      version: 'Dream World',
+      variant: 'Female',
+      description: 'Dream World female SVG artwork'
+    },
+    {
+      path: `/sprites/pokemon/other/showdown/${id}.gif`,
+      style: 'Pokemon Showdown',
+      version: 'Showdown',
+      variant: 'Front animated',
+      description: 'Animated front battle sprite'
+    },
+    {
+      path: `/sprites/pokemon/other/showdown/shiny/${id}.gif`,
+      style: 'Pokemon Showdown',
+      version: 'Showdown',
+      variant: 'Shiny front animated',
+      description: 'Animated shiny front battle sprite'
+    },
+    {
+      path: `/sprites/pokemon/other/showdown/female/${id}.gif`,
+      style: 'Pokemon Showdown',
+      version: 'Showdown',
+      variant: 'Female front animated',
+      description: 'Animated female front battle sprite'
+    },
+    {
+      path: `/sprites/pokemon/other/showdown/back/${id}.gif`,
+      style: 'Pokemon Showdown',
+      version: 'Showdown',
+      variant: 'Back animated',
+      description: 'Animated back battle sprite'
+    },
+    {
+      path: `/sprites/pokemon/${id}.png`,
+      style: 'Default sprite',
+      version: 'PokeAPI',
+      variant: 'Front',
+      description: 'Compact front sprite'
+    },
+    {
+      path: `/sprites/pokemon/shiny/${id}.png`,
+      style: 'Default sprite',
+      version: 'PokeAPI',
+      variant: 'Shiny front',
+      description: 'Compact shiny front sprite'
+    },
+    {
+      path: `/sprites/pokemon/female/${id}.png`,
+      style: 'Default sprite',
+      version: 'PokeAPI',
+      variant: 'Female front',
+      description: 'Compact female front sprite'
+    },
+    {
+      path: `/sprites/pokemon/back/${id}.png`,
+      style: 'Default sprite',
+      version: 'PokeAPI',
+      variant: 'Back',
+      description: 'Compact back sprite'
+    },
+    {
+      path: `/sprites/pokemon/back/shiny/${id}.png`,
+      style: 'Default sprite',
+      version: 'PokeAPI',
+      variant: 'Shiny back',
+      description: 'Compact shiny back sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`,
+      style: 'Game version',
+      version: 'Black / White',
+      variant: 'Animated front',
+      description: 'Generation V animated sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-v/black-white/animated/shiny/${id}.gif`,
+      style: 'Game version',
+      version: 'Black / White',
+      variant: 'Animated shiny',
+      description: 'Generation V animated shiny sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-v/black-white/${id}.png`,
+      style: 'Game version',
+      version: 'Black / White',
+      variant: 'Front',
+      description: 'Generation V front sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-vi/x-y/${id}.png`,
+      style: 'Game version',
+      version: 'X / Y',
+      variant: 'Front',
+      description: 'Generation VI front sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-vii/ultra-sun-ultra-moon/${id}.png`,
+      style: 'Game version',
+      version: 'Ultra Sun / Ultra Moon',
+      variant: 'Front',
+      description: 'Generation VII front sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-ix/scarlet-violet/${id}.png`,
+      style: 'Game version',
+      version: 'Scarlet / Violet',
+      variant: 'Front',
+      description: 'Generation IX front sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-iii/emerald/${id}.png`,
+      style: 'Game version',
+      version: 'Emerald',
+      variant: 'Front',
+      description: 'Generation III front sprite'
+    },
+    {
+      path: `/sprites/pokemon/versions/generation-i/red-blue/${id}.png`,
+      style: 'Game version',
+      version: 'Red / Blue',
+      variant: 'Front',
+      description: 'Generation I front sprite'
+    }
+  ];
+}
+
+function pokemonImageLabel(image: PokemonImage | null | undefined): string {
+  return image ? `${image.style} - ${image.version} - ${image.variant}` : '';
+}
+
+function pokemonImageCandidateForPath(id: number, path: string): PokemonImage | null {
+  const cleanPath = path.trim();
+  const candidate = pokemonImageCandidates(id).find((item) => item.path === cleanPath);
+  return candidate ? pokemonImageWithUrl(candidate) : null;
+}
+
+function cleanPokemonImage(value: unknown, pokemonId: number): PokemonImage | null {
+  const path = typeof value === 'string' ? value.trim() : '';
+  if (path === '') {
+    return null;
+  }
+
+  const image = pokemonImageCandidateForPath(pokemonId, path);
+  if (!image) {
+    throw validationError('Pokemon image path is invalid');
+  }
+  return image;
+}
+
+async function pokemonImageExists(candidate: PokemonImageCandidate): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), pokemonSpriteRequestTimeoutMs);
+
+  try {
+    const response = await fetch(pokemonSpriteUrl(candidate.path), { method: 'HEAD', signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function assignTranslation(translations: TranslationInput, locale: string, fieldName: TranslationField, value: string): void {
   if (!value) {
     return;
@@ -1155,6 +1401,29 @@ export async function fetchPokemonData(payload: Record<string, unknown>, userId:
     ),
     typeIds,
     stats: fetchedPokemonStats(pokemonRow)
+  };
+}
+
+export async function fetchPokemonImageOptions(payload: Record<string, unknown>): Promise<PokemonImageOptionsResult> {
+  const lookupKey = pokemonDataLookupKey(payload.identifier);
+  const data = await loadPokemonCsvData();
+  const pokemonRow = data.pokemonByLookup.get(lookupKey);
+
+  if (!pokemonRow) {
+    throw validationError('Pokemon data was not found');
+  }
+
+  const id = csvInteger(pokemonRow, 'id');
+  const images = (
+    await Promise.all(
+      pokemonImageCandidates(id).map(async (candidate) => (await pokemonImageExists(candidate) ? pokemonImageWithUrl(candidate) : null))
+    )
+  ).filter((image): image is PokemonImage => image !== null);
+
+  return {
+    id,
+    identifier: csvText(pokemonRow, 'identifier'),
+    images
   };
 }
 
@@ -1361,6 +1630,7 @@ async function pokemonEditChanges(
   pushChange(changes, 'Details', before.details, after.details);
   pushChange(changes, 'Height', pokemonHeightValue(before.heightInches), pokemonHeightValue(after.heightInches));
   pushChange(changes, 'Weight', pokemonWeightValue(before.weightPounds), pokemonWeightValue(after.weightPounds));
+  pushChange(changes, 'Image', pokemonImageLabel(before.image), pokemonImageLabel(after.image));
   pushChange(changes, 'Types', namedListValue(before.types), namesFromIds(after.typeIds, typeNames));
   pushChange(changes, 'Stats', pokemonStatsValue(before.stats), pokemonStatsValue(after.stats));
   pushChange(changes, 'Ideal Habitat', before.environment.name, environmentNames.get(after.environmentId));
@@ -1479,6 +1749,14 @@ function pokemonProjection(locale: string): string {
       round((p.height_inches * 0.0254)::numeric, 2)::double precision AS "heightMeters",
       p.weight_pounds AS "weightPounds",
       round((p.weight_pounds * 0.45359237)::numeric, 2)::double precision AS "weightKg",
+      CASE WHEN p.image_path <> '' THEN json_build_object(
+        'path', p.image_path,
+        'url', '${pokemonSpriteBaseUrl}' || p.image_path,
+        'style', p.image_style,
+        'version', p.image_version,
+        'variant', p.image_variant,
+        'description', p.image_description
+      ) ELSE NULL END AS image,
       json_build_object(
         'hp', p.hp,
         'attack', p.attack,
@@ -2847,8 +3125,10 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
     }
   }
 
+  const id = requirePositiveInteger(payload.id, 'Pokemon ID is required');
+
   return {
-    id: requirePositiveInteger(payload.id, 'Pokemon ID is required'),
+    id,
     name: cleanName(payload.name, 'Pokemon name is required'),
     genus: cleanOptionalText(payload.genus),
     details: cleanOptionalText(payload.details),
@@ -2860,7 +3140,8 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
     environmentId: requirePositiveInteger(payload.environmentId, 'Ideal Habitat is required'),
     skillIds,
     favoriteThingIds,
-    skillItemDrops: [...skillItemDrops.values()]
+    skillItemDrops: [...skillItemDrops.values()],
+    image: cleanPokemonImage(payload.imagePath, id)
   };
 }
 
@@ -2930,11 +3211,16 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
           special_attack,
           special_defense,
           speed,
+          image_path,
+          image_style,
+          image_version,
+          image_variant,
+          image_description,
           sort_order,
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $20)
       `,
       [
         cleanPayload.id,
@@ -2950,6 +3236,11 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
         cleanPayload.stats.specialAttack,
         cleanPayload.stats.specialDefense,
         cleanPayload.stats.speed,
+        cleanPayload.image?.path ?? '',
+        cleanPayload.image?.style ?? '',
+        cleanPayload.image?.version ?? '',
+        cleanPayload.image?.variant ?? '',
+        cleanPayload.image?.description ?? '',
         sortOrder,
         userId
       ]
@@ -2983,9 +3274,14 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
           special_attack = $10,
           special_defense = $11,
           speed = $12,
-          updated_by_user_id = $13,
+          image_path = $13,
+          image_style = $14,
+          image_version = $15,
+          image_variant = $16,
+          image_description = $17,
+          updated_by_user_id = $18,
           updated_at = now()
-        WHERE id = $14
+        WHERE id = $19
       `,
       [
         cleanPayload.name,
@@ -3000,6 +3296,11 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
         cleanPayload.stats.specialAttack,
         cleanPayload.stats.specialDefense,
         cleanPayload.stats.speed,
+        cleanPayload.image?.path ?? '',
+        cleanPayload.image?.style ?? '',
+        cleanPayload.image?.version ?? '',
+        cleanPayload.image?.variant ?? '',
+        cleanPayload.image?.description ?? '',
         userId,
         id
       ]

@@ -263,6 +263,11 @@ CREATE TABLE IF NOT EXISTS pokemon (
   special_attack integer NOT NULL DEFAULT 0 CHECK (special_attack >= 0),
   special_defense integer NOT NULL DEFAULT 0 CHECK (special_defense >= 0),
   speed integer NOT NULL DEFAULT 0 CHECK (speed >= 0),
+  image_path text NOT NULL DEFAULT '',
+  image_style text NOT NULL DEFAULT '',
+  image_version text NOT NULL DEFAULT '',
+  image_variant text NOT NULL DEFAULT '',
+  image_description text NOT NULL DEFAULT '',
   sort_order integer NOT NULL DEFAULT 0 CHECK (sort_order >= 0)
 );
 
@@ -462,6 +467,11 @@ ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS defense integer NOT NULL DEFAULT 0 
 ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS special_attack integer NOT NULL DEFAULT 0 CHECK (special_attack >= 0);
 ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS special_defense integer NOT NULL DEFAULT 0 CHECK (special_defense >= 0);
 ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS speed integer NOT NULL DEFAULT 0 CHECK (speed >= 0);
+ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS image_path text NOT NULL DEFAULT '';
+ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS image_style text NOT NULL DEFAULT '';
+ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS image_version text NOT NULL DEFAULT '';
+ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS image_variant text NOT NULL DEFAULT '';
+ALTER TABLE pokemon ADD COLUMN IF NOT EXISTS image_description text NOT NULL DEFAULT '';
 
 ALTER TABLE life_tags ADD COLUMN IF NOT EXISTS created_by_user_id integer REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE life_tags ADD COLUMN IF NOT EXISTS updated_by_user_id integer REFERENCES users(id) ON DELETE SET NULL;

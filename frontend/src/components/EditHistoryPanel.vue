@@ -15,6 +15,8 @@ const changeLabelKeys: Record<string, string> = {
   Genus: 'pages.pokemon.genus',
   Details: 'pages.pokemon.details',
   介绍: 'pages.pokemon.details',
+  Image: 'pages.pokemon.image',
+  图片: 'pages.pokemon.image',
   Height: 'pages.pokemon.height',
   身高: 'pages.pokemon.height',
   Weight: 'pages.pokemon.weight',

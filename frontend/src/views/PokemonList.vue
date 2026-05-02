@@ -48,6 +48,10 @@ function pokemonTypeIconSrc(typeId: number): string | null {
   return typeId >= 1 && typeId <= 19 ? `/types/small/${typeId}.png` : null;
 }
 
+function pokemonCardImage(item: Pokemon) {
+  return item.image ? { src: item.image.url, alt: t('pages.pokemon.imageAlt', { name: item.name, variant: item.image.variant }) } : undefined;
+}
+
 onMounted(async () => {
   options.value = await api.options();
   await loadPokemon();
@@ -147,6 +151,7 @@ watch(query, loadPokemon);
         :title="`#${item.id} ${item.name}`"
         :subtitle="t('pages.pokemon.environmentPrefix', { name: item.environment.name })"
         :to="`/pokemon/${item.id}`"
+        :image="pokemonCardImage(item)"
       >
         <EditMeta :entity="item" />
         <div v-if="item.types.length" class="chips">

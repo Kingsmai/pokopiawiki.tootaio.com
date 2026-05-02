@@ -19,6 +19,7 @@ import {
   type Options,
   type PokemonFetchOption,
   type PokemonFetchResult,
+  type PokemonImage,
   type PokemonPayload,
   type PokemonStats,
   type TranslationMap
@@ -38,11 +39,14 @@ const languages = ref<Language[]>([]);
 const loading = ref(true);
 const busy = ref(false);
 const fetchBusy = ref(false);
+const imageBusy = ref(false);
 const fetchOptionsLoading = ref(false);
 const fetchOptionsOpen = ref(false);
 const message = ref('');
 const fetchIdentifier = ref('');
 const fetchOptions = ref<PokemonFetchOption[]>([]);
+const imageOptions = ref<PokemonImage[]>([]);
+const currentPokemonImage = ref<PokemonImage | null>(null);
 const creatingSelect = ref('');
 const activeEditTab = ref('basic');
 const heightUnit = ref<'imperial' | 'metric'>('imperial');
@@ -73,7 +77,8 @@ const pokemonForm = ref({
   environmentId: '',
   skillIds: [] as string[],
   favoriteThingIds: [] as string[],
-  skillItemDrops: [] as SkillItemDropForm[]
+  skillItemDrops: [] as SkillItemDropForm[],
+  imagePath: ''
 });
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
@@ -97,6 +102,22 @@ const heightInchesValue = computed(() => totalHeightInchesValue.value - heightFe
 const heightMetersValue = computed(() => roundMeasurement(pokemonForm.value.heightInches * 0.0254, 2));
 const weightPoundsValue = computed(() => roundMeasurement(pokemonForm.value.weightPounds, 1));
 const weightKgValue = computed(() => roundMeasurement(pokemonForm.value.weightPounds * 0.45359237, 2));
+const selectedPokemonImage = computed(() => {
+  const imagePath = pokemonForm.value.imagePath;
+  if (!imagePath) {
+    return null;
+  }
+
+  return imageOptions.value.find((image) => image.path === imagePath) ?? (currentPokemonImage.value?.path === imagePath ? currentPokemonImage.value : null);
+});
+const displayedImageOptions = computed(() => {
+  const selectedImage = selectedPokemonImage.value;
+  if (!selectedImage || imageOptions.value.some((image) => image.path === selectedImage.path)) {
+    return imageOptions.value;
+  }
+
+  return [selectedImage, ...imageOptions.value];
+});
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -261,8 +282,11 @@ async function loadEditor() {
         skillItemDrops: pokemon.skills.map((skill) => ({
           skillId: String(skill.id),
           itemId: skill.itemDrop ? String(skill.itemDrop.id) : ''
-        }))
+        })),
+        imagePath: pokemon.image?.path ?? ''
       };
+      currentPokemonImage.value = pokemon.image;
+      imageOptions.value = pokemon.image ? [pokemon.image] : [];
       syncSkillItemDrops();
     }
   } catch (error) {
@@ -327,6 +351,14 @@ function closeFetchOptions() {
   cancelFetchOptionsRequest();
 }
 
+function handleFetchIdentifierInput() {
+  fetchOptionsOpen.value = true;
+}
+
+function closeFetchOptionsAfterBlur() {
+  window.setTimeout(closeFetchOptions, 120);
+}
+
 async function selectFetchOption(option: PokemonFetchOption) {
   fetchIdentifier.value = option.identifier;
   closeFetchOptions();
@@ -359,6 +391,65 @@ async function fetchPokemonByIdentifier(identifierValue?: string) {
 
 function fetchPokemonFromInput() {
   void fetchPokemonByIdentifier();
+}
+
+function pokemonImageLabel(image: PokemonImage) {
+  return `${image.version} - ${image.variant}`;
+}
+
+function pokemonImageAlt(image: PokemonImage) {
+  const name = pokemonForm.value.name.trim() || (pokemonForm.value.id.trim() ? `#${pokemonForm.value.id.trim()}` : t('pages.pokemon.title'));
+  return t('pages.pokemon.imageAlt', { name, variant: image.variant });
+}
+
+function selectPokemonImage(image: PokemonImage) {
+  pokemonForm.value.imagePath = image.path;
+  currentPokemonImage.value = image;
+}
+
+function clearPokemonImage() {
+  pokemonForm.value.imagePath = '';
+  currentPokemonImage.value = null;
+}
+
+async function fetchPokemonImages() {
+  const identifier = fetchIdentifier.value.trim() || pokemonForm.value.id.trim();
+  if (!identifier) {
+    message.value = t('pages.pokemon.fetchIdentifierRequired');
+    return;
+  }
+
+  imageBusy.value = true;
+  message.value = '';
+
+  try {
+    const result = await api.fetchPokemonImageOptions(identifier);
+    const currentId = pokemonIdForSave();
+    if (Number.isInteger(currentId) && currentId > 0 && result.id !== currentId) {
+      message.value = t('pages.pokemon.fetchIdMismatch', { id: result.id });
+      return;
+    }
+
+    fetchIdentifier.value = result.identifier;
+    imageOptions.value = result.images;
+
+    if (!result.images.length) {
+      message.value = t('pages.pokemon.imageNoMatches');
+      return;
+    }
+
+    if (!result.images.some((image) => image.path === pokemonForm.value.imagePath)) {
+      selectPokemonImage(result.images[0]);
+    }
+  } catch (error) {
+    message.value = errorText(error, t('pages.pokemon.imageFetchFailed'));
+  } finally {
+    imageBusy.value = false;
+  }
+}
+
+function fetchPokemonImagesFromInput() {
+  void fetchPokemonImages();
 }
 
 async function createSingleOption(selectKey: string, type: ConfigType, name: string, assign: (value: string) => void) {
@@ -399,7 +490,7 @@ async function createMultiOption(selectKey: string, type: ConfigType, name: stri
 }
 
 async function savePokemon() {
-  if (fetchBusy.value) {
+  if (fetchBusy.value || imageBusy.value) {
     return;
   }
 
@@ -427,7 +518,8 @@ async function savePokemon() {
       favoriteThingIds: toIds(pokemonForm.value.favoriteThingIds.slice(0, 6)),
       skillItemDrops: selectedSkillDropRows.value
         .map((row) => ({ skillId: Number(row.skillId), itemId: Number(row.itemId) }))
-        .filter((row) => Number.isInteger(row.skillId) && row.skillId > 0 && Number.isInteger(row.itemId) && row.itemId > 0)
+        .filter((row) => Number.isInteger(row.skillId) && row.skillId > 0 && Number.isInteger(row.itemId) && row.itemId > 0),
+      imagePath: pokemonForm.value.imagePath
     };
     const saved = isEditing.value ? await api.updatePokemon(routeId.value, payload) : await api.createPokemon(payload);
     await router.push(`/pokemon/${saved.id}`);
@@ -467,7 +559,9 @@ watch(fetchIdentifier, refreshFetchOptions);
             role="combobox"
             :aria-expanded="fetchOptionsOpen"
             aria-controls="pokemon-fetch-results"
-            @focus="openFetchOptions"
+            @click="openFetchOptions"
+            @input="handleFetchIdentifierInput"
+            @blur="closeFetchOptionsAfterBlur"
             @keydown.escape.stop="closeFetchOptions"
             @keydown.enter.prevent="fetchPokemonFromInput"
           />
@@ -490,10 +584,16 @@ watch(fetchIdentifier, refreshFetchOptions);
             <p v-else class="pokemon-fetch-results__status">{{ t('pages.pokemon.fetchNoMatches') }}</p>
           </div>
         </div>
-        <button type="button" class="ui-button ui-button--blue ui-button--small pokemon-fetch-panel__button" :disabled="busy || fetchBusy" @click="fetchPokemonFromInput">
-          <Icon :icon="iconSearch" class="ui-icon" aria-hidden="true" />
-          {{ fetchBusy ? t('pages.pokemon.fetchingData') : t('pages.pokemon.fetchData') }}
-        </button>
+        <div class="pokemon-fetch-panel__actions">
+          <button type="button" class="ui-button ui-button--blue ui-button--small pokemon-fetch-panel__button" :disabled="busy || fetchBusy" @click="fetchPokemonFromInput">
+            <Icon :icon="iconSearch" class="ui-icon" aria-hidden="true" />
+            {{ fetchBusy ? t('pages.pokemon.fetchingData') : t('pages.pokemon.fetchData') }}
+          </button>
+          <button type="button" class="ui-button ui-button--blue ui-button--small pokemon-fetch-panel__button" :disabled="busy || imageBusy" @click="fetchPokemonImagesFromInput">
+            <Icon :icon="iconSearch" class="ui-icon" aria-hidden="true" />
+            {{ imageBusy ? t('pages.pokemon.fetchingImages') : t('pages.pokemon.fetchImages') }}
+          </button>
+        </div>
       </div>
 
       <section v-if="activeEditTab === 'basic'" class="pokemon-edit-panel" role="tabpanel" :aria-label="t('pages.pokemon.editTabBasic')">
@@ -575,6 +675,47 @@ watch(fetchIdentifier, refreshFetchOptions);
             </div>
           </div>
         </div>
+
+        <div v-if="imageBusy" class="pokemon-image-preview pokemon-image-preview--loading" aria-busy="true" :aria-label="t('pages.pokemon.loadingImages')">
+          <Skeleton variant="box" height="220px" />
+          <Skeleton width="44%" />
+          <Skeleton width="70%" />
+        </div>
+
+        <div v-else-if="selectedPokemonImage" class="pokemon-image-picker">
+          <div class="pokemon-image-preview" :aria-label="t('pages.pokemon.selectedImage')">
+            <div class="pokemon-image-preview__screen">
+              <img :src="selectedPokemonImage.url" :alt="pokemonImageAlt(selectedPokemonImage)" />
+            </div>
+            <div class="pokemon-image-preview__caption">
+              <strong>{{ pokemonImageLabel(selectedPokemonImage) }}</strong>
+              <span>{{ selectedPokemonImage.style }}</span>
+              <p>{{ selectedPokemonImage.description }}</p>
+            </div>
+          </div>
+
+          <div v-if="displayedImageOptions.length" class="pokemon-image-thumbnails" :aria-label="t('pages.pokemon.imageOptions')">
+            <button
+              v-for="image in displayedImageOptions"
+              :key="image.path"
+              type="button"
+              class="pokemon-image-thumbnail"
+              :class="{ active: image.path === pokemonForm.imagePath }"
+              :aria-pressed="image.path === pokemonForm.imagePath"
+              @click="selectPokemonImage(image)"
+            >
+              <img :src="image.url" :alt="pokemonImageAlt(image)" loading="lazy" />
+              <span>{{ image.variant }}</span>
+            </button>
+          </div>
+
+          <button type="button" class="plain-button pokemon-image-clear" @click="clearPokemonImage">
+            <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.pokemon.clearImage') }}
+          </button>
+        </div>
+
+        <p v-else class="meta-line">{{ t('pages.pokemon.imageEmpty') }}</p>
       </section>
 
       <section v-else class="pokemon-edit-panel" role="tabpanel" :aria-label="t('pages.pokemon.editTabAdvance')">
@@ -681,7 +822,7 @@ watch(fetchIdentifier, refreshFetchOptions);
     </section>
 
     <template v-if="!loading && options" #footer>
-      <button type="submit" form="pokemon-edit-form" class="link-button" :disabled="busy || fetchBusy">
+      <button type="submit" form="pokemon-edit-form" class="link-button" :disabled="busy || fetchBusy || imageBusy">
         <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
         {{ busy ? t('common.saving') : t('common.save') }}
       </button>

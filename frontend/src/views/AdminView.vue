@@ -161,6 +161,18 @@ const wordingLocaleOptions = computed(() =>
       ]
 );
 const wordingModules = computed(() => [...new Set(wordingRows.value.map((item) => item.module))].sort((a, b) => a.localeCompare(b)));
+const wordingSurfaceTabs = computed<TabOption[]>(() => [
+  { value: '', label: t('pages.admin.allSurfaces') },
+  { value: 'frontend', label: t('pages.admin.surfaceFrontend') },
+  { value: 'backend', label: t('pages.admin.surfaceBackend') },
+  { value: 'email', label: t('pages.admin.surfaceEmail') }
+]);
+const activeWordingSurfaceTab = computed({
+  get: () => wordingSurface.value,
+  set: (value: string) => {
+    wordingSurface.value = value === 'frontend' || value === 'backend' || value === 'email' ? value : '';
+  }
+});
 const filteredWordingRows = computed(() =>
   wordingRows.value.filter((item) => {
     if (wordingModule.value && item.module !== wordingModule.value) return false;
@@ -228,6 +240,10 @@ function resetLanguageForm() {
 
 function resetWordingForm() {
   wordingForm.value = { key: '', locale: wordingLocale.value || defaultLocale, value: '', defaultValue: '', placeholders: [] };
+}
+
+function selectWordingModule(module: string) {
+  wordingModule.value = module;
 }
 
 function openNewConfig() {
@@ -817,11 +833,9 @@ onMounted(() => {
     </section>
 
     <section v-else-if="canEdit && activeTab === 'wordings'" class="detail-section">
-      <div class="detail-section__header">
+      <div class="detail-section__header system-wording-header">
         <h2>{{ t('pages.admin.wordings') }}</h2>
-      </div>
-      <div class="toolbar system-wording-toolbar">
-        <div class="field">
+        <div class="field system-wording-header__locale">
           <label for="wording-locale">{{ t('pages.admin.wordingLocale') }}</label>
           <select id="wording-locale" v-model="wordingLocale" :disabled="busy" @change="reloadWordings">
             <option v-for="language in wordingLocaleOptions" :key="language.code" :value="language.code">
@@ -829,49 +843,66 @@ onMounted(() => {
             </option>
           </select>
         </div>
-        <div class="field">
-          <label for="wording-module">{{ t('pages.admin.wordingModule') }}</label>
-          <select id="wording-module" v-model="wordingModule" :disabled="busy">
-            <option value="">{{ t('pages.admin.allModules') }}</option>
-            <option v-for="module in wordingModules" :key="module" :value="module">{{ module }}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="wording-surface">{{ t('pages.admin.wordingSurface') }}</label>
-          <select id="wording-surface" v-model="wordingSurface" :disabled="busy">
-            <option value="">{{ t('pages.admin.allSurfaces') }}</option>
-            <option value="frontend">{{ t('pages.admin.surfaceFrontend') }}</option>
-            <option value="backend">{{ t('pages.admin.surfaceBackend') }}</option>
-            <option value="email">{{ t('pages.admin.surfaceEmail') }}</option>
-          </select>
-        </div>
-        <div class="check-row system-wording-toolbar__check">
-          <label>
-            <input v-model="wordingMissingOnly" type="checkbox" :disabled="busy" />
-            {{ t('pages.admin.wordingMissingOnly') }}
-          </label>
+      </div>
+      <div class="system-wording-layout">
+        <nav class="system-wording-sidebar" :aria-label="t('pages.admin.wordingModule')">
+          <span class="system-wording-sidebar__title">{{ t('pages.admin.wordingModule') }}</span>
+          <button
+            type="button"
+            class="system-wording-sidebar__button"
+            :class="{ active: !wordingModule }"
+            :aria-current="!wordingModule ? 'true' : undefined"
+            :disabled="busy"
+            @click="selectWordingModule('')"
+          >
+            {{ t('pages.admin.allModules') }}
+          </button>
+          <button
+            v-for="module in wordingModules"
+            :key="module"
+            type="button"
+            class="system-wording-sidebar__button"
+            :class="{ active: wordingModule === module }"
+            :aria-current="wordingModule === module ? 'true' : undefined"
+            :disabled="busy"
+            @click="selectWordingModule(module)"
+          >
+            {{ module }}
+          </button>
+        </nav>
+
+        <div class="system-wording-content">
+          <div class="system-wording-controls">
+            <Tabs id="admin-wording-surface" v-model="activeWordingSurfaceTab" :tabs="wordingSurfaceTabs" :label="t('pages.admin.wordingSurface')" />
+            <div class="check-row system-wording-toolbar__check">
+              <label>
+                <input v-model="wordingMissingOnly" type="checkbox" :disabled="busy" />
+                {{ t('pages.admin.wordingMissingOnly') }}
+              </label>
+            </div>
+          </div>
+          <ul v-if="filteredWordingRows.length" class="row-list system-wording-list">
+            <li v-for="item in filteredWordingRows" :key="item.key">
+              <span class="system-wording-row">
+                <strong>{{ item.key }}</strong>
+                <span class="system-wording-row__meta">
+                  <span class="config-flag">{{ item.module }}</span>
+                  <span class="config-flag">{{ t(`pages.admin.surface${item.surface.charAt(0).toUpperCase()}${item.surface.slice(1)}`) }}</span>
+                  <span v-if="item.missing" class="config-flag">{{ t('pages.admin.missingTranslation') }}</span>
+                </span>
+                <span class="system-wording-row__value">{{ item.value || item.defaultValue }}</span>
+              </span>
+              <span class="row-actions">
+                <button type="button" :disabled="busy" @click="editWording(item)">
+                  <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+                  {{ t('common.edit') }}
+                </button>
+              </span>
+            </li>
+          </ul>
+          <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
         </div>
       </div>
-      <ul v-if="filteredWordingRows.length" class="row-list system-wording-list">
-        <li v-for="item in filteredWordingRows" :key="item.key">
-          <span class="system-wording-row">
-            <strong>{{ item.key }}</strong>
-            <span class="system-wording-row__meta">
-              <span class="config-flag">{{ item.module }}</span>
-              <span class="config-flag">{{ t(`pages.admin.surface${item.surface.charAt(0).toUpperCase()}${item.surface.slice(1)}`) }}</span>
-              <span v-if="item.missing" class="config-flag">{{ t('pages.admin.missingTranslation') }}</span>
-            </span>
-            <span class="system-wording-row__value">{{ item.value || item.defaultValue }}</span>
-          </span>
-          <span class="row-actions">
-            <button type="button" :disabled="busy" @click="editWording(item)">
-              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
-              {{ t('common.edit') }}
-            </button>
-          </span>
-        </li>
-      </ul>
-      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'pokemon'" class="detail-section">

@@ -2409,15 +2409,98 @@ button:disabled,
   font-weight: 850;
 }
 
-.system-wording-toolbar {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+.system-wording-header {
   align-items: end;
+}
+
+.system-wording-header__locale {
+  width: min(260px, 100%);
+}
+
+.system-wording-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.system-wording-sidebar {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.system-wording-sidebar__title {
+  padding: 2px 4px 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.system-wording-sidebar__button {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 850;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.system-wording-sidebar__button:hover {
+  border-color: rgba(42, 117, 187, 0.24);
+  background: rgba(255, 203, 5, 0.2);
+  color: var(--pokemon-blue-deep);
+}
+
+.system-wording-sidebar__button.active {
+  border-color: var(--line-strong);
+  background: var(--pokemon-blue);
+  color: #ffffff;
+  box-shadow: 0 2px 0 var(--line-strong);
+}
+
+.system-wording-sidebar__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.system-wording-content {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.system-wording-controls {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.system-wording-controls .tabs--component {
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
 .system-wording-toolbar__check {
   min-height: 44px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .system-wording-list li {
@@ -3795,8 +3878,20 @@ button:disabled,
   .pokemon-profile-grid,
   .pokemon-profile-row,
   .pokemon-related-grid,
+  .system-wording-layout,
   .admin-layout {
     grid-template-columns: 1fr;
+  }
+
+  .system-wording-sidebar {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .system-wording-sidebar__button {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .coming-soon-panel {
@@ -3882,6 +3977,32 @@ button:disabled,
   .life-toolbar__actions,
   .life-toolbar .ui-button {
     width: 100%;
+  }
+
+  .system-wording-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .system-wording-header__locale {
+    width: 100%;
+  }
+
+  .system-wording-controls .tabs--component {
+    flex-basis: 100%;
+  }
+
+  .system-wording-toolbar__check {
+    justify-content: flex-start;
+  }
+
+  .system-wording-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .system-wording-list .row-actions {
+    justify-content: flex-start;
   }
 
   .life-feed__list {

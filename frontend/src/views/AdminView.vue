@@ -24,7 +24,7 @@ import {
   iconTranslate,
   type AppIcon
 } from '../icons';
-import { defaultLocale, getCurrentLocale, setCurrentLocale } from '../i18n';
+import { defaultLocale, getCurrentLocale, loadSystemWordings, setCurrentLocale } from '../i18n';
 import {
   api,
   type AuthUser,
@@ -37,15 +37,18 @@ import {
   type Pokemon,
   type Recipe,
   type Skill,
+  type SystemWording,
+  type SystemWordingSurface,
   type TranslationMap
 } from '../services/api';
 
-type AdminTab = 'config' | 'languages' | 'checklist' | 'pokemon' | 'items' | 'recipes' | 'habitats';
+type AdminTab = 'config' | 'languages' | 'wordings' | 'checklist' | 'pokemon' | 'items' | 'recipes' | 'habitats';
 type EditableConfig = (NamedEntity | Skill) & { hasItemDrop?: boolean };
 
 const adminTabIcons: Record<AdminTab, AppIcon> = {
   config: iconAdmin,
   languages: iconTranslate,
+  wordings: iconTranslate,
   checklist: iconChecklist,
   pokemon: iconPokemon,
   items: iconItem,
@@ -58,6 +61,7 @@ const { locale, t } = useI18n();
 const tabs = computed<Array<{ key: AdminTab; label: string }>>(() => [
   { key: 'config', label: t('pages.admin.config') },
   { key: 'languages', label: t('pages.admin.languages') },
+  { key: 'wordings', label: t('pages.admin.wordings') },
   { key: 'checklist', label: t('pages.admin.checklist') },
   { key: 'pokemon', label: 'Pokemon' },
   { key: 'items', label: t('pages.items.title') },
@@ -86,6 +90,7 @@ const pokemonRows = ref<Pokemon[]>([]);
 const itemRows = ref<Item[]>([]);
 const recipeRows = ref<Recipe[]>([]);
 const habitatRows = ref<Habitat[]>([]);
+const wordingRows = ref<SystemWording[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
@@ -93,10 +98,16 @@ const message = ref('');
 const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, hasItemDrop: false });
 const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
 const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
+const wordingForm = ref({ key: '', locale: defaultLocale, value: '', defaultValue: '', placeholders: [] as string[] });
 const editingLanguageCode = ref('');
 const configModalOpen = ref(false);
 const checklistModalOpen = ref(false);
 const languageModalOpen = ref(false);
+const wordingModalOpen = ref(false);
+const wordingLocale = ref(getCurrentLocale());
+const wordingModule = ref('');
+const wordingSurface = ref<SystemWordingSurface | ''>('');
+const wordingMissingOnly = ref(false);
 
 const selectedConfig = computed(() => configTypes.value.find((item) => item.key === activeConfigType.value) ?? configTypes.value[0]);
 const configTabs = computed<TabOption[]>(() => configTypes.value.map((item) => ({ value: item.key, label: item.label })));
@@ -140,6 +151,24 @@ const configModalTitle = computed(() =>
 );
 const checklistModalTitle = computed(() => (checklistForm.value.id ? t('pages.checklist.editTask') : t('pages.checklist.newTask')));
 const languageModalTitle = computed(() => (editingLanguageCode.value ? t('pages.admin.editLanguage') : t('pages.admin.newLanguage')));
+const wordingModalTitle = computed(() => t('pages.admin.editWording'));
+const wordingLocaleOptions = computed(() =>
+  languageRows.value.length
+    ? languageRows.value
+    : [
+        { code: 'en', name: 'English', enabled: true, isDefault: true, sortOrder: 10 },
+        { code: 'zh-CN', name: '简体中文', enabled: true, isDefault: false, sortOrder: 20 }
+      ]
+);
+const wordingModules = computed(() => [...new Set(wordingRows.value.map((item) => item.module))].sort((a, b) => a.localeCompare(b)));
+const filteredWordingRows = computed(() =>
+  wordingRows.value.filter((item) => {
+    if (wordingModule.value && item.module !== wordingModule.value) return false;
+    if (wordingSurface.value && item.surface !== wordingSurface.value) return false;
+    if (wordingMissingOnly.value && !item.missing) return false;
+    return true;
+  })
+);
 const checklistKey = (item: DailyChecklistItem) => item.id;
 const checklistLabel = (item: DailyChecklistItem) => item.title;
 const languageKey = (item: Language) => item.code;
@@ -197,6 +226,10 @@ function resetLanguageForm() {
   editingLanguageCode.value = '';
 }
 
+function resetWordingForm() {
+  wordingForm.value = { key: '', locale: wordingLocale.value || defaultLocale, value: '', defaultValue: '', placeholders: [] };
+}
+
 function openNewConfig() {
   resetConfigForm();
   configModalOpen.value = true;
@@ -237,6 +270,11 @@ function closeLanguageModal() {
   resetLanguageForm();
 }
 
+function closeWordingModal() {
+  wordingModalOpen.value = false;
+  resetWordingForm();
+}
+
 function editLanguage(item: Language) {
   editingLanguageCode.value = item.code;
   languageForm.value = {
@@ -247,6 +285,17 @@ function editLanguage(item: Language) {
     sortOrder: item.sortOrder
   };
   languageModalOpen.value = true;
+}
+
+function editWording(item: SystemWording) {
+  wordingForm.value = {
+    key: item.key,
+    locale: wordingLocale.value || defaultLocale,
+    value: item.value,
+    defaultValue: item.defaultValue,
+    placeholders: item.placeholders
+  };
+  wordingModalOpen.value = true;
 }
 
 function updateConfigTranslation(localeCode: string, value: string) {
@@ -456,6 +505,7 @@ async function saveLanguage() {
       ? await api.updateLanguage(editingLanguageCode.value, payload)
       : await api.createLanguage(payload);
     closeLanguageModal();
+    await loadSystemWordings(getCurrentLocale(), true);
     setCurrentLocale(getCurrentLocale());
   });
 }
@@ -484,6 +534,32 @@ async function loadHabitats() {
   habitatRows.value = await api.habitats();
 }
 
+async function loadWordings() {
+  await loadLanguages();
+  if (!wordingLocaleOptions.value.some((language) => language.code === wordingLocale.value)) {
+    wordingLocale.value = defaultLocale;
+  }
+  wordingRows.value = await api.systemWordings({ locale: wordingLocale.value });
+}
+
+async function reloadWordings() {
+  await run(loadWordings);
+}
+
+async function saveWording() {
+  await run(async () => {
+    wordingRows.value = await api.updateSystemWording(wordingForm.value.key, {
+      locale: wordingForm.value.locale,
+      value: wordingForm.value.value
+    });
+    await loadSystemWordings(wordingForm.value.locale, true);
+    if (wordingForm.value.locale === getCurrentLocale()) {
+      setCurrentLocale(getCurrentLocale());
+    }
+    closeWordingModal();
+  });
+}
+
 async function loadCurrentTab(showSkeleton = false) {
   if (showSkeleton) {
     contentLoading.value = true;
@@ -492,6 +568,7 @@ async function loadCurrentTab(showSkeleton = false) {
   try {
     if (activeTab.value === 'config') await loadConfig();
     if (activeTab.value === 'languages') await loadLanguages();
+    if (activeTab.value === 'wordings') await loadWordings();
     if (activeTab.value === 'checklist') await loadChecklist();
     if (activeTab.value === 'pokemon') await loadPokemon();
     if (activeTab.value === 'items') await loadItems();
@@ -739,6 +816,64 @@ onMounted(() => {
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
+    <section v-else-if="canEdit && activeTab === 'wordings'" class="detail-section">
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.wordings') }}</h2>
+      </div>
+      <div class="toolbar system-wording-toolbar">
+        <div class="field">
+          <label for="wording-locale">{{ t('pages.admin.wordingLocale') }}</label>
+          <select id="wording-locale" v-model="wordingLocale" :disabled="busy" @change="reloadWordings">
+            <option v-for="language in wordingLocaleOptions" :key="language.code" :value="language.code">
+              {{ language.name }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="wording-module">{{ t('pages.admin.wordingModule') }}</label>
+          <select id="wording-module" v-model="wordingModule" :disabled="busy">
+            <option value="">{{ t('pages.admin.allModules') }}</option>
+            <option v-for="module in wordingModules" :key="module" :value="module">{{ module }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="wording-surface">{{ t('pages.admin.wordingSurface') }}</label>
+          <select id="wording-surface" v-model="wordingSurface" :disabled="busy">
+            <option value="">{{ t('pages.admin.allSurfaces') }}</option>
+            <option value="frontend">{{ t('pages.admin.surfaceFrontend') }}</option>
+            <option value="backend">{{ t('pages.admin.surfaceBackend') }}</option>
+            <option value="email">{{ t('pages.admin.surfaceEmail') }}</option>
+          </select>
+        </div>
+        <div class="check-row system-wording-toolbar__check">
+          <label>
+            <input v-model="wordingMissingOnly" type="checkbox" :disabled="busy" />
+            {{ t('pages.admin.wordingMissingOnly') }}
+          </label>
+        </div>
+      </div>
+      <ul v-if="filteredWordingRows.length" class="row-list system-wording-list">
+        <li v-for="item in filteredWordingRows" :key="item.key">
+          <span class="system-wording-row">
+            <strong>{{ item.key }}</strong>
+            <span class="system-wording-row__meta">
+              <span class="config-flag">{{ item.module }}</span>
+              <span class="config-flag">{{ t(`pages.admin.surface${item.surface.charAt(0).toUpperCase()}${item.surface.slice(1)}`) }}</span>
+              <span v-if="item.missing" class="config-flag">{{ t('pages.admin.missingTranslation') }}</span>
+            </span>
+            <span class="system-wording-row__value">{{ item.value || item.defaultValue }}</span>
+          </span>
+          <span class="row-actions">
+            <button type="button" :disabled="busy" @click="editWording(item)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
     <section v-else-if="canEdit && activeTab === 'pokemon'" class="detail-section">
       <h2>{{ t('pages.admin.pokemonList') }}</h2>
       <ReorderableList
@@ -927,6 +1062,40 @@ onMounted(() => {
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>
         <button type="button" class="plain-button" :disabled="busy" @click="closeLanguageModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="wordingModalOpen" :title="wordingModalTitle" :close-label="t('common.close')" size="wide" @close="closeWordingModal">
+      <form id="admin-wording-form" class="modal-edit-form" @submit.prevent="saveWording">
+        <div class="field">
+          <label for="wording-key">{{ t('pages.admin.wordingKey') }}</label>
+          <input id="wording-key" :value="wordingForm.key" disabled />
+        </div>
+        <div class="field">
+          <label for="wording-default-value">{{ t('pages.admin.defaultValue') }}</label>
+          <textarea id="wording-default-value" :value="wordingForm.defaultValue" disabled></textarea>
+        </div>
+        <div v-if="wordingForm.placeholders.length" class="field">
+          <span class="field-label">{{ t('pages.admin.placeholders') }}</span>
+          <span class="chips">
+            <span v-for="placeholder in wordingForm.placeholders" :key="placeholder" class="chip">{{ placeholder }}</span>
+          </span>
+        </div>
+        <div class="field">
+          <label for="wording-value">{{ t('pages.admin.wordingValue') }}</label>
+          <textarea id="wording-value" v-model="wordingForm.value" :required="wordingForm.locale === defaultLocale"></textarea>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-wording-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeWordingModal">
           <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
           {{ t('common.cancel') }}
         </button>

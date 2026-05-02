@@ -6,7 +6,7 @@
 - 所有人都可以浏览 Wiki 内容。
 - 已注册并完成邮箱验证的用户可以创建、编辑、删除 Wiki 内容。
 - 前台以 Pokemon、栖息地、物品、材料单、每日 CheckList、Life、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
-- 管理入口用于维护全局配置、语言、列表排序和每日 CheckList。
+- 管理入口用于维护全局配置、语言、系统文案、列表排序和每日 CheckList。
 
 ## 技术栈
 
@@ -68,6 +68,23 @@
 - 实体仍保留基础 `name`、`title`、`details` 或 `genus` 字段，默认语言内容以基础字段为准。
 - API 返回展示名称时按当前语言解析，回退顺序为：请求语言翻译 -> 默认语言翻译 -> 基础字段。
 - 编辑表单必须避免本地化 UI 覆盖基础名称；翻译字段只展示当前需要编辑的语言。
+- 系统级文案独立于实体翻译，不进入 `entity_translations`。
+- 系统级文案 key 由代码 catalog 维护，覆盖前端界面、后端错误提示和认证邮件模板。
+- 系统级文案值存储在 `system_wording_values`，key 元信息存储在 `system_wording_keys`：
+  - `key`
+  - `module`
+  - `surface`：`frontend` / `backend` / `email`
+  - `description`
+  - `placeholders`
+  - `enabled`
+  - `locale`
+  - `value`
+- 后端启动时同步代码 catalog，只补充缺失 key 和初始 value，不覆盖管理员已维护的 value。
+- 系统级文案回退顺序为：请求语言 value -> 默认语言 value -> 代码内置 fallback。
+- 系统级文案中的占位符必须与默认文案一致，例如 `{count}`、`{name}`；保存时校验，避免运行时插值失败。
+- 前端组件必须通过 Vue I18n key 读取系统文案，不直接写用户可见硬编码文案；后续新增模块必须先在 catalog 中注册 wording key。
+- 后端返回给前端的 user-facing 错误信息必须通过系统文案解析，不返回 token/hash、内部调试字段或未本地化的内部错误文本。
+- 管理入口提供 System wordings 维护能力，可按语言、模块、端和缺失状态查看并编辑系统级文案。
 
 ## 用户与认证
 
@@ -486,6 +503,7 @@ API 暴露边界：
 公开浏览 API：
 
 - `GET /api/languages`
+- `GET /api/system-wordings`
 - `GET /api/options`
 - `GET /api/daily-checklist`
 - `GET /api/pokemon`
@@ -530,6 +548,9 @@ API 暴露边界：
 - 每日 CheckList 的创建、更新、删除、排序。
 - 全局配置项的创建、更新、删除、排序。
 - 语言的创建、更新、删除、排序。
+- 系统级文案的查看和更新。
+  - `GET /api/admin/system-wordings`
+  - `PUT /api/admin/system-wordings/:key`
 - Pokemon、物品、材料单、栖息地的列表排序。
 
 ## 开发与验证

@@ -17,7 +17,7 @@ import {
   iconPokemon,
   iconRecipe
 } from './icons';
-import { getCurrentLocale, onLocaleChange, setCurrentLocale } from './i18n';
+import { getCurrentLocale, loadSystemWordings, onLocaleChange, setCurrentLocale } from './i18n';
 import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser, type Language } from './services/api';
 
 const { t, locale } = useI18n();
@@ -87,12 +87,15 @@ async function loadLanguages() {
     if (!languages.value.some((language) => language.code === getCurrentLocale() && language.enabled)) {
       setCurrentLocale('en');
     }
+
+    await loadSystemWordings(getCurrentLocale());
   } catch {
     // Keep the built-in language list when the API is not ready yet.
   }
 }
 
-function updateLocale(value: string) {
+async function updateLocale(value: string) {
+  await loadSystemWordings(value);
   setCurrentLocale(value);
 }
 

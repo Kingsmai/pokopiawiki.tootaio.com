@@ -62,6 +62,14 @@ import {
   updatePokemon,
   updateRecipe
 } from './queries.ts';
+import {
+  getSystemWordings,
+  listSystemWordingRows,
+  localizedStatusMessage,
+  syncSystemWordingCatalog,
+  systemMessage,
+  updateSystemWordingValue
+} from './systemWordingQueries.ts';
 
 const app = Fastify({
   logger: true
@@ -78,23 +86,23 @@ app.setErrorHandler(async (error, _request, reply) => {
   const locale = requestLocale(_request);
 
   if (pgError.code === '23503') {
-    return reply.code(409).send({ message: serverMessage(locale, 'foreignKey') });
+    return reply.code(409).send({ message: await serverMessage(locale, 'foreignKey') });
   }
 
   if (pgError.code === '23505') {
-    return reply.code(409).send({ message: serverMessage(locale, 'duplicate') });
+    return reply.code(409).send({ message: await serverMessage(locale, 'duplicate') });
   }
 
   if (pgError.code === '23514') {
-    return reply.code(400).send({ message: serverMessage(locale, 'invalidField') });
+    return reply.code(400).send({ message: await serverMessage(locale, 'invalidField') });
   }
 
   if (pgError.statusCode && pgError.statusCode < 500) {
-    return reply.code(pgError.statusCode).send({ message: pgError.message });
+    return reply.code(pgError.statusCode).send({ message: await localizedStatusMessage(locale, pgError.message) });
   }
 
   app.log.error(error);
-  return reply.code(500).send({ message: serverMessage(locale, 'serverError') });
+  return reply.code(500).send({ message: await serverMessage(locale, 'serverError') });
 });
 
 app.get('/health', async () => ({ ok: true }));
@@ -111,27 +119,15 @@ function requestLocale(request: FastifyRequest): string {
   return cleanLocale(queryLocale ?? (Array.isArray(headerLocale) ? headerLocale[0] : headerLocale));
 }
 
-function serverMessage(locale: string, key: 'foreignKey' | 'duplicate' | 'invalidField' | 'serverError' | 'loginRequired' | 'verifyEmailFirst'): string {
-  const messages = {
-    en: {
-      foreignKey: 'Referenced data does not exist or the record is currently in use',
-      duplicate: 'A record with the same name or ID already exists',
-      invalidField: 'Field value is invalid',
-      serverError: 'Server error',
-      loginRequired: 'Please log in first',
-      verifyEmailFirst: 'Please complete email verification first'
-    },
-    'zh-CN': {
-      foreignKey: '引用的数据不存在，或当前记录正在被使用',
-      duplicate: '同名或相同 ID 的记录已存在',
-      invalidField: '字段值不合法',
-      serverError: '服务器错误',
-      loginRequired: '请先登录',
-      verifyEmailFirst: '请先完成邮箱验证'
-    }
-  };
+function serverMessage(
+  locale: string,
+  key: 'foreignKey' | 'duplicate' | 'invalidField' | 'serverError' | 'loginRequired' | 'verifyEmailFirst' | 'notFound'
+): Promise<string> {
+  return systemMessage(locale, `server.errors.${key}`);
+}
 
-  return messages[locale as keyof typeof messages]?.[key] ?? messages.en[key];
+async function notFound(reply: FastifyReply, request: FastifyRequest) {
+  return reply.code(404).send({ message: await serverMessage(requestLocale(request), 'notFound') });
 }
 
 async function requireVerifiedUser(request: FastifyRequest, reply: FastifyReply): Promise<AuthUser | null> {
@@ -140,12 +136,12 @@ async function requireVerifiedUser(request: FastifyRequest, reply: FastifyReply)
   const locale = requestLocale(request);
 
   if (!user) {
-    reply.code(401).send({ message: serverMessage(locale, 'loginRequired') });
+    reply.code(401).send({ message: await serverMessage(locale, 'loginRequired') });
     return null;
   }
 
   if (!user.emailVerified) {
-    reply.code(403).send({ message: serverMessage(locale, 'verifyEmailFirst') });
+    reply.code(403).send({ message: await serverMessage(locale, 'verifyEmailFirst') });
     return null;
   }
 
@@ -178,7 +174,7 @@ app.get('/api/auth/me', async (request, reply) => {
   const user = token ? await getUserBySessionToken(token) : null;
 
   if (!user) {
-    return reply.code(401).send({ message: serverMessage(requestLocale(request), 'loginRequired') });
+    return reply.code(401).send({ message: await serverMessage(requestLocale(request), 'loginRequired') });
   }
 
   return { user };
@@ -194,6 +190,8 @@ app.post('/api/auth/logout', async (request, reply) => {
 });
 
 app.get('/api/languages', async () => listLanguages());
+
+app.get('/api/system-wordings', async (request) => getSystemWordings(requestLocale(request)));
 
 app.get('/api/options', async (request) => getOptions(requestLocale(request)));
 
@@ -218,7 +216,7 @@ app.post('/api/life-posts/:postId/comments', async (request, reply) => {
   }
   const { postId } = request.params as { postId: string };
   const comment = await createLifeComment(Number(postId), request.body as Record<string, unknown>, user.id);
-  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+  return comment ? reply.code(201).send(comment) : notFound(reply, request);
 });
 
 app.post('/api/life-posts/:postId/comments/:commentId/replies', async (request, reply) => {
@@ -233,7 +231,7 @@ app.post('/api/life-posts/:postId/comments/:commentId/replies', async (request, 
     request.body as Record<string, unknown>,
     user.id
   );
-  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+  return comment ? reply.code(201).send(comment) : notFound(reply, request);
 });
 
 app.put('/api/life-posts/:id', async (request, reply) => {
@@ -243,7 +241,7 @@ app.put('/api/life-posts/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const post = await updateLifePost(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
-  return post ? post : reply.code(404).send({ message: 'Not found' });
+  return post ? post : notFound(reply, request);
 });
 
 app.put('/api/life-posts/:id/reaction', async (request, reply) => {
@@ -253,7 +251,7 @@ app.put('/api/life-posts/:id/reaction', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const post = await setLifePostReaction(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
-  return post ? post : reply.code(404).send({ message: 'Not found' });
+  return post ? post : notFound(reply, request);
 });
 
 app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
@@ -263,7 +261,7 @@ app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const post = await deleteLifePostReaction(Number(id), user.id, requestLocale(request));
-  return post ? post : reply.code(404).send({ message: 'Not found' });
+  return post ? post : notFound(reply, request);
 });
 
 app.delete('/api/life-posts/:id', async (request, reply) => {
@@ -273,7 +271,7 @@ app.delete('/api/life-posts/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteLifePost(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.delete('/api/life-comments/:id', async (request, reply) => {
@@ -283,13 +281,13 @@ app.delete('/api/life-comments/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteLifeComment(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.get('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
   const { entityType, entityId } = request.params as { entityType: string; entityId: string };
   const comments = await listEntityDiscussionComments(entityType, Number(entityId));
-  return comments ? comments : reply.code(404).send({ message: 'Not found' });
+  return comments ? comments : notFound(reply, request);
 });
 
 app.post('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
@@ -305,7 +303,7 @@ app.post('/api/discussions/:entityType/:entityId/comments', async (request, repl
     request.body as Record<string, unknown>,
     user.id
   );
-  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+  return comment ? reply.code(201).send(comment) : notFound(reply, request);
 });
 
 app.post('/api/discussions/:entityType/:entityId/comments/:commentId/replies', async (request, reply) => {
@@ -326,7 +324,7 @@ app.post('/api/discussions/:entityType/:entityId/comments/:commentId/replies', a
     request.body as Record<string, unknown>,
     user.id
   );
-  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+  return comment ? reply.code(201).send(comment) : notFound(reply, request);
 });
 
 app.delete('/api/discussions/comments/:id', async (request, reply) => {
@@ -337,7 +335,7 @@ app.delete('/api/discussions/comments/:id', async (request, reply) => {
 
   const { id } = request.params as { id: string };
   const deleted = await deleteEntityDiscussionComment(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.get('/api/pokemon', async (request) =>
@@ -356,7 +354,7 @@ app.get('/api/pokemon/:id', async (request, reply) => {
   const pokemon = await getPokemon(Number(id), requestLocale(request));
 
   if (!pokemon) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return pokemon;
@@ -383,7 +381,7 @@ app.put('/api/pokemon/:id', async (request, reply) => {
   const pokemon = await updatePokemon(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
 
   if (!pokemon) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return pokemon;
@@ -396,7 +394,7 @@ app.delete('/api/pokemon/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deletePokemon(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.get('/api/habitats', async (request) => listHabitats(requestLocale(request)));
@@ -406,7 +404,7 @@ app.get('/api/habitats/:id', async (request, reply) => {
   const habitat = await getHabitat(Number(id), requestLocale(request));
 
   if (!habitat) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return habitat;
@@ -428,7 +426,7 @@ app.put('/api/habitats/:id', async (request, reply) => {
   const habitat = await updateHabitat(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
 
   if (!habitat) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return habitat;
@@ -441,7 +439,7 @@ app.delete('/api/habitats/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteHabitat(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.get('/api/items', async (request) =>
@@ -453,7 +451,7 @@ app.get('/api/items/:id', async (request, reply) => {
   const item = await getItem(Number(id), requestLocale(request));
 
   if (!item) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return item;
@@ -475,7 +473,7 @@ app.put('/api/items/:id', async (request, reply) => {
   const item = await updateItem(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
 
   if (!item) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return item;
@@ -488,7 +486,7 @@ app.delete('/api/items/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteItem(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.get('/api/recipes', async (request) =>
@@ -500,7 +498,7 @@ app.get('/api/recipes/:id', async (request, reply) => {
   const recipe = await getRecipe(Number(id), requestLocale(request));
 
   if (!recipe) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return recipe;
@@ -522,7 +520,7 @@ app.put('/api/recipes/:id', async (request, reply) => {
   const recipe = await updateRecipe(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
 
   if (!recipe) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
 
   return recipe;
@@ -535,7 +533,7 @@ app.delete('/api/recipes/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteRecipe(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.post('/api/admin/daily-checklist', async (request, reply) => {
@@ -564,7 +562,7 @@ app.put('/api/admin/daily-checklist/:id', async (request, reply) => {
     user.id,
     requestLocale(request)
   );
-  return item ? item : reply.code(404).send({ message: 'Not found' });
+  return item ? item : notFound(reply, request);
 });
 
 app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
@@ -574,7 +572,7 @@ app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteDailyChecklistItem(Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.put('/api/admin/pokemon/order', async (request, reply) => {
@@ -628,7 +626,21 @@ app.delete('/api/admin/languages/:code', async (request, reply) => {
   }
   const { code } = request.params as { code: string };
   const deleted = await deleteLanguage(code);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
+app.get('/api/admin/system-wordings', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? listSystemWordingRows(request.query as Record<string, unknown>) : undefined;
+});
+
+app.put('/api/admin/system-wordings/:key', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const { key } = request.params as { key: string };
+  return updateSystemWordingValue(key, request.body as Record<string, unknown>, user.id);
 });
 
 app.get('/api/admin/config/:type', async (request, reply) => {
@@ -638,7 +650,7 @@ app.get('/api/admin/config/:type', async (request, reply) => {
   }
   const { type } = request.params as { type: string };
   if (!isConfigType(type)) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
   return listConfig(type, requestLocale(request));
 });
@@ -650,7 +662,7 @@ app.post('/api/admin/config/:type', async (request, reply) => {
   }
   const { type } = request.params as { type: string };
   if (!isConfigType(type)) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
   return reply
     .code(201)
@@ -664,7 +676,7 @@ app.put('/api/admin/config/:type/order', async (request, reply) => {
   }
   const { type } = request.params as { type: string };
   if (!isConfigType(type)) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
   return reorderConfig(type, request.body as Record<string, unknown>, user.id, requestLocale(request));
 });
@@ -676,10 +688,10 @@ app.put('/api/admin/config/:type/:id', async (request, reply) => {
   }
   const { type, id } = request.params as { type: string; id: string };
   if (!isConfigType(type)) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
   const config = await updateConfig(type, Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
-  return config ? config : reply.code(404).send({ message: 'Not found' });
+  return config ? config : notFound(reply, request);
 });
 
 app.delete('/api/admin/config/:type/:id', async (request, reply) => {
@@ -689,16 +701,17 @@ app.delete('/api/admin/config/:type/:id', async (request, reply) => {
   }
   const { type, id } = request.params as { type: string; id: string };
   if (!isConfigType(type)) {
-    return reply.code(404).send({ message: 'Not found' });
+    return notFound(reply, request);
   }
   const deleted = await deleteConfig(type, Number(id), user.id);
-  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+  return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 const port = Number(process.env.BACKEND_PORT ?? 3001);
 
 try {
   await initializeDatabase();
+  await syncSystemWordingCatalog();
   await app.listen({ host: '0.0.0.0', port });
 } catch (error) {
   app.log.error(error);

@@ -15,6 +15,21 @@ export interface Language {
   sortOrder: number;
 }
 
+export type SystemWordingSurface = 'frontend' | 'backend' | 'email';
+
+export interface SystemWording {
+  key: string;
+  module: string;
+  surface: SystemWordingSurface;
+  description: string;
+  placeholders: string[];
+  value: string;
+  defaultValue: string;
+  missing: boolean;
+  updatedAt: string | null;
+  updatedBy: UserSummary | null;
+}
+
 export interface NamedEntity {
   id: number;
   name: string;
@@ -508,6 +523,10 @@ export const api = {
     sendJson<Language[]>(`/api/admin/languages/${code}`, 'PUT', payload),
   reorderLanguages: (codes: string[]) => sendJson<Language[]>('/api/admin/languages/order', 'PUT', { codes }),
   deleteLanguage: (code: string) => deleteJson(`/api/admin/languages/${code}`),
+  systemWordings: (params: { locale?: string; module?: string; surface?: string; missing?: string } = {}) =>
+    getJson<SystemWording[]>(`/api/admin/system-wordings${buildQuery(params)}`),
+  updateSystemWording: (key: string, payload: { locale: string; value: string }) =>
+    sendJson<SystemWording[]>(`/api/admin/system-wordings/${encodeURIComponent(key)}`, 'PUT', payload),
   register: (payload: RegisterPayload) => sendJson<{ message: string }>('/api/auth/register', 'POST', payload),
   verifyEmail: (token: string) =>
     sendJson<{ message: string; user: AuthUser }>('/api/auth/verify-email', 'POST', { token }),

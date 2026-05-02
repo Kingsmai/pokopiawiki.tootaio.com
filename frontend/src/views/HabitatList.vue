@@ -3,8 +3,6 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import EditMeta from '../components/EditMeta.vue';
-import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -18,6 +16,10 @@ const { t } = useI18n();
 const loading = ref(true);
 const skeletonCardCount = 6;
 const showEditor = computed(() => route.name === 'habitat-new');
+
+function habitatCardImage(item: Habitat) {
+  return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : undefined;
+}
 
 onMounted(async () => {
   habitats.value = await api.habitats();
@@ -37,27 +39,23 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="entity-grid" aria-busy="true" :aria-label="t('pages.habitats.loadingList')">
+    <div v-if="loading" class="entity-grid pokemon-list-grid" aria-busy="true" :aria-label="t('pages.habitats.loadingList')">
       <article v-for="index in skeletonCardCount" :key="index" class="entity-card entity-card--skeleton">
-        <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
-          <Skeleton width="68%" height="24px" />
-          <Skeleton width="66%" />
-          <div class="skeleton-chip-row">
-            <Skeleton v-for="chipIndex in 3" :key="`recipe-${chipIndex}`" width="70px" class="skeleton-chip" />
-          </div>
-          <div class="skeleton-chip-row">
-            <Skeleton v-for="chipIndex in 2" :key="`pokemon-${chipIndex}`" width="82px" class="skeleton-chip" />
-          </div>
+          <Skeleton width="128px" height="24px" />
         </div>
       </article>
     </div>
-    <div v-else class="entity-grid">
-      <EntityCard v-for="item in habitats" :key="item.id" :title="item.name" :to="`/habitats/${item.id}`" :icon="iconHabitat">
-        <EditMeta :entity="item" />
-        <EntityChips :items="item.recipe" />
-        <EntityChips :items="item.pokemon ?? []" />
-      </EntityCard>
+    <div v-else class="entity-grid pokemon-list-grid">
+      <EntityCard
+        v-for="item in habitats"
+        :key="item.id"
+        :title="item.name"
+        :to="`/habitats/${item.id}`"
+        :icon="iconHabitat"
+        :image="habitatCardImage(item)"
+      />
     </div>
 
     <HabitatEdit v-if="showEditor" />

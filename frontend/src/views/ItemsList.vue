@@ -3,8 +3,6 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import EditMeta from '../components/EditMeta.vue';
-import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
 import PageHeader from '../components/PageHeader.vue';
@@ -41,6 +39,10 @@ const itemQuery = computed(() => ({
   tagIds: tagIds.value.join(',')
 }));
 const showEditor = computed(() => route.name === 'item-new');
+
+function itemCardImage(item: Item) {
+  return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : undefined;
+}
 
 async function loadItems() {
   loading.value = true;
@@ -112,36 +114,26 @@ watch(itemQuery, loadItems);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid" aria-busy="true" :aria-label="t('pages.items.loadingList')">
+    <div v-if="loading" class="entity-grid catalog-card-grid" aria-busy="true" :aria-label="t('pages.items.loadingList')">
       <article v-for="index in skeletonCardCount" :key="`item-skeleton-${index}`" class="entity-card entity-card--skeleton">
-        <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
-          <Skeleton width="72%" height="24px" />
-          <Skeleton width="52%" />
-          <Skeleton width="64%" />
-          <div class="skeleton-chip-row">
-            <Skeleton
-              v-for="chipIndex in 3"
-              :key="chipIndex"
-              :width="chipIndex === 1 ? '74px' : '58px'"
-              class="skeleton-chip"
-            />
-          </div>
+          <Skeleton width="128px" height="24px" />
+          <Skeleton width="92px" />
         </div>
       </article>
     </div>
-    <div v-else class="entity-grid">
+    <div v-else class="entity-grid catalog-card-grid">
       <EntityCard
         v-for="item in items"
         :key="item.id"
         :title="item.name"
-        :subtitle="item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name"
+        :subtitle="item.category.name"
         :to="`/items/${item.id}`"
         :icon="iconItem"
-      >
-        <EditMeta :entity="item" />
-        <EntityChips :items="item.tags" />
-      </EntityCard>
+        :image="itemCardImage(item)"
+        :ribbon="item.usage?.name"
+      />
     </div>
 
     <ItemEdit v-if="showEditor" />

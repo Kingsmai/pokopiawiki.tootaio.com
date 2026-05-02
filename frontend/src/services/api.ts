@@ -50,18 +50,36 @@ export interface PokemonStats {
   speed: number;
 }
 
-export interface PokemonImage {
+export interface UserSummary {
+  id: number;
+  displayName: string;
+}
+
+export interface EntityImage {
   path: string;
   url: string;
+}
+
+export interface EntityImageUpload extends EntityImage {
+  id: number;
+  entityType: ImageUploadEntityType;
+  entityId: number | null;
+  entityName: string;
+  originalFilename: string;
+  mimeType: string;
+  byteSize: number;
+  uploadedAt: string;
+  uploadedBy: UserSummary | null;
+}
+
+export type ImageUploadEntityType = 'pokemon' | 'items' | 'habitats';
+
+export interface PokemonImage extends EntityImage {
   style: string;
   version: string;
   variant: string;
   description: string;
-}
-
-export interface UserSummary {
-  id: number;
-  displayName: string;
+  source?: 'sprite' | 'upload';
 }
 
 export interface EditInfo {
@@ -120,6 +138,7 @@ export interface PokemonDetail extends Pokemon {
   favoriteThingItems: Array<NamedEntity & { category: NamedEntity; tags: NamedEntity[] }>;
   relatedPokemon: RelatedPokemon[];
   editHistory: EditHistoryEntry[];
+  imageHistory: EntityImageUpload[];
   habitats: Array<{
     id: number;
     name: string;
@@ -135,12 +154,14 @@ export interface Habitat extends EditInfo {
   name: string;
   baseName?: string;
   translations?: TranslationMap;
+  image: EntityImage | null;
   recipe: Array<NamedEntity & { quantity: number }>;
   pokemon?: NamedEntity[];
 }
 
 export interface HabitatDetail extends Habitat {
   editHistory: EditHistoryEntry[];
+  imageHistory: EntityImageUpload[];
   pokemon: Array<NamedEntity & {
     time_of_day: string;
     weather: string;
@@ -170,6 +191,7 @@ export interface Item extends EditInfo {
   name: string;
   baseName?: string;
   translations?: TranslationMap;
+  image: EntityImage | null;
   category: NamedEntity;
   usage: NamedEntity | null;
   customization: {
@@ -188,6 +210,7 @@ export interface ItemDetail extends Item {
   relatedRecipes: RecipeUsage[];
   relatedHabitats: HabitatUsage[];
   editHistory: EditHistoryEntry[];
+  imageHistory: EntityImageUpload[];
   droppedByPokemon: Array<{
     pokemon: NamedEntity;
     skill: NamedEntity;
@@ -356,6 +379,7 @@ export interface ItemPayload {
   noRecipe: boolean;
   acquisitionMethodIds: number[];
   tagIds: number[];
+  imagePath: string;
 }
 
 export interface RecipePayload {
@@ -367,6 +391,7 @@ export interface RecipePayload {
 export interface HabitatPayload {
   name: string;
   translations?: TranslationMap;
+  imagePath: string;
   recipeItems: Array<{ itemId: number; quantity: number }>;
   pokemonAppearances: Array<{
     pokemonId: number;
@@ -518,6 +543,20 @@ async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body:
   return response.json() as Promise<T>;
 }
 
+async function sendFormData<T>(path: string, body: FormData): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'POST',
+    headers: requestHeaders(),
+    body
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return response.json() as Promise<T>;
+}
+
 async function postEmpty(path: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: 'POST',
@@ -614,6 +653,18 @@ export const api = {
     payload: EntityDiscussionCommentPayload
   ) => sendJson<EntityDiscussionComment>(`/api/discussions/${entityType}/${entityId}/comments/${commentId}/replies`, 'POST', payload),
   deleteEntityDiscussionComment: (id: string | number) => deleteJson(`/api/discussions/comments/${id}`),
+  uploadImage: (
+    entityType: ImageUploadEntityType,
+    payload: { file: File; entityName: string; entityId?: string | number | null }
+  ) => {
+    const body = new FormData();
+    body.set('entityName', payload.entityName);
+    if (payload.entityId) {
+      body.set('entityId', String(payload.entityId));
+    }
+    body.set('file', payload.file);
+    return sendFormData<EntityImageUpload>(`/api/uploads/${entityType}`, body);
+  },
   createDailyChecklistItem: (payload: DailyChecklistPayload) =>
     sendJson<DailyChecklistItem>('/api/admin/daily-checklist', 'POST', payload),
   updateDailyChecklistItem: (id: string | number, payload: DailyChecklistPayload) =>

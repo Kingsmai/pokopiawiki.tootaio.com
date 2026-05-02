@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
+import ImageUploadField from '../components/ImageUploadField.vue';
 import Modal from '../components/Modal.vue';
 import PokemonStatsFields from '../components/PokemonStatsFields.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -14,6 +15,8 @@ import { iconCancel, iconSave, iconSearch } from '../icons';
 import {
   api,
   type ConfigType,
+  type EntityImage,
+  type EntityImageUpload,
   type Language,
   type NamedEntity,
   type Options,
@@ -47,6 +50,7 @@ const fetchIdentifier = ref('');
 const fetchOptions = ref<PokemonFetchOption[]>([]);
 const imageOptions = ref<PokemonImage[]>([]);
 const currentPokemonImage = ref<PokemonImage | null>(null);
+const imageHistory = ref<EntityImageUpload[]>([]);
 const creatingSelect = ref('');
 const activeEditTab = ref('basic');
 const heightUnit = ref<'imperial' | 'metric'>('imperial');
@@ -102,6 +106,7 @@ const heightInchesValue = computed(() => totalHeightInchesValue.value - heightFe
 const heightMetersValue = computed(() => roundMeasurement(pokemonForm.value.heightInches * 0.0254, 2));
 const weightPoundsValue = computed(() => roundMeasurement(pokemonForm.value.weightPounds, 1));
 const weightKgValue = computed(() => roundMeasurement(pokemonForm.value.weightPounds * 0.45359237, 2));
+const imageEntityName = computed(() => pokemonNameForSave().trim());
 const selectedPokemonImage = computed(() => {
   const imagePath = pokemonForm.value.imagePath;
   if (!imagePath) {
@@ -118,6 +123,7 @@ const displayedImageOptions = computed(() => {
 
   return [selectedImage, ...imageOptions.value];
 });
+const selectedUploadImage = computed(() => (selectedPokemonImage.value?.source === 'upload' ? selectedPokemonImage.value : null));
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -287,6 +293,7 @@ async function loadEditor() {
       };
       currentPokemonImage.value = pokemon.image;
       imageOptions.value = pokemon.image ? [pokemon.image] : [];
+      imageHistory.value = pokemon.imageHistory;
       syncSkillItemDrops();
     }
   } catch (error) {
@@ -394,12 +401,15 @@ function fetchPokemonFromInput() {
 }
 
 function pokemonImageLabel(image: PokemonImage) {
+  if (image.source === 'upload') {
+    return t('media.uploadedImage');
+  }
   return `${image.version} - ${image.variant}`;
 }
 
 function pokemonImageAlt(image: PokemonImage) {
   const name = pokemonForm.value.name.trim() || (pokemonForm.value.id.trim() ? `#${pokemonForm.value.id.trim()}` : t('pages.pokemon.title'));
-  return t('pages.pokemon.imageAlt', { name, variant: image.variant });
+  return image.source === 'upload' ? t('media.imageAlt', { name }) : t('pages.pokemon.imageAlt', { name, variant: image.variant });
 }
 
 function selectPokemonImage(image: PokemonImage) {
@@ -410,6 +420,27 @@ function selectPokemonImage(image: PokemonImage) {
 function clearPokemonImage() {
   pokemonForm.value.imagePath = '';
   currentPokemonImage.value = null;
+}
+
+function pokemonImageFromUpload(image: EntityImage): PokemonImage {
+  return {
+    path: image.path,
+    url: image.url,
+    style: t('media.uploadedImage'),
+    version: t('media.uploadedImage'),
+    variant: imageEntityName.value || (pokemonForm.value.id.trim() ? `#${pokemonForm.value.id.trim()}` : t('pages.pokemon.title')),
+    description: '',
+    source: 'upload'
+  };
+}
+
+function handleUploadImageSelected(image: EntityImage) {
+  selectPokemonImage(pokemonImageFromUpload(image));
+}
+
+function handleUploadImageUploaded(image: EntityImageUpload) {
+  imageHistory.value = [image, ...imageHistory.value.filter((item) => item.path !== image.path)];
+  selectPokemonImage(pokemonImageFromUpload(image));
 }
 
 async function fetchPokemonImages() {
@@ -716,6 +747,21 @@ watch(fetchIdentifier, refreshFetchOptions);
         </div>
 
         <p v-else class="meta-line">{{ t('pages.pokemon.imageEmpty') }}</p>
+
+        <ImageUploadField
+          v-model="pokemonForm.imagePath"
+          entity-type="pokemon"
+          :entity-id="isEditing ? routeId : null"
+          :entity-name="imageEntityName"
+          :label="t('media.imageHistory')"
+          :current-image="selectedUploadImage"
+          :history="imageHistory"
+          :disabled="busy || imageBusy"
+          :show-preview="false"
+          @selected="handleUploadImageSelected"
+          @uploaded="handleUploadImageUploaded"
+          @error="message = $event"
+        />
       </section>
 
       <section v-else class="pokemon-edit-panel" role="tabpanel" :aria-label="t('pages.pokemon.editTabAdvance')">

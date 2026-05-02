@@ -3,19 +3,22 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
+import ImageUploadField from '../components/ImageUploadField.vue';
 import Modal from '../components/Modal.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import TranslationFields from '../components/TranslationFields.vue';
 import { iconCancel, iconSave } from '../icons';
-import { api, type ConfigType, type ItemPayload, type Language, type Options, type TranslationMap } from '../services/api';
+import { api, type ConfigType, type EntityImage, type EntityImageUpload, type ItemPayload, type Language, type Options, type TranslationMap } from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
 const { locale, t } = useI18n();
 const options = ref<Options | null>(null);
 const languages = ref<Language[]>([]);
+const currentImage = ref<EntityImage | null>(null);
+const imageHistory = ref<EntityImageUpload[]>([]);
 const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
@@ -30,7 +33,8 @@ const itemForm = ref({
   patternEditable: false,
   noRecipe: false,
   acquisitionMethodIds: [] as string[],
-  tagIds: [] as string[]
+  tagIds: [] as string[],
+  imagePath: ''
 });
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
@@ -42,6 +46,7 @@ const pageTitle = computed(() =>
 );
 const cancelTo = computed(() => (isEditing.value ? `/items/${routeId.value}` : '/items'));
 const hasRecipe = ref(false);
+const imageEntityName = computed(() => itemNameForSave().trim());
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -88,8 +93,11 @@ async function loadEditor() {
         patternEditable: item.customization.patternEditable,
         noRecipe: item.noRecipe,
         acquisitionMethodIds: item.acquisitionMethods.map((method) => String(method.id)),
-        tagIds: item.tags.map((tag) => String(tag.id))
+        tagIds: item.tags.map((tag) => String(tag.id)),
+        imagePath: item.image?.path ?? ''
       };
+      currentImage.value = item.image;
+      imageHistory.value = item.imageHistory;
       hasRecipe.value = item.recipe !== null;
     }
   } catch (error) {
@@ -151,7 +159,8 @@ async function saveItem() {
       patternEditable: itemForm.value.patternEditable,
       noRecipe: itemForm.value.noRecipe,
       acquisitionMethodIds: toIds(itemForm.value.acquisitionMethodIds),
-      tagIds: toIds(itemForm.value.tagIds)
+      tagIds: toIds(itemForm.value.tagIds),
+      imagePath: itemForm.value.imagePath
     };
     const saved = isEditing.value ? await api.updateItem(routeId.value, payload) : await api.createItem(payload);
     await router.push(`/items/${saved.id}`);
@@ -160,6 +169,15 @@ async function saveItem() {
   } finally {
     busy.value = false;
   }
+}
+
+function handleImageSelected(image: EntityImage) {
+  currentImage.value = image;
+}
+
+function handleImageUploaded(image: EntityImageUpload) {
+  currentImage.value = image;
+  imageHistory.value = [image, ...imageHistory.value.filter((item) => item.path !== image.path)];
 }
 
 onMounted(() => {
@@ -180,6 +198,20 @@ onMounted(() => {
         :label="t('common.name')"
         :languages="languages"
         required
+      />
+
+      <ImageUploadField
+        v-model="itemForm.imagePath"
+        entity-type="items"
+        :entity-id="isEditing ? routeId : null"
+        :entity-name="imageEntityName"
+        :label="t('media.image')"
+        :current-image="currentImage"
+        :history="imageHistory"
+        :disabled="busy"
+        @selected="handleImageSelected"
+        @uploaded="handleImageUploaded"
+        @error="message = $event"
       />
 
       <div class="field">

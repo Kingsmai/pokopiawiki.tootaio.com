@@ -1,6 +1,9 @@
 import cors from '@fastify/cors';
+import multipart, { type MultipartFile } from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { mkdir } from 'node:fs/promises';
 import {
   getUserBySessionToken,
   loginUser,
@@ -81,6 +84,12 @@ import {
   systemMessage,
   updateSystemWordingValue
 } from './systemWordingQueries.ts';
+import {
+  imageUploadMaxBytes,
+  isUploadEntityType,
+  saveEntityImageUpload,
+  uploadRoot
+} from './uploads.ts';
 
 const app = Fastify({
   logger: true
@@ -90,6 +99,19 @@ await app.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type', 'X-Locale'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   origin: process.env.FRONTEND_ORIGIN ?? true
+});
+
+await mkdir(uploadRoot, { recursive: true });
+await app.register(multipart, {
+  limits: {
+    fileSize: imageUploadMaxBytes,
+    files: 1
+  }
+});
+await app.register(fastifyStatic, {
+  root: uploadRoot,
+  prefix: '/uploads/',
+  decorateReply: false
 });
 
 app.setErrorHandler(async (error, _request, reply) => {
@@ -135,6 +157,12 @@ function serverMessage(
   key: 'foreignKey' | 'duplicate' | 'invalidField' | 'serverError' | 'loginRequired' | 'verifyEmailFirst' | 'notFound'
 ): Promise<string> {
   return systemMessage(locale, `server.errors.${key}`);
+}
+
+function badRequest(message: string): Error & { statusCode: number } {
+  const error = new Error(message) as Error & { statusCode: number };
+  error.statusCode = 400;
+  return error;
 }
 
 async function notFound(reply: FastifyReply, request: FastifyRequest) {
@@ -406,6 +434,31 @@ app.post('/api/pokemon/fetch', async (request, reply) => {
 app.post('/api/pokemon/image-options', async (request, reply) => {
   const user = await requireVerifiedUser(request, reply);
   return user ? fetchPokemonImageOptions(request.body as Record<string, unknown>) : undefined;
+});
+
+app.post('/api/uploads/:entityType', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+
+  const { entityType } = request.params as { entityType: string };
+  if (!isUploadEntityType(entityType)) {
+    return notFound(reply, request);
+  }
+
+  let file: MultipartFile | undefined;
+  try {
+    file = await request.file();
+  } catch (error) {
+    const multipartError = error as Error & { code?: string };
+    if (multipartError.code === 'FST_REQ_FILE_TOO_LARGE') {
+      throw badRequest('server.validation.imageUploadContentInvalid');
+    }
+    throw error;
+  }
+
+  return reply.code(201).send(await saveEntityImageUpload(entityType, file, user));
 });
 
 app.put('/api/pokemon/:id', async (request, reply) => {

@@ -10,11 +10,13 @@ defineProps<{
   icon?: AppIcon;
   marker?: string;
   image?: { src: string; alt: string };
+  ribbon?: string;
 }>();
 </script>
 
 <template>
   <RouterLink v-if="to" class="entity-card entity-card--link" :to="to">
+    <span v-if="ribbon" class="entity-card__ribbon">{{ ribbon }}</span>
     <span class="entity-card__mark" :class="{ 'entity-card__mark--image': image }">
       <img v-if="image" class="entity-card__image" :src="image.src" :alt="image.alt" loading="lazy" />
       <Icon v-else-if="icon" :icon="icon" class="entity-card__icon" aria-hidden="true" />
@@ -23,12 +25,14 @@ defineProps<{
     </span>
     <div class="entity-card__content">
       <span class="entity-card__title">{{ title }}</span>
+      <slot name="after-title"></slot>
       <span v-if="subtitle" class="entity-card__subtitle">{{ subtitle }}</span>
       <slot></slot>
     </div>
   </RouterLink>
 
   <article v-else class="entity-card">
+    <span v-if="ribbon" class="entity-card__ribbon">{{ ribbon }}</span>
     <span class="entity-card__mark" :class="{ 'entity-card__mark--image': image }">
       <img v-if="image" class="entity-card__image" :src="image.src" :alt="image.alt" loading="lazy" />
       <Icon v-else-if="icon" :icon="icon" class="entity-card__icon" aria-hidden="true" />
@@ -37,6 +41,7 @@ defineProps<{
     </span>
     <div class="entity-card__content">
       <span class="entity-card__title">{{ title }}</span>
+      <slot name="after-title"></slot>
       <span v-if="subtitle" class="entity-card__subtitle">{{ subtitle }}</span>
       <slot></slot>
     </div>

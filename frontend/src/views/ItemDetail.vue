@@ -37,6 +37,10 @@ const customization = computed(() => {
   ].filter(Boolean);
 });
 
+function imageFileName(path: string): string {
+  return path.split('/').at(-1) ?? t('media.image');
+}
+
 async function loadItemDetail() {
   item.value = await api.itemDetail(String(route.params.id));
 }
@@ -136,6 +140,21 @@ watch(
       <Tabs id="item-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
 
       <div v-if="detailTab === 'details'" class="detail-grid">
+        <DetailSection v-if="item.image || item.imageHistory.length" :title="t('media.image')">
+          <div class="entity-detail-image">
+            <div v-if="item.image" class="entity-detail-image__frame">
+              <img :src="item.image.url" :alt="t('media.imageAlt', { name: item.name })" />
+            </div>
+            <p v-else class="meta-line">{{ t('media.imageEmpty') }}</p>
+            <div v-if="item.imageHistory.length" class="image-history-list" :aria-label="t('media.imageHistory')">
+              <div v-for="image in item.imageHistory" :key="image.path" class="image-history-list__item">
+                <img :src="image.url" :alt="t('media.imageAlt', { name: item.name })" loading="lazy" />
+                <span>{{ imageFileName(image.path) }}</span>
+              </div>
+            </div>
+          </div>
+        </DetailSection>
+
         <DetailSection :title="t('pages.items.acquisitionMethods')">
           <EntityChips :items="item.acquisitionMethods" />
         </DetailSection>

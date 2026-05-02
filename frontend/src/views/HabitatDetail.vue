@@ -108,6 +108,10 @@ const pokemonRows = computed<PokemonRow[]>(() => {
   }));
 });
 
+function imageFileName(path: string): string {
+  return path.split('/').at(-1) ?? t('media.image');
+}
+
 async function loadHabitatDetail() {
   habitat.value = await api.habitatDetail(String(route.params.id));
 }
@@ -200,6 +204,21 @@ watch(
       <Tabs id="habitat-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
 
       <div v-if="detailTab === 'details'" class="habitat-detail-stack">
+        <DetailSection v-if="habitat.image || habitat.imageHistory.length" :title="t('media.image')">
+          <div class="entity-detail-image">
+            <div v-if="habitat.image" class="entity-detail-image__frame">
+              <img :src="habitat.image.url" :alt="t('media.imageAlt', { name: habitat.name })" />
+            </div>
+            <p v-else class="meta-line">{{ t('media.imageEmpty') }}</p>
+            <div v-if="habitat.imageHistory.length" class="image-history-list" :aria-label="t('media.imageHistory')">
+              <div v-for="image in habitat.imageHistory" :key="image.path" class="image-history-list__item">
+                <img :src="image.url" :alt="t('media.imageAlt', { name: habitat.name })" loading="lazy" />
+                <span>{{ imageFileName(image.path) }}</span>
+              </div>
+            </div>
+          </div>
+        </DetailSection>
+
         <DetailSection :title="t('pages.habitats.recipeList')">
           <EntityChips :items="habitat.recipe" />
         </DetailSection>

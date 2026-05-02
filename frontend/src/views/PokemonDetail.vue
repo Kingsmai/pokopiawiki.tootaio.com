@@ -17,7 +17,7 @@ import { api, type PokemonDetail } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const route = useRoute();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 const pokemon = ref<PokemonDetail | null>(null);
 const itemCategoryTab = ref('');
 const relatedHabitatTab = ref('');
@@ -187,11 +187,30 @@ function pokemonTypeIconSrc(typeId: number): string | null {
 }
 
 function pokemonImageAlt() {
-  return pokemon.value?.image ? t('pages.pokemon.imageAlt', { name: pokemon.value.name, variant: pokemon.value.image.variant }) : '';
+  if (!pokemon.value?.image) {
+    return '';
+  }
+  return pokemon.value.image.source === 'upload'
+    ? t('media.imageAlt', { name: pokemon.value.name })
+    : t('pages.pokemon.imageAlt', { name: pokemon.value.name, variant: pokemon.value.image.variant });
 }
 
 function pokemonImageLabel() {
-  return pokemon.value?.image ? `${pokemon.value.image.version} - ${pokemon.value.image.variant}` : '';
+  if (!pokemon.value?.image) {
+    return '';
+  }
+  return pokemon.value.image.source === 'upload' ? t('media.uploadedImage') : `${pokemon.value.image.version} - ${pokemon.value.image.variant}`;
+}
+
+function imageFileName(path: string): string {
+  return path.split('/').at(-1) ?? t('media.image');
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(new Date(value));
 }
 
 function openImageModal() {
@@ -502,8 +521,15 @@ watch(
       </div>
       <div class="pokemon-image-detail__caption">
         <strong>{{ pokemonImageLabel() }}</strong>
-        <span>{{ pokemon.image.style }}</span>
-        <p>{{ pokemon.image.description }}</p>
+        <span v-if="pokemon.image.style">{{ pokemon.image.style }}</span>
+        <p v-if="pokemon.image.description">{{ pokemon.image.description }}</p>
+        <div v-if="pokemon.imageHistory.length" class="image-history-list" :aria-label="t('media.imageHistory')">
+          <div v-for="image in pokemon.imageHistory" :key="image.path" class="image-history-list__item">
+            <img :src="image.url" :alt="t('media.imageAlt', { name: pokemon.name })" loading="lazy" />
+            <span>{{ imageFileName(image.path) }}</span>
+            <span>{{ formatDateTime(image.uploadedAt) }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </Modal>

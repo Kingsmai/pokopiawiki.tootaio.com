@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
+import ImageUploadField from '../components/ImageUploadField.vue';
 import Modal from '../components/Modal.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
@@ -13,6 +14,8 @@ import { iconAdd, iconCancel, iconDelete, iconPokemon, iconSave } from '../icons
 import {
   api,
   type ConfigType,
+  type EntityImage,
+  type EntityImageUpload,
   type HabitatDetail,
   type HabitatPayload,
   type Item,
@@ -37,6 +40,8 @@ const options = ref<Options | null>(null);
 const itemRows = ref<Item[]>([]);
 const pokemonRows = ref<Pokemon[]>([]);
 const languages = ref<Language[]>([]);
+const currentImage = ref<EntityImage | null>(null);
+const imageHistory = ref<EntityImageUpload[]>([]);
 const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
@@ -44,6 +49,7 @@ const creatingSelect = ref('');
 const habitatForm = ref({
   name: '',
   translations: {} as TranslationMap,
+  imagePath: '',
   recipeItems: [] as Array<{ itemId: string; quantity: number }>,
   pokemonAppearances: [] as HabitatAppearanceForm[]
 });
@@ -73,6 +79,7 @@ const pageTitle = computed(() =>
     : t('pages.habitats.newTitle')
 );
 const cancelTo = computed(() => (isEditing.value ? `/habitats/${routeId.value}` : '/habitats'));
+const imageEntityName = computed(() => habitatNameForSave().trim());
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -159,9 +166,12 @@ async function loadEditor() {
       habitatForm.value = {
         name: habitat.baseName ?? habitat.name,
         translations: habitat.translations ?? {},
+        imagePath: habitat.image?.path ?? '',
         recipeItems: habitat.recipe.map((recipeItem) => ({ itemId: String(recipeItem.id), quantity: recipeItem.quantity })),
         pokemonAppearances: groupPokemonAppearances(habitat)
       };
+      currentImage.value = habitat.image;
+      imageHistory.value = habitat.imageHistory;
     }
   } catch (error) {
     message.value = errorText(error, t('errors.loadFailed'));
@@ -202,6 +212,7 @@ async function saveHabitat() {
     const payload: HabitatPayload = {
       name: habitatNameForSave(),
       translations: habitatForm.value.translations,
+      imagePath: habitatForm.value.imagePath,
       recipeItems: toQuantityRows(habitatForm.value.recipeItems),
       pokemonAppearances: habitatForm.value.pokemonAppearances
         .map((item) => ({
@@ -222,6 +233,15 @@ async function saveHabitat() {
   }
 }
 
+function handleImageSelected(image: EntityImage) {
+  currentImage.value = image;
+}
+
+function handleImageUploaded(image: EntityImageUpload) {
+  currentImage.value = image;
+  imageHistory.value = [image, ...imageHistory.value.filter((item) => item.path !== image.path)];
+}
+
 onMounted(() => {
   void loadEditor();
 });
@@ -240,6 +260,20 @@ onMounted(() => {
         :label="t('common.name')"
         :languages="languages"
         required
+      />
+
+      <ImageUploadField
+        v-model="habitatForm.imagePath"
+        entity-type="habitats"
+        :entity-id="isEditing ? routeId : null"
+        :entity-name="imageEntityName"
+        :label="t('media.image')"
+        :current-image="currentImage"
+        :history="imageHistory"
+        :disabled="busy"
+        @selected="handleImageSelected"
+        @uploaded="handleImageUploaded"
+        @error="message = $event"
       />
 
       <div class="field">

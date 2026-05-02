@@ -1,5 +1,12 @@
 import { parseIdList, parseMatchMode, sqlForRelationFilter } from './filter.ts';
 import { pool, query, queryOne } from './db.ts';
+import {
+  isUploadImagePath,
+  linkEntityImageUpload,
+  listEntityImageUploads,
+  uploadImageUrl,
+  uploadPublicBaseUrl
+} from './uploads.ts';
 import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -77,6 +84,12 @@ type PokemonImage = {
   version: string;
   variant: string;
   description: string;
+  source?: 'sprite' | 'upload';
+};
+
+type EntityImageValue = {
+  path: string;
+  url: string;
 };
 
 type PokemonImageCandidate = Omit<PokemonImage, 'url'>;
@@ -143,6 +156,7 @@ type ItemPayload = {
   noRecipe: boolean;
   acquisitionMethodIds: number[];
   tagIds: number[];
+  imagePath: string;
 };
 
 type RecipePayload = {
@@ -236,6 +250,7 @@ type LifePostsPage = {
 type HabitatPayload = {
   name: string;
   translations: TranslationInput;
+  imagePath: string;
   recipeItems: IdQuantity[];
   pokemonAppearances: Array<{
     pokemonId: number;
@@ -282,6 +297,7 @@ type PokemonChangeSource = {
 };
 type ItemChangeSource = {
   name: string;
+  image: EntityImageValue | null;
   category: { name: string };
   usage: { name: string } | null;
   customization: { dyeable: boolean; dualDyeable: boolean; patternEditable: boolean };
@@ -291,6 +307,7 @@ type ItemChangeSource = {
 };
 type HabitatChangeSource = {
   name: string;
+  image: EntityImageValue | null;
   recipe: Array<{ name: string; quantity: number }>;
   pokemon: Array<{ name: string; time_of_day: string; weather: string; rarity: number; map: { name: string } }>;
 };
@@ -358,6 +375,25 @@ export function cleanLocale(value: unknown): string {
 
 function sqlLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
+}
+
+function uploadedImageJson(pathExpression: string): string {
+  return `
+    CASE WHEN ${pathExpression} <> '' THEN json_build_object(
+      'path', ${pathExpression},
+      'url', ${sqlLiteral(uploadPublicBaseUrl)} || ${pathExpression}
+    ) ELSE NULL END
+  `;
+}
+
+function imagePathLabel(path: string | null | undefined): string {
+  const cleanPath = path?.trim() ?? '';
+  if (cleanPath === '') {
+    return '';
+  }
+
+  const parts = cleanPath.split('/');
+  return parts.length >= 3 ? `${parts[1]} / ${parts[2]}` : cleanPath;
 }
 
 function localizedField(
@@ -557,6 +593,17 @@ function cleanName(value: unknown, message = 'Name is required'): string {
 
 function cleanOptionalText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function cleanUploadImagePath(value: unknown, entityType: 'items' | 'habitats'): string {
+  const imagePath = cleanOptionalText(value);
+  if (imagePath === '') {
+    return '';
+  }
+  if (!isUploadImagePath(imagePath) || !imagePath.startsWith(`${entityType}/`)) {
+    throw validationError('server.validation.imagePathInvalid');
+  }
+  return imagePath;
 }
 
 function cleanIds(value: unknown): number[] {
@@ -1039,7 +1086,7 @@ function pokemonSpriteUrl(path: string): string {
 }
 
 function pokemonImageWithUrl(candidate: PokemonImageCandidate): PokemonImage {
-  return { ...candidate, url: pokemonSpriteUrl(candidate.path) };
+  return { ...candidate, url: pokemonSpriteUrl(candidate.path), source: 'sprite' };
 }
 
 function pokemonImageCandidates(id: number): PokemonImageCandidate[] {
@@ -1223,7 +1270,10 @@ function pokemonImageCandidates(id: number): PokemonImageCandidate[] {
 }
 
 function pokemonImageLabel(image: PokemonImage | null | undefined): string {
-  return image ? `${image.style} - ${image.version} - ${image.variant}` : '';
+  if (!image) {
+    return '';
+  }
+  return image.source === 'upload' || isUploadImagePath(image.path) ? imagePathLabel(image.path) : `${image.style} - ${image.version} - ${image.variant}`;
 }
 
 function pokemonImageCandidateForPath(id: number, path: string): PokemonImage | null {
@@ -1236,6 +1286,21 @@ function cleanPokemonImage(value: unknown, pokemonId: number): PokemonImage | nu
   const path = typeof value === 'string' ? value.trim() : '';
   if (path === '') {
     return null;
+  }
+
+  if (isUploadImagePath(path)) {
+    if (!path.startsWith('pokemon/')) {
+      throw validationError('server.validation.imagePathInvalid');
+    }
+    return {
+      path,
+      url: uploadImageUrl(path),
+      style: 'Upload',
+      version: 'Community upload',
+      variant: `#${pokemonId}`,
+      description: '',
+      source: 'upload'
+    };
   }
 
   const image = pokemonImageCandidateForPath(pokemonId, path);
@@ -1653,6 +1718,7 @@ async function itemEditChanges(
   const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Category', before.category.name, categoryNames.get(after.categoryId));
   pushChange(changes, 'Usage', before.usage?.name, after.usageId ? usageNames.get(after.usageId) : null);
   pushChange(changes, 'Dyeable', boolValue(before.customization.dyeable), boolValue(after.dyeable));
@@ -1684,6 +1750,7 @@ async function habitatEditChanges(
     .join(' / ');
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Recipe', quantityListValue(before.recipe), await quantityPayloadValue(client, after.recipeItems));
   pushChange(changes, 'Possible Pokemon', appearanceListValue(before.pokemon), afterAppearances);
 
@@ -1749,14 +1816,27 @@ function pokemonProjection(locale: string): string {
       round((p.height_inches * 0.0254)::numeric, 2)::double precision AS "heightMeters",
       p.weight_pounds AS "weightPounds",
       round((p.weight_pounds * 0.45359237)::numeric, 2)::double precision AS "weightKg",
-      CASE WHEN p.image_path <> '' THEN json_build_object(
-        'path', p.image_path,
-        'url', '${pokemonSpriteBaseUrl}' || p.image_path,
-        'style', p.image_style,
-        'version', p.image_version,
-        'variant', p.image_variant,
-        'description', p.image_description
-      ) ELSE NULL END AS image,
+      CASE
+        WHEN p.image_path LIKE '/sprites/%' THEN json_build_object(
+          'path', p.image_path,
+          'url', '${pokemonSpriteBaseUrl}' || p.image_path,
+          'style', p.image_style,
+          'version', p.image_version,
+          'variant', p.image_variant,
+          'description', p.image_description,
+          'source', 'sprite'
+        )
+        WHEN p.image_path <> '' THEN json_build_object(
+          'path', p.image_path,
+          'url', ${sqlLiteral(uploadPublicBaseUrl)} || p.image_path,
+          'style', 'Upload',
+          'version', 'Community upload',
+          'variant', p.name,
+          'description', '',
+          'source', 'upload'
+        )
+        ELSE NULL
+      END AS image,
       json_build_object(
         'hp', p.hp,
         'attack', p.attack,
@@ -2951,7 +3031,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
   const relatedSkillName = localizedName('skills', 'related_skill', locale);
   const relatedFavoriteThingName = localizedName('favorite-things', 'related_favorite_thing', locale);
 
-  const [habitats, itemDrops, favoriteThingItems, relatedPokemon, editHistory] = await Promise.all([
+  const [habitats, itemDrops, favoriteThingItems, relatedPokemon, editHistory, imageHistory] = await Promise.all([
     query(
       `
         SELECT
@@ -3068,7 +3148,8 @@ export async function getPokemon(id: number, locale = defaultLocale) {
       `,
       [id]
     ),
-    getEditHistory('pokemon', id)
+    getEditHistory('pokemon', id),
+    listEntityImageUploads('pokemon', id)
   ]);
 
   const dropsBySkill = itemDrops.reduce((itemsBySkill, item) => {
@@ -3083,7 +3164,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
       }))
     : [];
 
-  return { ...pokemon, skills, habitats, favoriteThingItems, relatedPokemon, editHistory };
+  return { ...pokemon, skills, habitats, favoriteThingItems, relatedPokemon, editHistory, imageHistory };
 }
 
 function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
@@ -3245,6 +3326,7 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
         userId
       ]
     );
+    await linkEntityImageUpload(client, 'pokemon', cleanPayload.id, cleanPayload.image?.path, cleanPayload.name);
     await replacePokemonRelations(client, cleanPayload.id, cleanPayload);
     await replaceEntityTranslations(client, 'pokemon', cleanPayload.id, cleanPayload.translations, ['name', 'details', 'genus']);
     await recordEditLog(client, 'pokemon', cleanPayload.id, 'create', userId);
@@ -3308,6 +3390,7 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
     if (result.rowCount === 0) {
       return false;
     }
+    await linkEntityImageUpload(client, 'pokemon', id, cleanPayload.image?.path, cleanPayload.name);
     await replacePokemonRelations(client, id, cleanPayload);
     await replaceEntityTranslations(client, 'pokemon', id, cleanPayload.translations, ['name', 'details', 'genus']);
     const changes = before ? await pokemonEditChanges(client, before as unknown as PokemonChangeSource, cleanPayload) : [];
@@ -3343,6 +3426,7 @@ export async function listHabitats(locale = defaultLocale) {
       h.name AS "baseName",
       ${translationsSelect('habitats', 'h.id')} AS translations,
       ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
+      ${uploadedImageJson('h.image_path')} AS image,
       COALESCE((
         SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${orderByEntity('i')})
         FROM habitat_recipe_items hri
@@ -3378,6 +3462,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
         h.name AS "baseName",
         ${translationsSelect('habitats', 'h.id')} AS translations,
         ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
+        ${uploadedImageJson('h.image_path')} AS image,
         COALESCE((
           SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${orderByEntity('i')})
           FROM habitat_recipe_items hri
@@ -3395,7 +3480,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
     return null;
   }
 
-  const [pokemon, editHistory] = await Promise.all([
+  const [pokemon, editHistory, imageHistory] = await Promise.all([
     query(
       `
         SELECT
@@ -3413,10 +3498,11 @@ export async function getHabitat(id: number, locale = defaultLocale) {
       `,
       [id]
     ),
-    getEditHistory('habitats', id)
+    getEditHistory('habitats', id),
+    listEntityImageUploads('habitats', id)
   ]);
 
-  return { ...habitat, pokemon, editHistory };
+  return { ...habitat, pokemon, editHistory, imageHistory };
 }
 
 function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
@@ -3453,6 +3539,7 @@ function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
   return {
     name: cleanName(payload.name, 'Habitat name is required'),
     translations: cleanTranslations(payload.translations, ['name']),
+    imagePath: cleanUploadImagePath(payload.imagePath, 'habitats'),
     recipeItems: cleanQuantities(payload.recipeItems),
     pokemonAppearances: [...pokemonAppearances.values()]
   };
@@ -3488,13 +3575,14 @@ export async function createHabitat(payload: Record<string, unknown>, userId: nu
     const sortOrder = await nextSortOrder(client, 'habitats');
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO habitats (name, sort_order, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $3, $3)
+        INSERT INTO habitats (name, image_path, sort_order, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $4, $4)
         RETURNING id
       `,
-      [cleanPayload.name, sortOrder, userId]
+      [cleanPayload.name, cleanPayload.imagePath, sortOrder, userId]
     );
     const habitatId = result.rows[0].id;
+    await linkEntityImageUpload(client, 'habitats', habitatId, cleanPayload.imagePath, cleanPayload.name);
     await replaceHabitatRelations(client, habitatId, cleanPayload);
     await replaceEntityTranslations(client, 'habitats', habitatId, cleanPayload.translations, ['name']);
     await recordEditLog(client, 'habitats', habitatId, 'create', userId);
@@ -3509,12 +3597,13 @@ export async function updateHabitat(id: number, payload: Record<string, unknown>
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
-      'UPDATE habitats SET name = $1, updated_by_user_id = $2, updated_at = now() WHERE id = $3',
-      [cleanPayload.name, userId, id]
+      'UPDATE habitats SET name = $1, image_path = $2, updated_by_user_id = $3, updated_at = now() WHERE id = $4',
+      [cleanPayload.name, cleanPayload.imagePath, userId, id]
     );
     if (result.rowCount === 0) {
       return false;
     }
+    await linkEntityImageUpload(client, 'habitats', id, cleanPayload.imagePath, cleanPayload.name);
     await replaceHabitatRelations(client, id, cleanPayload);
     await replaceEntityTranslations(client, 'habitats', id, cleanPayload.translations, ['name']);
     const changes = before ? await habitatEditChanges(client, before as unknown as HabitatChangeSource, cleanPayload) : [];
@@ -3551,6 +3640,7 @@ function itemProjection(locale: string): string {
       i.name AS "baseName",
       ${translationsSelect('items', 'i.id')} AS translations,
       ${auditSelect('i', 'item_created_user', 'item_updated_user')},
+      ${uploadedImageJson('i.image_path')} AS image,
       json_build_object('id', c.id, 'name', ${categoryName}) AS category,
       CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'name', ${usageName}) END AS usage,
       json_build_object(
@@ -3649,7 +3739,7 @@ export async function getItem(id: number, locale = defaultLocale) {
   const pokemonName = localizedName('pokemon', 'p', locale);
   const skillName = localizedName('skills', 's', locale);
 
-  const [acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory] = await Promise.all([
+  const [acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory, imageHistory] = await Promise.all([
     query(
       `
         SELECT am.id, ${acquisitionMethodName} AS name
@@ -3737,10 +3827,11 @@ export async function getItem(id: number, locale = defaultLocale) {
       `,
       [id]
     ),
-    getEditHistory('items', id)
+    getEditHistory('items', id),
+    listEntityImageUploads('items', id)
   ]);
 
-  return { ...item, acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory };
+  return { ...item, acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory, imageHistory };
 }
 
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
@@ -3758,7 +3849,8 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     patternEditable: Boolean(payload.patternEditable),
     noRecipe: Boolean(payload.noRecipe),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
-    tagIds: cleanIds(payload.tagIds)
+    tagIds: cleanIds(payload.tagIds),
+    imagePath: cleanUploadImagePath(payload.imagePath, 'items')
   };
 }
 
@@ -3807,11 +3899,12 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           dual_dyeable,
           pattern_editable,
           no_recipe,
+          image_path,
           sort_order,
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
         RETURNING id
       `,
       [
@@ -3822,11 +3915,13 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
         cleanPayload.noRecipe,
+        cleanPayload.imagePath,
         sortOrder,
         userId
       ]
     );
     const itemId = result.rows[0].id;
+    await linkEntityImageUpload(client, 'items', itemId, cleanPayload.imagePath, cleanPayload.name);
     await replaceItemRelations(client, itemId, cleanPayload);
     await replaceEntityTranslations(client, 'items', itemId, cleanPayload.translations, ['name']);
     await recordEditLog(client, 'items', itemId, 'create', userId);
@@ -3851,9 +3946,10 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
             dual_dyeable = $5,
             pattern_editable = $6,
             no_recipe = $7,
-            updated_by_user_id = $8,
+            image_path = $8,
+            updated_by_user_id = $9,
             updated_at = now()
-        WHERE id = $9
+        WHERE id = $10
       `,
       [
         cleanPayload.name,
@@ -3863,6 +3959,7 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
         cleanPayload.noRecipe,
+        cleanPayload.imagePath,
         userId,
         id
       ]
@@ -3870,6 +3967,7 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
     if (result.rowCount === 0) {
       return false;
     }
+    await linkEntityImageUpload(client, 'items', id, cleanPayload.imagePath, cleanPayload.name);
     await replaceItemRelations(client, id, cleanPayload);
     await replaceEntityTranslations(client, 'items', id, cleanPayload.translations, ['name']);
     const changes = before ? await itemEditChanges(client, before as unknown as ItemChangeSource, cleanPayload) : [];

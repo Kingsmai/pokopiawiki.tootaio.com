@@ -3,7 +3,6 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import EditMeta from '../components/EditMeta.vue';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
 import PageHeader from '../components/PageHeader.vue';
@@ -46,8 +45,8 @@ function recipeTarget(item: Item) {
   return item.recipe ? `/recipes/${item.recipe.id}` : undefined;
 }
 
-function itemSubtitle(item: Item) {
-  return item.usage ? `${item.category.name} · ${item.usage.name}` : item.category.name;
+function recipeCardImage(item: Item) {
+  return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : undefined;
 }
 
 function createRecipeTarget(item: Item) {
@@ -132,31 +131,55 @@ watch(itemQuery, loadItems);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid" aria-busy="true" :aria-label="t('pages.recipes.loadingList')">
+    <div v-if="loading" class="entity-grid catalog-card-grid" aria-busy="true" :aria-label="t('pages.recipes.loadingList')">
       <article v-for="index in skeletonCardCount" :key="`recipe-skeleton-${index}`" class="entity-card entity-card--skeleton">
-        <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
-          <Skeleton width="72%" height="24px" />
-          <Skeleton width="52%" />
-          <Skeleton width="64%" />
+          <Skeleton width="128px" height="24px" />
+          <Skeleton variant="box" width="132px" height="36px" />
+          <Skeleton width="92px" />
         </div>
       </article>
     </div>
 
-    <div v-else class="entity-grid">
+    <div v-else class="entity-grid catalog-card-grid">
       <EntityCard
         v-for="item in items"
         :key="item.id"
         :title="item.name"
-        :subtitle="itemSubtitle(item)"
+        :subtitle="item.category.name"
         :to="recipeTarget(item)"
         :icon="itemIcon(item)"
+        :image="recipeCardImage(item)"
+        :ribbon="item.usage?.name"
       >
-        <EditMeta v-if="item.recipe" :entity="item.recipe" />
-        <RouterLink v-else-if="!item.noRecipe" class="ui-button ui-button--primary ui-button--small" :to="createRecipeTarget(item)">
-          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
-          {{ t('pages.items.createRecipe') }}
-        </RouterLink>
+        <template #after-title>
+          <span
+            v-if="item.recipe"
+            class="ui-button ui-button--primary ui-button--small catalog-card-action catalog-card-action--hidden"
+            aria-hidden="true"
+          >
+            <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.items.createRecipe') }}
+          </span>
+          <button
+            v-else-if="item.noRecipe"
+            class="ui-button ui-button--primary ui-button--small catalog-card-action"
+            type="button"
+            disabled
+          >
+            <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.items.createRecipe') }}
+          </button>
+          <RouterLink
+            v-else
+            class="ui-button ui-button--primary ui-button--small catalog-card-action"
+            :to="createRecipeTarget(item)"
+          >
+            <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.items.createRecipe') }}
+          </RouterLink>
+        </template>
       </EntityCard>
     </div>
 

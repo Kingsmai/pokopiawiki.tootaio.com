@@ -437,6 +437,33 @@ const messages = {
       update: 'Edit',
       delete: 'Delete',
       empty: 'No edit history'
+    },
+    discussion: {
+      title: 'Discussion',
+      count: '{count} comments',
+      comment: 'Comment',
+      commentPlaceholder: 'Write a comment...',
+      replyPlaceholder: 'Write a reply...',
+      postComment: 'Post comment',
+      postingComment: 'Posting comment',
+      reply: 'Reply',
+      postReply: 'Post reply',
+      postingReply: 'Posting reply',
+      cancelReply: 'Cancel reply',
+      deleteComment: 'Delete comment',
+      deleteConfirm: 'Delete this comment?',
+      deletedComment: 'Comment deleted',
+      commentRequired: 'Please enter a comment.',
+      commentFailed: 'Comment failed',
+      replyFailed: 'Reply failed',
+      deleteFailed: 'Delete failed',
+      loading: 'Loading discussion',
+      empty: 'No discussion yet',
+      emptyHint: 'Start a new discussion now.',
+      loginPrompt: 'Log in with a verified email to comment.',
+      verifyPrompt: 'Complete email verification to comment.',
+      byUnknown: 'Community member',
+      charactersLeft: '{count} characters left'
     }
   },
   'zh-CN': {
@@ -871,6 +898,33 @@ const messages = {
       update: '编辑',
       delete: '删除',
       empty: '暂无编辑历史'
+    },
+    discussion: {
+      title: '讨论',
+      count: '{count} 条评论',
+      comment: '评论',
+      commentPlaceholder: '写下评论……',
+      replyPlaceholder: '写下回复……',
+      postComment: '发表评论',
+      postingComment: '评论中',
+      reply: '回复',
+      postReply: '发布回复',
+      postingReply: '回复中',
+      cancelReply: '取消回复',
+      deleteComment: '删除评论',
+      deleteConfirm: '确认删除这条评论？',
+      deletedComment: '评论已删除',
+      commentRequired: '请输入评论内容。',
+      commentFailed: '评论失败',
+      replyFailed: '回复失败',
+      deleteFailed: '删除失败',
+      loading: '正在加载讨论',
+      empty: '暂无讨论',
+      emptyHint: '现在发起新的讨论。',
+      loginPrompt: '使用已验证邮箱登录后即可评论。',
+      verifyPrompt: '完成邮箱验证后即可评论。',
+      byUnknown: '社区成员',
+      charactersLeft: '还可以输入 {count} 个字符'
     }
   }
 };

@@ -336,6 +336,25 @@ export interface LifeCommentPayload {
   body: string;
 }
 
+export type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats';
+
+export interface EntityDiscussionComment {
+  id: number;
+  entityType: DiscussionEntityType;
+  entityId: number;
+  parentCommentId: number | null;
+  body: string;
+  deleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  author: UserSummary | null;
+  replies: EntityDiscussionComment[];
+}
+
+export interface EntityDiscussionCommentPayload {
+  body: string;
+}
+
 export function buildQuery(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
 
@@ -499,6 +518,20 @@ export const api = {
   createLifeCommentReply: (postId: string | number, commentId: string | number, payload: LifeCommentPayload) =>
     sendJson<LifeComment>(`/api/life-posts/${postId}/comments/${commentId}/replies`, 'POST', payload),
   deleteLifeComment: (id: string | number) => deleteJson(`/api/life-comments/${id}`),
+  entityDiscussion: (entityType: DiscussionEntityType, entityId: string | number) =>
+    getJson<EntityDiscussionComment[]>(`/api/discussions/${entityType}/${entityId}/comments`),
+  createEntityDiscussionComment: (
+    entityType: DiscussionEntityType,
+    entityId: string | number,
+    payload: EntityDiscussionCommentPayload
+  ) => sendJson<EntityDiscussionComment>(`/api/discussions/${entityType}/${entityId}/comments`, 'POST', payload),
+  createEntityDiscussionReply: (
+    entityType: DiscussionEntityType,
+    entityId: string | number,
+    commentId: string | number,
+    payload: EntityDiscussionCommentPayload
+  ) => sendJson<EntityDiscussionComment>(`/api/discussions/${entityType}/${entityId}/comments/${commentId}/replies`, 'POST', payload),
+  deleteEntityDiscussionComment: (id: string | number) => deleteJson(`/api/discussions/comments/${id}`),
   createDailyChecklistItem: (payload: DailyChecklistPayload) =>
     sendJson<DailyChecklistItem>('/api/admin/daily-checklist', 'POST', payload),
   updateDailyChecklistItem: (id: string | number, payload: DailyChecklistPayload) =>

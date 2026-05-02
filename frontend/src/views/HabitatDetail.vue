@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
+import EntityDiscussionPanel from '../components/EntityDiscussionPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -22,6 +23,7 @@ const weathers = ['晴天', '阴天', '雨天'];
 const showEditor = computed(() => route.name === 'habitat-edit');
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
+  { value: 'discussion', label: t('discussion.title') },
   { value: 'history', label: t('history.editHistory') }
 ]);
 
@@ -227,6 +229,10 @@ watch(
             </li>
           </ul>
         </DetailSection>
+      </div>
+
+      <div v-else-if="detailTab === 'discussion'" class="detail-tab-panel">
+        <EntityDiscussionPanel entity-type="habitats" :entity-id="habitat.id" />
       </div>
 
       <div v-else class="detail-tab-panel">

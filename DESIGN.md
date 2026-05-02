@@ -119,6 +119,19 @@
 - 详情页展示最后编辑者、最后编辑时间和编辑历史面板。
 - 编辑历史中的用户信息只展示必要署名，不暴露邮箱、token、hash 或内部元数据。
 
+## 实体讨论
+
+- Pokemon、物品、材料单、栖息地详情页支持讨论。
+- 所有人都可以浏览实体讨论。
+- 已注册并完成邮箱验证的用户可以发表评论，并回复顶层评论。
+- 讨论回复只支持一层回复，不做无限嵌套。
+- 评论作者可以删除自己的评论；删除后正文不再展示，已有回复保留在原位置。
+- 被删除实体的讨论会随实体删除一并清理。
+- 讨论按创建时间正序展示。
+- 讨论内容是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
+- API 对外只返回评论作者的 `id` 和 `displayName`。
+- API 不返回邮箱、token/hash、内部调试字段、`deleted_at`、`deleted_by_user_id` 等内部删除字段。
+
 ## 全局配置数据
 
 以下配置项都支持创建、编辑、删除、翻译和拖拽排序。
@@ -241,6 +254,7 @@ Pokemon 详情页展示：
 - 关联喜欢的东西的物品：与相关 Pokemon 在桌面端左右并排展示
 - 出现的栖息地
 - 最后编辑信息
+- 讨论
 - 编辑历史：通过详情页 Tabs 展示
 
 ## 物品
@@ -281,6 +295,7 @@ Pokemon 详情页展示：
 - 相关栖息地
 - 相关 Pokemon 掉落
 - 最后编辑信息
+- 讨论
 - 编辑历史
 
 ## 材料单
@@ -311,6 +326,7 @@ Pokemon 详情页展示：
 - 入手方式
 - 需要材料列表
 - 最后编辑信息
+- 讨论
 - 编辑历史
 
 ## 栖息地
@@ -352,6 +368,7 @@ Pokemon 出现配置：
 - 稀有度
 - 出现的地图列表
 - 最后编辑信息
+- 讨论
 - 编辑历史
 
 ## 每日 CheckList
@@ -471,6 +488,7 @@ API 暴露边界：
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `tagId` 按 Life 标签筛选。
+- `GET /api/discussions/:entityType/:entityId/comments`：读取实体讨论；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`。
 
 认证 API：
 
@@ -491,6 +509,10 @@ API 暴露边界：
   - `POST /api/life-posts/:postId/comments`
   - `POST /api/life-posts/:postId/comments/:commentId/replies`
   - `DELETE /api/life-comments/:id`
+- 实体讨论评论的创建、回复，以及作者本人对评论的删除。
+  - `POST /api/discussions/:entityType/:entityId/comments`
+  - `POST /api/discussions/:entityType/:entityId/comments/:commentId/replies`
+  - `DELETE /api/discussions/comments/:id`
 - Life Reaction 的设置、替换和取消。
   - `PUT /api/life-posts/:id/reaction`
   - `DELETE /api/life-posts/:id/reaction`

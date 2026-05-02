@@ -116,6 +116,28 @@ type LifeCommentPayload = {
   body: string;
 };
 
+type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats';
+type DiscussionEntityDefinition = {
+  table: string;
+};
+type EntityDiscussionCommentPayload = {
+  body: string;
+};
+type EntityDiscussionCommentRow = {
+  id: number;
+  entityType: DiscussionEntityType;
+  entityId: number;
+  parentCommentId: number | null;
+  body: string;
+  deleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  author: { id: number; displayName: string } | null;
+};
+type EntityDiscussionComment = EntityDiscussionCommentRow & {
+  replies: EntityDiscussionComment[];
+};
+
 type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
 type LifeReactionCounts = Record<LifeReactionType, number>;
 
@@ -261,6 +283,13 @@ const sortableContentDefinitions: Record<SortableContentType, SortableContentDef
   items: { table: 'items', entityType: 'items' },
   recipes: { table: 'recipes', entityType: 'recipes' },
   habitats: { table: 'habitats', entityType: 'habitats' }
+};
+
+const discussionEntityDefinitions: Record<DiscussionEntityType, DiscussionEntityDefinition> = {
+  pokemon: { table: 'pokemon' },
+  items: { table: 'items' },
+  recipes: { table: 'recipes' },
+  habitats: { table: 'habitats' }
 };
 
 function asString(value: QueryValue): string | undefined {
@@ -1770,6 +1799,224 @@ export async function deleteLifeComment(id: number, userId: number) {
   return Boolean(result);
 }
 
+function cleanDiscussionEntityType(value: unknown): DiscussionEntityType {
+  if (typeof value !== 'string' || !Object.hasOwn(discussionEntityDefinitions, value)) {
+    throw validationError('Entity type is invalid');
+  }
+
+  return value as DiscussionEntityType;
+}
+
+function cleanEntityDiscussionCommentPayload(payload: Record<string, unknown>): EntityDiscussionCommentPayload {
+  const body = cleanName(payload.body, 'Please enter a comment');
+  if (body.length > 1000) {
+    throw validationError('Comment is too long');
+  }
+
+  return { body };
+}
+
+async function entityDiscussionExists(
+  client: Pick<DbClient, 'query'>,
+  entityType: DiscussionEntityType,
+  entityId: number
+): Promise<boolean> {
+  const definition = discussionEntityDefinitions[entityType];
+  const result = await client.query<{ exists: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM ${definition.table} WHERE id = $1) AS exists`,
+    [entityId]
+  );
+
+  return result.rows[0]?.exists === true;
+}
+
+function entityDiscussionCommentProjection(whereClause: string): string {
+  return `
+    SELECT
+      edc.id,
+      edc.entity_type AS "entityType",
+      edc.entity_id AS "entityId",
+      edc.parent_comment_id AS "parentCommentId",
+      CASE WHEN edc.deleted_at IS NULL THEN edc.body ELSE '' END AS body,
+      edc.deleted_at IS NOT NULL AS deleted,
+      edc.created_at AS "createdAt",
+      edc.updated_at AS "updatedAt",
+      CASE
+        WHEN edc.deleted_at IS NOT NULL OR comment_user.id IS NULL THEN NULL
+        ELSE json_build_object('id', comment_user.id, 'displayName', comment_user.display_name)
+      END AS author
+    FROM entity_discussion_comments edc
+    LEFT JOIN users comment_user ON comment_user.id = edc.created_by_user_id
+    ${whereClause}
+  `;
+}
+
+function buildEntityDiscussionCommentTree(rows: EntityDiscussionCommentRow[]): EntityDiscussionComment[] {
+  const comments = new Map<number, EntityDiscussionComment>();
+  const topLevelComments: EntityDiscussionComment[] = [];
+
+  for (const row of rows) {
+    comments.set(row.id, { ...row, replies: [] });
+  }
+
+  for (const comment of comments.values()) {
+    if (comment.parentCommentId === null) {
+      topLevelComments.push(comment);
+      continue;
+    }
+
+    const parent = comments.get(comment.parentCommentId);
+    if (parent?.parentCommentId === null) {
+      parent.replies.push(comment);
+    } else {
+      topLevelComments.push(comment);
+    }
+  }
+
+  return topLevelComments;
+}
+
+async function getEntityDiscussionCommentById(id: number): Promise<EntityDiscussionComment | null> {
+  const row = await queryOne<EntityDiscussionCommentRow>(
+    `
+      ${entityDiscussionCommentProjection('WHERE edc.id = $1')}
+    `,
+    [id]
+  );
+
+  return row ? { ...row, replies: [] } : null;
+}
+
+export async function listEntityDiscussionComments(
+  entityTypeValue: string,
+  entityIdValue: number
+): Promise<EntityDiscussionComment[] | null> {
+  const entityType = cleanDiscussionEntityType(entityTypeValue);
+  const entityId = requirePositiveInteger(entityIdValue, 'Record is invalid');
+
+  if (!(await entityDiscussionExists(pool, entityType, entityId))) {
+    return null;
+  }
+
+  const rows = await query<EntityDiscussionCommentRow>(
+    `
+      ${entityDiscussionCommentProjection('WHERE edc.entity_type = $1 AND edc.entity_id = $2')}
+      ORDER BY edc.created_at, edc.id
+    `,
+    [entityType, entityId]
+  );
+
+  return buildEntityDiscussionCommentTree(rows);
+}
+
+export async function createEntityDiscussionComment(
+  entityTypeValue: string,
+  entityIdValue: number,
+  payload: Record<string, unknown>,
+  userId: number
+): Promise<EntityDiscussionComment | null> {
+  const entityType = cleanDiscussionEntityType(entityTypeValue);
+  const entityId = requirePositiveInteger(entityIdValue, 'Record is invalid');
+  const cleanPayload = cleanEntityDiscussionCommentPayload(payload);
+
+  const id = await withTransaction(async (client) => {
+    if (!(await entityDiscussionExists(client, entityType, entityId))) {
+      return null;
+    }
+
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO entity_discussion_comments (entity_type, entity_id, body, created_by_user_id)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `,
+      [entityType, entityId, cleanPayload.body, userId]
+    );
+
+    return result.rows[0].id;
+  });
+
+  return id ? getEntityDiscussionCommentById(id) : null;
+}
+
+export async function createEntityDiscussionReply(
+  entityTypeValue: string,
+  entityIdValue: number,
+  commentIdValue: number,
+  payload: Record<string, unknown>,
+  userId: number
+): Promise<EntityDiscussionComment | null> {
+  const entityType = cleanDiscussionEntityType(entityTypeValue);
+  const entityId = requirePositiveInteger(entityIdValue, 'Record is invalid');
+  const commentId = requirePositiveInteger(commentIdValue, 'Comment is invalid');
+  const cleanPayload = cleanEntityDiscussionCommentPayload(payload);
+
+  const id = await withTransaction(async (client) => {
+    if (!(await entityDiscussionExists(client, entityType, entityId))) {
+      return null;
+    }
+
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO entity_discussion_comments (
+          entity_type,
+          entity_id,
+          parent_comment_id,
+          body,
+          created_by_user_id
+        )
+        SELECT edc.entity_type, edc.entity_id, edc.id, $4, $5
+        FROM entity_discussion_comments edc
+        WHERE edc.entity_type = $1
+          AND edc.entity_id = $2
+          AND edc.id = $3
+          AND edc.parent_comment_id IS NULL
+          AND edc.deleted_at IS NULL
+        RETURNING id
+      `,
+      [entityType, entityId, commentId, cleanPayload.body, userId]
+    );
+
+    return result.rows[0]?.id ?? null;
+  });
+
+  return id ? getEntityDiscussionCommentById(id) : null;
+}
+
+export async function deleteEntityDiscussionComment(id: number, userId: number): Promise<boolean> {
+  const commentId = requirePositiveInteger(id, 'Comment is invalid');
+  const result = await queryOne<{ id: number }>(
+    `
+      UPDATE entity_discussion_comments
+      SET deleted_at = now(),
+          deleted_by_user_id = $2,
+          updated_at = now()
+      WHERE id = $1
+        AND created_by_user_id = $2
+        AND deleted_at IS NULL
+      RETURNING id
+    `,
+    [commentId, userId]
+  );
+
+  return Boolean(result);
+}
+
+async function deleteEntityDiscussionCommentsForEntity(
+  client: DbClient,
+  entityType: DiscussionEntityType,
+  entityId: number
+): Promise<void> {
+  await client.query(
+    `
+      DELETE FROM entity_discussion_comments
+      WHERE entity_type = $1
+        AND entity_id = $2
+    `,
+    [entityType, entityId]
+  );
+}
+
 export function isConfigType(type: string): type is ConfigType {
   return Object.hasOwn(configDefinitions, type);
 }
@@ -2355,6 +2602,7 @@ export async function deletePokemon(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityDiscussionCommentsForEntity(client, 'pokemon', id);
     await deleteEntityTranslations(client, 'pokemon', id);
     await recordEditLog(client, 'pokemon', id, 'delete', userId);
     return true;
@@ -2561,6 +2809,7 @@ export async function deleteHabitat(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityDiscussionCommentsForEntity(client, 'habitats', id);
     await deleteEntityTranslations(client, 'habitats', id);
     await recordEditLog(client, 'habitats', id, 'delete', userId);
     return true;
@@ -2915,6 +3164,7 @@ export async function deleteItem(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityDiscussionCommentsForEntity(client, 'items', id);
     await deleteEntityTranslations(client, 'items', id);
     await recordEditLog(client, 'items', id, 'delete', userId);
     return true;
@@ -3082,6 +3332,7 @@ export async function deleteRecipe(id: number, userId: number) {
       return false;
     }
 
+    await deleteEntityDiscussionCommentsForEntity(client, 'recipes', id);
     await recordEditLog(client, 'recipes', id, 'delete', userId);
     return true;
   });

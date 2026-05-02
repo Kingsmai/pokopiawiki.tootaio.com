@@ -2664,6 +2664,216 @@ button:disabled,
   overflow-wrap: anywhere;
 }
 
+.entity-discussion-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.entity-discussion-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.entity-discussion-panel__header h2,
+.entity-discussion-empty h3 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 950;
+  line-height: 1.12;
+}
+
+.entity-discussion-panel__header h2 {
+  font-size: 21px;
+}
+
+.entity-discussion-panel__header p,
+.entity-discussion-empty p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.entity-discussion-skeleton,
+.entity-discussion-form,
+.entity-discussion-list {
+  display: grid;
+  gap: 12px;
+}
+
+.entity-discussion-form textarea {
+  min-height: 106px;
+  resize: vertical;
+}
+
+.entity-discussion-form--reply {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.entity-discussion-form__counter {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.entity-discussion-form__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.entity-discussion-form__actions,
+.entity-discussion-auth-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.entity-discussion-auth-note {
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.entity-discussion-auth-note p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.entity-discussion-comment {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.entity-discussion-comment:last-child {
+  border-bottom: 0;
+}
+
+.entity-discussion-comment--skeleton {
+  align-items: start;
+}
+
+.entity-discussion-comment__avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--pokemon-blue);
+  box-shadow: 0 2px 0 var(--line-strong);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.entity-discussion-comment.is-deleted .entity-discussion-comment__avatar {
+  background: var(--muted);
+}
+
+.entity-discussion-comment__content {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.entity-discussion-comment__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.entity-discussion-comment__meta strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.entity-discussion-comment.is-deleted .entity-discussion-comment__meta strong {
+  color: var(--muted);
+}
+
+.entity-discussion-comment__meta time {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.entity-discussion-comment__body {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.entity-discussion-comment__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.entity-discussion-replies {
+  display: grid;
+  gap: 0;
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.entity-discussion-comment--reply {
+  grid-template-columns: 34px minmax(0, 1fr);
+  padding: 10px 0;
+}
+
+.entity-discussion-comment--reply .entity-discussion-comment__avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+}
+
+.entity-discussion-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.entity-discussion-empty__icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  color: var(--pokemon-blue);
+}
+
 .row-list {
   display: grid;
   gap: 0;

@@ -7,6 +7,8 @@ import {
   cleanLocale,
   createConfig,
   createDailyChecklistItem,
+  createEntityDiscussionComment,
+  createEntityDiscussionReply,
   createHabitat,
   createItem,
   createLanguage,
@@ -17,6 +19,7 @@ import {
   createRecipe,
   deleteConfig,
   deleteDailyChecklistItem,
+  deleteEntityDiscussionComment,
   deleteHabitat,
   deleteItem,
   deleteLanguage,
@@ -31,6 +34,7 @@ import {
   getPokemon,
   getRecipe,
   isConfigType,
+  listEntityDiscussionComments,
   listConfig,
   listDailyChecklistItems,
   listHabitats,
@@ -277,6 +281,60 @@ app.delete('/api/life-comments/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteLifeComment(Number(id), user.id);
+  return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
+});
+
+app.get('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
+  const { entityType, entityId } = request.params as { entityType: string; entityId: string };
+  const comments = await listEntityDiscussionComments(entityType, Number(entityId));
+  return comments ? comments : reply.code(404).send({ message: 'Not found' });
+});
+
+app.post('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+
+  const { entityType, entityId } = request.params as { entityType: string; entityId: string };
+  const comment = await createEntityDiscussionComment(
+    entityType,
+    Number(entityId),
+    request.body as Record<string, unknown>,
+    user.id
+  );
+  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+});
+
+app.post('/api/discussions/:entityType/:entityId/comments/:commentId/replies', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+
+  const { entityType, entityId, commentId } = request.params as {
+    entityType: string;
+    entityId: string;
+    commentId: string;
+  };
+  const comment = await createEntityDiscussionReply(
+    entityType,
+    Number(entityId),
+    Number(commentId),
+    request.body as Record<string, unknown>,
+    user.id
+  );
+  return comment ? reply.code(201).send(comment) : reply.code(404).send({ message: 'Not found' });
+});
+
+app.delete('/api/discussions/comments/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+
+  const { id } = request.params as { id: string };
+  const deleted = await deleteEntityDiscussionComment(Number(id), user.id);
   return deleted ? reply.code(204).send() : reply.code(404).send({ message: 'Not found' });
 });
 

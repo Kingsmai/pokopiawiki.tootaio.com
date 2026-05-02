@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
+import EntityDiscussionPanel from '../components/EntityDiscussionPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -20,6 +21,7 @@ const detailTab = ref('details');
 const showEditor = computed(() => route.name === 'item-edit');
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
+  { value: 'discussion', label: t('discussion.title') },
   { value: 'history', label: t('history.editHistory') }
 ]);
 
@@ -193,6 +195,10 @@ watch(
           </ul>
           <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
+      </div>
+
+      <div v-else-if="detailTab === 'discussion'" class="detail-tab-panel">
+        <EntityDiscussionPanel entity-type="items" :entity-id="item.id" />
       </div>
 
       <div v-else class="detail-tab-panel">

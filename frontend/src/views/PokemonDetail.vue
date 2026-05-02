@@ -7,6 +7,7 @@ import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityDiscussionPanel from '../components/EntityDiscussionPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
+import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import PokemonStatsPanel from '../components/PokemonStatsPanel.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -21,6 +22,7 @@ const pokemon = ref<PokemonDetail | null>(null);
 const itemCategoryTab = ref('');
 const relatedHabitatTab = ref('');
 const detailTab = ref('details');
+const imageModalOpen = ref(false);
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const relatedPokemonLimit = 6;
@@ -192,6 +194,14 @@ function pokemonImageLabel() {
   return pokemon.value?.image ? `${pokemon.value.image.version} - ${pokemon.value.image.variant}` : '';
 }
 
+function openImageModal() {
+  imageModalOpen.value = true;
+}
+
+function closeImageModal() {
+  imageModalOpen.value = false;
+}
+
 async function loadPokemonDetail() {
   const nextPokemon = await api.pokemonDetail(String(route.params.id));
   pokemon.value = nextPokemon;
@@ -217,6 +227,7 @@ watch(
     pokemon.value = null;
     relatedHabitatTab.value = '';
     detailTab.value = 'details';
+    imageModalOpen.value = false;
     void loadPokemonDetail();
   }
 );
@@ -298,18 +309,7 @@ watch(
       <Tabs id="pokemon-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
 
       <div v-if="detailTab === 'details'" class="detail-grid detail-grid--stack">
-        <section v-if="pokemon.image" class="detail-section pokemon-image-detail" :aria-label="t('pages.pokemon.image')">
-          <div class="pokemon-image-detail__screen">
-            <img :src="pokemon.image.url" :alt="pokemonImageAlt()" />
-          </div>
-          <div class="pokemon-image-detail__caption">
-            <strong>{{ pokemonImageLabel() }}</strong>
-            <span>{{ pokemon.image.style }}</span>
-            <p>{{ pokemon.image.description }}</p>
-          </div>
-        </section>
-
-        <div class="pokemon-profile-grid">
+        <div class="pokemon-profile-grid" :class="{ 'pokemon-profile-grid--with-image': pokemon.image }">
           <div class="pokemon-profile-main">
             <section class="detail-section pokemon-profile-card" :aria-label="t('pages.pokemon.details')">
               <p v-if="pokemon.genus" class="pokemon-genus">{{ pokemon.genus }}</p>
@@ -352,9 +352,15 @@ watch(
             </div>
           </div>
 
-          <DetailSection class="pokemon-profile-stats" :title="t('pages.pokemon.statsTitle')">
-            <PokemonStatsPanel :stats="pokemon.stats" />
-          </DetailSection>
+          <div class="pokemon-profile-side" :class="{ 'pokemon-profile-side--with-image': pokemon.image }">
+            <DetailSection class="pokemon-profile-stats" :title="t('pages.pokemon.statsTitle')">
+              <PokemonStatsPanel :stats="pokemon.stats" />
+            </DetailSection>
+
+            <button v-if="pokemon.image" type="button" class="pokemon-profile-image" :aria-label="pokemonImageLabel()" @click="openImageModal">
+              <img :src="pokemon.image.url" :alt="pokemonImageAlt()" />
+            </button>
+          </div>
         </div>
 
         <DetailSection :title="t('pages.pokemon.skills')">
@@ -481,6 +487,26 @@ watch(
       </div>
     </div>
   </section>
+
+  <Modal
+    v-if="pokemon?.image && imageModalOpen"
+    :title="t('pages.pokemon.image')"
+    :subtitle="pokemonImageLabel()"
+    :close-label="t('common.close')"
+    size="wide"
+    @close="closeImageModal"
+  >
+    <div class="pokemon-image-detail">
+      <div class="pokemon-image-detail__screen">
+        <img :src="pokemon.image.url" :alt="pokemonImageAlt()" />
+      </div>
+      <div class="pokemon-image-detail__caption">
+        <strong>{{ pokemonImageLabel() }}</strong>
+        <span>{{ pokemon.image.style }}</span>
+        <p>{{ pokemon.image.description }}</p>
+      </div>
+    </div>
+  </Modal>
 
   <PokemonEdit v-if="showEditor" />
 </template>

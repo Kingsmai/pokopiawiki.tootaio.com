@@ -3379,6 +3379,21 @@ button:disabled,
   align-items: stretch;
 }
 
+.pokemon-profile-grid--with-image {
+  grid-template-columns: minmax(0, 1fr) minmax(430px, 560px);
+}
+
+.pokemon-profile-side {
+  display: grid;
+  gap: 16px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.pokemon-profile-side--with-image {
+  grid-template-columns: minmax(0, 1fr) clamp(112px, 12vw, 164px);
+}
+
 .pokemon-profile-main,
 .pokemon-profile-row {
   display: grid;
@@ -3398,6 +3413,36 @@ button:disabled,
 
 .pokemon-profile-stats {
   align-self: stretch;
+}
+
+.pokemon-profile-image {
+  width: clamp(112px, 12vw, 164px);
+  aspect-ratio: 1 / 1;
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border: 4px solid #172036;
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(90deg, rgba(42, 117, 187, 0.08) 1px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(rgba(42, 117, 187, 0.08) 1px, transparent 1px) 0 0 / 18px 18px,
+    #eef9ff;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+.pokemon-profile-image:hover,
+.pokemon-profile-image:focus-visible {
+  border-color: var(--pokemon-blue);
+}
+
+.pokemon-profile-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .pokemon-types-card {
@@ -4135,6 +4180,16 @@ button:disabled,
 
   .pokemon-fetch-panel__actions {
     justify-content: flex-start;
+  }
+
+  .pokemon-profile-side--with-image {
+    grid-template-columns: minmax(0, 1fr) clamp(96px, 21vw, 132px);
+    gap: 10px;
+  }
+
+  .pokemon-profile-image {
+    width: clamp(96px, 21vw, 132px);
+    padding: 8px;
   }
 
   .coming-soon-panel {

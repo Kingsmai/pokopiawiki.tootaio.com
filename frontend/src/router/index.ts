@@ -13,6 +13,7 @@ import ComingSoonView from '../views/ComingSoonView.vue';
 import AdminView from '../views/AdminView.vue';
 import ForgotPasswordView from '../views/ForgotPasswordView.vue';
 import LoginView from '../views/LoginView.vue';
+import UserProfileView from '../views/UserProfileView.vue';
 import RegisterView from '../views/RegisterView.vue';
 import ResetPasswordView from '../views/ResetPasswordView.vue';
 import VerifyEmailView from '../views/VerifyEmailView.vue';
@@ -46,6 +47,7 @@ export const router = createRouter({
     { path: '/checklist', component: DailyChecklistView },
     { path: '/life', component: LifeView },
     { path: '/admin', component: AdminView, meta: { requiresVerified: true } },
+    { path: '/profile', component: UserProfileView, meta: { requiresAuth: true } },
     { path: '/login', component: LoginView },
     { path: '/forgot-password', component: ForgotPasswordView },
     { path: '/reset-password', component: ResetPasswordView },
@@ -60,7 +62,10 @@ export const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
-  if (!to.matched.some((record) => record.meta.requiresVerified === true)) {
+  const requiresVerified = to.matched.some((record) => record.meta.requiresVerified === true);
+  const requiresAuth = requiresVerified || to.matched.some((record) => record.meta.requiresAuth === true);
+
+  if (!requiresAuth) {
     return true;
   }
 
@@ -70,7 +75,7 @@ router.beforeEach(async (to) => {
 
   try {
     const response = await api.me();
-    return response.user.emailVerified ? true : { path: '/login', query: { redirect: to.fullPath } };
+    return !requiresVerified || response.user.emailVerified ? true : { path: '/login', query: { redirect: to.fullPath } };
   } catch {
     setAuthToken(null);
     return { path: '/login', query: { redirect: to.fullPath } };

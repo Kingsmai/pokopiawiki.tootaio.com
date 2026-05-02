@@ -57,6 +57,7 @@ export const systemWordingMessages = {
       openMenu: 'Open navigation',
       closeMenu: 'Close navigation',
       language: 'Language',
+      profile: 'Profile',
       login: 'Log in',
       logout: 'Log out',
       register: 'Register'
@@ -108,6 +109,19 @@ export const systemWordingMessages = {
       completeEmailVerification: 'Please complete email verification first.'
     },
     pages: {
+      profile: {
+        title: 'User profile',
+        subtitle: 'Manage your account display name and email status.',
+        loading: 'Loading profile',
+        accountSummary: 'Account summary',
+        profileDetails: 'Profile details',
+        displayNameHint: 'Display name is shown on edits, discussions, and Life posts.',
+        displayNameRequired: 'Display name is required.',
+        emailVerified: 'Email verified',
+        emailUnverified: 'Email unverified',
+        saved: 'Profile saved',
+        saveFailed: 'Profile save failed'
+      },
       pokemon: {
         title: 'Pokemon',
         subtitle: 'Search Pokemon and filter by specialities, ideal habitat, and favourites.',
@@ -669,6 +683,7 @@ export const systemWordingMessages = {
       openMenu: '打开导航',
       closeMenu: '关闭导航',
       language: '语言',
+      profile: '个人资料',
       login: '登录',
       logout: '退出',
       register: '注册'
@@ -720,6 +735,19 @@ export const systemWordingMessages = {
       completeEmailVerification: '请先完成邮箱验证'
     },
     pages: {
+      profile: {
+        title: '个人资料',
+        subtitle: '管理账号显示名和邮箱状态。',
+        loading: '正在加载个人资料',
+        accountSummary: '账号概览',
+        profileDetails: '资料详情',
+        displayNameHint: '显示名会用于编辑署名、讨论和 Life 动态。',
+        displayNameRequired: '请输入显示名。',
+        emailVerified: '邮箱已验证',
+        emailUnverified: '邮箱未验证',
+        saved: '个人资料已保存',
+        saveFailed: '个人资料保存失败'
+      },
       pokemon: {
         title: 'Pokemon',
         subtitle: '搜索宝可梦，并按特长、环境、喜欢的东西筛选。',

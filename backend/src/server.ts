@@ -8,6 +8,7 @@ import {
   registerUser,
   requestPasswordReset,
   resetPassword,
+  updateCurrentUser,
   verifyEmail,
   type AuthUser
 } from './auth.ts';
@@ -196,6 +197,18 @@ app.get('/api/auth/me', async (request, reply) => {
   }
 
   return { user };
+});
+
+app.patch('/api/auth/me', async (request, reply) => {
+  const token = getBearerToken(request.headers.authorization);
+  const user = token ? await getUserBySessionToken(token) : null;
+
+  if (!user) {
+    return reply.code(401).send({ message: await serverMessage(requestLocale(request), 'loginRequired') });
+  }
+
+  const payload = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
+  return { user: await updateCurrentUser(user.id, payload, requestLocale(request)) };
 });
 
 app.post('/api/auth/logout', async (request, reply) => {

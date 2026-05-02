@@ -274,6 +274,10 @@ export interface AuthUser {
   emailVerified: boolean;
 }
 
+export interface UserProfilePayload {
+  displayName: string;
+}
+
 export interface LoginPayload {
   email: string;
   password: string;
@@ -449,14 +453,18 @@ export function setAuthToken(token: string | null, options: { persistent?: boole
     session?.removeItem(authTokenKey);
   }
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(authChangeEvent));
-  }
+  notifyAuthChange();
 }
 
 export function onAuthTokenChange(callback: () => void): () => void {
   window.addEventListener(authChangeEvent, callback);
   return () => window.removeEventListener(authChangeEvent, callback);
+}
+
+export function notifyAuthChange(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(authChangeEvent));
+  }
 }
 
 function requestHeaders(): HeadersInit {
@@ -493,7 +501,7 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function sendJson<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> {
+async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body: unknown): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method,
     headers: {
@@ -567,6 +575,7 @@ export const api = {
   resetPassword: (payload: { token: string; password: string }) =>
     sendJson<{ message: string }>('/api/auth/reset-password', 'POST', payload),
   me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
+  updateMe: (payload: UserProfilePayload) => sendJson<{ user: AuthUser }>('/api/auth/me', 'PATCH', payload),
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),

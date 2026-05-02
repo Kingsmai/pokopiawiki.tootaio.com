@@ -3,7 +3,7 @@ import { Icon } from '@iconify/vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { iconClose, iconLogin, iconLogout, iconMenu, iconRegister, iconTranslate, type AppIcon } from '../icons';
+import { iconClose, iconLogin, iconLogout, iconMenu, iconProfile, iconRegister, iconTranslate, type AppIcon } from '../icons';
 import type { AuthUser, Language } from '../services/api';
 import PokeBallMark from './PokeBallMark.vue';
 import StatusBadge from './StatusBadge.vue';
@@ -184,7 +184,10 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <template v-if="currentUser">
-            <span class="auth-user">{{ currentUser.displayName || currentUser.email }}</span>
+            <RouterLink class="auth-user" to="/profile" :aria-label="t('nav.profile')" @click="closeSidebar">
+              <Icon :icon="iconProfile" class="ui-icon auth-user__icon" aria-hidden="true" />
+              <span class="auth-user__name">{{ currentUser.displayName || currentUser.email }}</span>
+            </RouterLink>
             <button class="ui-button ui-button--ghost ui-button--small" type="button" @click="requestLogout">
               <Icon :icon="iconLogout" class="ui-icon" aria-hidden="true" />
               {{ t('nav.logout') }}

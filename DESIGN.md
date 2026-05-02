@@ -115,6 +115,11 @@
 - 对外用户字段只包含必要信息：
   - 当前用户：`id`、`email`、`displayName`、`emailVerified`
   - 编辑署名：`id`、`displayName`
+- User Profile：
+  - 登录用户可通过 `/profile` 查看自己的邮箱、邮箱验证状态和显示名。
+  - 当前版本只允许用户更新自己的 `displayName`，不支持头像、公开个人主页、邮箱修改或直接密码修改。
+  - 更新显示名后，API 仍只返回当前用户必要字段，不返回 session、token/hash、内部审计或调试数据。
+  - 显示名用于编辑署名、讨论和 Life 内容作者展示。
 
 ## Community 编辑与审计
 
@@ -498,6 +503,7 @@ API 暴露边界：
 - UI 风格以 `DesignGuidelines.html` 为准。
 - 页面结构以 `AppShell`、`PageHeader`、列表、详情区和管理区为核心。
 - 全局主导航使用 `AppShell` 侧边栏；移动端通过导航按钮打开侧边栏抽屉。
+- 登录用户的侧边栏账号入口进入 `/profile`；User Profile 属于账号入口，不作为 Wiki 主内容导航项。
 - 页面级分类、筛选或辅助内容切换使用 Tabs，避免在内容页继续增加侧边栏。
 - 导航和主要操作使用图标增强识别。
 - 数据加载状态使用 Skeleton，避免裸文本 loading。
@@ -544,6 +550,7 @@ API 暴露边界：
 - `POST /api/auth/request-password-reset`
 - `POST /api/auth/reset-password`
 - `GET /api/auth/me`
+- `PATCH /api/auth/me`：更新当前用户显示名；需要登录；只接收并返回当前用户必要字段。
 - `POST /api/auth/logout`
 
 已验证用户编辑 API：

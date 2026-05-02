@@ -507,6 +507,29 @@ export async function getUserBySessionToken(token: string): Promise<AuthUser | n
   return user ? toPublicUser(user) : null;
 }
 
+export async function updateCurrentUser(
+  userId: number,
+  payload: Record<string, unknown>,
+  locale = defaultLocale
+): Promise<AuthUser> {
+  const displayName = await cleanDisplayName(payload.displayName, locale);
+  const user = await queryOne<UserRow>(
+    `
+      UPDATE users
+      SET display_name = $1, updated_at = now()
+      WHERE id = $2
+      RETURNING id, email, display_name, email_verified_at
+    `,
+    [displayName, userId]
+  );
+
+  if (!user) {
+    throw statusError(await systemMessage(locale || defaultLocale, 'server.errors.loginRequired'), 401);
+  }
+
+  return toPublicUser(user);
+}
+
 export async function logoutSession(token: string): Promise<void> {
   if (token.length < 32) {
     return;

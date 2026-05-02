@@ -29,6 +29,7 @@ export const iconMail: AppIcon = 'mdi:email-fast-outline';
 export const iconMenu: AppIcon = 'mdi:menu';
 export const iconNoRecipe: AppIcon = 'mdi:file-document-remove-outline';
 export const iconPokemon: AppIcon = 'mdi:pokeball';
+export const iconProfile: AppIcon = 'mdi:account-circle-outline';
 export const iconRecipe: AppIcon = 'mdi:book-open-page-variant-outline';
 export const iconRegister: AppIcon = 'mdi:account-plus-outline';
 export const iconReply: AppIcon = 'mdi:reply-outline';

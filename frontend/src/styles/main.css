@@ -364,11 +364,43 @@ svg {
 }
 
 .auth-user {
+  min-height: 44px;
   max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   overflow: hidden;
+  padding: 8px 10px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
   color: var(--ink-soft);
   font-size: 14px;
   font-weight: 850;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.auth-user:hover,
+.auth-user.router-link-active {
+  border-color: var(--pokemon-blue);
+  background: rgba(255, 203, 5, 0.22);
+  color: var(--pokemon-blue-deep);
+}
+
+.auth-user__icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.auth-user__name {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3830,6 +3862,103 @@ button:disabled,
   background: color-mix(in srgb, var(--danger) 10%, var(--surface));
 }
 
+.profile-page {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.62fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.profile-card {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+.profile-card--identity {
+  align-content: start;
+}
+
+.profile-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.profile-avatar {
+  width: 58px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--line-strong);
+  border-radius: 50%;
+  background:
+    linear-gradient(to bottom, var(--pokemon-red) 0 45%, var(--line-strong) 45% 55%, var(--pokeball-white) 55% 100%);
+  color: var(--line-strong);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.38), 0 3px 0 rgba(0, 0, 0, 0.16);
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.profile-identity__copy {
+  min-width: 0;
+}
+
+.profile-identity h2,
+.profile-card__header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 950;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.profile-identity p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.profile-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-card__icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  color: var(--pokemon-blue);
+}
+
+.profile-field-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.profile-readonly-input {
+  color: var(--muted);
+  cursor: default;
+}
+
 .admin-layout {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
@@ -4153,6 +4282,7 @@ button:disabled,
   .pokemon-profile-grid,
   .pokemon-profile-row,
   .pokemon-related-grid,
+  .profile-layout,
   .system-wording-layout,
   .admin-layout {
     grid-template-columns: 1fr;

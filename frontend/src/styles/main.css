@@ -725,6 +725,69 @@ button:disabled,
   gap: 12px;
 }
 
+.modal-edit-form--tabbed {
+  gap: 14px;
+}
+
+.pokemon-edit-form {
+  height: clamp(420px, calc(100dvh - 188px), 640px);
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.pokemon-edit-panel {
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.pokemon-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.pokemon-measurement-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.pokemon-measurement-control {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.pokemon-measurement-control > .field-label {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pokemon-measurement-control > .field {
+  min-width: 96px;
+  flex: 1 1 110px;
+}
+
+.pokemon-measurement-control > .pokemon-measurement-fields {
+  min-width: 0;
+  flex: 1 1 220px;
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  gap: 8px;
+}
+
 .pokemon-measurement-fields,
 .pokemon-stats-fields {
   display: grid;
@@ -3409,6 +3472,10 @@ button:disabled,
   .appearance-row__main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .pokemon-measurement-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -3436,6 +3503,7 @@ button:disabled,
   .toolbar,
   .entity-grid,
   .grid,
+  .pokemon-edit-grid,
   .coming-soon-preview {
     grid-template-columns: 1fr;
   }

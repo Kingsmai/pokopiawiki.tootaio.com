@@ -13,6 +13,7 @@ const router = useRouter();
 const { t } = useI18n();
 const email = ref('');
 const password = ref('');
+const rememberMe = ref(false);
 const busy = ref(false);
 const errorMessage = ref('');
 
@@ -23,9 +24,10 @@ async function submitLogin() {
   try {
     const response = await api.login({
       email: email.value,
-      password: password.value
+      password: password.value,
+      rememberMe: rememberMe.value
     });
-    setAuthToken(response.token);
+    setAuthToken(response.token, { persistent: rememberMe.value });
 
     const redirect =
       typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
@@ -44,7 +46,7 @@ async function submitLogin() {
   <section class="auth-page">
     <div class="auth-panel">
       <PageHeader :title="t('auth.loginTitle')" :subtitle="t('auth.loginSubtitle')">
-        <template #kicker>Trainer Pass</template>
+        <template #kicker>{{ t('auth.accountAccess') }}</template>
       </PageHeader>
 
       <form class="auth-form" @submit.prevent="submitLogin">
@@ -56,6 +58,14 @@ async function submitLogin() {
         <div class="field">
           <label for="login-password">{{ t('auth.password') }}</label>
           <input id="login-password" v-model="password" autocomplete="current-password" required type="password" />
+        </div>
+
+        <div class="auth-options">
+          <label class="check-row auth-options__remember">
+            <input v-model="rememberMe" type="checkbox" />
+            {{ t('auth.rememberMe') }}
+          </label>
+          <RouterLink to="/forgot-password">{{ t('auth.forgotPassword') }}</RouterLink>
         </div>
 
         <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>

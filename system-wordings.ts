@@ -62,13 +62,18 @@ export const systemWordingMessages = {
       register: 'Register'
     },
     auth: {
+      accountAccess: 'Trainer Pass',
       email: 'Email',
       password: 'Password',
+      newPassword: 'New password',
+      confirmPassword: 'Confirm password',
       displayName: 'Display name',
       loginTitle: 'Log in',
       loginSubtitle: 'Use a verified email to enter Pokopia Wiki.',
       loggingIn: 'Logging in',
       loginFailed: 'Login failed',
+      rememberMe: 'Remember me',
+      forgotPassword: 'Forgot password?',
       noAccount: 'No account yet?',
       registerTitle: 'Register',
       registerSubtitle: 'Verify your email after creating an account.',
@@ -76,6 +81,17 @@ export const systemWordingMessages = {
       sending: 'Sending',
       sendVerification: 'Send verification email',
       hasAccount: 'Already have an account?',
+      requestResetTitle: 'Reset password',
+      requestResetSubtitle: 'Send a password reset link to your account email.',
+      sendResetLink: 'Send reset link',
+      requestResetFailed: 'Password reset request failed',
+      resetTitle: 'Choose a new password',
+      resetSubtitle: 'Use the reset link from your email to update your password.',
+      resetPassword: 'Reset password',
+      resetting: 'Resetting',
+      resetFailed: 'Password reset failed',
+      passwordMismatch: 'Passwords do not match',
+      invalidPasswordReset: 'The password reset link is invalid or expired.',
       verifyTitle: 'Email verification',
       verifySubtitle: 'You can log in after verification is complete.',
       verifyingEmail: 'Verifying email',
@@ -523,8 +539,11 @@ export const systemWordingMessages = {
       emailAlreadyRegistered: 'This email is already registered',
       checkVerificationEmail: 'Please check your verification email',
       emailVerified: 'Email verified',
+      checkPasswordResetEmail: 'If an account uses this email, a password reset link will be sent.',
+      passwordResetComplete: 'Password updated. You can log in with the new password.',
       invalidCredentials: 'Email or password is incorrect',
-      verifyEmailFirst: 'Please complete email verification first'
+      verifyEmailFirst: 'Please complete email verification first',
+      invalidResetToken: 'The password reset link is invalid or expired'
     },
     validation: {
       nameRequired: 'Name is required',
@@ -590,7 +609,11 @@ export const systemWordingMessages = {
       verificationSubject: 'Verify your Pokopia Wiki email',
       verificationHtml:
         '<p>Open the link below to verify your email:</p><p><a href="{url}">Verify email</a></p><p>The link expires in {hours} hours.</p>',
-      verificationText: 'Open this link to verify your Pokopia Wiki email: {url}\nThe link expires in {hours} hours.'
+      verificationText: 'Open this link to verify your Pokopia Wiki email: {url}\nThe link expires in {hours} hours.',
+      passwordResetSubject: 'Reset your Pokopia Wiki password',
+      passwordResetHtml:
+        '<p>Open the link below to reset your password:</p><p><a href="{url}">Reset password</a></p><p>The link expires in {hours} hours.</p>',
+      passwordResetText: 'Open this link to reset your Pokopia Wiki password: {url}\nThe link expires in {hours} hours.'
     }
   },
   },
@@ -651,13 +674,18 @@ export const systemWordingMessages = {
       register: '注册'
     },
     auth: {
+      accountAccess: 'Trainer Pass',
       email: '邮箱',
       password: '密码',
+      newPassword: '新密码',
+      confirmPassword: '确认密码',
       displayName: '显示名',
       loginTitle: '登录',
       loginSubtitle: '使用已验证邮箱进入 Pokopia Wiki',
       loggingIn: '登录中',
       loginFailed: '登录失败',
+      rememberMe: '记住我',
+      forgotPassword: '忘记密码？',
       noAccount: '还没有账号？',
       registerTitle: '注册',
       registerSubtitle: '创建账号后需要完成邮箱验证',
@@ -665,6 +693,17 @@ export const systemWordingMessages = {
       sending: '发送中',
       sendVerification: '发送验证邮件',
       hasAccount: '已有账号？',
+      requestResetTitle: '重置密码',
+      requestResetSubtitle: '向账号邮箱发送密码重置链接。',
+      sendResetLink: '发送重置链接',
+      requestResetFailed: '密码重置请求失败',
+      resetTitle: '设置新密码',
+      resetSubtitle: '使用邮件中的重置链接更新密码。',
+      resetPassword: '重置密码',
+      resetting: '重置中',
+      resetFailed: '密码重置失败',
+      passwordMismatch: '两次输入的密码不一致',
+      invalidPasswordReset: '密码重置链接无效或已过期',
       verifyTitle: '邮箱验证',
       verifySubtitle: '完成验证后即可登录',
       verifyingEmail: '正在验证邮箱',
@@ -1112,8 +1151,11 @@ export const systemWordingMessages = {
         emailAlreadyRegistered: '该邮箱已注册',
         checkVerificationEmail: '请查收验证邮件',
         emailVerified: '邮箱已验证',
+        checkPasswordResetEmail: '如果该邮箱已注册，系统会发送密码重置链接。',
+        passwordResetComplete: '密码已更新，请使用新密码登录。',
         invalidCredentials: '邮箱或密码不正确',
-        verifyEmailFirst: '请先完成邮箱验证'
+        verifyEmailFirst: '请先完成邮箱验证',
+        invalidResetToken: '密码重置链接无效或已过期'
       },
       validation: {
         nameRequired: '请输入名称',
@@ -1178,7 +1220,10 @@ export const systemWordingMessages = {
       auth: {
         verificationSubject: '验证你的 Pokopia Wiki 邮箱',
         verificationHtml: '<p>请点击下面的链接完成邮箱验证：</p><p><a href="{url}">验证邮箱</a></p><p>链接将在 {hours} 小时后失效。</p>',
-        verificationText: '请打开以下链接完成 Pokopia Wiki 邮箱验证：{url}\n链接将在 {hours} 小时后失效。'
+        verificationText: '请打开以下链接完成 Pokopia Wiki 邮箱验证：{url}\n链接将在 {hours} 小时后失效。',
+        passwordResetSubject: '重置你的 Pokopia Wiki 密码',
+        passwordResetHtml: '<p>请点击下面的链接重置密码：</p><p><a href="{url}">重置密码</a></p><p>链接将在 {hours} 小时后失效。</p>',
+        passwordResetText: '请打开以下链接重置 Pokopia Wiki 密码：{url}\n链接将在 {hours} 小时后失效。'
       }
     }
   }

@@ -11,8 +11,10 @@ import DailyChecklistView from '../views/DailyChecklistView.vue';
 import LifeView from '../views/LifeView.vue';
 import ComingSoonView from '../views/ComingSoonView.vue';
 import AdminView from '../views/AdminView.vue';
+import ForgotPasswordView from '../views/ForgotPasswordView.vue';
 import LoginView from '../views/LoginView.vue';
 import RegisterView from '../views/RegisterView.vue';
+import ResetPasswordView from '../views/ResetPasswordView.vue';
 import VerifyEmailView from '../views/VerifyEmailView.vue';
 import { api, getAuthToken, setAuthToken } from '../services/api';
 
@@ -45,6 +47,8 @@ export const router = createRouter({
     { path: '/life', component: LifeView },
     { path: '/admin', component: AdminView, meta: { requiresVerified: true } },
     { path: '/login', component: LoginView },
+    { path: '/forgot-password', component: ForgotPasswordView },
+    { path: '/reset-password', component: ResetPasswordView },
     { path: '/register', component: RegisterView },
     { path: '/verify-email', component: VerifyEmailView }
   ],

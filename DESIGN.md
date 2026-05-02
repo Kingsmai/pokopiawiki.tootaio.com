@@ -102,8 +102,15 @@
 - 验证邮件包含一次性验证链接。
 - 验证 token 只保存 hash，并带过期时间和使用状态。
 - 只有邮箱已验证的用户可以登录。
+- 用户可请求重置密码：
+  - 重置请求只接收邮箱，并始终返回泛化成功信息，避免暴露邮箱是否已注册。
+  - 重置邮件包含一次性重置链接。
+  - 重置 token 只保存 hash，并带过期时间和使用状态。
+  - 密码重置成功后不自动登录，并删除该用户已有 session。
+- 登录页提供 Remember me：
+  - 未勾选时前端将登录 token 保存在 `sessionStorage` 的 `pokopia_auth_token`，服务端 session 有效期为 1 天。
+  - 勾选时前端将登录 token 保存在 `localStorage` 的 `pokopia_auth_token`，服务端 session 有效期为 30 天。
 - 登录成功后返回明文 session token 给前端；数据库只保存 session token hash。
-- 前端将登录 token 保存在 `localStorage` 的 `pokopia_auth_token`。
 - 用户可退出登录，退出时删除对应 session。
 - 对外用户字段只包含必要信息：
   - 当前用户：`id`、`email`、`displayName`、`emailVerified`
@@ -534,6 +541,8 @@ API 暴露边界：
 - `POST /api/auth/register`
 - `POST /api/auth/verify-email`
 - `POST /api/auth/login`
+- `POST /api/auth/request-password-reset`
+- `POST /api/auth/reset-password`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
 

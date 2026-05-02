@@ -7,7 +7,9 @@ import { systemMessage } from './systemWordingQueries.ts';
 const scrypt = promisify(scryptCallback);
 const passwordKeyLength = 64;
 const verificationTokenHours = 24;
-const sessionDays = 30;
+const passwordResetTokenHours = 1;
+const rememberedSessionDays = 30;
+const sessionOnlySessionDays = 1;
 const defaultLocale = 'en';
 
 type DbClient = PoolClient;
@@ -35,11 +37,19 @@ type AuthMessageKey =
   | 'emailAlreadyRegistered'
   | 'checkVerificationEmail'
   | 'emailVerified'
+  | 'checkPasswordResetEmail'
+  | 'passwordResetComplete'
   | 'invalidCredentials'
   | 'verifyEmailFirst'
+  | 'invalidResetToken'
   | 'emailSubject'
   | 'emailHtml'
-  | 'emailText';
+  | 'emailText'
+  | 'passwordResetSubject'
+  | 'passwordResetHtml'
+  | 'passwordResetText';
+
+type AuthTokenMessageKey = 'invalidToken' | 'invalidResetToken';
 
 export type AuthUser = {
   id: number;
@@ -65,11 +75,17 @@ function authMessage(locale: string, key: AuthMessageKey, params: Record<string,
     emailAlreadyRegistered: 'server.auth.emailAlreadyRegistered',
     checkVerificationEmail: 'server.auth.checkVerificationEmail',
     emailVerified: 'server.auth.emailVerified',
+    checkPasswordResetEmail: 'server.auth.checkPasswordResetEmail',
+    passwordResetComplete: 'server.auth.passwordResetComplete',
     invalidCredentials: 'server.auth.invalidCredentials',
     verifyEmailFirst: 'server.auth.verifyEmailFirst',
+    invalidResetToken: 'server.auth.invalidResetToken',
     emailSubject: 'email.auth.verificationSubject',
     emailHtml: 'email.auth.verificationHtml',
-    emailText: 'email.auth.verificationText'
+    emailText: 'email.auth.verificationText',
+    passwordResetSubject: 'email.auth.passwordResetSubject',
+    passwordResetHtml: 'email.auth.passwordResetHtml',
+    passwordResetText: 'email.auth.passwordResetText'
   };
 
   return systemMessage(locale || defaultLocale, messageKeys[key], params);
@@ -109,9 +125,13 @@ async function cleanPassword(value: unknown, locale: string): Promise<string> {
   return value;
 }
 
-async function cleanToken(value: unknown, locale: string): Promise<string> {
+async function cleanToken(
+  value: unknown,
+  locale: string,
+  messageKey: AuthTokenMessageKey = 'invalidToken'
+): Promise<string> {
   if (typeof value !== 'string' || value.trim().length < 32) {
-    throw statusError(await authMessage(locale, 'invalidToken'), 400);
+    throw statusError(await authMessage(locale, messageKey), 400);
   }
 
   return value.trim();
@@ -187,11 +207,19 @@ function getEmailConfig() {
   return { apiKey, from };
 }
 
-function buildVerificationUrl(token: string): string {
+function buildTokenUrl(pathname: string, token: string): string {
   const origin = process.env.APP_ORIGIN ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000';
-  const url = new URL('/verify-email', origin);
+  const url = new URL(pathname, origin);
   url.searchParams.set('token', token);
   return url.toString();
+}
+
+function buildVerificationUrl(token: string): string {
+  return buildTokenUrl('/verify-email', token);
+}
+
+function buildPasswordResetUrl(token: string): string {
+  return buildTokenUrl('/reset-password', token);
 }
 
 async function sendVerificationEmail(email: string, token: string, locale: string): Promise<void> {
@@ -200,6 +228,33 @@ async function sendVerificationEmail(email: string, token: string, locale: strin
   const subject = await authMessage(locale, 'emailSubject');
   const html = await authMessage(locale, 'emailHtml', { url: verificationUrl, hours: verificationTokenHours });
   const text = await authMessage(locale, 'emailText', { url: verificationUrl, hours: verificationTokenHours });
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from,
+      to: [email],
+      subject,
+      html,
+      text
+    })
+  });
+
+  if (!response.ok) {
+    const responseText = await response.text();
+    throw new Error(`Resend email failed with ${response.status}: ${responseText.slice(0, 500)}`);
+  }
+}
+
+async function sendPasswordResetEmail(email: string, token: string, locale: string): Promise<void> {
+  const { apiKey, from } = getEmailConfig();
+  const resetUrl = buildPasswordResetUrl(token);
+  const subject = await authMessage(locale, 'passwordResetSubject');
+  const html = await authMessage(locale, 'passwordResetHtml', { url: resetUrl, hours: passwordResetTokenHours });
+  const text = await authMessage(locale, 'passwordResetText', { url: resetUrl, hours: passwordResetTokenHours });
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -324,9 +379,90 @@ export async function verifyEmail(payload: Record<string, unknown>, locale = def
   });
 }
 
+export async function requestPasswordReset(payload: Record<string, unknown>, locale = defaultLocale) {
+  const email = await cleanEmail(payload.email, locale);
+  const user = await queryOne<UserRow>(
+    'SELECT id, email, display_name, email_verified_at FROM users WHERE email = $1',
+    [email]
+  );
+
+  if (user) {
+    const resetToken = createPlainToken();
+    const resetTokenHash = hashToken(resetToken);
+
+    await withTransaction(async (client) => {
+      await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1 AND used_at IS NULL', [user.id]);
+      await client.query(
+        `
+          INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+          VALUES ($1, $2, now() + ($3 * interval '1 hour'))
+        `,
+        [user.id, resetTokenHash, passwordResetTokenHours]
+      );
+    });
+
+    try {
+      await sendPasswordResetEmail(email, resetToken, locale);
+    } catch (error) {
+      console.error('Password reset email failed', error);
+    }
+  }
+
+  return { message: await authMessage(locale, 'checkPasswordResetEmail') };
+}
+
+export async function resetPassword(payload: Record<string, unknown>, locale = defaultLocale) {
+  const token = await cleanToken(payload.token, locale, 'invalidResetToken');
+  const password = await cleanPassword(payload.password, locale);
+  const passwordHash = await hashPassword(password);
+  const tokenHash = hashToken(token);
+
+  return withTransaction(async (client) => {
+    const tokenRow = await clientQueryOne<{ id: number; user_id: number }>(
+      client,
+      `
+        SELECT id, user_id
+        FROM password_reset_tokens
+        WHERE token_hash = $1
+          AND used_at IS NULL
+          AND expires_at > now()
+        FOR UPDATE
+      `,
+      [tokenHash]
+    );
+
+    if (!tokenRow) {
+      throw statusError(await authMessage(locale, 'invalidResetToken'), 400);
+    }
+
+    const user = await clientQueryOne<UserRow>(
+      client,
+      `
+        UPDATE users
+        SET password_hash = $1, updated_at = now()
+        WHERE id = $2
+        RETURNING id, email, display_name, email_verified_at
+      `,
+      [passwordHash, tokenRow.user_id]
+    );
+
+    if (!user) {
+      throw statusError(await authMessage(locale, 'invalidResetToken'), 400);
+    }
+
+    await client.query('UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL', [
+      user.id
+    ]);
+    await client.query('DELETE FROM user_sessions WHERE user_id = $1', [user.id]);
+
+    return { message: await authMessage(locale, 'passwordResetComplete') };
+  });
+}
+
 export async function loginUser(payload: Record<string, unknown>, locale = defaultLocale) {
   const email = await cleanEmail(payload.email, locale);
   const password = await cleanPassword(payload.password, locale);
+  const sessionDays = payload.rememberMe === true ? rememberedSessionDays : sessionOnlySessionDays;
   const user = await queryOne<LoginUserRow>(
     'SELECT id, email, display_name, email_verified_at, password_hash FROM users WHERE email = $1',
     [email]

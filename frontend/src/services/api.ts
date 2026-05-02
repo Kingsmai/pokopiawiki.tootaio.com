@@ -277,6 +277,7 @@ export interface AuthUser {
 export interface LoginPayload {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface RegisterPayload extends LoginPayload {
@@ -418,26 +419,39 @@ export function buildQuery(params: Record<string, string | number | undefined>):
   return query ? `?${query}` : '';
 }
 
-export function getAuthToken(): string | null {
-  if (typeof localStorage === 'undefined') {
+function authStorage(type: 'local' | 'session'): Storage | null {
+  if (typeof window === 'undefined') {
     return null;
   }
 
-  return localStorage.getItem(authTokenKey);
+  return type === 'local' ? window.localStorage : window.sessionStorage;
 }
 
-export function setAuthToken(token: string | null): void {
-  if (typeof localStorage === 'undefined') {
-    return;
-  }
+export function getAuthToken(): string | null {
+  const sessionToken = authStorage('session')?.getItem(authTokenKey);
+  return sessionToken ?? authStorage('local')?.getItem(authTokenKey) ?? null;
+}
+
+export function setAuthToken(token: string | null, options: { persistent?: boolean } = {}): void {
+  const local = authStorage('local');
+  const session = authStorage('session');
 
   if (token) {
-    localStorage.setItem(authTokenKey, token);
+    if (options.persistent === false) {
+      session?.setItem(authTokenKey, token);
+      local?.removeItem(authTokenKey);
+    } else {
+      local?.setItem(authTokenKey, token);
+      session?.removeItem(authTokenKey);
+    }
   } else {
-    localStorage.removeItem(authTokenKey);
+    local?.removeItem(authTokenKey);
+    session?.removeItem(authTokenKey);
   }
 
-  window.dispatchEvent(new Event(authChangeEvent));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(authChangeEvent));
+  }
 }
 
 export function onAuthTokenChange(callback: () => void): () => void {
@@ -548,6 +562,10 @@ export const api = {
   verifyEmail: (token: string) =>
     sendJson<{ message: string; user: AuthUser }>('/api/auth/verify-email', 'POST', { token }),
   login: (payload: LoginPayload) => sendJson<AuthResponse>('/api/auth/login', 'POST', payload),
+  requestPasswordReset: (payload: { email: string }) =>
+    sendJson<{ message: string }>('/api/auth/request-password-reset', 'POST', payload),
+  resetPassword: (payload: { token: string; password: string }) =>
+    sendJson<{ message: string }>('/api/auth/reset-password', 'POST', payload),
   me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),

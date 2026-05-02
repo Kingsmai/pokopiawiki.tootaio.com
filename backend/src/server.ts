@@ -1,7 +1,16 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { getUserBySessionToken, loginUser, logoutSession, registerUser, verifyEmail, type AuthUser } from './auth.ts';
+import {
+  getUserBySessionToken,
+  loginUser,
+  logoutSession,
+  registerUser,
+  requestPasswordReset,
+  resetPassword,
+  verifyEmail,
+  type AuthUser
+} from './auth.ts';
 import { initializeDatabase, pool } from './db.ts';
 import {
   cleanLocale,
@@ -169,6 +178,14 @@ app.post('/api/auth/register', async (request, reply) =>
 app.post('/api/auth/verify-email', async (request) => verifyEmail(request.body as Record<string, unknown>, requestLocale(request)));
 
 app.post('/api/auth/login', async (request) => loginUser(request.body as Record<string, unknown>, requestLocale(request)));
+
+app.post('/api/auth/request-password-reset', async (request) =>
+  requestPasswordReset(request.body as Record<string, unknown>, requestLocale(request))
+);
+
+app.post('/api/auth/reset-password', async (request) =>
+  resetPassword(request.body as Record<string, unknown>, requestLocale(request))
+);
 
 app.get('/api/auth/me', async (request, reply) => {
   const token = getBearerToken(request.headers.authorization);

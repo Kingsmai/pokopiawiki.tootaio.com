@@ -1461,6 +1461,33 @@ button:disabled,
   color: var(--muted);
 }
 
+.pokemon-list-grid .entity-card {
+  min-height: 168px;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.pokemon-list-grid .entity-card__mark {
+  width: 92px;
+  height: 92px;
+}
+
+.pokemon-list-grid .pokeball-mark {
+  --ball-size: 64px !important;
+}
+
+.pokemon-list-grid .entity-card__content {
+  justify-items: center;
+  gap: 0;
+}
+
+.pokemon-list-grid .entity-card__title {
+  font-size: 20px;
+}
+
 .edit-meta {
   margin: 0;
   color: var(--muted);

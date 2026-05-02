@@ -3,8 +3,6 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import EditMeta from '../components/EditMeta.vue';
-import EntityChips from '../components/EntityChips.vue';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
 import PageHeader from '../components/PageHeader.vue';
@@ -42,10 +40,6 @@ async function loadPokemon() {
   loading.value = true;
   pokemon.value = await api.pokemon(query.value);
   loading.value = false;
-}
-
-function pokemonTypeIconSrc(typeId: number): string | null {
-  return typeId >= 1 && typeId <= 19 ? `/types/small/${typeId}.png` : null;
 }
 
 function pokemonCardImage(item: Pokemon) {
@@ -128,41 +122,22 @@ watch(query, loadPokemon);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid" aria-busy="true" :aria-label="t('pages.pokemon.loadingList')">
+    <div v-if="loading" class="entity-grid pokemon-list-grid" aria-busy="true" :aria-label="t('pages.pokemon.loadingList')">
       <article v-for="index in skeletonCardCount" :key="index" class="entity-card entity-card--skeleton">
-        <Skeleton variant="box" width="42px" height="42px" class="skeleton-entity-mark" />
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
-          <Skeleton width="76%" height="24px" />
-          <Skeleton width="58%" />
-          <Skeleton width="68%" />
-          <div class="skeleton-chip-row">
-            <Skeleton v-for="chipIndex in 2" :key="`skills-${chipIndex}`" width="64px" class="skeleton-chip" />
-          </div>
-          <div class="skeleton-chip-row">
-            <Skeleton v-for="chipIndex in 3" :key="`things-${chipIndex}`" width="72px" class="skeleton-chip" />
-          </div>
+          <Skeleton width="128px" height="24px" />
         </div>
       </article>
     </div>
-    <div v-else class="entity-grid">
+    <div v-else class="entity-grid pokemon-list-grid">
       <EntityCard
         v-for="item in pokemon"
         :key="item.id"
         :title="`#${item.id} ${item.name}`"
-        :subtitle="t('pages.pokemon.environmentPrefix', { name: item.environment.name })"
         :to="`/pokemon/${item.id}`"
         :image="pokemonCardImage(item)"
-      >
-        <EditMeta :entity="item" />
-        <div v-if="item.types.length" class="chips">
-          <span v-for="type in item.types" :key="type.id" class="chip pokemon-type-chip">
-            <img v-if="pokemonTypeIconSrc(type.id)" class="pokemon-type-chip__icon" :src="pokemonTypeIconSrc(type.id) ?? undefined" alt="" aria-hidden="true" />
-            <span>{{ type.name }}</span>
-          </span>
-        </div>
-        <EntityChips :items="item.skills" />
-        <EntityChips :items="item.favorite_things" />
-      </EntityCard>
+      />
     </div>
 
     <PokemonEdit v-if="showEditor" />

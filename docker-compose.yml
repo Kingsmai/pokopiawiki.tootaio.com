@@ -17,7 +17,8 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgres://pokopia:pokopia@postgres:5432/pokopia
       BACKEND_PORT: 3001

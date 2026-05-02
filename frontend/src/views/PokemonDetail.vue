@@ -180,6 +180,10 @@ function formatImperialHeight(inches: number): string {
   return `${feet}'${remainingInches}"`;
 }
 
+function pokemonTypeIconSrc(typeId: number): string | null {
+  return typeId >= 1 && typeId <= 19 ? `/types/small/${typeId}.png` : null;
+}
+
 async function loadPokemonDetail() {
   const nextPokemon = await api.pokemonDetail(String(route.params.id));
   pokemon.value = nextPokemon;
@@ -319,7 +323,10 @@ watch(
 
               <section class="detail-section pokemon-profile-card pokemon-types-card" :aria-label="t('pages.pokemon.types')">
                 <div v-if="pokemon.types.length" class="pokemon-type-slots" :class="typeSlotClass">
-                  <span v-for="type in pokemon.types.slice(0, 2)" :key="type.id" class="chip">{{ type.name }}</span>
+                  <span v-for="type in pokemon.types.slice(0, 2)" :key="type.id" class="chip pokemon-type-chip">
+                    <img v-if="pokemonTypeIconSrc(type.id)" class="pokemon-type-chip__icon" :src="pokemonTypeIconSrc(type.id) ?? undefined" alt="" aria-hidden="true" />
+                    <span>{{ type.name }}</span>
+                  </span>
                 </div>
                 <p v-else class="meta-line">{{ t('common.none') }}</p>
               </section>

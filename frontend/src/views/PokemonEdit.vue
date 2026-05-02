@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Modal from '../components/Modal.vue';
@@ -10,13 +10,15 @@ import StatusMessage from '../components/StatusMessage.vue';
 import Tabs from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import TranslationFields from '../components/TranslationFields.vue';
-import { iconCancel, iconSave } from '../icons';
+import { iconCancel, iconSave, iconSearch } from '../icons';
 import {
   api,
   type ConfigType,
   type Language,
   type NamedEntity,
   type Options,
+  type PokemonFetchOption,
+  type PokemonFetchResult,
   type PokemonPayload,
   type PokemonStats,
   type TranslationMap
@@ -35,11 +37,17 @@ const itemOptions = ref<NamedEntity[]>([]);
 const languages = ref<Language[]>([]);
 const loading = ref(true);
 const busy = ref(false);
+const fetchBusy = ref(false);
+const fetchOptionsLoading = ref(false);
+const fetchOptionsOpen = ref(false);
 const message = ref('');
+const fetchIdentifier = ref('');
+const fetchOptions = ref<PokemonFetchOption[]>([]);
 const creatingSelect = ref('');
 const activeEditTab = ref('basic');
 const heightUnit = ref<'imperial' | 'metric'>('imperial');
 const weightUnit = ref<'imperial' | 'metric'>('imperial');
+let fetchOptionsController: AbortController | null = null;
 
 function defaultPokemonStats(): PokemonStats {
   return {
@@ -174,6 +182,46 @@ function pokemonIdForSave() {
   return Number(isEditing.value ? routeId.value : pokemonForm.value.id);
 }
 
+function mergeFetchedTranslations(fetchedTranslations: TranslationMap | undefined): TranslationMap {
+  const nextTranslations = Object.entries(pokemonForm.value.translations).reduce<TranslationMap>((translations, [code, fields]) => {
+    translations[code] = { ...fields };
+    return translations;
+  }, {});
+
+  Object.entries(fetchedTranslations ?? {}).forEach(([code, fields]) => {
+    const nextFields = { ...(nextTranslations[code] ?? {}) };
+    if (typeof fields.name === 'string') {
+      nextFields.name = fields.name;
+    }
+    if (typeof fields.genus === 'string') {
+      nextFields.genus = fields.genus;
+    }
+    nextTranslations[code] = nextFields;
+  });
+
+  return nextTranslations;
+}
+
+function applyFetchedPokemon(fetchedPokemon: PokemonFetchResult): boolean {
+  if (isEditing.value && fetchedPokemon.id !== pokemonIdForSave()) {
+    message.value = t('pages.pokemon.fetchIdMismatch', { id: fetchedPokemon.id });
+    return false;
+  }
+
+  pokemonForm.value = {
+    ...pokemonForm.value,
+    id: isEditing.value ? pokemonForm.value.id : String(fetchedPokemon.id),
+    name: fetchedPokemon.name,
+    genus: fetchedPokemon.genus,
+    heightInches: fetchedPokemon.heightInches,
+    weightPounds: fetchedPokemon.weightPounds,
+    translations: mergeFetchedTranslations(fetchedPokemon.translations),
+    typeIds: fetchedPokemon.typeIds.map(String),
+    stats: fetchedPokemon.stats
+  };
+  return true;
+}
+
 function hasRequiredBasicFields() {
   const id = pokemonIdForSave();
   return Number.isInteger(id) && id > 0 && pokemonNameForSave().trim() !== '';
@@ -224,6 +272,95 @@ async function loadEditor() {
   }
 }
 
+function cancelFetchOptionsRequest() {
+  fetchOptionsController?.abort();
+  fetchOptionsController = null;
+  fetchOptionsLoading.value = false;
+}
+
+function fetchOptionLabel(option: PokemonFetchOption) {
+  return `#${option.id} ${option.name}`;
+}
+
+async function loadFetchOptions() {
+  cancelFetchOptionsRequest();
+  const controller = new AbortController();
+  fetchOptionsController = controller;
+  fetchOptionsLoading.value = true;
+
+  try {
+    const rows = await api.pokemonFetchOptions(fetchIdentifier.value, controller.signal);
+    if (fetchOptionsController === controller) {
+      fetchOptions.value = rows;
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return;
+    }
+    if (fetchOptionsController === controller) {
+      fetchOptions.value = [];
+      message.value = errorText(error, t('pages.pokemon.fetchSearchFailed'));
+    }
+  } finally {
+    if (fetchOptionsController === controller) {
+      fetchOptionsLoading.value = false;
+      fetchOptionsController = null;
+    }
+  }
+}
+
+function refreshFetchOptions() {
+  if (!fetchOptionsOpen.value) {
+    return;
+  }
+
+  void loadFetchOptions();
+}
+
+function openFetchOptions() {
+  fetchOptionsOpen.value = true;
+  refreshFetchOptions();
+}
+
+function closeFetchOptions() {
+  fetchOptionsOpen.value = false;
+  cancelFetchOptionsRequest();
+}
+
+async function selectFetchOption(option: PokemonFetchOption) {
+  fetchIdentifier.value = option.identifier;
+  closeFetchOptions();
+  await fetchPokemonByIdentifier(option.identifier);
+}
+
+async function fetchPokemonByIdentifier(identifierValue?: string) {
+  const identifier = (identifierValue ?? fetchIdentifier.value).trim() || pokemonForm.value.id.trim();
+  if (!identifier) {
+    message.value = t('pages.pokemon.fetchIdentifierRequired');
+    return;
+  }
+
+  fetchBusy.value = true;
+  message.value = '';
+
+  try {
+    const fetchedPokemon = await api.fetchPokemonData(identifier);
+    await loadOptions();
+    if (applyFetchedPokemon(fetchedPokemon)) {
+      fetchIdentifier.value = fetchedPokemon.identifier;
+      closeFetchOptions();
+    }
+  } catch (error) {
+    message.value = errorText(error, t('pages.pokemon.fetchFailed'));
+  } finally {
+    fetchBusy.value = false;
+  }
+}
+
+function fetchPokemonFromInput() {
+  void fetchPokemonByIdentifier();
+}
+
 async function createSingleOption(selectKey: string, type: ConfigType, name: string, assign: (value: string) => void) {
   const cleanName = name.trim();
   if (!cleanName) return;
@@ -262,6 +399,10 @@ async function createMultiOption(selectKey: string, type: ConfigType, name: stri
 }
 
 async function savePokemon() {
+  if (fetchBusy.value) {
+    return;
+  }
+
   if (!hasRequiredBasicFields()) {
     await showBasicFieldValidation();
     return;
@@ -301,7 +442,10 @@ onMounted(() => {
   void loadEditor();
 });
 
+onBeforeUnmount(cancelFetchOptionsRequest);
+
 watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
+watch(fetchIdentifier, refreshFetchOptions);
 </script>
 
 <template>
@@ -310,6 +454,47 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
 
     <form v-if="!loading && options" id="pokemon-edit-form" class="modal-edit-form modal-edit-form--tabbed pokemon-edit-form" @submit.prevent="savePokemon">
       <Tabs id="pokemon-edit-tabs" v-model="activeEditTab" :tabs="editTabs" :label="t('pages.pokemon.editSections')" />
+
+      <div class="pokemon-fetch-panel" :aria-label="t('pages.pokemon.fetchData')">
+        <div class="field pokemon-fetch-panel__input">
+          <label for="pokemon-fetch-identifier">{{ t('pages.pokemon.fetchIdentifier') }}</label>
+          <input
+            id="pokemon-fetch-identifier"
+            v-model="fetchIdentifier"
+            type="search"
+            :placeholder="t('pages.pokemon.fetchIdentifierPlaceholder')"
+            autocomplete="off"
+            role="combobox"
+            :aria-expanded="fetchOptionsOpen"
+            aria-controls="pokemon-fetch-results"
+            @focus="openFetchOptions"
+            @keydown.escape.stop="closeFetchOptions"
+            @keydown.enter.prevent="fetchPokemonFromInput"
+          />
+          <div v-if="fetchOptionsOpen" id="pokemon-fetch-results" class="pokemon-fetch-results" role="listbox" :aria-label="t('pages.pokemon.fetchResults')">
+            <p v-if="fetchOptionsLoading" class="pokemon-fetch-results__status">{{ t('pages.pokemon.fetchSearching') }}</p>
+            <template v-else-if="fetchOptions.length">
+              <button
+                v-for="option in fetchOptions"
+                :key="option.id"
+                type="button"
+                class="pokemon-fetch-option"
+                role="option"
+                @mousedown.prevent
+                @click="selectFetchOption(option)"
+              >
+                <span class="pokemon-fetch-option__name">{{ fetchOptionLabel(option) }}</span>
+                <span class="pokemon-fetch-option__identifier">{{ option.identifier }}</span>
+              </button>
+            </template>
+            <p v-else class="pokemon-fetch-results__status">{{ t('pages.pokemon.fetchNoMatches') }}</p>
+          </div>
+        </div>
+        <button type="button" class="ui-button ui-button--blue ui-button--small pokemon-fetch-panel__button" :disabled="busy || fetchBusy" @click="fetchPokemonFromInput">
+          <Icon :icon="iconSearch" class="ui-icon" aria-hidden="true" />
+          {{ fetchBusy ? t('pages.pokemon.fetchingData') : t('pages.pokemon.fetchData') }}
+        </button>
+      </div>
 
       <section v-if="activeEditTab === 'basic'" class="pokemon-edit-panel" role="tabpanel" :aria-label="t('pages.pokemon.editTabBasic')">
         <div class="pokemon-edit-grid">
@@ -476,10 +661,8 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
             v-model="pokemonForm.typeIds"
             :options="options.pokemonTypes"
             :max="2"
-            allow-create
             :creating="creatingSelect === 'pokemon-types'"
             :placeholder="t('pages.pokemon.searchTypes')"
-            @create="createMultiOption('pokemon-types', 'pokemon-types', $event, pokemonForm.typeIds, 2)"
           />
         </div>
 
@@ -498,7 +681,7 @@ watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
     </section>
 
     <template v-if="!loading && options" #footer>
-      <button type="submit" form="pokemon-edit-form" class="link-button" :disabled="busy">
+      <button type="submit" form="pokemon-edit-form" class="link-button" :disabled="busy || fetchBusy">
         <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
         {{ busy ? t('common.saving') : t('common.save') }}
       </button>

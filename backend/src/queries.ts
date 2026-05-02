@@ -1,6 +1,9 @@
 import { parseIdList, parseMatchMode, sqlForRelationFilter } from './filter.ts';
 import { pool, query, queryOne } from './db.ts';
 import { Buffer } from 'node:buffer';
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { PoolClient } from 'pg';
 
 type QueryValue = string | string[] | undefined;
@@ -81,6 +84,34 @@ type PokemonPayload = {
   skillIds: number[];
   favoriteThingIds: number[];
   skillItemDrops: SkillItemDrop[];
+};
+
+type PokemonFetchResult = {
+  id: number;
+  identifier: string;
+  name: string;
+  genus: string;
+  heightInches: number;
+  weightPounds: number;
+  translations: TranslationInput;
+  typeIds: number[];
+  stats: PokemonStats;
+};
+
+type PokemonFetchOption = {
+  id: number;
+  identifier: string;
+  name: string;
+};
+
+type CsvRow = Record<string, string>;
+type PokemonCsvData = {
+  pokemonRows: CsvRow[];
+  pokemonByLookup: Map<string, CsvRow>;
+  namesByPokemonId: Map<number, CsvRow>;
+  genusByPokemonId: Map<number, CsvRow>;
+  typesById: Map<number, CsvRow>;
+  canonicalTypeRows: CsvRow[];
 };
 
 type ItemPayload = {
@@ -257,6 +288,7 @@ const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
 const defaultLifePostLimit = 20;
 const maxLifePostLimit = 50;
 const lifeReactionTypes = ['like', 'helpful', 'fun', 'thanks'] as const;
+const pokemonTypeIconIds = new Set(Array.from({ length: 19 }, (_value, index) => index + 1));
 const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
   { key: 'hp', label: 'HP' },
   { key: 'attack', label: 'Attack' },
@@ -291,6 +323,8 @@ const discussionEntityDefinitions: Record<DiscussionEntityType, DiscussionEntity
   recipes: { table: 'recipes' },
   habitats: { table: 'habitats' }
 };
+
+let pokemonCsvDataCache: Promise<PokemonCsvData> | null = null;
 
 function asString(value: QueryValue): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -656,7 +690,7 @@ function requireLanguageCode(value: unknown): string {
 }
 
 export async function listLanguages(includeDisabled = false) {
-  return query(
+  return query<LanguagePayload>(
     `
       SELECT code, name, enabled, is_default AS "isDefault", sort_order AS "sortOrder"
       FROM languages
@@ -784,6 +818,393 @@ export async function reorderLanguages(payload: Record<string, unknown>) {
   });
 
   return listLanguages(true);
+}
+
+function parseCsv(content: string, fileName: string): CsvRow[] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+
+    if (inQuotes) {
+      if (char === '"' && content[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      row.push(cell);
+      cell = '';
+    } else if (char === '\n') {
+      row.push(cell);
+      if (row.some((value) => value !== '')) {
+        rows.push(row);
+      }
+      row = [];
+      cell = '';
+    } else if (char !== '\r') {
+      cell += char;
+    }
+  }
+
+  if (cell !== '' || row.length > 0) {
+    row.push(cell);
+    if (row.some((value) => value !== '')) {
+      rows.push(row);
+    }
+  }
+
+  const headers = rows[0]?.map((header) => header.replace(/^\uFEFF/, ''));
+  if (!headers?.length) {
+    throw validationError(`${fileName} is empty`);
+  }
+
+  return rows.slice(1).map((values) =>
+    headers.reduce<CsvRow>((record, header, index) => {
+      record[header] = values[index] ?? '';
+      return record;
+    }, {})
+  );
+}
+
+async function readPokemonDataFile(fileName: string): Promise<string> {
+  const sourceDir = dirname(fileURLToPath(import.meta.url));
+  const directories = [
+    process.env.POKOPIA_DATA_DIR ? resolve(process.env.POKOPIA_DATA_DIR) : '',
+    resolve(process.cwd(), 'data'),
+    resolve(process.cwd(), '..', 'data'),
+    resolve(sourceDir, '..', 'data'),
+    resolve(sourceDir, '..', '..', 'data')
+  ].filter(Boolean);
+  const uniqueDirectories = [...new Set(directories)];
+
+  for (const directory of uniqueDirectories) {
+    try {
+      return await readFile(resolve(directory, fileName), 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  throw validationError(`Pokemon data file ${fileName} is unavailable`);
+}
+
+function csvInteger(row: CsvRow, fieldName: string): number {
+  const value = Number(row[fieldName]);
+  return Number.isInteger(value) ? value : 0;
+}
+
+function csvNumber(row: CsvRow, fieldName: string): number {
+  const value = Number(row[fieldName]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function csvText(row: CsvRow, fieldName: string): string {
+  return row[fieldName]?.trim() ?? '';
+}
+
+function indexRowsByNumber(rows: CsvRow[], fieldName: string): Map<number, CsvRow> {
+  return rows.reduce((index, row) => {
+    const id = csvInteger(row, fieldName);
+    if (id > 0) {
+      index.set(id, row);
+    }
+    return index;
+  }, new Map<number, CsvRow>());
+}
+
+async function loadPokemonCsvData(): Promise<PokemonCsvData> {
+  if (!pokemonCsvDataCache) {
+    pokemonCsvDataCache = (async () => {
+      const [pokemonContent, namesContent, genusContent, typesContent] = await Promise.all([
+        readPokemonDataFile('pokemon_data.csv'),
+        readPokemonDataFile('localized_pokemon_name.csv'),
+        readPokemonDataFile('localized_pokemon_genus.csv'),
+        readPokemonDataFile('localized_type_name.csv')
+      ]);
+      const pokemonRows = parseCsv(pokemonContent, 'pokemon_data.csv');
+      const typeRows = parseCsv(typesContent, 'localized_type_name.csv');
+      const pokemonByLookup = new Map<string, CsvRow>();
+
+      for (const row of pokemonRows) {
+        const id = csvInteger(row, 'id');
+        const identifier = csvText(row, 'identifier').toLowerCase();
+        if (id > 0) {
+          pokemonByLookup.set(String(id), row);
+        }
+        if (identifier) {
+          pokemonByLookup.set(identifier, row);
+        }
+      }
+
+      return {
+        pokemonRows,
+        pokemonByLookup,
+        namesByPokemonId: indexRowsByNumber(parseCsv(namesContent, 'localized_pokemon_name.csv'), 'pokemon_species_id'),
+        genusByPokemonId: indexRowsByNumber(parseCsv(genusContent, 'localized_pokemon_genus.csv'), 'pokemon_species_id'),
+        typesById: indexRowsByNumber(typeRows, 'type_id'),
+        canonicalTypeRows: typeRows.filter((row) => pokemonTypeIconIds.has(csvInteger(row, 'type_id')))
+      };
+    })();
+  }
+
+  return pokemonCsvDataCache;
+}
+
+function pokemonDataLookupKey(value: unknown): string {
+  const rawValue = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  if (rawValue === '') {
+    throw validationError('Pokemon identifier is required');
+  }
+
+  const numericValue = Number(rawValue);
+  if (Number.isInteger(numericValue) && numericValue > 0) {
+    return String(numericValue);
+  }
+
+  return rawValue.toLowerCase();
+}
+
+function languageCsvColumn(code: string): string | null {
+  const [language, region = ''] = code.split('-');
+  const languageKey = language.toLowerCase();
+  const regionKey = region.toUpperCase();
+  const directColumns: Record<string, string> = {
+    de: 'de',
+    en: 'en',
+    es: 'es',
+    fr: 'fr',
+    it: 'it',
+    ja: 'ja',
+    ko: 'ko'
+  };
+
+  if (languageKey === 'zh') {
+    return ['HK', 'MO', 'TW'].includes(regionKey) ? 'zh_hant' : 'zh_hans';
+  }
+
+  return directColumns[languageKey] ?? null;
+}
+
+function localizedCsvText(row: CsvRow, code: string): string {
+  const column = languageCsvColumn(code);
+  return column ? csvText(row, column) : '';
+}
+
+function defaultLanguage(languages: LanguagePayload[]): LanguagePayload | undefined {
+  return languages.find((language) => language.isDefault) ?? languages.find((language) => language.code === defaultLocale) ?? languages[0];
+}
+
+function defaultCsvText(row: CsvRow, languages: LanguagePayload[], fallback: string): string {
+  const defaultCode = defaultLanguage(languages)?.code ?? defaultLocale;
+  return localizedCsvText(row, defaultCode) || localizedCsvText(row, defaultLocale) || fallback;
+}
+
+function assignTranslation(translations: TranslationInput, locale: string, fieldName: TranslationField, value: string): void {
+  if (!value) {
+    return;
+  }
+
+  translations[locale] = {
+    ...(translations[locale] ?? {}),
+    [fieldName]: value
+  };
+}
+
+function localizedCsvTranslations(
+  rows: Array<{ row: CsvRow; fieldName: TranslationField }>,
+  languages: LanguagePayload[]
+): TranslationInput {
+  const translations: TranslationInput = {};
+  const defaultCode = defaultLanguage(languages)?.code ?? defaultLocale;
+
+  for (const language of languages) {
+    if (language.code === defaultCode) {
+      continue;
+    }
+
+    for (const { row, fieldName } of rows) {
+      assignTranslation(translations, language.code, fieldName, localizedCsvText(row, language.code));
+    }
+  }
+
+  return cleanTranslations(translations, rows.map((row) => row.fieldName));
+}
+
+function fetchedPokemonStats(row: CsvRow): PokemonStats {
+  return {
+    hp: csvInteger(row, 'hp'),
+    attack: csvInteger(row, 'atk'),
+    defense: csvInteger(row, 'def'),
+    specialAttack: csvInteger(row, 'sp_atk'),
+    specialDefense: csvInteger(row, 'sp_def'),
+    speed: csvInteger(row, 'spd')
+  };
+}
+
+function fetchedPokemonTypeIds(row: CsvRow, data: PokemonCsvData): number[] {
+  const typeIds = [csvInteger(row, 'type_1_id'), csvInteger(row, 'type_2_id')].filter((typeId) => typeId > 0);
+
+  if (typeIds.length === 0 || typeIds.some((typeId) => !data.typesById.has(typeId) || !pokemonTypeIconIds.has(typeId))) {
+    throw validationError('Pokemon type data is unavailable');
+  }
+
+  return typeIds;
+}
+
+async function ensurePokemonTypeCatalog(
+  client: DbClient,
+  data: PokemonCsvData,
+  languages: LanguagePayload[],
+  userId: number
+): Promise<void> {
+  for (const row of data.canonicalTypeRows) {
+    const typeId = csvInteger(row, 'type_id');
+    const name = defaultCsvText(row, languages, csvText(row, 'identifier'));
+    const translations = localizedCsvTranslations([{ row, fieldName: 'name' }], languages);
+    const existing = await client.query<{ name: string }>('SELECT name FROM pokemon_types WHERE id = $1', [typeId]);
+
+    if (existing.rowCount === 0) {
+      await client.query(
+        `
+          INSERT INTO pokemon_types (
+            id,
+            name,
+            sort_order,
+            created_by_user_id,
+            updated_by_user_id
+          )
+          VALUES ($1, $2, $3, $4, $4)
+        `,
+        [typeId, name, typeId * 10, userId]
+      );
+      await recordEditLog(client, 'pokemon-types', typeId, 'create', userId);
+    } else if (existing.rows[0].name !== name) {
+      await client.query(
+        `
+          UPDATE pokemon_types
+          SET name = $1,
+              updated_by_user_id = $2,
+              updated_at = now()
+          WHERE id = $3
+        `,
+        [name, userId, typeId]
+      );
+      await recordEditLog(client, 'pokemon-types', typeId, 'update', userId, [
+        { label: 'Name', before: existing.rows[0].name, after: name }
+      ]);
+    }
+
+    await replaceEntityTranslations(client, 'pokemon-types', typeId, translations, ['name']);
+  }
+
+  await client.query(
+    `
+      SELECT setval(
+        pg_get_serial_sequence('pokemon_types', 'id'),
+        GREATEST((SELECT COALESCE(MAX(id), 1) FROM pokemon_types), 1),
+        true
+      )
+    `
+  );
+}
+
+export async function fetchPokemonData(payload: Record<string, unknown>, userId: number): Promise<PokemonFetchResult> {
+  const lookupKey = pokemonDataLookupKey(payload.identifier);
+  const [data, languages] = await Promise.all([loadPokemonCsvData(), listLanguages()]);
+  const pokemonRow = data.pokemonByLookup.get(lookupKey);
+
+  if (!pokemonRow) {
+    throw validationError('Pokemon data was not found');
+  }
+
+  const id = csvInteger(pokemonRow, 'id');
+  const nameRow = data.namesByPokemonId.get(id) ?? pokemonRow;
+  const genusRow = data.genusByPokemonId.get(id) ?? pokemonRow;
+  const identifier = csvText(pokemonRow, 'identifier');
+  const typeIds = fetchedPokemonTypeIds(pokemonRow, data);
+
+  await withTransaction((client) => ensurePokemonTypeCatalog(client, data, languages, userId));
+
+  return {
+    id,
+    identifier,
+    name: defaultCsvText(nameRow, languages, identifier),
+    genus: defaultCsvText(genusRow, languages, ''),
+    heightInches: Math.round(csvNumber(pokemonRow, 'height_m') * 39.37007874015748 * 100) / 100,
+    weightPounds: Math.round(csvNumber(pokemonRow, 'weight_kg') * 2.2046226218 * 10) / 10,
+    translations: localizedCsvTranslations(
+      [
+        { row: nameRow, fieldName: 'name' },
+        { row: genusRow, fieldName: 'genus' }
+      ],
+      languages
+    ),
+    typeIds,
+    stats: fetchedPokemonStats(pokemonRow)
+  };
+}
+
+function pokemonFetchOption(row: CsvRow, data: PokemonCsvData, languages: LanguagePayload[], locale: string): PokemonFetchOption {
+  const id = csvInteger(row, 'id');
+  const identifier = csvText(row, 'identifier');
+  const nameRow = data.namesByPokemonId.get(id) ?? row;
+
+  return {
+    id,
+    identifier,
+    name: localizedCsvText(nameRow, cleanLocale(locale)) || defaultCsvText(nameRow, languages, identifier)
+  };
+}
+
+function pokemonFetchOptionMatches(
+  row: CsvRow,
+  data: PokemonCsvData,
+  languages: LanguagePayload[],
+  locale: string,
+  search: string
+): boolean {
+  if (!search) {
+    return true;
+  }
+
+  const id = csvInteger(row, 'id');
+  const identifier = csvText(row, 'identifier');
+  const nameRow = data.namesByPokemonId.get(id) ?? row;
+  const defaultCode = defaultLanguage(languages)?.code ?? defaultLocale;
+  const searchFields = [
+    String(id),
+    identifier,
+    localizedCsvText(nameRow, cleanLocale(locale)),
+    localizedCsvText(nameRow, defaultCode),
+    localizedCsvText(nameRow, defaultLocale)
+  ];
+  const keyword = search.toLowerCase();
+
+  return searchFields.some((field) => field.toLowerCase().includes(keyword));
+}
+
+export async function listPokemonFetchOptions(paramsQuery: QueryParams, locale = defaultLocale): Promise<PokemonFetchOption[]> {
+  const search = asString(paramsQuery.search)?.trim() ?? '';
+  const [data, languages] = await Promise.all([loadPokemonCsvData(), listLanguages()]);
+
+  return data.pokemonRows
+    .filter((row) => csvInteger(row, 'id') > 0 && pokemonFetchOptionMatches(row, data, languages, locale, search))
+    .slice(0, 20)
+    .map((row) => pokemonFetchOption(row, data, languages, locale));
 }
 
 function displayValue(value: string | null | undefined): string {

@@ -290,6 +290,24 @@ export interface PokemonPayload {
   skillItemDrops: Array<{ skillId: number; itemId: number }>;
 }
 
+export interface PokemonFetchResult {
+  id: number;
+  identifier: string;
+  name: string;
+  genus: string;
+  heightInches: number;
+  weightPounds: number;
+  translations?: TranslationMap;
+  typeIds: number[];
+  stats: PokemonStats;
+}
+
+export interface PokemonFetchOption {
+  id: number;
+  identifier: string;
+  name: string;
+}
+
 export interface ItemPayload {
   name: string;
   translations?: TranslationMap;
@@ -416,9 +434,10 @@ async function getErrorMessage(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
-async function getJson<T>(path: string): Promise<T> {
+async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: requestHeaders()
+    headers: requestHeaders(),
+    signal
   });
 
   if (!response.ok) {
@@ -550,6 +569,9 @@ export const api = {
   pokemon: (params: Record<string, string | number | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),
   pokemonDetail: (id: string | number) => getJson<PokemonDetail>(`/api/pokemon/${id}`),
+  pokemonFetchOptions: (search: string, signal?: AbortSignal) =>
+    getJson<PokemonFetchOption[]>(`/api/pokemon/fetch-options${buildQuery({ search: search.trim() })}`, signal),
+  fetchPokemonData: (identifier: string) => sendJson<PokemonFetchResult>('/api/pokemon/fetch', 'POST', { identifier }),
   createPokemon: (payload: PokemonPayload) => sendJson<PokemonDetail>('/api/pokemon', 'POST', payload),
   updatePokemon: (id: string | number, payload: PokemonPayload) =>
     sendJson<PokemonDetail>(`/api/pokemon/${id}`, 'PUT', payload),

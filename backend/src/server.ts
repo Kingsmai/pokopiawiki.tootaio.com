@@ -28,6 +28,7 @@ import {
   deleteLifePostReaction,
   deletePokemon,
   deleteRecipe,
+  fetchPokemonData,
   getHabitat,
   getItem,
   getOptions,
@@ -42,6 +43,7 @@ import {
   listLanguages,
   listLifePosts,
   listPokemon,
+  listPokemonFetchOptions,
   listRecipes,
   reorderConfig,
   reorderDailyChecklistItems,
@@ -342,6 +344,13 @@ app.get('/api/pokemon', async (request) =>
   listPokemon(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
 );
 
+app.get('/api/pokemon/fetch-options', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user
+    ? listPokemonFetchOptions(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
+    : undefined;
+});
+
 app.get('/api/pokemon/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
   const pokemon = await getPokemon(Number(id), requestLocale(request));
@@ -358,6 +367,11 @@ app.post('/api/pokemon', async (request, reply) => {
   return user
     ? reply.code(201).send(await createPokemon(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
+});
+
+app.post('/api/pokemon/fetch', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? fetchPokemonData(request.body as Record<string, unknown>, user.id) : undefined;
 });
 
 app.put('/api/pokemon/:id', async (request, reply) => {

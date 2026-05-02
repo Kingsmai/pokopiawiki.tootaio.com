@@ -44,6 +44,10 @@ async function loadPokemon() {
   loading.value = false;
 }
 
+function pokemonTypeIconSrc(typeId: number): string | null {
+  return typeId >= 1 && typeId <= 19 ? `/types/small/${typeId}.png` : null;
+}
+
 onMounted(async () => {
   options.value = await api.options();
   await loadPokemon();
@@ -145,7 +149,12 @@ watch(query, loadPokemon);
         :to="`/pokemon/${item.id}`"
       >
         <EditMeta :entity="item" />
-        <EntityChips v-if="item.types.length" :items="item.types" />
+        <div v-if="item.types.length" class="chips">
+          <span v-for="type in item.types" :key="type.id" class="chip pokemon-type-chip">
+            <img v-if="pokemonTypeIconSrc(type.id)" class="pokemon-type-chip__icon" :src="pokemonTypeIconSrc(type.id) ?? undefined" alt="" aria-hidden="true" />
+            <span>{{ type.name }}</span>
+          </span>
+        </div>
         <EntityChips :items="item.skills" />
         <EntityChips :items="item.favorite_things" />
       </EntityCard>

@@ -14,6 +14,7 @@ import PokemonStatsPanel from '../components/PokemonStatsPanel.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconHabitat, iconItem } from '../icons';
+import { applySeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type PokemonDetail } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
@@ -221,6 +222,15 @@ async function loadPokemonDetail() {
   const nextPokemon = await api.pokemonDetail(String(route.params.id));
   pokemon.value = nextPokemon;
   relatedHabitatTab.value = habitatTabValue(nextPokemon.environment.id);
+
+  if (route.meta.editorModal !== true) {
+    applySeo({
+      title: `${nextPokemon.name} - ${t('pages.pokemon.title')}`,
+      description: t('seo.pokemonDetailDescription', { name: nextPokemon.name }),
+      canonicalPath: `/pokemon/${nextPokemon.id}`,
+      image: nextPokemon.image?.url
+    });
+  }
 }
 
 onMounted(async () => {

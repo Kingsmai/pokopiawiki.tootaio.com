@@ -11,6 +11,7 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconRecipe } from '../icons';
+import { applySeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type RecipeDetail } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
@@ -42,7 +43,17 @@ const recipeSubtitle = computed(() => {
 });
 
 async function loadRecipeDetail() {
-  recipe.value = await api.recipeDetail(String(route.params.id));
+  const nextRecipe = await api.recipeDetail(String(route.params.id));
+  recipe.value = nextRecipe;
+
+  if (route.meta.editorModal !== true) {
+    applySeo({
+      title: `${nextRecipe.name} - ${t('pages.recipes.title')}`,
+      description: t('seo.recipeDetailDescription', { name: nextRecipe.name }),
+      canonicalPath: `/recipes/${nextRecipe.id}`,
+      image: nextRecipe.item.image?.url
+    });
+  }
 }
 
 onMounted(async () => {

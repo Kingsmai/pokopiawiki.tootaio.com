@@ -64,6 +64,18 @@ export const systemWordingMessages = {
       logout: 'Log out',
       register: 'Register'
     },
+    seo: {
+      siteDescription:
+        'Browse Pokopia Wiki for Pokemon, habitats, items, recipes, daily tasks, and Life community posts for Pokemon Pokopia.',
+      pokemonDetailDescription:
+        'Read {name} details in Pokopia Wiki, including habitat, types, specialities, favourites, stats, related items, discussions, and edit history.',
+      itemDetailDescription:
+        'Browse {name} item details in Pokopia Wiki, including category, usage, acquisition methods, customization, related recipes, habitats, and Pokemon drops.',
+      habitatDetailDescription:
+        'View {name} habitat details in Pokopia Wiki, including recipes, possible Pokemon, maps, time, weather, discussions, and edit history.',
+      recipeDetailDescription:
+        'View the {name} recipe in Pokopia Wiki, including the result item, acquisition methods, materials, discussions, and edit history.'
+    },
     auth: {
       accountAccess: 'Trainer Pass',
       email: 'Email',
@@ -835,6 +847,13 @@ export const systemWordingMessages = {
       login: '登录',
       logout: '退出',
       register: '注册'
+    },
+    seo: {
+      siteDescription: '浏览 Pokopia Wiki 的 Pokemon、栖息地、物品、材料单、每日清单和 Life 社区动态。',
+      pokemonDetailDescription: '查看 {name} 在 Pokopia Wiki 中的栖息地、属性、特长、喜欢的东西、六维、相关物品、讨论和编辑历史。',
+      itemDetailDescription: '查看 {name} 在 Pokopia Wiki 中的分类、用途、入手方式、自定义、相关材料单、栖息地和 Pokemon 掉落。',
+      habitatDetailDescription: '查看 {name} 在 Pokopia Wiki 中的配方、可能出现的 Pokemon、地图、时间、天气、讨论和编辑历史。',
+      recipeDetailDescription: '查看 {name} 材料单在 Pokopia Wiki 中的结果物品、入手方式、需要材料、讨论和编辑历史。'
     },
     auth: {
       accountAccess: 'Trainer Pass',

@@ -12,6 +12,7 @@ import PokeBallMark from '../components/PokeBallMark.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconAdd, iconBack, iconEdit, iconHabitat, iconItem } from '../icons';
+import { applySeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type ItemDetail } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
@@ -49,7 +50,17 @@ const customization = computed(() => {
 });
 
 async function loadItemDetail() {
-  item.value = await api.itemDetail(String(route.params.id));
+  const nextItem = await api.itemDetail(String(route.params.id));
+  item.value = nextItem;
+
+  if (route.meta.editorModal !== true) {
+    applySeo({
+      title: `${nextItem.name} - ${t('pages.items.title')}`,
+      description: t('seo.itemDetailDescription', { name: nextItem.name }),
+      canonicalPath: `/items/${nextItem.id}`,
+      image: nextItem.image?.url
+    });
+  }
 }
 
 onMounted(async () => {

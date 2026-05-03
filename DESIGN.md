@@ -656,6 +656,28 @@ API 暴露边界：
 - 用户界面不得展示内部字段名、调试数据、计划说明或“已修改某字段”一类实现说明。
 - 权限不足时前端可以隐藏或禁用对应操作；后端必须返回本地化 403，并且不得在 UI 暴露内部权限 key 作为普通用户提示。
 
+## Technical SEO
+
+- 前端发布基础 SEO 静态资源：
+  - `favicon.ico`
+  - 默认社交分享图
+  - 品牌 Logo 素材
+- `VITE_SITE_URL` 定义 canonical、Open Graph URL、robots sitemap 地址和 sitemap URL 的站点根地址；当前公开站点为 `https://pokopiawiki.tootaio.com`，本地前端端口默认使用 `http://localhost:20015`。
+- 前端入口 `index.html` 提供默认 title、description、robots、canonical、Open Graph、Twitter card 和 favicon；客户端路由切换后根据当前路由更新页面 metadata。
+- 主要公开浏览入口可索引：
+  - `/pokemon`
+  - `/habitats`
+  - `/items`
+  - `/recipes`
+  - `/checklist`
+  - `/life`
+- `sitemap.xml` 当前只包含稳定的公开顶层浏览入口；实体详情页和公开 Profile 依赖运行时数据与站内链接可达性，当前不静态写入 sitemap。
+- Pokemon、物品、材料单和栖息地详情页在公开详情数据加载完成后，用实体名称、公开展示图片和本地化 SEO 文案更新 title、description、canonical、Open Graph 和 Twitter card。
+- 认证、管理、新建、编辑和开发中入口必须设置 `noindex`，避免搜索引擎索引受保护、低价值或临时流程页面。
+- 新建页面 canonical 指向对应列表页；编辑 Modal 路由 canonical 指向对应实体详情页。
+- SEO metadata 只能使用公开业务数据和系统文案；不得暴露邮箱、权限 key、token/hash、内部审计 payload、调试信息或实现说明。
+- 多语言 metadata 使用当前前端语言和系统文案回退机制；当前没有语言专属 URL，因此暂不输出 `hreflang`。
+
 ## API 概览
 
 公开浏览 API：

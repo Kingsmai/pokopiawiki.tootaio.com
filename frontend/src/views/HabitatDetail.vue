@@ -12,6 +12,7 @@ import PokeBallMark from '../components/PokeBallMark.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconHabitat } from '../icons';
+import { applySeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type HabitatDetail } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
@@ -116,7 +117,17 @@ const pokemonRows = computed<PokemonRow[]>(() => {
 });
 
 async function loadHabitatDetail() {
-  habitat.value = await api.habitatDetail(String(route.params.id));
+  const nextHabitat = await api.habitatDetail(String(route.params.id));
+  habitat.value = nextHabitat;
+
+  if (route.meta.editorModal !== true) {
+    applySeo({
+      title: `${nextHabitat.name} - ${t('pages.habitats.title')}`,
+      description: t('seo.habitatDetailDescription', { name: nextHabitat.name }),
+      canonicalPath: `/habitats/${nextHabitat.id}`,
+      image: nextHabitat.image?.url
+    });
+  }
 }
 
 onMounted(async () => {

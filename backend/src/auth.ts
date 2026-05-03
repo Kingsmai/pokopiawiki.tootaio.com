@@ -659,7 +659,7 @@ async function referralUserId(
 }
 
 function buildReferralUrl(code: string): string {
-  const origin = process.env.APP_ORIGIN ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000';
+  const origin = process.env.APP_ORIGIN ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:20015';
   const url = new URL('/register', origin);
   url.searchParams.set('ref', code);
   return url.toString();
@@ -677,7 +677,7 @@ function getEmailConfig() {
 }
 
 function buildTokenUrl(pathname: string, token: string): string {
-  const origin = process.env.APP_ORIGIN ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000';
+  const origin = process.env.APP_ORIGIN ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:20015';
   const url = new URL(pathname, origin);
   url.searchParams.set('token', token);
   return url.toString();

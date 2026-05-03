@@ -22,8 +22,8 @@ services:
     environment:
       DATABASE_URL: postgres://pokopia:pokopia@postgres:5432/pokopia
       BACKEND_PORT: 3001
-      FRONTEND_ORIGIN: http://localhost:3000
-      APP_ORIGIN: http://localhost:3000
+      FRONTEND_ORIGIN: http://localhost:20015
+      APP_ORIGIN: http://localhost:20015
       UPLOAD_DIR: /app/uploads
       BACKEND_PUBLIC_ORIGIN: http://localhost:3001
       RESEND_API_KEY: ${RESEND_API_KEY:-}
@@ -42,8 +42,9 @@ services:
       dockerfile: frontend/Dockerfile
     environment:
       VITE_API_BASE_URL: http://localhost:3001
+      VITE_SITE_URL: https://pokopiawiki.tootaio.com
     ports:
-      - "3000:3000"
+      - "20015:20015"
     depends_on:
       - backend
 

@@ -196,11 +196,18 @@ type EntityDiscussionCommentRow = {
   body: string;
   deleted: boolean;
   createdAt: Date;
+  createdAtCursor?: string;
   updatedAt: Date;
   author: { id: number; displayName: string } | null;
 };
-type EntityDiscussionComment = EntityDiscussionCommentRow & {
+type EntityDiscussionComment = Omit<EntityDiscussionCommentRow, 'createdAtCursor'> & {
   replies: EntityDiscussionComment[];
+};
+type EntityDiscussionCommentsPage = {
+  items: EntityDiscussionComment[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
 };
 
 type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
@@ -213,11 +220,12 @@ type LifeCommentRow = {
   body: string;
   deleted: boolean;
   createdAt: Date;
+  createdAtCursor?: string;
   updatedAt: Date;
   author: { id: number; displayName: string } | null;
 };
 
-type LifeComment = LifeCommentRow & {
+type LifeComment = Omit<LifeCommentRow, 'createdAtCursor'> & {
   replies: LifeComment[];
 };
 
@@ -233,7 +241,8 @@ type LifePostRow = {
 };
 
 type LifePost = Omit<LifePostRow, 'createdAtCursor'> & {
-  comments: LifeComment[];
+  commentPreview: LifeComment[];
+  commentCount: number;
   reactionCounts: LifeReactionCounts;
   myReaction: LifeReactionType | null;
 };
@@ -251,6 +260,13 @@ type LifePostsPage = {
   items: LifePost[];
   nextCursor: string | null;
   hasMore: boolean;
+};
+
+type LifeCommentsPage = {
+  items: LifeComment[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
 };
 
 type PublicProfileUser = {
@@ -405,6 +421,9 @@ const defaultLocale = 'en';
 const localePattern = /^[a-z]{2}(-[A-Z]{2})?$/;
 const defaultLifePostLimit = 20;
 const maxLifePostLimit = 50;
+const defaultCommentLimit = 20;
+const maxCommentLimit = 50;
+const lifeCommentPreviewLimit = 2;
 const lifeReactionTypes = ['like', 'helpful', 'fun', 'thanks'] as const;
 const pokemonTypeIconIds = new Set(Array.from({ length: 19 }, (_value, index) => index + 1));
 const pokemonSpriteBaseUrl = 'https://pokesprite.tootaio.com';
@@ -2267,6 +2286,16 @@ function cleanLifePostLimit(value: QueryValue): number {
   return Number.isInteger(limit) && limit > 0 ? Math.min(limit, maxLifePostLimit) : defaultLifePostLimit;
 }
 
+function cleanCommentLimit(value: QueryValue): number {
+  const rawLimit = asString(value);
+  if (rawLimit === undefined || rawLimit === '') {
+    return defaultCommentLimit;
+  }
+
+  const limit = Number(rawLimit);
+  return Number.isInteger(limit) && limit > 0 ? Math.min(limit, maxCommentLimit) : defaultCommentLimit;
+}
+
 function decodeLifePostCursor(value: QueryValue): LifePostCursor | null {
   const rawCursor = asString(value);
   if (!rawCursor) {
@@ -2336,7 +2365,8 @@ function encodeUserCommentActivityCursor(cursor: UserCommentActivityCursor): str
 
 function hydrateLifePost(
   post: LifePostRow,
-  commentsByPost: Map<number, LifeComment[]>,
+  commentPreviewByPost: Map<number, LifeComment[]>,
+  commentCountsByPost: Map<number, number>,
   countsByPost: Map<number, LifeReactionCounts>,
   myReactionsByPost: Map<number, LifeReactionType>
 ): LifePost {
@@ -2348,7 +2378,8 @@ function hydrateLifePost(
     author: post.author,
     updatedBy: post.updatedBy,
     tags: post.tags,
-    comments: commentsByPost.get(post.id) ?? [],
+    commentPreview: commentPreviewByPost.get(post.id) ?? [],
+    commentCount: commentCountsByPost.get(post.id) ?? 0,
     reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
     myReaction: myReactionsByPost.get(post.id) ?? null
   };
@@ -2363,6 +2394,7 @@ function lifeCommentProjection(whereClause: string): string {
       CASE WHEN lc.deleted_at IS NULL THEN lc.body ELSE '' END AS body,
       lc.deleted_at IS NOT NULL AS deleted,
       lc.created_at AS "createdAt",
+      lc.created_at::text AS "createdAtCursor",
       lc.updated_at AS "updatedAt",
       CASE
         WHEN lc.deleted_at IS NOT NULL OR comment_user.id IS NULL THEN NULL
@@ -2379,7 +2411,8 @@ function buildLifeCommentTree(rows: LifeCommentRow[]): LifeComment[] {
   const topLevelComments: LifeComment[] = [];
 
   for (const row of rows) {
-    comments.set(row.id, { ...row, replies: [] });
+    const { createdAtCursor: _createdAtCursor, ...comment } = row;
+    comments.set(row.id, { ...comment, replies: [] });
   }
 
   for (const comment of comments.values()) {
@@ -2399,7 +2432,34 @@ function buildLifeCommentTree(rows: LifeCommentRow[]): LifeComment[] {
   return topLevelComments;
 }
 
-async function lifeCommentsForPosts(postIds: number[]): Promise<Map<number, LifeComment[]>> {
+async function lifeCommentCountsForPosts(postIds: number[]): Promise<Map<number, number>> {
+  const countsByPost = new Map<number, number>();
+  for (const postId of postIds) {
+    countsByPost.set(postId, 0);
+  }
+
+  if (postIds.length === 0) {
+    return countsByPost;
+  }
+
+  const rows = await query<{ postId: number; total: number }>(
+    `
+      SELECT post_id AS "postId", COUNT(*)::integer AS total
+      FROM life_post_comments
+      WHERE post_id = ANY($1::integer[])
+      GROUP BY post_id
+    `,
+    [postIds]
+  );
+
+  for (const row of rows) {
+    countsByPost.set(row.postId, row.total);
+  }
+
+  return countsByPost;
+}
+
+async function lifeCommentPreviewForPosts(postIds: number[]): Promise<Map<number, LifeComment[]>> {
   const commentsByPost = new Map<number, LifeComment[]>();
   if (postIds.length === 0) {
     return commentsByPost;
@@ -2407,10 +2467,22 @@ async function lifeCommentsForPosts(postIds: number[]): Promise<Map<number, Life
 
   const rows = await query<LifeCommentRow>(
     `
-      ${lifeCommentProjection('WHERE lc.post_id = ANY($1::integer[])')}
-      ORDER BY lc.created_at, lc.id
+      WITH preview_top AS (
+        SELECT id
+        FROM (
+          SELECT
+            lc.id,
+            ROW_NUMBER() OVER (PARTITION BY lc.post_id ORDER BY lc.created_at DESC, lc.id DESC) AS preview_rank
+          FROM life_post_comments lc
+          WHERE lc.post_id = ANY($1::integer[])
+            AND lc.parent_comment_id IS NULL
+        ) ranked
+        WHERE preview_rank <= $2
+      )
+      ${lifeCommentProjection('WHERE lc.id IN (SELECT id FROM preview_top)')}
+      ORDER BY lc.post_id, lc.created_at, lc.id
     `,
-    [postIds]
+    [postIds, lifeCommentPreviewLimit]
   );
 
   for (const postId of postIds) {
@@ -2418,6 +2490,80 @@ async function lifeCommentsForPosts(postIds: number[]): Promise<Map<number, Life
   }
 
   return commentsByPost;
+}
+
+export async function listLifeComments(postIdValue: number, paramsQuery: QueryParams = {}): Promise<LifeCommentsPage | null> {
+  const postId = requirePositiveInteger(postIdValue, 'server.validation.recordInvalid');
+  const cursor = decodeLifePostCursor(paramsQuery.cursor);
+  const limit = cleanCommentLimit(paramsQuery.limit);
+  const exists = await queryOne<{ exists: boolean }>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM life_posts
+        WHERE id = $1
+          AND deleted_at IS NULL
+      ) AS exists
+    `,
+    [postId]
+  );
+
+  if (exists?.exists !== true) {
+    return null;
+  }
+
+  const params: unknown[] = [postId];
+  const topLevelConditions = ['lc.post_id = $1', 'lc.parent_comment_id IS NULL'];
+
+  if (cursor) {
+    params.push(cursor.createdAt, cursor.id);
+    topLevelConditions.push(`(lc.created_at, lc.id) > ($${params.length - 1}::timestamptz, $${params.length}::integer)`);
+  }
+
+  params.push(limit + 1);
+  const topLevelRows = await query<LifeCommentRow>(
+    `
+      ${lifeCommentProjection(`WHERE ${topLevelConditions.join(' AND ')}`)}
+      ORDER BY lc.created_at, lc.id
+      LIMIT $${params.length}
+    `,
+    params
+  );
+  const hasMore = topLevelRows.length > limit;
+  const topLevelComments = hasMore ? topLevelRows.slice(0, limit) : topLevelRows;
+  const topLevelIds = topLevelComments.map((comment) => comment.id);
+  const replyRows = topLevelIds.length
+    ? await query<LifeCommentRow>(
+        `
+          ${lifeCommentProjection('WHERE lc.parent_comment_id = ANY($1::integer[])')}
+          ORDER BY lc.created_at, lc.id
+        `,
+        [topLevelIds]
+      )
+    : [];
+  const total = await queryOne<{ total: number }>(
+    `
+      SELECT COUNT(*)::integer AS total
+      FROM life_post_comments
+      WHERE post_id = $1
+    `,
+    [postId]
+  );
+
+  return {
+    items: buildLifeCommentTree([...topLevelComments, ...replyRows]),
+    nextCursor:
+      hasMore && topLevelComments.length > 0
+        ? encodeProfileCursor({
+            createdAt:
+              topLevelComments[topLevelComments.length - 1].createdAtCursor ??
+              topLevelComments[topLevelComments.length - 1].createdAt.toISOString(),
+            id: topLevelComments[topLevelComments.length - 1].id
+          })
+        : null,
+    hasMore,
+    total: total?.total ?? 0
+  };
 }
 
 async function lifeReactionsForPosts(
@@ -2487,7 +2633,12 @@ async function getLifeCommentById(id: number): Promise<LifeComment | null> {
     [id]
   );
 
-  return row ? { ...row, replies: [] } : null;
+  if (!row) {
+    return null;
+  }
+
+  const { createdAtCursor: _createdAtCursor, ...comment } = row;
+  return { ...comment, replies: [] };
 }
 
 async function listLifePostsWithFilters(
@@ -2544,11 +2695,12 @@ async function listLifePostsWithFilters(
   const posts = hasMore ? rows.slice(0, limit) : rows;
 
   const postIds = posts.map((post) => post.id);
-  const commentsByPost = await lifeCommentsForPosts(postIds);
+  const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds);
+  const commentCountsByPost = await lifeCommentCountsForPosts(postIds);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, userId);
 
   return {
-    items: posts.map((post) => hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost)),
+    items: posts.map((post) => hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost)),
     nextCursor: hasMore && posts.length > 0 ? encodeLifePostCursor(posts[posts.length - 1]) : null,
     hasMore
   };
@@ -2690,11 +2842,12 @@ async function hydrateLifePostsById(
     `,
     [postIds]
   );
-  const commentsByPost = await lifeCommentsForPosts(postIds);
+  const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds);
+  const commentCountsByPost = await lifeCommentCountsForPosts(postIds);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, viewerUserId);
 
   for (const post of posts) {
-    postById.set(post.id, hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost));
+    postById.set(post.id, hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost));
   }
 
   return postById;
@@ -2934,9 +3087,10 @@ async function getLifePostById(id: number, userId: number | null = null, locale 
     return null;
   }
 
-  const commentsByPost = await lifeCommentsForPosts([post.id]);
+  const commentPreviewByPost = await lifeCommentPreviewForPosts([post.id]);
+  const commentCountsByPost = await lifeCommentCountsForPosts([post.id]);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts([post.id], userId);
-  return hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost);
+  return hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost);
 }
 
 async function replaceLifePostTags(client: DbClient, postId: number, tagIds: number[]): Promise<void> {
@@ -3180,6 +3334,7 @@ function entityDiscussionCommentProjection(whereClause: string): string {
       CASE WHEN edc.deleted_at IS NULL THEN edc.body ELSE '' END AS body,
       edc.deleted_at IS NOT NULL AS deleted,
       edc.created_at AS "createdAt",
+      edc.created_at::text AS "createdAtCursor",
       edc.updated_at AS "updatedAt",
       CASE
         WHEN edc.deleted_at IS NOT NULL OR comment_user.id IS NULL THEN NULL
@@ -3196,7 +3351,8 @@ function buildEntityDiscussionCommentTree(rows: EntityDiscussionCommentRow[]): E
   const topLevelComments: EntityDiscussionComment[] = [];
 
   for (const row of rows) {
-    comments.set(row.id, { ...row, replies: [] });
+    const { createdAtCursor: _createdAtCursor, ...comment } = row;
+    comments.set(row.id, { ...comment, replies: [] });
   }
 
   for (const comment of comments.values()) {
@@ -3224,29 +3380,81 @@ async function getEntityDiscussionCommentById(id: number): Promise<EntityDiscuss
     [id]
   );
 
-  return row ? { ...row, replies: [] } : null;
+  if (!row) {
+    return null;
+  }
+
+  const { createdAtCursor: _createdAtCursor, ...comment } = row;
+  return { ...comment, replies: [] };
 }
 
 export async function listEntityDiscussionComments(
   entityTypeValue: string,
-  entityIdValue: number
-): Promise<EntityDiscussionComment[] | null> {
+  entityIdValue: number,
+  paramsQuery: QueryParams = {}
+): Promise<EntityDiscussionCommentsPage | null> {
   const entityType = cleanDiscussionEntityType(entityTypeValue);
   const entityId = requirePositiveInteger(entityIdValue, 'server.validation.recordInvalid');
+  const cursor = decodeLifePostCursor(paramsQuery.cursor);
+  const limit = cleanCommentLimit(paramsQuery.limit);
 
   if (!(await entityDiscussionExists(pool, entityType, entityId))) {
     return null;
   }
 
-  const rows = await query<EntityDiscussionCommentRow>(
+  const params: unknown[] = [entityType, entityId];
+  const topLevelConditions = ['edc.entity_type = $1', 'edc.entity_id = $2', 'edc.parent_comment_id IS NULL'];
+
+  if (cursor) {
+    params.push(cursor.createdAt, cursor.id);
+    topLevelConditions.push(`(edc.created_at, edc.id) > ($${params.length - 1}::timestamptz, $${params.length}::integer)`);
+  }
+
+  params.push(limit + 1);
+  const topLevelRows = await query<EntityDiscussionCommentRow>(
     `
-      ${entityDiscussionCommentProjection('WHERE edc.entity_type = $1 AND edc.entity_id = $2')}
+      ${entityDiscussionCommentProjection(`WHERE ${topLevelConditions.join(' AND ')}`)}
       ORDER BY edc.created_at, edc.id
+      LIMIT $${params.length}
+    `,
+    params
+  );
+  const hasMore = topLevelRows.length > limit;
+  const topLevelComments = hasMore ? topLevelRows.slice(0, limit) : topLevelRows;
+  const topLevelIds = topLevelComments.map((comment) => comment.id);
+  const replyRows = topLevelIds.length
+    ? await query<EntityDiscussionCommentRow>(
+        `
+          ${entityDiscussionCommentProjection('WHERE edc.parent_comment_id = ANY($1::integer[])')}
+          ORDER BY edc.created_at, edc.id
+        `,
+        [topLevelIds]
+      )
+    : [];
+  const total = await queryOne<{ total: number }>(
+    `
+      SELECT COUNT(*)::integer AS total
+      FROM entity_discussion_comments
+      WHERE entity_type = $1
+        AND entity_id = $2
     `,
     [entityType, entityId]
   );
 
-  return buildEntityDiscussionCommentTree(rows);
+  return {
+    items: buildEntityDiscussionCommentTree([...topLevelComments, ...replyRows]),
+    nextCursor:
+      hasMore && topLevelComments.length > 0
+        ? encodeProfileCursor({
+            createdAt:
+              topLevelComments[topLevelComments.length - 1].createdAtCursor ??
+              topLevelComments[topLevelComments.length - 1].createdAt.toISOString(),
+            id: topLevelComments[topLevelComments.length - 1].id
+          })
+        : null,
+    hasMore,
+    total: total?.total ?? 0
+  };
 }
 
 export async function createEntityDiscussionComment(

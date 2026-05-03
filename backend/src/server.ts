@@ -72,6 +72,7 @@ import {
   listDailyChecklistItems,
   listHabitats,
   listItems,
+  listLifeComments,
   listLanguages,
   listLifePosts,
   listPokemon,
@@ -793,6 +794,12 @@ app.get('/api/life-posts', async (request) => {
   return listLifePosts(request.query as Record<string, string | string[] | undefined>, user?.id ?? null, requestLocale(request));
 });
 
+app.get('/api/life-posts/:postId/comments', async (request, reply) => {
+  const { postId } = request.params as { postId: string };
+  const comments = await listLifeComments(Number(postId), request.query as Record<string, string | string[] | undefined>);
+  return comments ? comments : notFound(reply, request);
+});
+
 app.post('/api/life-posts', async (request, reply) => {
   const user = await requirePermissionWithRateLimits(request, reply, 'life.posts.create', 'communityWrite');
   return user
@@ -898,7 +905,11 @@ app.delete('/api/life-comments/:id', async (request, reply) => {
 
 app.get('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
   const { entityType, entityId } = request.params as { entityType: string; entityId: string };
-  const comments = await listEntityDiscussionComments(entityType, Number(entityId));
+  const comments = await listEntityDiscussionComments(
+    entityType,
+    Number(entityId),
+    request.query as Record<string, string | string[] | undefined>
+  );
   return comments ? comments : notFound(reply, request);
 });
 

@@ -38,6 +38,17 @@ import {
   type NamedEntity
 } from '../services/api';
 
+type LifeCommentPageState = {
+  items: LifeComment[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+  loading: boolean;
+  loadingMore: boolean;
+  loaded: boolean;
+  error: string;
+};
+
 const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
 const lifeTags = ref<NamedEntity[]>([]);
@@ -59,6 +70,7 @@ const commentBodies = ref<Record<number, string>>({});
 const replyBodies = ref<Record<number, string>>({});
 const replyTargetId = ref<number | null>(null);
 const expandedComments = ref<Record<number, boolean>>({});
+const commentPages = ref<Record<number, LifeCommentPageState>>({});
 const commentBusyKey = ref('');
 const commentErrors = ref<Record<string, string>>({});
 const reactionPickerPostId = ref<number | null>(null);
@@ -67,6 +79,7 @@ const reactionErrors = ref<Record<number, string>>({});
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
 const loadMoreSentinel = ref<HTMLElement | null>(null);
 const lifePostPageSize = 20;
+const lifeCommentPageSize = 20;
 const bodyMaxLength = 2000;
 const commentMaxLength = 1000;
 const skeletonPostCount = 3;
@@ -158,6 +171,8 @@ async function loadPosts() {
       return;
     }
     posts.value = page.items;
+    expandedComments.value = {};
+    commentPages.value = {};
     nextCursor.value = page.nextCursor;
     hasMorePosts.value = page.hasMore;
   } catch (error) {
@@ -338,8 +353,36 @@ function replyKey(commentId: number) {
   return `reply-${commentId}`;
 }
 
+function initialCommentPage(post: LifePost): LifeCommentPageState {
+  return {
+    items: post.commentPreview,
+    nextCursor: null,
+    hasMore: post.commentCount > post.commentPreview.reduce((count, comment) => count + 1 + comment.replies.length, 0),
+    total: post.commentCount,
+    loading: false,
+    loadingMore: false,
+    loaded: false,
+    error: ''
+  };
+}
+
+function commentPage(post: LifePost) {
+  return commentPages.value[post.id] ?? initialCommentPage(post);
+}
+
+function setCommentPage(postId: number, page: LifeCommentPageState) {
+  commentPages.value = {
+    ...commentPages.value,
+    [postId]: page
+  };
+}
+
+function commentsForPost(post: LifePost) {
+  return commentPage(post).items;
+}
+
 function commentCount(post: LifePost) {
-  return post.comments.reduce((count, comment) => count + 1 + comment.replies.length, 0);
+  return commentPage(post).total;
 }
 
 function reactionTotal(post: LifePost) {
@@ -375,6 +418,13 @@ function replacePost(updatedPost: LifePost) {
     return;
   }
 
+  const existingComments = commentPages.value[updatedPost.id];
+  if (existingComments) {
+    setCommentPage(updatedPost.id, {
+      ...existingComments,
+      total: updatedPost.commentCount
+    });
+  }
   posts.value = posts.value.map((post) => (post.id === updatedPost.id ? updatedPost : post));
 }
 
@@ -389,8 +439,56 @@ function setCommentsExpanded(postId: number, expanded: boolean) {
   };
 }
 
-function toggleComments(postId: number) {
-  setCommentsExpanded(postId, !areCommentsExpanded(postId));
+function mergeComments(existing: LifeComment[], incoming: LifeComment[]) {
+  const ids = new Set(existing.map((comment) => comment.id));
+  return [...existing, ...incoming.filter((comment) => !ids.has(comment.id))];
+}
+
+async function loadComments(post: LifePost, reset = false) {
+  const existing = commentPage(post);
+  if (existing.loading || existing.loadingMore || (!reset && existing.loaded && !existing.hasMore)) {
+    return;
+  }
+
+  const cursor = reset || !existing.loaded ? null : existing.nextCursor;
+  setCommentPage(post.id, {
+    ...existing,
+    items: reset || !existing.loaded ? [] : existing.items,
+    loading: reset || !existing.loaded,
+    loadingMore: !reset && existing.loaded,
+    error: ''
+  });
+
+  try {
+    const page = await api.lifeComments(post.id, { limit: lifeCommentPageSize, cursor });
+    const nextItems = reset || !existing.loaded ? page.items : mergeComments(existing.items, page.items);
+    setCommentPage(post.id, {
+      items: nextItems,
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+      total: page.total,
+      loading: false,
+      loadingMore: false,
+      loaded: true,
+      error: ''
+    });
+    post.commentCount = page.total;
+  } catch (error) {
+    setCommentPage(post.id, {
+      ...existing,
+      loading: false,
+      loadingMore: false,
+      error: error instanceof Error && error.message ? error.message : t('errors.loadFailed')
+    });
+  }
+}
+
+function toggleComments(post: LifePost) {
+  const expanded = !areCommentsExpanded(post.id);
+  setCommentsExpanded(post.id, expanded);
+  if (expanded) {
+    void loadComments(post);
+  }
 }
 
 function isCommentBusy(key: string) {
@@ -418,6 +516,10 @@ function clearCommentError(key: string) {
   const nextErrors = { ...commentErrors.value };
   delete nextErrors[key];
   commentErrors.value = nextErrors;
+}
+
+function updateCommentPage(post: LifePost, updater: (page: LifeCommentPageState) => LifeCommentPageState) {
+  setCommentPage(post.id, updater(commentPage(post)));
 }
 
 function setReactionError(postId: number, message: string) {
@@ -555,7 +657,14 @@ async function submitComment(post: LifePost) {
 
   try {
     const comment = await api.createLifeComment(post.id, { body: nextBody });
-    post.comments.push(comment);
+    const nextTotal = commentCount(post) + 1;
+    post.commentCount = nextTotal;
+    updateCommentPage(post, (page) => ({
+      ...page,
+      items: mergeComments(page.items, [comment]),
+      total: nextTotal,
+      loaded: page.loaded || areCommentsExpanded(post.id)
+    }));
     commentBodies.value[post.id] = '';
     setCommentsExpanded(post.id, true);
   } catch (error) {
@@ -578,7 +687,13 @@ async function submitReply(post: LifePost, comment: LifeComment) {
 
   try {
     const reply = await api.createLifeCommentReply(post.id, comment.id, { body: nextBody });
+    const nextTotal = commentCount(post) + 1;
+    post.commentCount = nextTotal;
     comment.replies.push(reply);
+    updateCommentPage(post, (page) => ({
+      ...page,
+      total: nextTotal
+    }));
     setCommentsExpanded(post.id, true);
     cancelReply(comment.id);
   } catch (error) {
@@ -615,7 +730,7 @@ async function deleteComment(post: LifePost, comment: LifeComment) {
 
   try {
     await api.deleteLifeComment(comment.id);
-    markCommentDeleted(post.comments, comment.id);
+    markCommentDeleted(commentsForPost(post), comment.id);
     if (replyTargetId.value === comment.id) {
       cancelReply(comment.id);
     }
@@ -921,7 +1036,7 @@ onUnmounted(() => {
                   :aria-controls="`life-comments-${post.id}`"
                   :aria-expanded="areCommentsExpanded(post.id)"
                   :aria-label="areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment')"
-                  @click="toggleComments(post.id)"
+                  @click="toggleComments(post)"
                 >
                   <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
                   <span class="life-action-tooltip" role="tooltip">
@@ -955,7 +1070,7 @@ onUnmounted(() => {
                   :aria-controls="`life-comments-${post.id}`"
                   :aria-expanded="areCommentsExpanded(post.id)"
                   :aria-label="t('pages.life.commentsCount', { count: commentCount(post) })"
-                  @click="toggleComments(post.id)"
+                  @click="toggleComments(post)"
                 >
                   <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
                   <span>{{ commentCount(post) }}</span>
@@ -1000,9 +1115,23 @@ onUnmounted(() => {
                 </button>
               </form>
 
-              <div v-if="post.comments.length" class="life-comment-list">
+              <div v-if="commentPage(post).loading && !commentsForPost(post).length" class="life-comment-list" :aria-label="t('pages.life.loadingComments')">
+                <article v-for="index in 2" :key="`life-comments-loading-${post.id}-${index}`" class="life-comment">
+                  <div class="life-comment__main">
+                    <Skeleton variant="box" width="36px" height="36px" />
+                    <div class="life-comment__content">
+                      <Skeleton width="132px" />
+                      <Skeleton width="86%" />
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <p v-else-if="commentPage(post).error" class="life-form__error" role="alert">{{ commentPage(post).error }}</p>
+
+              <div v-else-if="commentsForPost(post).length" class="life-comment-list">
                 <article
-                  v-for="comment in post.comments"
+                  v-for="comment in commentsForPost(post)"
                   :key="comment.id"
                   class="life-comment"
                   :class="{ 'is-deleted': comment.deleted }"
@@ -1116,6 +1245,18 @@ onUnmounted(() => {
               </div>
 
               <p v-else class="life-comments__empty">{{ t('pages.life.noComments') }}</p>
+
+              <div v-if="commentPage(post).hasMore && !commentPage(post).loading" class="life-feed__retry">
+                <button
+                  class="ui-button ui-button--ghost ui-button--small"
+                  type="button"
+                  :disabled="commentPage(post).loadingMore"
+                  @click="loadComments(post)"
+                >
+                  <Icon :icon="iconChevronDown" class="ui-icon" aria-hidden="true" />
+                  {{ commentPage(post).loadingMore ? t('common.loading') : t('pages.life.loadMoreComments') }}
+                </button>
+              </div>
             </section>
           </article>
 

@@ -292,6 +292,7 @@
 - 评论作者拥有 `discussions.comments.delete` 权限时可以删除自己的评论；拥有 `discussions.comments.delete-any` 权限的用户可以删除其他用户评论；删除后正文不再展示，已有回复保留在原位置。
 - 被删除实体的讨论会随实体删除一并清理。
 - 讨论按创建时间正序展示。
+- 讨论列表按顶层评论分页读取，支持 `limit` / `cursor`；每页顶层评论携带其一层回复，响应包含 `items`、`nextCursor`、`hasMore`、`total`。
 - 讨论内容是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 - API 对外只返回评论作者的 `id` 和 `displayName`。
 - API 不返回邮箱、token/hash、内部调试字段、`deleted_at`、`deleted_by_user_id` 等内部删除字段。
@@ -623,6 +624,7 @@ Life Post 可配置：
 - 评论作者拥有 `life.comments.delete` 权限时可以删除自己的评论；拥有 `life.comments.delete-any` 权限的用户可以删除其他用户评论；删除评论后正文不再展示，已有回复保留在原位置。
 - 已软删除的 Life Post 不出现在信息流、搜索或标签筛选结果中，也不能继续编辑、评论或设置 Reaction。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
+- Life Feed 只随每条 Life Post 返回评论总数和最近少量评论预览；完整评论列表在展开评论区后通过独立分页接口按顶层评论正序读取，每页顶层评论携带其一层回复。
 - 已注册并完成邮箱验证且拥有 `life.reactions.set` 权限的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
@@ -637,7 +639,8 @@ API 暴露边界：
 - Life Post 标签只返回 `id` 和按当前语言解析后的 `name`。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
 - Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
-- Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。
+- Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。每个 Life Post 的评论字段只包含 `commentCount` 和 `commentPreview`，不内嵌完整评论列表。
+- Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌。
 - API 不返回邮箱、token/hash、内部调试字段或不必要的审计 payload。
 - API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
 - 非作者只有拥有对应 `*-any` 管理权限时才能编辑或删除其他用户的 Life Post 或 Life Comment。
@@ -725,11 +728,12 @@ API 暴露边界：
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `tagId` 按 Life 标签筛选。
+- `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
 - `GET /api/users/:id/reactions`：分页读取该用户设置过 Reaction 且目标未删除的 Life Post。
 - `GET /api/users/:id/comments`：分页读取该用户未删除的 Life 评论和实体讨论评论。
-- `GET /api/discussions/:entityType/:entityId/comments`：读取实体讨论；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`。
+- `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`。
 
 认证 API：
 

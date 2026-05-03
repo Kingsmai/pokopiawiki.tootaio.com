@@ -23,6 +23,7 @@ const { locale, t } = useI18n();
 const comments = ref<EntityDiscussionComment[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
+const loadingMore = ref(false);
 const authReady = ref(false);
 const body = ref('');
 const replyBodies = ref<Record<number, string>>({});
@@ -33,8 +34,12 @@ const formError = ref('');
 const commentErrors = ref<Record<string, string>>({});
 const commentInput = ref<HTMLTextAreaElement | null>(null);
 const commentMaxLength = 1000;
+const discussionPageSize = 20;
 let requestId = 0;
 let removeAuthListener: (() => void) | null = null;
+const nextCursor = ref<string | null>(null);
+const hasMoreComments = ref(false);
+const commentTotal = ref(0);
 
 function can(permissionKey: string) {
   return currentUser.value?.permissions.includes(permissionKey) === true;
@@ -42,7 +47,6 @@ function can(permissionKey: string) {
 
 const canComment = computed(() => can('discussions.comments.create'));
 const charactersLeft = computed(() => Math.max(0, commentMaxLength - body.value.length));
-const commentTotal = computed(() => comments.value.reduce((total, comment) => total + 1 + comment.replies.length, 0));
 
 async function loadCurrentUser() {
   authReady.value = false;
@@ -64,15 +68,34 @@ async function loadCurrentUser() {
   }
 }
 
-async function loadDiscussion() {
+function mergeComments(existing: EntityDiscussionComment[], incoming: EntityDiscussionComment[]) {
+  const ids = new Set(existing.map((comment) => comment.id));
+  return [...existing, ...incoming.filter((comment) => !ids.has(comment.id))];
+}
+
+async function loadDiscussion(reset = true) {
+  if (!reset && (loadingMore.value || !hasMoreComments.value)) {
+    return;
+  }
+
   const nextRequestId = ++requestId;
-  loading.value = true;
+  if (reset) {
+    loading.value = true;
+  } else {
+    loadingMore.value = true;
+  }
   loadError.value = '';
 
   try {
-    const rows = await api.entityDiscussion(props.entityType, props.entityId);
+    const page = await api.entityDiscussion(props.entityType, props.entityId, {
+      limit: discussionPageSize,
+      cursor: reset ? null : nextCursor.value
+    });
     if (nextRequestId === requestId) {
-      comments.value = rows;
+      comments.value = reset ? page.items : mergeComments(comments.value, page.items);
+      nextCursor.value = page.nextCursor;
+      hasMoreComments.value = page.hasMore;
+      commentTotal.value = page.total;
     }
   } catch (error) {
     if (nextRequestId === requestId) {
@@ -81,6 +104,7 @@ async function loadDiscussion() {
   } finally {
     if (nextRequestId === requestId) {
       loading.value = false;
+      loadingMore.value = false;
     }
   }
 }
@@ -168,6 +192,7 @@ async function submitComment() {
   try {
     const comment = await api.createEntityDiscussionComment(props.entityType, props.entityId, { body: nextBody });
     comments.value = [...comments.value, comment];
+    commentTotal.value += 1;
     body.value = '';
   } catch (error) {
     formError.value = error instanceof Error && error.message ? error.message : t('discussion.commentFailed');
@@ -190,6 +215,7 @@ async function submitReply(comment: EntityDiscussionComment) {
   try {
     const reply = await api.createEntityDiscussionReply(props.entityType, props.entityId, comment.id, { body: nextBody });
     comment.replies.push(reply);
+    commentTotal.value += 1;
     cancelReply(comment.id);
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('discussion.replyFailed'));
@@ -239,6 +265,9 @@ watch(
   () => {
     resetComposer();
     comments.value = [];
+    nextCursor.value = null;
+    hasMoreComments.value = false;
+    commentTotal.value = 0;
     void loadDiscussion();
   }
 );
@@ -419,6 +448,18 @@ onUnmounted(() => {
           </div>
         </div>
       </article>
+
+      <div v-if="hasMoreComments" class="life-feed__retry">
+        <button
+          class="ui-button ui-button--ghost ui-button--small"
+          type="button"
+          :disabled="loadingMore"
+          @click="loadDiscussion(false)"
+        >
+          <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+          {{ loadingMore ? t('common.loading') : t('discussion.loadMore') }}
+        </button>
+      </div>
     </div>
 
     <div v-else class="entity-discussion-empty">

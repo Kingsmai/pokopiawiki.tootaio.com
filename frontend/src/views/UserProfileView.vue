@@ -548,7 +548,7 @@ function authorInitial(post: LifePost): string {
 }
 
 function commentTotal(post: LifePost): number {
-  return post.comments.reduce((total, comment) => total + 1 + comment.replies.length, 0);
+  return post.commentCount;
 }
 
 function reactionTotal(post: LifePost): number {

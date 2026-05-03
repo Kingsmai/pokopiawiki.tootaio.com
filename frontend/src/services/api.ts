@@ -260,7 +260,8 @@ export interface LifePost {
   author: UserSummary | null;
   updatedBy: UserSummary | null;
   tags: NamedEntity[];
-  comments: LifeComment[];
+  commentPreview: LifeComment[];
+  commentCount: number;
   reactionCounts: LifeReactionCounts;
   myReaction: LifeReactionType | null;
 }
@@ -278,6 +279,11 @@ export interface LifePostsParams {
   tagId?: string | number;
 }
 
+export interface CommentPageParams {
+  cursor?: string | null;
+  limit?: number;
+}
+
 export interface LifeComment {
   id: number;
   postId: number;
@@ -288,6 +294,13 @@ export interface LifeComment {
   updatedAt: string;
   author: UserSummary | null;
   replies: LifeComment[];
+}
+
+export interface LifeCommentsPage {
+  items: LifeComment[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
 }
 
 export interface RecipeDetail extends Recipe {
@@ -566,6 +579,13 @@ export interface EntityDiscussionComment {
   replies: EntityDiscussionComment[];
 }
 
+export interface EntityDiscussionCommentsPage {
+  items: EntityDiscussionComment[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+}
+
 export interface UserCommentActivity {
   id: number;
   source: ProfileCommentSource;
@@ -833,11 +853,23 @@ export const api = {
   deleteLifeReaction: (id: string | number) => deleteAndGetJson<LifePost>(`/api/life-posts/${id}/reaction`),
   createLifeComment: (postId: string | number, payload: LifeCommentPayload) =>
     sendJson<LifeComment>(`/api/life-posts/${postId}/comments`, 'POST', payload),
+  lifeComments: (postId: string | number, params: CommentPageParams = {}) =>
+    getJson<LifeCommentsPage>(
+      `/api/life-posts/${postId}/comments${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   createLifeCommentReply: (postId: string | number, commentId: string | number, payload: LifeCommentPayload) =>
     sendJson<LifeComment>(`/api/life-posts/${postId}/comments/${commentId}/replies`, 'POST', payload),
   deleteLifeComment: (id: string | number) => deleteJson(`/api/life-comments/${id}`),
-  entityDiscussion: (entityType: DiscussionEntityType, entityId: string | number) =>
-    getJson<EntityDiscussionComment[]>(`/api/discussions/${entityType}/${entityId}/comments`),
+  entityDiscussion: (entityType: DiscussionEntityType, entityId: string | number, params: CommentPageParams = {}) =>
+    getJson<EntityDiscussionCommentsPage>(
+      `/api/discussions/${entityType}/${entityId}/comments${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   createEntityDiscussionComment: (
     entityType: DiscussionEntityType,
     entityId: string | number,

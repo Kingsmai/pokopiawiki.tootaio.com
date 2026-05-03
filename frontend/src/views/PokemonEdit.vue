@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import ImageUploadField from '../components/ImageUploadField.vue';
@@ -49,8 +49,10 @@ const imageBusy = ref(false);
 const fetchOptionsLoading = ref(false);
 const fetchOptionsOpen = ref(false);
 const message = ref('');
+const fetchInput = ref<HTMLInputElement | null>(null);
 const fetchIdentifier = ref('');
 const fetchOptions = ref<PokemonFetchOption[]>([]);
+const fetchResultsStyle = ref<CSSProperties>({});
 const imageOptions = ref<PokemonImage[]>([]);
 const currentPokemonImage = ref<PokemonImage | null>(null);
 const imageHistory = ref<EntityImageUpload[]>([]);
@@ -59,6 +61,7 @@ const activeEditTab = ref('basic');
 const heightUnit = ref<'imperial' | 'metric'>('imperial');
 const weightUnit = ref<'imperial' | 'metric'>('imperial');
 let fetchOptionsController: AbortController | null = null;
+let fetchPositionFrame = 0;
 
 function defaultPokemonStats(): PokemonStats {
   return {
@@ -373,17 +376,80 @@ function refreshFetchOptions() {
   void loadFetchOptions();
 }
 
+function updateFetchResultsPosition() {
+  if (!fetchInput.value) {
+    fetchResultsStyle.value = {};
+    return;
+  }
+
+  const viewportPadding = 12;
+  const dropdownGap = 6;
+  const inputRect = fetchInput.value.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const width = Math.min(inputRect.width, viewportWidth - viewportPadding * 2);
+  const left = Math.min(Math.max(inputRect.left, viewportPadding), viewportWidth - width - viewportPadding);
+  const spaceBelow = viewportHeight - inputRect.bottom - viewportPadding - dropdownGap;
+  const spaceAbove = inputRect.top - viewportPadding - dropdownGap;
+  const placeAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+  const maxHeight = Math.max(96, Math.min(260, placeAbove ? spaceAbove : spaceBelow));
+  const nextStyle = {
+    left: `${left}px`,
+    width: `${width}px`,
+    '--pokemon-fetch-results-max-height': `${maxHeight}px`
+  } as CSSProperties;
+
+  fetchResultsStyle.value = placeAbove
+    ? { ...nextStyle, bottom: `${viewportHeight - inputRect.top + dropdownGap}px` }
+    : { ...nextStyle, top: `${inputRect.bottom + dropdownGap}px` };
+}
+
+function scheduleFetchResultsPositionUpdate() {
+  if (!fetchOptionsOpen.value || fetchPositionFrame) {
+    return;
+  }
+
+  fetchPositionFrame = window.requestAnimationFrame(() => {
+    fetchPositionFrame = 0;
+    updateFetchResultsPosition();
+  });
+}
+
+function addFetchPositionListeners() {
+  window.addEventListener('resize', scheduleFetchResultsPositionUpdate);
+  window.addEventListener('scroll', scheduleFetchResultsPositionUpdate, true);
+}
+
+function removeFetchPositionListeners() {
+  window.removeEventListener('resize', scheduleFetchResultsPositionUpdate);
+  window.removeEventListener('scroll', scheduleFetchResultsPositionUpdate, true);
+
+  if (fetchPositionFrame) {
+    window.cancelAnimationFrame(fetchPositionFrame);
+    fetchPositionFrame = 0;
+  }
+}
+
+function positionFetchResultsAfterOpen() {
+  updateFetchResultsPosition();
+  addFetchPositionListeners();
+  void nextTick(updateFetchResultsPosition);
+}
+
 function openFetchOptions() {
   if (!canFetchPokemon.value) {
     return;
   }
 
   fetchOptionsOpen.value = true;
+  positionFetchResultsAfterOpen();
   refreshFetchOptions();
 }
 
 function closeFetchOptions() {
   fetchOptionsOpen.value = false;
+  fetchResultsStyle.value = {};
+  removeFetchPositionListeners();
   cancelFetchOptionsRequest();
 }
 
@@ -393,6 +459,7 @@ function handleFetchIdentifierInput() {
   }
 
   fetchOptionsOpen.value = true;
+  positionFetchResultsAfterOpen();
 }
 
 function closeFetchOptionsAfterBlur() {
@@ -607,7 +674,10 @@ onMounted(() => {
   void loadEditor();
 });
 
-onBeforeUnmount(cancelFetchOptionsRequest);
+onBeforeUnmount(() => {
+  cancelFetchOptionsRequest();
+  removeFetchPositionListeners();
+});
 
 watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
 watch(fetchIdentifier, refreshFetchOptions);
@@ -625,6 +695,7 @@ watch(fetchIdentifier, refreshFetchOptions);
           <label for="pokemon-fetch-identifier">{{ t('pages.pokemon.fetchIdentifier') }}</label>
           <input
             id="pokemon-fetch-identifier"
+            ref="fetchInput"
             v-model="fetchIdentifier"
             type="search"
             :placeholder="t('pages.pokemon.fetchIdentifierPlaceholder')"
@@ -638,7 +709,14 @@ watch(fetchIdentifier, refreshFetchOptions);
             @keydown.escape.stop="closeFetchOptions"
             @keydown.enter.prevent="fetchPokemonFromInput"
           />
-          <div v-if="fetchOptionsOpen" id="pokemon-fetch-results" class="pokemon-fetch-results" role="listbox" :aria-label="t('pages.pokemon.fetchResults')">
+          <div
+            v-if="fetchOptionsOpen"
+            id="pokemon-fetch-results"
+            class="pokemon-fetch-results"
+            :style="fetchResultsStyle"
+            role="listbox"
+            :aria-label="t('pages.pokemon.fetchResults')"
+          >
             <p v-if="fetchOptionsLoading" class="pokemon-fetch-results__status">{{ t('pages.pokemon.fetchSearching') }}</p>
             <template v-else-if="fetchOptions.length">
               <button

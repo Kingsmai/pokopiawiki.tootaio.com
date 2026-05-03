@@ -38,8 +38,7 @@ const props = withDefaults(
     multiple: true,
     max: 0,
     allowCreate: false,
-    creating: false,
-    dropdownStrategy: 'absolute'
+    creating: false
   }
 );
 
@@ -57,6 +56,7 @@ const search = ref('');
 const activeIndex = ref(-1);
 const dropdownStyle = ref<CSSProperties>({});
 const dropdownPlacement = ref<'top' | 'bottom'>('bottom');
+const isInsideModal = ref(false);
 let positionFrame = 0;
 
 const optionRows = computed(() =>
@@ -111,7 +111,8 @@ const candidateRows = computed<CandidateRow[]>(() => {
 });
 const activeCandidate = computed(() => candidateRows.value[activeIndex.value]);
 const activeDescendant = computed(() => activeCandidate.value?.id);
-const usesFixedDropdown = computed(() => props.dropdownStrategy === 'fixed');
+const resolvedDropdownStrategy = computed<DropdownStrategy>(() => props.dropdownStrategy ?? (isInsideModal.value ? 'fixed' : 'absolute'));
+const usesFixedDropdown = computed(() => resolvedDropdownStrategy.value === 'fixed');
 
 function setDefaultActiveIndex() {
   const keyword = createName.value.toLowerCase();
@@ -311,6 +312,7 @@ function removePositionListeners() {
 }
 
 onMounted(() => {
+  isInsideModal.value = root.value?.closest('.modal') !== null;
   document.addEventListener('pointerdown', onDocumentPointerDown);
 });
 

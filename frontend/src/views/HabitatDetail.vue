@@ -8,9 +8,10 @@ import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityDiscussionPanel from '../components/EntityDiscussionPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
+import PokeBallMark from '../components/PokeBallMark.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
-import { iconBack, iconEdit } from '../icons';
+import { iconBack, iconEdit, iconHabitat } from '../icons';
 import { api, type HabitatDetail } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
@@ -30,6 +31,7 @@ const detailTabs = computed<TabOption[]>(() => [
 type PokemonRow = {
   id: number;
   name: string;
+  image: HabitatDetail['pokemon'][number]['image'];
   timeOfDays: string[];
   weathers: string[];
   rarity: number;
@@ -74,6 +76,7 @@ const pokemonRows = computed<PokemonRow[]>(() => {
     {
       id: number;
       name: string;
+      image: HabitatDetail['pokemon'][number]['image'];
       timeOfDays: Set<string>;
       weathers: Set<string>;
       rarity: number;
@@ -86,6 +89,7 @@ const pokemonRows = computed<PokemonRow[]>(() => {
     const row = rows.get(key) ?? {
       id: pokemon.id,
       name: pokemon.name,
+      image: pokemon.image,
       timeOfDays: new Set<string>(),
       weathers: new Set<string>(),
       rarity: pokemon.rarity,
@@ -101,16 +105,13 @@ const pokemonRows = computed<PokemonRow[]>(() => {
   return [...rows.values()].map((row) => ({
     id: row.id,
     name: row.name,
+    image: row.image,
     timeOfDays: sortByOrder(row.timeOfDays, timeOfDays),
     weathers: sortByOrder(row.weathers, weathers),
     rarity: row.rarity,
     maps: [...row.maps]
   }));
 });
-
-function imageFileName(path: string): string {
-  return path.split('/').at(-1) ?? t('media.image');
-}
 
 async function loadHabitatDetail() {
   habitat.value = await api.habitatDetail(String(route.params.id));
@@ -187,7 +188,7 @@ watch(
   </section>
   <section v-else class="page-stack">
     <PageHeader :title="habitat.name" :subtitle="t('pages.habitats.detailSubtitle')">
-      <template #kicker>Habitat Detail</template>
+      <template #kicker>{{ t('pages.habitats.detailKicker') }}</template>
       <template #actions>
         <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
@@ -203,29 +204,48 @@ watch(
     <div class="detail-tabs">
       <Tabs id="habitat-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
 
-      <div v-if="detailTab === 'details'" class="habitat-detail-stack">
-        <DetailSection v-if="habitat.image || habitat.imageHistory.length" :title="t('media.image')">
-          <div class="entity-detail-image">
-            <div v-if="habitat.image" class="entity-detail-image__frame">
-              <img :src="habitat.image.url" :alt="t('media.imageAlt', { name: habitat.name })" />
-            </div>
-            <p v-else class="meta-line">{{ t('media.imageEmpty') }}</p>
-            <div v-if="habitat.imageHistory.length" class="image-history-list" :aria-label="t('media.imageHistory')">
-              <div v-for="image in habitat.imageHistory" :key="image.path" class="image-history-list__item">
-                <img :src="image.url" :alt="t('media.imageAlt', { name: habitat.name })" loading="lazy" />
-                <span>{{ imageFileName(image.path) }}</span>
+      <div v-if="detailTab === 'details'" class="detail-grid detail-grid--stack">
+        <div class="entity-profile-grid">
+          <section class="detail-section entity-profile-media-section" :aria-label="t('media.image')">
+            <div class="entity-detail-image">
+              <div class="entity-detail-image__frame" :class="{ 'entity-detail-image__frame--placeholder': !habitat.image }">
+                <img v-if="habitat.image" :src="habitat.image.url" :alt="t('media.imageAlt', { name: habitat.name })" />
+                <span v-else class="entity-card__mark entity-detail-image__mark" role="img" :aria-label="t('media.imageEmpty')">
+                  <Icon :icon="iconHabitat" class="entity-card__icon" aria-hidden="true" />
+                </span>
               </div>
             </div>
-          </div>
-        </DetailSection>
+          </section>
 
-        <DetailSection :title="t('pages.habitats.recipeList')">
-          <EntityChips :items="habitat.recipe" />
-        </DetailSection>
+          <div class="entity-profile-main">
+            <section class="detail-section entity-profile-overview" :aria-label="t('common.details')">
+              <dl class="entity-profile-facts">
+                <div>
+                  <dt>{{ t('pages.habitats.recipeList') }}</dt>
+                  <dd>{{ habitat.recipe.length }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.habitats.possiblePokemon') }}</dt>
+                  <dd>{{ pokemonRows.length }}</dd>
+                </div>
+              </dl>
+
+              <div class="entity-profile-group">
+                <h3 class="section-subtitle">{{ t('pages.habitats.recipeList') }}</h3>
+                <EntityChips v-if="habitat.recipe.length" :items="habitat.recipe" />
+                <p v-else class="meta-line">{{ t('common.none') }}</p>
+              </div>
+            </section>
+          </div>
+        </div>
 
         <DetailSection :title="t('pages.habitats.possiblePokemon')">
-          <ul class="row-list appearance-list">
+          <ul v-if="pokemonRows.length" class="row-list appearance-list appearance-list--with-media">
             <li v-for="item in pokemonRows" :key="`${item.id}-${item.rarity}`">
+              <span class="related-entity-media related-entity-media--appearance related-entity-media--pokemon" aria-hidden="true">
+                <img v-if="item.image" :src="item.image.url" alt="" loading="lazy" />
+                <PokeBallMark v-else size="24px" />
+              </span>
               <RouterLink class="appearance-name" :to="`/pokemon/${item.id}`">{{ item.name }}</RouterLink>
               <dl class="appearance-summary">
                 <div>
@@ -247,6 +267,7 @@ watch(
               </dl>
             </li>
           </ul>
+          <p v-else class="meta-line">{{ t('common.none') }}</p>
         </DetailSection>
       </div>
 

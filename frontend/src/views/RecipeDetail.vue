@@ -10,7 +10,7 @@ import EntityChips from '../components/EntityChips.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
-import { iconBack, iconEdit } from '../icons';
+import { iconBack, iconEdit, iconRecipe } from '../icons';
 import { api, type RecipeDetail } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
@@ -24,6 +24,20 @@ const detailTabs = computed<TabOption[]>(() => [
   { value: 'discussion', label: t('discussion.title') },
   { value: 'history', label: t('history.editHistory') }
 ]);
+const recipeSubtitle = computed(() => {
+  if (!recipe.value) {
+    return '';
+  }
+
+  const categoryName = recipe.value.item.category?.name;
+  const usageName = recipe.value.item.usage?.name;
+
+  if (categoryName && usageName) {
+    return `${categoryName} · ${usageName}`;
+  }
+
+  return categoryName ?? t('pages.recipes.detailSubtitle');
+});
 
 async function loadRecipeDetail() {
   recipe.value = await api.recipeDetail(String(route.params.id));
@@ -80,8 +94,8 @@ watch(
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="recipe.name" :subtitle="t('pages.recipes.detailSubtitle')">
-      <template #kicker>Recipe Detail</template>
+    <PageHeader :title="recipe.name" :subtitle="recipeSubtitle">
+      <template #kicker>{{ t('pages.recipes.detailKicker') }}</template>
       <template #actions>
         <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
@@ -97,14 +111,60 @@ watch(
     <div class="detail-tabs">
       <Tabs id="recipe-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
 
-      <div v-if="detailTab === 'details'" class="detail-grid">
-        <DetailSection :title="t('pages.items.acquisitionMethods')">
-          <EntityChips :items="recipe.acquisition_methods" />
-        </DetailSection>
+      <div v-if="detailTab === 'details'" class="detail-grid detail-grid--stack">
+        <div class="entity-profile-grid">
+          <section class="detail-section entity-profile-media-section" :aria-label="t('pages.recipes.item')">
+            <div class="entity-detail-image">
+              <RouterLink
+                class="entity-detail-image__frame entity-detail-image__frame--link"
+                :class="{ 'entity-detail-image__frame--placeholder': !recipe.item.image }"
+                :to="`/items/${recipe.item.id}`"
+              >
+                <img v-if="recipe.item.image" :src="recipe.item.image.url" :alt="t('media.imageAlt', { name: recipe.item.name })" />
+                <span v-else class="entity-card__mark entity-detail-image__mark" role="img" :aria-label="t('media.imageEmpty')">
+                  <Icon :icon="iconRecipe" class="entity-card__icon" aria-hidden="true" />
+                </span>
+              </RouterLink>
+              <RouterLink class="entity-profile-title-link" :to="`/items/${recipe.item.id}`">{{ recipe.item.name }}</RouterLink>
+            </div>
+          </section>
 
-        <DetailSection :title="t('pages.recipes.materials')">
-          <EntityChips :items="recipe.materials" />
-        </DetailSection>
+          <div class="entity-profile-main">
+            <section class="detail-section entity-profile-overview" :aria-label="t('common.details')">
+              <dl class="entity-profile-facts">
+                <div>
+                  <dt>{{ t('pages.items.category') }}</dt>
+                  <dd>{{ recipe.item.category?.name ?? t('common.none') }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.items.usage') }}</dt>
+                  <dd>{{ recipe.item.usage?.name ?? t('common.none') }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.items.acquisitionMethods') }}</dt>
+                  <dd>{{ recipe.acquisition_methods.length }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.recipes.materials') }}</dt>
+                  <dd>{{ recipe.materials.length }}</dd>
+                </div>
+              </dl>
+
+              <div class="entity-profile-groups">
+                <div class="entity-profile-group">
+                  <h3 class="section-subtitle">{{ t('pages.items.acquisitionMethods') }}</h3>
+                  <EntityChips v-if="recipe.acquisition_methods.length" :items="recipe.acquisition_methods" />
+                  <p v-else class="meta-line">{{ t('common.none') }}</p>
+                </div>
+                <div class="entity-profile-group">
+                  <h3 class="section-subtitle">{{ t('pages.recipes.materials') }}</h3>
+                  <EntityChips v-if="recipe.materials.length" :items="recipe.materials" />
+                  <p v-else class="meta-line">{{ t('common.none') }}</p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
 
       <div v-else-if="detailTab === 'discussion'" class="detail-tab-panel">

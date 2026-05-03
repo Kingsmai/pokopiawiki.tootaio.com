@@ -386,6 +386,32 @@ function uploadedImageJson(pathExpression: string): string {
   `;
 }
 
+function pokemonImageJson(alias: string): string {
+  return `
+    CASE
+      WHEN ${alias}.image_path LIKE '/sprites/%' THEN json_build_object(
+        'path', ${alias}.image_path,
+        'url', ${sqlLiteral(pokemonSpriteBaseUrl)} || ${alias}.image_path,
+        'style', ${alias}.image_style,
+        'version', ${alias}.image_version,
+        'variant', ${alias}.image_variant,
+        'description', ${alias}.image_description,
+        'source', 'sprite'
+      )
+      WHEN ${alias}.image_path <> '' THEN json_build_object(
+        'path', ${alias}.image_path,
+        'url', ${sqlLiteral(uploadPublicBaseUrl)} || ${alias}.image_path,
+        'style', 'Upload',
+        'version', 'Community upload',
+        'variant', ${alias}.name,
+        'description', '',
+        'source', 'upload'
+      )
+      ELSE NULL
+    END
+  `;
+}
+
 function imagePathLabel(path: string | null | undefined): string {
   const cleanPath = path?.trim() ?? '';
   if (cleanPath === '') {
@@ -1816,27 +1842,7 @@ function pokemonProjection(locale: string): string {
       round((p.height_inches * 0.0254)::numeric, 2)::double precision AS "heightMeters",
       p.weight_pounds AS "weightPounds",
       round((p.weight_pounds * 0.45359237)::numeric, 2)::double precision AS "weightKg",
-      CASE
-        WHEN p.image_path LIKE '/sprites/%' THEN json_build_object(
-          'path', p.image_path,
-          'url', '${pokemonSpriteBaseUrl}' || p.image_path,
-          'style', p.image_style,
-          'version', p.image_version,
-          'variant', p.image_variant,
-          'description', p.image_description,
-          'source', 'sprite'
-        )
-        WHEN p.image_path <> '' THEN json_build_object(
-          'path', p.image_path,
-          'url', ${sqlLiteral(uploadPublicBaseUrl)} || p.image_path,
-          'style', 'Upload',
-          'version', 'Community upload',
-          'variant', p.name,
-          'description', '',
-          'source', 'upload'
-        )
-        ELSE NULL
-      END AS image,
+      ${pokemonImageJson('p')} AS image,
       json_build_object(
         'hp', p.hp,
         'attack', p.attack,
@@ -3037,6 +3043,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         SELECT
           h.id,
           ${habitatName} AS name,
+          ${uploadedImageJson('h.image_path')} AS image,
           hp.time_of_day,
           hp.weather,
           hp.rarity,
@@ -3049,9 +3056,9 @@ export async function getPokemon(id: number, locale = defaultLocale) {
       `,
       [id]
     ),
-    query<{ skillId: number; id: number; name: string }>(
+    query<{ skillId: number; id: number; name: string; image: EntityImageValue | null }>(
       `
-        SELECT psid.skill_id AS "skillId", i.id, ${itemName} AS name
+        SELECT psid.skill_id AS "skillId", i.id, ${itemName} AS name, ${uploadedImageJson('i.image_path')} AS image
         FROM pokemon_skill_item_drops psid
         JOIN skills s ON s.id = psid.skill_id
         JOIN items i ON i.id = psid.item_id
@@ -3066,6 +3073,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         SELECT
           i.id,
           ${itemName} AS name,
+          ${uploadedImageJson('i.image_path')} AS image,
           json_build_object('id', c.id, 'name', ${categoryName}) AS category,
           json_agg(json_build_object('id', ft.id, 'name', ${tagName}) ORDER BY ${orderByEntity('ft')}) AS tags
         FROM pokemon_favorite_things pft
@@ -3074,7 +3082,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         JOIN items i ON i.id = ift.item_id
         JOIN item_categories c ON c.id = i.category_id
         WHERE pft.pokemon_id = $1
-        GROUP BY i.id, i.name, i.sort_order, c.id, c.name, c.sort_order
+        GROUP BY i.id, i.name, i.image_path, i.sort_order, c.id, c.name, c.sort_order
         ORDER BY ${orderByEntity('c')}, ${orderByEntity('i')}
       `,
       [id]
@@ -3110,6 +3118,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         SELECT
           related_pokemon.id,
           ${relatedPokemonName} AS name,
+          ${pokemonImageJson('related_pokemon')} AS image,
           json_build_object('id', related_environment.id, 'name', ${relatedEnvironmentName}) AS environment,
           COALESCE((
             SELECT json_agg(
@@ -3153,9 +3162,9 @@ export async function getPokemon(id: number, locale = defaultLocale) {
   ]);
 
   const dropsBySkill = itemDrops.reduce((itemsBySkill, item) => {
-    itemsBySkill.set(item.skillId, { id: item.id, name: item.name });
+    itemsBySkill.set(item.skillId, { id: item.id, name: item.name, image: item.image });
     return itemsBySkill;
-  }, new Map<number, { id: number; name: string }>());
+  }, new Map<number, { id: number; name: string; image: EntityImageValue | null }>());
 
   const skills = Array.isArray(pokemon.skills)
     ? pokemon.skills.map((skill: { id: number; name: string }) => ({
@@ -3464,7 +3473,15 @@ export async function getHabitat(id: number, locale = defaultLocale) {
         ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
         ${uploadedImageJson('h.image_path')} AS image,
         COALESCE((
-          SELECT json_agg(json_build_object('id', i.id, 'name', ${itemName}, 'quantity', hri.quantity) ORDER BY ${orderByEntity('i')})
+          SELECT json_agg(
+            json_build_object(
+              'id', i.id,
+              'name', ${itemName},
+              'image', ${uploadedImageJson('i.image_path')},
+              'quantity', hri.quantity
+            )
+            ORDER BY ${orderByEntity('i')}
+          )
           FROM habitat_recipe_items hri
           JOIN items i ON i.id = hri.item_id
           WHERE hri.habitat_id = h.id
@@ -3486,6 +3503,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
         SELECT
           p.id,
           ${pokemonName} AS name,
+          ${pokemonImageJson('p')} AS image,
           hp.time_of_day,
           hp.weather,
           hp.rarity,
@@ -3733,6 +3751,8 @@ export async function getItem(id: number, locale = defaultLocale) {
 
   const acquisitionMethodName = localizedName('acquisition-methods', 'am', locale);
   const resultItemName = localizedName('items', 'result_item', locale);
+  const resultItemCategoryName = localizedName('item-categories', 'result_category', locale);
+  const resultItemUsageName = localizedName('item-usages', 'result_usage', locale);
   const materialItemName = localizedName('items', 'mi', locale);
   const habitatName = localizedName('habitats', 'h', locale);
   const recipeItemName = localizedName('items', 'recipe_item', locale);
@@ -3763,14 +3783,33 @@ export async function getItem(id: number, locale = defaultLocale) {
             WHERE ram.recipe_id = r.id
           ), '[]'::json) AS acquisition_methods,
           COALESCE((
-            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${orderByEntity('mi')})
+            SELECT json_agg(
+              json_build_object(
+                'id', mi.id,
+                'name', ${materialItemName},
+                'image', ${uploadedImageJson('mi.image_path')},
+                'quantity', rm.quantity
+              )
+              ORDER BY ${orderByEntity('mi')}
+            )
             FROM recipe_materials rm
             JOIN items mi ON mi.id = rm.item_id
             WHERE rm.recipe_id = r.id
           ), '[]'::json) AS materials,
-          json_build_object('id', result_item.id, 'name', ${resultItemName}) AS item
+          json_build_object(
+            'id', result_item.id,
+            'name', ${resultItemName},
+            'image', ${uploadedImageJson('result_item.image_path')},
+            'category', json_build_object('id', result_category.id, 'name', ${resultItemCategoryName}),
+            'usage', CASE
+              WHEN result_usage.id IS NULL THEN NULL
+              ELSE json_build_object('id', result_usage.id, 'name', ${resultItemUsageName})
+            END
+          ) AS item
         FROM recipes r
         JOIN items result_item ON result_item.id = r.item_id
+        JOIN item_categories result_category ON result_category.id = result_item.category_id
+        LEFT JOIN item_usages result_usage ON result_usage.id = result_item.usage_id
         ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
         WHERE r.item_id = $1
       `,
@@ -3781,8 +3820,17 @@ export async function getItem(id: number, locale = defaultLocale) {
         SELECT
           r.id,
           ${resultItemName} AS name,
+          ${uploadedImageJson('result_item.image_path')} AS image,
           COALESCE((
-            SELECT json_agg(json_build_object('id', mi.id, 'name', ${materialItemName}, 'quantity', recipe_material.quantity) ORDER BY ${orderByEntity('mi')})
+            SELECT json_agg(
+              json_build_object(
+                'id', mi.id,
+                'name', ${materialItemName},
+                'image', ${uploadedImageJson('mi.image_path')},
+                'quantity', recipe_material.quantity
+              )
+              ORDER BY ${orderByEntity('mi')}
+            )
             FROM recipe_materials recipe_material
             JOIN items mi ON mi.id = recipe_material.item_id
             WHERE recipe_material.recipe_id = r.id
@@ -3800,8 +3848,17 @@ export async function getItem(id: number, locale = defaultLocale) {
         SELECT
           h.id,
           ${habitatName} AS name,
+          ${uploadedImageJson('h.image_path')} AS image,
           COALESCE((
-            SELECT json_agg(json_build_object('id', recipe_item.id, 'name', ${recipeItemName}, 'quantity', recipe_item_row.quantity) ORDER BY ${orderByEntity('recipe_item')})
+            SELECT json_agg(
+              json_build_object(
+                'id', recipe_item.id,
+                'name', ${recipeItemName},
+                'image', ${uploadedImageJson('recipe_item.image_path')},
+                'quantity', recipe_item_row.quantity
+              )
+              ORDER BY ${orderByEntity('recipe_item')}
+            )
             FROM habitat_recipe_items recipe_item_row
             JOIN items recipe_item ON recipe_item.id = recipe_item_row.item_id
             WHERE recipe_item_row.habitat_id = h.id
@@ -3816,7 +3873,7 @@ export async function getItem(id: number, locale = defaultLocale) {
     query(
       `
         SELECT
-          json_build_object('id', p.id, 'name', ${pokemonName}) AS pokemon,
+          json_build_object('id', p.id, 'name', ${pokemonName}, 'image', ${pokemonImageJson('p')}) AS pokemon,
           json_build_object('id', s.id, 'name', ${skillName}) AS skill
         FROM pokemon_skill_item_drops psid
         JOIN pokemon p ON p.id = psid.pokemon_id
@@ -4025,6 +4082,8 @@ export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaul
 
 export async function getRecipe(id: number, locale = defaultLocale) {
   const resultItemName = localizedName('items', 'result_item', locale);
+  const resultItemCategoryName = localizedName('item-categories', 'result_category', locale);
+  const resultItemUsageName = localizedName('item-usages', 'result_usage', locale);
   const acquisitionMethodName = localizedName('acquisition-methods', 'am', locale);
   const materialItemName = localizedName('items', 'i', locale);
 
@@ -4041,14 +4100,33 @@ export async function getRecipe(id: number, locale = defaultLocale) {
           WHERE ram.recipe_id = r.id
         ), '[]'::json) AS acquisition_methods,
         COALESCE((
-          SELECT json_agg(json_build_object('id', i.id, 'name', ${materialItemName}, 'quantity', rm.quantity) ORDER BY ${orderByEntity('i')})
+          SELECT json_agg(
+            json_build_object(
+              'id', i.id,
+              'name', ${materialItemName},
+              'image', ${uploadedImageJson('i.image_path')},
+              'quantity', rm.quantity
+            )
+            ORDER BY ${orderByEntity('i')}
+          )
           FROM recipe_materials rm
           JOIN items i ON i.id = rm.item_id
           WHERE rm.recipe_id = r.id
         ), '[]'::json) AS materials,
-        json_build_object('id', result_item.id, 'name', ${resultItemName}) AS item
+        json_build_object(
+          'id', result_item.id,
+          'name', ${resultItemName},
+          'image', ${uploadedImageJson('result_item.image_path')},
+          'category', json_build_object('id', result_category.id, 'name', ${resultItemCategoryName}),
+          'usage', CASE
+            WHEN result_usage.id IS NULL THEN NULL
+            ELSE json_build_object('id', result_usage.id, 'name', ${resultItemUsageName})
+          END
+        ) AS item
       FROM recipes r
       JOIN items result_item ON result_item.id = r.item_id
+      JOIN item_categories result_category ON result_category.id = result_item.category_id
+      LEFT JOIN item_usages result_usage ON result_usage.id = result_item.usage_id
       ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
       WHERE r.id = $1
     `,

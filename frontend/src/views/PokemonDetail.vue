@@ -9,15 +9,16 @@ import EntityDiscussionPanel from '../components/EntityDiscussionPanel.vue';
 import EntityChips from '../components/EntityChips.vue';
 import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
+import PokeBallMark from '../components/PokeBallMark.vue';
 import PokemonStatsPanel from '../components/PokemonStatsPanel.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
-import { iconBack, iconEdit } from '../icons';
+import { iconBack, iconEdit, iconHabitat, iconItem } from '../icons';
 import { api, type PokemonDetail } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const route = useRoute();
-const { locale, t } = useI18n();
+const { t } = useI18n();
 const pokemon = ref<PokemonDetail | null>(null);
 const itemCategoryTab = ref('');
 const relatedHabitatTab = ref('');
@@ -30,6 +31,7 @@ const relatedPokemonLimit = 6;
 type HabitatRow = {
   id: number;
   name: string;
+  image: PokemonDetail['habitats'][number]['image'];
   timeOfDays: string[];
   weathers: string[];
   rarity: number;
@@ -78,6 +80,7 @@ const habitatRows = computed<HabitatRow[]>(() => {
     {
       id: number;
       name: string;
+      image: PokemonDetail['habitats'][number]['image'];
       timeOfDays: Set<string>;
       weathers: Set<string>;
       rarity: number;
@@ -90,6 +93,7 @@ const habitatRows = computed<HabitatRow[]>(() => {
     const row = rows.get(key) ?? {
       id: habitat.id,
       name: habitat.name,
+      image: habitat.image,
       timeOfDays: new Set<string>(),
       weathers: new Set<string>(),
       rarity: habitat.rarity,
@@ -105,6 +109,7 @@ const habitatRows = computed<HabitatRow[]>(() => {
   return [...rows.values()].map((row) => ({
     id: row.id,
     name: row.name,
+    image: row.image,
     timeOfDays: sortByOrder(row.timeOfDays, timeOfDays),
     weathers: sortByOrder(row.weathers, weathers),
     rarity: row.rarity,
@@ -200,17 +205,6 @@ function pokemonImageLabel() {
     return '';
   }
   return pokemon.value.image.source === 'upload' ? t('media.uploadedImage') : `${pokemon.value.image.version} - ${pokemon.value.image.variant}`;
-}
-
-function imageFileName(path: string): string {
-  return path.split('/').at(-1) ?? t('media.image');
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(value));
 }
 
 function openImageModal() {
@@ -328,7 +322,7 @@ watch(
       <Tabs id="pokemon-detail-tabs" v-model="detailTab" :tabs="detailTabs" :label="t('common.details')" />
 
       <div v-if="detailTab === 'details'" class="detail-grid detail-grid--stack">
-        <div class="pokemon-profile-grid" :class="{ 'pokemon-profile-grid--with-image': pokemon.image }">
+        <div class="pokemon-profile-grid pokemon-profile-grid--with-image">
           <div class="pokemon-profile-main">
             <section class="detail-section pokemon-profile-card" :aria-label="t('pages.pokemon.details')">
               <p v-if="pokemon.genus" class="pokemon-genus">{{ pokemon.genus }}</p>
@@ -371,7 +365,7 @@ watch(
             </div>
           </div>
 
-          <div class="pokemon-profile-side" :class="{ 'pokemon-profile-side--with-image': pokemon.image }">
+          <div class="pokemon-profile-side pokemon-profile-side--with-image">
             <DetailSection class="pokemon-profile-stats" :title="t('pages.pokemon.statsTitle')">
               <PokemonStatsPanel :stats="pokemon.stats" />
             </DetailSection>
@@ -379,6 +373,9 @@ watch(
             <button v-if="pokemon.image" type="button" class="pokemon-profile-image" :aria-label="pokemonImageLabel()" @click="openImageModal">
               <img :src="pokemon.image.url" :alt="pokemonImageAlt()" />
             </button>
+            <div v-else class="pokemon-profile-image pokemon-profile-image--placeholder" role="img" :aria-label="t('pages.pokemon.imageEmpty')">
+              <PokeBallMark size="64px" />
+            </div>
           </div>
         </div>
 
@@ -390,7 +387,13 @@ watch(
           <ul class="row-list skill-drop-summary">
             <li v-for="skill in skillDropRows" :key="skill.id">
               <span>{{ t('pages.pokemon.skillDrop', { name: skill.name }) }}</span>
-              <RouterLink v-if="skill.itemDrop" :to="`/items/${skill.itemDrop.id}`">{{ skill.itemDrop.name }}</RouterLink>
+              <RouterLink v-if="skill.itemDrop" class="related-entity-link related-entity-link--compact" :to="`/items/${skill.itemDrop.id}`">
+                <span class="related-entity-media related-entity-media--inline" aria-hidden="true">
+                  <img v-if="skill.itemDrop.image" :src="skill.itemDrop.image.url" alt="" loading="lazy" />
+                  <Icon v-else :icon="iconItem" class="related-entity-media__icon" aria-hidden="true" />
+                </span>
+                <span>{{ skill.itemDrop.name }}</span>
+              </RouterLink>
             </li>
           </ul>
         </DetailSection>
@@ -411,35 +414,41 @@ watch(
               />
               <ul v-if="relatedPokemonRows.length" class="row-list related-pokemon-list">
                 <li v-for="related in relatedPokemonRows" :key="related.id">
-                  <div class="related-pokemon-row">
-                    <div class="related-pokemon-row__summary">
-                      <RouterLink class="related-pokemon-row__name" :to="`/pokemon/${related.id}`">#{{ related.id }} {{ related.name }}</RouterLink>
-                      <div class="related-pokemon-row__traits">
-                        <EntityChips
-                          v-if="related.skills.length"
-                          class="related-pokemon-row__skills"
-                          :items="related.skills"
-                        />
+                  <div class="related-pokemon-list-item">
+                    <span class="related-entity-media related-entity-media--pokemon" aria-hidden="true">
+                      <img v-if="related.image" :src="related.image.url" alt="" loading="lazy" />
+                      <PokeBallMark v-else size="24px" />
+                    </span>
+                    <div class="related-pokemon-row">
+                      <div class="related-pokemon-row__summary">
+                        <RouterLink class="related-pokemon-row__name" :to="`/pokemon/${related.id}`">#{{ related.id }} {{ related.name }}</RouterLink>
+                        <div class="related-pokemon-row__traits">
+                          <EntityChips
+                            v-if="related.skills.length"
+                            class="related-pokemon-row__skills"
+                            :items="related.skills"
+                          />
+                          <span
+                            class="chip related-pokemon-row__environment"
+                            :class="{ 'related-pokemon-row__environment--match': related.environment.id === pokemon.environment.id }"
+                          >
+                            {{ related.environment.name }}
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        v-if="related.favorite_things.length"
+                        class="chips related-pokemon-row__favourites"
+                      >
                         <span
-                          class="chip related-pokemon-row__environment"
-                          :class="{ 'related-pokemon-row__environment--match': related.environment.id === pokemon.environment.id }"
+                          v-for="thing in related.favorite_things"
+                          :key="thing.id"
+                          class="chip related-favourite-chip"
+                          :class="{ 'related-favourite-chip--match': thing.matches }"
                         >
-                          {{ related.environment.name }}
+                          {{ thing.name }}
                         </span>
                       </div>
-                    </div>
-                    <div
-                      v-if="related.favorite_things.length"
-                      class="chips related-pokemon-row__favourites"
-                    >
-                      <span
-                        v-for="thing in related.favorite_things"
-                        :key="thing.id"
-                        class="chip related-favourite-chip"
-                        :class="{ 'related-favourite-chip--match': thing.matches }"
-                      >
-                        {{ thing.name }}
-                      </span>
                     </div>
                   </div>
                 </li>
@@ -460,7 +469,13 @@ watch(
               />
               <ul v-if="favoriteThingItems.length" class="row-list">
                 <li v-for="item in favoriteThingItems" :key="item.id">
-                  <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
+                  <RouterLink class="related-entity-link related-entity-link--compact" :to="`/items/${item.id}`">
+                    <span class="related-entity-media related-entity-media--inline" aria-hidden="true">
+                      <img v-if="item.image" :src="item.image.url" alt="" loading="lazy" />
+                      <Icon v-else :icon="iconItem" class="related-entity-media__icon" aria-hidden="true" />
+                    </span>
+                    <span>{{ item.name }}</span>
+                  </RouterLink>
                   <EntityChips :items="item.tags" />
                 </li>
               </ul>
@@ -471,8 +486,12 @@ watch(
         </div>
 
         <DetailSection :title="t('pages.pokemon.habitats')">
-          <ul class="row-list appearance-list">
+          <ul class="row-list appearance-list appearance-list--with-media">
             <li v-for="habitat in habitatRows" :key="`${habitat.id}-${habitat.rarity}`">
+              <span class="related-entity-media related-entity-media--appearance" aria-hidden="true">
+                <img v-if="habitat.image" :src="habitat.image.url" alt="" loading="lazy" />
+                <Icon v-else :icon="iconHabitat" class="related-entity-media__icon" aria-hidden="true" />
+              </span>
               <RouterLink class="appearance-name" :to="`/habitats/${habitat.id}`">{{ habitat.name }}</RouterLink>
               <dl class="appearance-summary">
                 <div>
@@ -523,13 +542,6 @@ watch(
         <strong>{{ pokemonImageLabel() }}</strong>
         <span v-if="pokemon.image.style">{{ pokemon.image.style }}</span>
         <p v-if="pokemon.image.description">{{ pokemon.image.description }}</p>
-        <div v-if="pokemon.imageHistory.length" class="image-history-list" :aria-label="t('media.imageHistory')">
-          <div v-for="image in pokemon.imageHistory" :key="image.path" class="image-history-list__item">
-            <img :src="image.url" :alt="t('media.imageAlt', { name: pokemon.name })" loading="lazy" />
-            <span>{{ imageFileName(image.path) }}</span>
-            <span>{{ formatDateTime(image.uploadedAt) }}</span>
-          </div>
-        </div>
       </div>
     </div>
   </Modal>

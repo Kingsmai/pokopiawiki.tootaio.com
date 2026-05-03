@@ -128,20 +128,22 @@ export interface Pokemon extends EditInfo {
 export interface RelatedPokemon {
   id: number;
   name: string;
+  image?: PokemonImage | null;
   environment: NamedEntity;
   skills: Skill[];
   favorite_things: Array<NamedEntity & { matches: boolean }>;
 }
 
 export interface PokemonDetail extends Pokemon {
-  skills: Array<Skill & { itemDrop: NamedEntity | null }>;
-  favoriteThingItems: Array<NamedEntity & { category: NamedEntity; tags: NamedEntity[] }>;
+  skills: Array<Skill & { itemDrop: (NamedEntity & { image?: EntityImage | null }) | null }>;
+  favoriteThingItems: Array<NamedEntity & { image?: EntityImage | null; category: NamedEntity; tags: NamedEntity[] }>;
   relatedPokemon: RelatedPokemon[];
   editHistory: EditHistoryEntry[];
   imageHistory: EntityImageUpload[];
   habitats: Array<{
     id: number;
     name: string;
+    image?: EntityImage | null;
     time_of_day: string;
     weather: string;
     rarity: number;
@@ -155,7 +157,7 @@ export interface Habitat extends EditInfo {
   baseName?: string;
   translations?: TranslationMap;
   image: EntityImage | null;
-  recipe: Array<NamedEntity & { quantity: number }>;
+  recipe: Array<NamedEntity & { image?: EntityImage | null; quantity: number }>;
   pokemon?: NamedEntity[];
 }
 
@@ -163,6 +165,7 @@ export interface HabitatDetail extends Habitat {
   editHistory: EditHistoryEntry[];
   imageHistory: EntityImageUpload[];
   pokemon: Array<NamedEntity & {
+    image?: PokemonImage | null;
     time_of_day: string;
     weather: string;
     rarity: number;
@@ -177,13 +180,21 @@ export interface RecipeSummary extends EditInfo {
 export interface RecipeUsage {
   id: number;
   name: string;
-  materials: Array<NamedEntity & { quantity: number }>;
+  image?: EntityImage | null;
+  materials: Array<NamedEntity & { image?: EntityImage | null; quantity: number }>;
 }
 
 export interface HabitatUsage {
   id: number;
   name: string;
-  recipe: Array<NamedEntity & { quantity: number }>;
+  image?: EntityImage | null;
+  recipe: Array<NamedEntity & { image?: EntityImage | null; quantity: number }>;
+}
+
+export interface RecipeResultItem extends NamedEntity {
+  image?: EntityImage | null;
+  category?: NamedEntity;
+  usage?: NamedEntity | null;
 }
 
 export interface Item extends EditInfo {
@@ -212,7 +223,7 @@ export interface ItemDetail extends Item {
   editHistory: EditHistoryEntry[];
   imageHistory: EntityImageUpload[];
   droppedByPokemon: Array<{
-    pokemon: NamedEntity;
+    pokemon: NamedEntity & { image?: PokemonImage | null };
     skill: NamedEntity;
   }>;
 }
@@ -220,7 +231,7 @@ export interface ItemDetail extends Item {
 export interface Recipe extends EditInfo {
   id: number;
   name: string;
-  materials: Array<NamedEntity & { quantity: number }>;
+  materials: Array<NamedEntity & { image?: EntityImage | null; quantity: number }>;
 }
 
 export interface DailyChecklistItem {
@@ -274,7 +285,7 @@ export interface LifeComment {
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];
   editHistory: EditHistoryEntry[];
-  item: NamedEntity;
+  item: RecipeResultItem;
 }
 
 export interface Options {

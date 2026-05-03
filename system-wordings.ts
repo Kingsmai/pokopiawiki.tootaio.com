@@ -212,6 +212,7 @@ export const systemWordingMessages = {
       habitats: {
         title: 'Habitats',
         subtitle: 'View recipes and Pokemon that may appear.',
+        detailKicker: 'Habitat Detail',
         detailSubtitle: 'Habitat detail',
         editSubtitle: 'Maintain habitat recipes and possible Pokemon appearances.',
         newTitle: 'New habitat',
@@ -859,6 +860,7 @@ export const systemWordingMessages = {
       habitats: {
         title: '栖息地',
         subtitle: '查看配方和可能出现的宝可梦。',
+        detailKicker: 'Habitat Detail',
         detailSubtitle: '栖息地详情',
         editSubtitle: '维护栖息地配方和可能出现的 Pokemon。',
         newTitle: '新增栖息地',

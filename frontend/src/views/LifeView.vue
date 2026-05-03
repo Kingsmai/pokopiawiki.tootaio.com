@@ -218,8 +218,12 @@ function resetForm() {
 function payload() {
   return {
     body: body.value.trim(),
-    tagIds: selectedTagIds.value.map((tagId) => Number(tagId)).filter((tagId) => Number.isInteger(tagId) && tagId > 0)
+    tagIds: selectedLifeTagIds()
   };
+}
+
+function selectedLifeTagIds() {
+  return selectedTagIds.value.map((tagId) => Number(tagId)).filter((tagId) => Number.isInteger(tagId) && tagId > 0);
 }
 
 function submitSearch() {
@@ -278,6 +282,12 @@ async function submitPost() {
   if (!body.value.trim()) {
     formError.value = t('pages.life.bodyRequired');
     bodyInput.value?.focus();
+    return;
+  }
+
+  if (selectedLifeTagIds().length === 0) {
+    formError.value = t('pages.life.tagRequired');
+    document.getElementById('life-post-tags')?.focus();
     return;
   }
 

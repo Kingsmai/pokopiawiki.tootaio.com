@@ -565,7 +565,7 @@ Life 是社区生活分享信息流，类似轻量社交动态。
 Life Post 可配置：
 
 - Post 内容正文
-- 标签：使用 Life 标签配置，可多选
+- 标签：使用 Life 标签配置，至少选择 1 个，可多选
 - 创建者、最后编辑者、创建时间、最后编辑时间
 - 评论
 - 评论回复：仅支持回复顶层评论，不做无限嵌套
@@ -578,7 +578,7 @@ Life Post 可配置：
 - 已注册并完成邮箱验证且拥有 `life.posts.create` 权限的用户可以发布 Life Post。
 - 作者本人拥有 `life.posts.update` / `life.posts.delete` 权限时可以编辑、删除自己的 Life Post；删除 Life Post 使用软删除。
 - 拥有 `life.posts.update-any` / `life.posts.delete-any` 权限的用户可以管理其他用户的 Life Post。
-- 已注册并完成邮箱验证且拥有 `life.posts.create` 或 `life.posts.update` 权限的用户发布或编辑 Life Post 时可以选择一个或多个 Life 标签。
+- 已注册并完成邮箱验证且拥有 `life.posts.create` 或 `life.posts.update` 权限的用户发布或编辑 Life Post 时必须选择至少 1 个 Life 标签，可选择多个。
 - 已注册并完成邮箱验证且拥有 `life.comments.create` 权限的用户可以评论 Life Post，并回复顶层评论。
 - 评论作者拥有 `life.comments.delete` 权限时可以删除自己的评论；拥有 `life.comments.delete-any` 权限的用户可以删除其他用户评论；删除评论后正文不再展示，已有回复保留在原位置。
 - 已软删除的 Life Post 不出现在信息流、搜索或标签筛选结果中，也不能继续编辑、评论或设置 Reaction。

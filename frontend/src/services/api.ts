@@ -486,7 +486,7 @@ export interface DailyChecklistPayload {
 
 export interface LifePostPayload {
   body: string;
-  tagIds?: number[];
+  tagIds: number[];
 }
 
 export interface LifeCommentPayload {

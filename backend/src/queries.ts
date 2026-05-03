@@ -2089,10 +2089,14 @@ function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload
   if (body.length > 2000) {
     throw validationError('Post is too long');
   }
+  const tagIds = cleanIds(payload.tagIds);
+  if (tagIds.length === 0) {
+    throw validationError('server.validation.lifeTagRequired');
+  }
 
   return {
     body,
-    tagIds: cleanIds(payload.tagIds)
+    tagIds
   };
 }
 

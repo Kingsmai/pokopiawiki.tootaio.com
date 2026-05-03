@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import FilterPanel from '../components/FilterPanel.vue';
+import LifeRatingControl from '../components/LifeRatingControl.vue';
 import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -25,8 +26,6 @@ import {
   iconReply,
   iconSave,
   iconSearch,
-  iconStar,
-  iconStarOutline,
   iconVersion,
   iconWarning
 } from '../icons';
@@ -727,21 +726,6 @@ function canUseRatings(post: LifePost) {
   return canRate.value && ratingBusyPostId.value === null && post.moderationStatus === 'approved' && post.category?.isRateable === true;
 }
 
-function ratingButtonLabel(post: LifePost, rating: number) {
-  return post.myRating === rating ? t('pages.life.removeRating') : t('pages.life.setRating', { count: rating });
-}
-
-function ratingAverageLabel(post: LifePost) {
-  if (post.ratingAverage === null || post.ratingCount === 0) {
-    return t('pages.life.noRatings');
-  }
-
-  return t('pages.life.ratingAverage', {
-    average: new Intl.NumberFormat(locale.value, { maximumFractionDigits: 2 }).format(post.ratingAverage),
-    count: post.ratingCount
-  });
-}
-
 function closeReactionPicker() {
   reactionPickerPostId.value = null;
 }
@@ -1256,21 +1240,6 @@ onUnmounted(() => {
               </div>
             </header>
 
-            <div class="life-post__moderation">
-              <StatusBadge :label="moderationLabel(post.moderationStatus)" :tone="moderationTone(post.moderationStatus)" compact />
-              <button
-                v-if="canRetryModeration(post)"
-                class="ui-button ui-button--ghost ui-button--small"
-                type="button"
-                :disabled="moderationBusyPostId === post.id"
-                @click="retryPostModeration(post)"
-              >
-                <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
-                {{ moderationBusyPostId === post.id ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry') }}
-              </button>
-            </div>
-            <p v-if="moderationErrors[post.id]" class="life-form__error" role="alert">{{ moderationErrors[post.id] }}</p>
-
             <p class="life-post__body">{{ post.body }}</p>
 
             <div v-if="post.category || post.gameVersion" class="life-post__tags" :aria-label="t('pages.life.postMeta')">
@@ -1285,28 +1254,18 @@ onUnmounted(() => {
               <p>{{ post.gameVersion.changeLog }}</p>
             </details>
 
-            <div v-if="post.category?.isRateable" class="life-rating">
-              <div class="life-rating__stars" role="group" :aria-label="t('pages.life.rating')">
-                <button
-                  v-for="rating in 5"
-                  :key="rating"
-                  class="life-rating__star"
-                  :class="{ 'is-active': post.myRating !== null && rating <= post.myRating }"
-                  type="button"
-                  :aria-label="ratingButtonLabel(post, rating)"
-                  :aria-pressed="post.myRating === rating"
-                  :disabled="!canUseRatings(post) || isRatingBusy(post.id)"
-                  @click="toggleRating(post, rating)"
-                >
-                  <Icon :icon="post.myRating !== null && rating <= post.myRating ? iconStar : iconStarOutline" class="ui-icon" aria-hidden="true" />
-                </button>
-              </div>
-              <span class="life-rating__summary">{{ ratingAverageLabel(post) }}</span>
-            </div>
-            <p v-if="ratingErrors[post.id]" class="life-form__error" role="alert">{{ ratingErrors[post.id] }}</p>
-
             <div class="life-post__engagement">
               <div class="life-post__engagement-actions">
+                <LifeRatingControl
+                  v-if="post.category?.isRateable"
+                  :rating-average="post.ratingAverage"
+                  :rating-count="post.ratingCount"
+                  :my-rating="post.myRating"
+                  :disabled="!canUseRatings(post)"
+                  :busy="isRatingBusy(post.id)"
+                  @rate="toggleRating(post, $event)"
+                />
+
                 <div class="life-reactions">
                   <div class="life-reaction-control">
                     <button
@@ -1379,6 +1338,23 @@ onUnmounted(() => {
                     {{ areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment') }}
                   </span>
                 </button>
+
+                <div class="life-post__review-actions">
+                  <StatusBadge :label="moderationLabel(post.moderationStatus)" :tone="moderationTone(post.moderationStatus)" compact />
+                  <button
+                    v-if="canRetryModeration(post)"
+                    class="life-icon-button life-review-button"
+                    type="button"
+                    :aria-label="moderationBusyPostId === post.id ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry')"
+                    :disabled="moderationBusyPostId === post.id"
+                    @click="retryPostModeration(post)"
+                  >
+                    <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
+                    <span class="life-action-tooltip" role="tooltip">
+                      {{ moderationBusyPostId === post.id ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry') }}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               <div class="life-post__metrics">
@@ -1416,6 +1392,8 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <p v-if="ratingErrors[post.id]" class="life-form__error" role="alert">{{ ratingErrors[post.id] }}</p>
+            <p v-if="moderationErrors[post.id]" class="life-form__error" role="alert">{{ moderationErrors[post.id] }}</p>
             <p v-if="reactionErrors[post.id]" class="life-form__error" role="alert">{{ reactionErrors[post.id] }}</p>
 
             <section

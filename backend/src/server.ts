@@ -128,10 +128,24 @@ const app = Fastify({
   trustProxy: process.env.TRUST_PROXY === 'true'
 });
 
+function configuredCorsOrigin(): true | string | string[] {
+  const rawOrigin = process.env.FRONTEND_ORIGIN?.trim();
+  if (!rawOrigin) {
+    return true;
+  }
+
+  const origins = rawOrigin
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return origins.length <= 1 ? (origins[0] ?? true) : origins;
+}
+
 await app.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type', 'X-Locale'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  origin: process.env.FRONTEND_ORIGIN ?? true
+  origin: configuredCorsOrigin()
 });
 
 await app.register(rateLimit, {

@@ -21,10 +21,10 @@ services:
       DATABASE_URL: postgres://pokopia:pokopia@postgres:5432/pokopia
       BACKEND_PORT: 3001
       TRUST_PROXY: ${TRUST_PROXY:-false}
-      FRONTEND_ORIGIN: http://localhost:20015
-      APP_ORIGIN: http://localhost:20015
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:20015}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:20015}
       UPLOAD_DIR: /app/uploads
-      BACKEND_PUBLIC_ORIGIN: http://localhost:20016
+      BACKEND_PUBLIC_ORIGIN: ${BACKEND_PUBLIC_ORIGIN:-http://localhost:20016}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: "${EMAIL_FROM:-Pokopia Wiki <onboarding@resend.dev>}"
     ports:

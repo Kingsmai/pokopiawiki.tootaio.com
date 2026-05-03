@@ -9,27 +9,15 @@ export type UploadEntityType = 'pokemon' | 'items' | 'habitats';
 
 export type EntityImageUpload = {
   id: number;
-  entityType: UploadEntityType;
-  entityId: number | null;
-  entityName: string;
   path: string;
   url: string;
-  originalFilename: string;
-  mimeType: string;
-  byteSize: number;
   uploadedAt: Date;
   uploadedBy: { id: number; displayName: string } | null;
 };
 
 type UploadRow = {
   id: number;
-  entityType: UploadEntityType;
-  entityId: number | null;
-  entityName: string;
   path: string;
-  originalFilename: string;
-  mimeType: string;
-  byteSize: number;
   uploadedAt: Date;
   uploadedBy: { id: number; displayName: string } | null;
 };
@@ -164,7 +152,10 @@ function hasValidImageSignature(mimeType: string, buffer: Buffer): boolean {
 
 function mapUploadRow(row: UploadRow): EntityImageUpload {
   return {
-    ...row,
+    id: row.id,
+    path: row.path,
+    uploadedAt: row.uploadedAt,
+    uploadedBy: row.uploadedBy,
     url: uploadImageUrl(row.path)
   };
 }
@@ -213,13 +204,7 @@ export async function saveEntityImageUpload(
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING
         id,
-        entity_type AS "entityType",
-        entity_id AS "entityId",
-        entity_name AS "entityName",
         path,
-        original_filename AS "originalFilename",
-        mime_type AS "mimeType",
-        byte_size AS "byteSize",
         created_at AS "uploadedAt",
         json_build_object('id', $8::integer, 'displayName', $9::text) AS "uploadedBy"
     `,
@@ -238,13 +223,7 @@ export async function listEntityImageUploads(entityType: UploadEntityType, entit
     `
       SELECT
         upload.id,
-        upload.entity_type AS "entityType",
-        upload.entity_id AS "entityId",
-        upload.entity_name AS "entityName",
         upload.path,
-        upload.original_filename AS "originalFilename",
-        upload.mime_type AS "mimeType",
-        upload.byte_size AS "byteSize",
         upload.created_at AS "uploadedAt",
         CASE
           WHEN u.id IS NULL THEN NULL

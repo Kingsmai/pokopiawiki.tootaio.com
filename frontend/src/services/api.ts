@@ -62,12 +62,6 @@ export interface EntityImage {
 
 export interface EntityImageUpload extends EntityImage {
   id: number;
-  entityType: ImageUploadEntityType;
-  entityId: number | null;
-  entityName: string;
-  originalFilename: string;
-  mimeType: string;
-  byteSize: number;
   uploadedAt: string;
   uploadedBy: UserSummary | null;
 }

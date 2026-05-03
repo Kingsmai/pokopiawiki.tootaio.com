@@ -1087,14 +1087,20 @@ export const systemWordingMessages = {
   },
   email: {
     auth: {
+      kicker: 'Account security',
+      linkFallback: 'If the button does not work, copy and paste this link into your browser:',
+      footer: 'You received this automated email because an account action was requested for Pokopia Wiki.',
       verificationSubject: 'Verify your Pokopia Wiki email',
+      verificationActionLabel: 'Verify email',
       verificationHtml:
-        '<p>Open the link below to verify your email:</p><p><a href="{url}">Verify email</a></p><p>The link expires in {hours} hours.</p>',
-      verificationText: 'Open this link to verify your Pokopia Wiki email: {url}\nThe link expires in {hours} hours.',
+        '<p>Welcome to Pokopia Wiki. Confirm this email address to finish setting up your account and unlock verified editing.</p><p><a href="{url}">Verify email</a></p><p>This secure link expires in {hours} hours.</p>',
+      verificationText: 'Verify your Pokopia Wiki email: {url}\nThis secure link expires in {hours} hours.',
       passwordResetSubject: 'Reset your Pokopia Wiki password',
+      passwordResetActionLabel: 'Reset password',
       passwordResetHtml:
-        '<p>Open the link below to reset your password:</p><p><a href="{url}">Reset password</a></p><p>The link expires in {hours} hours.</p>',
-      passwordResetText: 'Open this link to reset your Pokopia Wiki password: {url}\nThe link expires in {hours} hours.'
+        '<p>Use this secure link to choose a new password for your Pokopia Wiki account.</p><p><a href="{url}">Reset password</a></p><p>This link expires in {hours} hours. If you did not request this, you can ignore this email.</p>',
+      passwordResetText:
+        'Reset your Pokopia Wiki password: {url}\nThis link expires in {hours} hours. If you did not request this, you can ignore this email.'
     }
   },
   },
@@ -2155,12 +2161,20 @@ export const systemWordingMessages = {
     },
     email: {
       auth: {
+        kicker: '账号安全',
+        linkFallback: '如果按钮无法打开，请复制以下链接到浏览器：',
+        footer: '这封自动邮件来自 Pokopia Wiki，用于处理你的账号操作。',
         verificationSubject: '验证你的 Pokopia Wiki 邮箱',
-        verificationHtml: '<p>请点击下面的链接完成邮箱验证：</p><p><a href="{url}">验证邮箱</a></p><p>链接将在 {hours} 小时后失效。</p>',
-        verificationText: '请打开以下链接完成 Pokopia Wiki 邮箱验证：{url}\n链接将在 {hours} 小时后失效。',
+        verificationActionLabel: '验证邮箱',
+        verificationHtml:
+          '<p>欢迎来到 Pokopia Wiki。请确认这个邮箱地址，完成账号设置并解锁已验证编辑权限。</p><p><a href="{url}">验证邮箱</a></p><p>安全链接将在 {hours} 小时后失效。</p>',
+        verificationText: '请打开以下链接完成 Pokopia Wiki 邮箱验证：{url}\n安全链接将在 {hours} 小时后失效。',
         passwordResetSubject: '重置你的 Pokopia Wiki 密码',
-        passwordResetHtml: '<p>请点击下面的链接重置密码：</p><p><a href="{url}">重置密码</a></p><p>链接将在 {hours} 小时后失效。</p>',
-        passwordResetText: '请打开以下链接重置 Pokopia Wiki 密码：{url}\n链接将在 {hours} 小时后失效。'
+        passwordResetActionLabel: '重置密码',
+        passwordResetHtml:
+          '<p>请使用这个安全链接为你的 Pokopia Wiki 账号设置新密码。</p><p><a href="{url}">重置密码</a></p><p>链接将在 {hours} 小时后失效。如果这不是你本人操作，可以忽略这封邮件。</p>',
+        passwordResetText:
+          '请打开以下链接重置 Pokopia Wiki 密码：{url}\n链接将在 {hours} 小时后失效。如果这不是你本人操作，可以忽略这封邮件。'
       }
     }
   }

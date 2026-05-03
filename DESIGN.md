@@ -101,6 +101,7 @@
   - `RESEND_API_KEY`
   - `EMAIL_FROM`
   - `APP_ORIGIN` 或 `FRONTEND_ORIGIN`
+- 认证邮件和密码重置邮件使用标准化 Pokopia Wiki 品牌 HTML 外壳；正文、按钮文案、兜底链接提示和纯文本版本仍通过 `surface=email` 的系统级文案维护。
 - 验证邮件包含一次性验证链接。
 - 验证 token 只保存 hash，并带过期时间和使用状态。
 - 只有邮箱已验证的用户可以登录。

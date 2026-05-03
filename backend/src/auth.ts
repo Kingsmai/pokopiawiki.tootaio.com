@@ -62,9 +62,14 @@ type AuthMessageKey =
   | 'emailSubject'
   | 'emailHtml'
   | 'emailText'
+  | 'emailKicker'
+  | 'emailLinkFallback'
+  | 'emailFooter'
+  | 'verificationActionLabel'
   | 'passwordResetSubject'
   | 'passwordResetHtml'
-  | 'passwordResetText';
+  | 'passwordResetText'
+  | 'passwordResetActionLabel';
 
 type AuthTokenMessageKey = 'invalidToken' | 'invalidResetToken';
 
@@ -185,9 +190,14 @@ function authMessage(locale: string, key: AuthMessageKey, params: Record<string,
     emailSubject: 'email.auth.verificationSubject',
     emailHtml: 'email.auth.verificationHtml',
     emailText: 'email.auth.verificationText',
+    emailKicker: 'email.auth.kicker',
+    emailLinkFallback: 'email.auth.linkFallback',
+    emailFooter: 'email.auth.footer',
+    verificationActionLabel: 'email.auth.verificationActionLabel',
     passwordResetSubject: 'email.auth.passwordResetSubject',
     passwordResetHtml: 'email.auth.passwordResetHtml',
-    passwordResetText: 'email.auth.passwordResetText'
+    passwordResetText: 'email.auth.passwordResetText',
+    passwordResetActionLabel: 'email.auth.passwordResetActionLabel'
   };
 
   return systemMessage(locale || defaultLocale, messageKeys[key], params);
@@ -698,12 +708,132 @@ function buildPasswordResetUrl(token: string): string {
   return buildTokenUrl('/reset-password', token);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripStandaloneActionLink(contentHtml: string, actionUrl: string): string {
+  const escapedUrl = escapeRegExp(actionUrl);
+  const actionLinkPattern = new RegExp(
+    `<p>\\s*<a\\s+href=["']${escapedUrl}["'][^>]*>.*?<\\/a>\\s*<\\/p>`,
+    'giu'
+  );
+  return contentHtml.replace(actionLinkPattern, '').trim();
+}
+
+function authEmailHtml(options: {
+  subject: string;
+  contentHtml: string;
+  actionUrl: string;
+  actionLabel: string;
+  kicker: string;
+  linkFallback: string;
+  footer: string;
+}): string {
+  const safeSubject = escapeHtml(options.subject);
+  const safeKicker = escapeHtml(options.kicker);
+  const safeActionUrl = escapeHtml(options.actionUrl);
+  const safeActionLabel = escapeHtml(options.actionLabel);
+  const safeLinkFallback = escapeHtml(options.linkFallback);
+  const safeFooter = escapeHtml(options.footer);
+  const contentHtml = stripStandaloneActionLink(options.contentHtml, options.actionUrl);
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <style>
+      @media (max-width: 620px) {
+        .email-shell { width: 100% !important; }
+        .email-card { padding: 28px 22px !important; }
+        .email-title { font-size: 26px !important; }
+      }
+      .email-content p { margin: 0 0 16px; }
+      .email-content a { color: #2a75bb; font-weight: 800; }
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background:#f2f5fa; color:#151923; font-family:Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">${safeSubject}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; background:#f2f5fa;">
+      <tr>
+        <td align="center" style="padding:34px 16px;">
+          <table class="email-shell" role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:600px; max-width:600px; border-collapse:collapse;">
+            <tr>
+              <td style="padding:0 4px 16px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr>
+                    <td align="left" style="vertical-align:middle;">
+                      <div style="font-size:28px; line-height:1; font-weight:900; color:#ffcb05; letter-spacing:0; text-shadow:2px 3px 0 #2a75bb; -webkit-text-stroke:1px #003a70;">Pokopia</div>
+                      <div style="margin-top:3px; font-size:12px; line-height:1.2; font-weight:800; color:#687487; text-transform:uppercase;">Wiki</div>
+                    </td>
+                    <td align="right" style="vertical-align:middle;">
+                      <span style="display:inline-block; padding:7px 10px; border:1px solid #d8deea; border-radius:8px; background:#ffffff; color:#354052; font-size:12px; line-height:1.2; font-weight:800;">${safeKicker}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="border:1px solid #d8deea; border-radius:8px; background:#ffffff; box-shadow:0 14px 32px rgba(23, 35, 54, .13); overflow:hidden;">
+                <div style="height:8px; background:#2a75bb;"></div>
+                <div class="email-card" style="padding:36px 34px 34px;">
+                  <div style="display:inline-block; margin-bottom:18px; padding:8px 11px; border-radius:8px; background:#fff7cc; color:#003a70; font-size:12px; line-height:1; font-weight:900; text-transform:uppercase;">Pokopia Wiki</div>
+                  <h1 class="email-title" style="margin:0 0 18px; color:#151923; font-size:30px; line-height:1.16; font-weight:900; letter-spacing:0;">${safeSubject}</h1>
+                  <div class="email-content" style="color:#354052; font-size:16px; line-height:1.7;">${contentHtml}</div>
+                  <div style="margin:28px 0 30px;">
+                    <a href="${safeActionUrl}" style="display:inline-block; padding:14px 22px; border-radius:8px; background:#2a75bb; color:#ffffff; font-size:16px; line-height:1.2; font-weight:900; text-decoration:none; box-shadow:0 3px 0 #003a70;">${safeActionLabel}</a>
+                  </div>
+                  <div style="padding:16px; border:1px solid #d8deea; border-radius:8px; background:#f8fafd;">
+                    <p style="margin:0 0 8px; color:#687487; font-size:13px; line-height:1.5; font-weight:700;">${safeLinkFallback}</p>
+                    <a href="${safeActionUrl}" style="color:#2a75bb; font-size:13px; line-height:1.5; word-break:break-all;">${safeActionUrl}</a>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 8px 0; color:#687487; font-size:12px; line-height:1.6; text-align:center;">${safeFooter}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 async function sendVerificationEmail(email: string, token: string, locale: string): Promise<void> {
   const { apiKey, from } = getEmailConfig();
   const verificationUrl = buildVerificationUrl(token);
-  const subject = await authMessage(locale, 'emailSubject');
-  const html = await authMessage(locale, 'emailHtml', { url: verificationUrl, hours: verificationTokenHours });
-  const text = await authMessage(locale, 'emailText', { url: verificationUrl, hours: verificationTokenHours });
+  const [subject, contentHtml, text, actionLabel, kicker, linkFallback, footer] = await Promise.all([
+    authMessage(locale, 'emailSubject'),
+    authMessage(locale, 'emailHtml', { url: verificationUrl, hours: verificationTokenHours }),
+    authMessage(locale, 'emailText', { url: verificationUrl, hours: verificationTokenHours }),
+    authMessage(locale, 'verificationActionLabel'),
+    authMessage(locale, 'emailKicker'),
+    authMessage(locale, 'emailLinkFallback'),
+    authMessage(locale, 'emailFooter')
+  ]);
+  const html = authEmailHtml({
+    subject,
+    contentHtml,
+    actionUrl: verificationUrl,
+    actionLabel,
+    kicker,
+    linkFallback,
+    footer
+  });
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -728,9 +858,24 @@ async function sendVerificationEmail(email: string, token: string, locale: strin
 async function sendPasswordResetEmail(email: string, token: string, locale: string): Promise<void> {
   const { apiKey, from } = getEmailConfig();
   const resetUrl = buildPasswordResetUrl(token);
-  const subject = await authMessage(locale, 'passwordResetSubject');
-  const html = await authMessage(locale, 'passwordResetHtml', { url: resetUrl, hours: passwordResetTokenHours });
-  const text = await authMessage(locale, 'passwordResetText', { url: resetUrl, hours: passwordResetTokenHours });
+  const [subject, contentHtml, text, actionLabel, kicker, linkFallback, footer] = await Promise.all([
+    authMessage(locale, 'passwordResetSubject'),
+    authMessage(locale, 'passwordResetHtml', { url: resetUrl, hours: passwordResetTokenHours }),
+    authMessage(locale, 'passwordResetText', { url: resetUrl, hours: passwordResetTokenHours }),
+    authMessage(locale, 'passwordResetActionLabel'),
+    authMessage(locale, 'emailKicker'),
+    authMessage(locale, 'emailLinkFallback'),
+    authMessage(locale, 'emailFooter')
+  ]);
+  const html = authEmailHtml({
+    subject,
+    contentHtml,
+    actionUrl: resetUrl,
+    actionLabel,
+    kicker,
+    linkFallback,
+    footer
+  });
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {

@@ -402,6 +402,9 @@ type EditHistoryEntry = {
   createdAt: Date;
   user: { id: number; displayName: string } | null;
 };
+type TranslationChangeSource = {
+  translations?: TranslationInput | null;
+};
 type PokemonChangeSource = {
   displayId: number;
   isEventItem: boolean;
@@ -416,7 +419,7 @@ type PokemonChangeSource = {
   environment: { name: string };
   skills: Array<{ name: string; itemDrop?: { name: string } | null }>;
   favorite_things: Array<{ name: string }>;
-};
+} & TranslationChangeSource;
 type ItemChangeSource = {
   name: string;
   isEventItem: boolean;
@@ -427,19 +430,29 @@ type ItemChangeSource = {
   noRecipe: boolean;
   acquisitionMethods: Array<{ name: string }>;
   tags: Array<{ name: string }>;
-};
+} & TranslationChangeSource;
 type HabitatChangeSource = {
   name: string;
   isEventItem: boolean;
   image: EntityImageValue | null;
   recipe: Array<{ name: string; quantity: number }>;
   pokemon: Array<{ name: string; time_of_day: string; weather: string; rarity: number; map: { name: string } }>;
-};
+} & TranslationChangeSource;
 type RecipeChangeSource = {
   item: { name: string };
   acquisition_methods: Array<{ name: string }>;
   materials: Array<{ name: string; quantity: number }>;
 };
+type DailyChecklistChangeSource = {
+  title: string;
+} & TranslationChangeSource;
+type ConfigChangeSource = {
+  name: string;
+  hasItemDrop?: boolean;
+  isDefault?: boolean;
+  isRateable?: boolean;
+  changeLog?: string;
+} & TranslationChangeSource;
 
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
@@ -915,8 +928,8 @@ async function reorderTableRows(
   ids: number[],
   userId: number
 ): Promise<void> {
-  const existing = await client.query<{ id: number }>(
-    `SELECT id FROM ${tableName} WHERE id = ANY($1::integer[])`,
+  const existing = await client.query<{ id: number; sortOrder: number }>(
+    `SELECT id, sort_order AS "sortOrder" FROM ${tableName} WHERE id = ANY($1::integer[])`,
     [ids]
   );
 
@@ -924,16 +937,25 @@ async function reorderTableRows(
     throw validationError('server.validation.recordMissing');
   }
 
+  const sortOrders = new Map(existing.rows.map((row) => [row.id, row.sortOrder]));
   for (const [index, id] of ids.entries()) {
+    const nextSortOrder = (index + 1) * 10;
+    const previousSortOrder = sortOrders.get(id);
+    if (previousSortOrder === nextSortOrder) {
+      continue;
+    }
+
     await client.query(
       `
         UPDATE ${tableName}
         SET sort_order = $1, updated_by_user_id = $2, updated_at = now()
         WHERE id = $3
       `,
-      [(index + 1) * 10, userId, id]
+      [nextSortOrder, userId, id]
     );
-    await recordEditLog(client, entityType, id, 'update', userId);
+    const changes: EditChange[] = [];
+    pushChange(changes, 'Sort order', String(previousSortOrder), String(nextSortOrder));
+    await recordEditLog(client, entityType, id, 'update', userId, changes);
   }
 }
 
@@ -1608,7 +1630,14 @@ async function ensurePokemonTypeCatalog(
     const typeId = csvInteger(row, 'type_id');
     const name = defaultCsvText(row, languages, csvText(row, 'identifier'));
     const translations = localizedCsvTranslations([{ row, fieldName: 'name' }], languages);
-    const existing = await client.query<{ name: string }>('SELECT name FROM pokemon_types WHERE id = $1', [typeId]);
+    const existing = await client.query<ConfigChangeSource>(
+      `
+        SELECT pt.name, ${translationsSelect('pokemon-types', 'pt.id')} AS translations
+        FROM pokemon_types pt
+        WHERE pt.id = $1
+      `,
+      [typeId]
+    );
 
     if (existing.rowCount === 0) {
       await client.query(
@@ -1625,20 +1654,25 @@ async function ensurePokemonTypeCatalog(
         [typeId, name, typeId * 10, userId]
       );
       await recordEditLog(client, 'pokemon-types', typeId, 'create', userId);
-    } else if (existing.rows[0].name !== name) {
-      await client.query(
-        `
-          UPDATE pokemon_types
-          SET name = $1,
-              updated_by_user_id = $2,
-              updated_at = now()
-          WHERE id = $3
-        `,
-        [name, userId, typeId]
+    } else {
+      const changes = configEditChanges(
+        { table: 'pokemon_types', entityType: 'pokemon-types' },
+        existing.rows[0],
+        { name, translations, hasItemDrop: false, isDefault: false, isRateable: false, changeLog: '' }
       );
-      await recordEditLog(client, 'pokemon-types', typeId, 'update', userId, [
-        { label: 'Name', before: existing.rows[0].name, after: name }
-      ]);
+      if (changes.length) {
+        await client.query(
+          `
+            UPDATE pokemon_types
+            SET name = $1,
+                updated_by_user_id = $2,
+                updated_at = now()
+            WHERE id = $3
+          `,
+          [name, userId, typeId]
+        );
+        await recordEditLog(client, 'pokemon-types', typeId, 'update', userId, changes);
+      }
     }
 
     await replaceEntityTranslations(client, 'pokemon-types', typeId, translations, ['name']);
@@ -1774,6 +1808,44 @@ function pushChange(changes: EditChange[], label: string, before: string | null 
 
   if (beforeValue !== afterValue) {
     changes.push({ label, before: beforeValue, after: afterValue });
+  }
+}
+
+const translationChangeLabels: Record<TranslationField, string> = {
+  name: 'Name',
+  title: 'Title',
+  details: 'Details',
+  genus: 'Genus'
+};
+
+function translationFieldValue(
+  translations: TranslationInput | null | undefined,
+  locale: string,
+  field: TranslationField
+): string | null {
+  const value = translations?.[locale]?.[field];
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+function pushTranslationChanges(
+  changes: EditChange[],
+  before: TranslationInput | null | undefined,
+  after: TranslationInput,
+  fields: TranslationField[]
+): void {
+  const locales = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after)])]
+    .filter((locale) => locale !== defaultLocale)
+    .sort((a, b) => a.localeCompare(b));
+
+  for (const locale of locales) {
+    for (const field of fields) {
+      pushChange(
+        changes,
+        `${translationChangeLabels[field]} (${locale})`,
+        translationFieldValue(before, locale, field),
+        translationFieldValue(after, locale, field)
+      );
+    }
   }
 }
 
@@ -1917,6 +1989,7 @@ async function pokemonEditChanges(
   pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Genus', before.genus, after.genus);
   pushChange(changes, 'Details', before.details, after.details);
+  pushTranslationChanges(changes, before.translations, after.translations, ['name', 'genus', 'details']);
   pushChange(changes, 'Height', pokemonHeightValue(before.heightInches), pokemonHeightValue(after.heightInches));
   pushChange(changes, 'Weight', pokemonWeightValue(before.weightPounds), pokemonWeightValue(after.weightPounds));
   pushChange(changes, 'Image', pokemonImageLabel(before.image), pokemonImageLabel(after.image));
@@ -1942,6 +2015,7 @@ async function itemEditChanges(
   const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushTranslationChanges(changes, before.translations, after.translations, ['name']);
   pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Category', before.category.name, categoryNames.get(after.categoryId));
@@ -1975,6 +2049,7 @@ async function habitatEditChanges(
     .join(' / ');
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushTranslationChanges(changes, before.translations, after.translations, ['name']);
   pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Recipe', quantityListValue(before.recipe), await quantityPayloadValue(client, after.recipeItems));
@@ -1996,6 +2071,43 @@ async function recipeEditChanges(
   pushChange(changes, 'Acquisition methods', namedListValue(before.acquisition_methods), namesFromIds(after.acquisitionMethodIds, methodNames));
   pushChange(changes, 'Materials', quantityListValue(before.materials), await quantityPayloadValue(client, after.materials));
 
+  return changes;
+}
+
+function dailyChecklistEditChanges(before: DailyChecklistChangeSource, after: DailyChecklistPayload): EditChange[] {
+  const changes: EditChange[] = [];
+  pushChange(changes, 'Title', before.title, after.title);
+  pushTranslationChanges(changes, before.translations, after.translations, ['title']);
+  return changes;
+}
+
+function configEditChanges(
+  definition: ConfigDefinition,
+  before: ConfigChangeSource,
+  after: {
+    name: string;
+    translations: TranslationInput;
+    hasItemDrop: boolean;
+    isDefault: boolean;
+    isRateable: boolean;
+    changeLog: string;
+  }
+): EditChange[] {
+  const changes: EditChange[] = [];
+  pushChange(changes, 'Name', before.name, after.name);
+  pushTranslationChanges(changes, before.translations, after.translations, ['name']);
+  if (definition.hasItemDrop) {
+    pushChange(changes, 'Has item drop', boolValue(Boolean(before.hasItemDrop)), boolValue(after.hasItemDrop));
+  }
+  if (definition.hasDefault) {
+    pushChange(changes, 'Default category', boolValue(Boolean(before.isDefault)), boolValue(after.isDefault));
+  }
+  if (definition.hasRateable) {
+    pushChange(changes, 'Rateable', boolValue(Boolean(before.isRateable)), boolValue(after.isRateable));
+  }
+  if (definition.hasChangeLog) {
+    pushChange(changes, 'ChangeLog', before.changeLog, after.changeLog);
+  }
   return changes;
 }
 
@@ -2184,6 +2296,7 @@ export async function updateDailyChecklistItem(
   locale = defaultLocale
 ) {
   const cleanPayload = cleanDailyChecklistPayload(payload);
+  const before = await getDailyChecklistItemById(id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
@@ -2200,7 +2313,8 @@ export async function updateDailyChecklistItem(
     }
 
     await replaceEntityTranslations(client, 'daily-checklist-items', id, cleanPayload.translations, ['title']);
-    await recordEditLog(client, 'daily-checklist-items', id, 'update', userId);
+    const changes = before ? dailyChecklistEditChanges(before as DailyChecklistChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'daily-checklist-items', id, 'update', userId, changes);
     return true;
   });
 
@@ -2214,8 +2328,8 @@ export async function reorderDailyChecklistItems(payload: Record<string, unknown
   }
 
   await withTransaction(async (client) => {
-    const existing = await client.query<{ id: number }>(
-      'SELECT id FROM daily_checklist_items WHERE id = ANY($1::integer[])',
+    const existing = await client.query<{ id: number; sortOrder: number }>(
+      'SELECT id, sort_order AS "sortOrder" FROM daily_checklist_items WHERE id = ANY($1::integer[])',
       [ids]
     );
 
@@ -2223,16 +2337,25 @@ export async function reorderDailyChecklistItems(payload: Record<string, unknown
       throw validationError('server.validation.taskDoesNotExist');
     }
 
+    const sortOrders = new Map(existing.rows.map((row) => [row.id, row.sortOrder]));
     for (const [index, id] of ids.entries()) {
+      const nextSortOrder = (index + 1) * 10;
+      const previousSortOrder = sortOrders.get(id);
+      if (previousSortOrder === nextSortOrder) {
+        continue;
+      }
+
       await client.query(
         `
           UPDATE daily_checklist_items
           SET sort_order = $1, updated_by_user_id = $2, updated_at = now()
           WHERE id = $3
         `,
-        [(index + 1) * 10, userId, id]
+        [nextSortOrder, userId, id]
       );
-      await recordEditLog(client, 'daily-checklist-items', id, 'update', userId);
+      const changes: EditChange[] = [];
+      pushChange(changes, 'Sort order', String(previousSortOrder), String(nextSortOrder));
+      await recordEditLog(client, 'daily-checklist-items', id, 'update', userId, changes);
     }
   });
 
@@ -4193,6 +4316,7 @@ export async function updateConfig(
   const isDefault = definition.hasDefault ? Boolean(payload.isDefault) : false;
   const isRateable = definition.hasRateable ? Boolean(payload.isRateable) : false;
   const changeLog = definition.hasChangeLog ? cleanOptionalText(payload.changeLog) : '';
+  const before = await getConfigById(type, id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
     if (definition.hasDefault && isDefault) {
@@ -4241,7 +4365,10 @@ export async function updateConfig(
     }
 
     await replaceEntityTranslations(client, definition.entityType, id, translations, ['name']);
-    await recordEditLog(client, type, id, 'update', userId);
+    const changes = before
+      ? configEditChanges(definition, before as ConfigChangeSource, { name, translations, hasItemDrop, isDefault, isRateable, changeLog })
+      : [];
+    await recordEditLog(client, type, id, 'update', userId, changes);
     return true;
   });
 

@@ -12,6 +12,8 @@ const changeLabelKeys: Record<string, string> = {
   Name: 'common.name',
   名字: 'common.name',
   名称: 'common.name',
+  Title: 'pages.checklist.task',
+  标题: 'pages.checklist.task',
   'Pokemon ID': 'pages.pokemon.id',
   'Event item': 'common.eventItem',
   Genus: 'pages.pokemon.genus',
@@ -62,7 +64,16 @@ const changeLabelKeys: Record<string, string> = {
   Item: 'pages.recipes.item',
   物品: 'pages.recipes.item',
   Materials: 'pages.recipes.materials',
-  需要材料: 'pages.recipes.materials'
+  需要材料: 'pages.recipes.materials',
+  'Sort order': 'pages.admin.sortOrder',
+  排序: 'pages.admin.sortOrder',
+  'Has item drop': 'pages.admin.hasItemDrop',
+  有掉落物: 'pages.admin.hasItemDrop',
+  'Default category': 'pages.admin.defaultCategory',
+  默认分类: 'pages.admin.defaultCategory',
+  Rateable: 'pages.admin.rateableCategory',
+  可评分: 'pages.admin.rateableCategory',
+  ChangeLog: 'pages.admin.changeLog'
 };
 
 function displayName(user: UserSummary | null): string {
@@ -78,6 +89,14 @@ function actionMark(action: EditHistoryAction): string {
 }
 
 function changeLabel(label: string): string {
+  const localizedFieldMatch = label.match(/^(.+) \(([^()]+)\)$/);
+  if (localizedFieldMatch) {
+    const [, fieldLabel, languageCode] = localizedFieldMatch;
+    if (fieldLabel && languageCode) {
+      return `${changeLabel(fieldLabel)} (${languageCode})`;
+    }
+  }
+
   const key = changeLabelKeys[label];
   return key ? t(key) : label;
 }

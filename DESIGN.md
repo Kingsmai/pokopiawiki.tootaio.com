@@ -120,8 +120,12 @@
   - 任意用户可通过 `/profile/:id` 访问其他用户的公开 Profile。
   - 公开 Profile 展示用户公开摘要、Life Feeds、Wiki 贡献统计、Like / Reaction 过的 Life Post 和评论过的内容。
   - Profile 使用 Tabs 组织：Feeds、Contributions、Reactions、Comments；仅自己的 `/profile` 额外展示 Account。
+  - Contributions、Reactions、Comments 在对应 Tab 内提供二级分类：Contributions 可按主要内容类型或配置类查看，Reactions 可按 reaction 类型查看，Comments 可按 Life / Wiki discussion 来源查看。
   - 公开用户摘要只包含 `id`、`displayName` 和公开展示需要的加入时间；不公开邮箱、角色、权限、Referral Code、邀请链接、session、token/hash 或内部审计 payload。
-  - 当前版本只允许用户在自己的 `/profile` Account Tab 更新 `displayName`，不支持头像、邮箱修改或直接密码修改。
+  - 当前用户可在自己的 `/profile` Account Tab 更新 `displayName`、查看 Referral 信息、复制 Referral 邀请链接，并修改密码；当前版本不支持头像或邮箱修改。
+  - 当前用户自己的 Profile 顶部摘要区可显示简化 Referral Code 和 Copy Link 入口；完整 Referral 卡片保留 Referral Code、邀请链接复制入口和有效邀请数量；这些字段不在公开 Profile 展示。
+  - 修改密码必须提交当前密码和新密码；成功后更新 password hash、作废未使用的密码重置 token，并保留当前 session、删除该用户其他 session。
+  - 修改密码 API 只返回本地化结果 message，不返回 user、session、token/hash 或内部审计 payload。
   - 更新显示名后，API 仍只返回当前用户必要字段，不返回 session、token/hash、内部审计或调试数据。
   - 显示名用于编辑署名、讨论和 Life 内容作者展示。
 
@@ -178,7 +182,7 @@
   - 全局唯一。
   - 只包含大写英文字母和数字。
   - 现有用户在首次读取 Referral 信息或重新注册未验证账号时自动补齐。
-- 登录用户可在 `/profile` 查看自己的 Referral Code、邀请链接和有效邀请数量。
+- 登录用户可在 `/profile` Account Tab 查看自己的 Referral Code、邀请链接复制入口和有效邀请数量。
 - 邀请链接使用前端注册页路径：`/register?ref=CODE`。
 - 注册页支持：
   - 从 `ref` query 自动填入 Referral Code。

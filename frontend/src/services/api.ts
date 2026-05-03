@@ -355,9 +355,13 @@ export interface PublicUserProfile {
   contributions: PublicProfileContribution[];
 }
 
+export type ProfileCommentSource = 'life' | 'discussion';
+
 export interface ProfileActivityParams {
   cursor?: string | null;
   limit?: number;
+  reactionType?: LifeReactionType;
+  source?: ProfileCommentSource;
 }
 
 export interface UserReactionActivity {
@@ -421,6 +425,11 @@ export interface PermissionPayload {
 
 export interface UserProfilePayload {
   displayName: string;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  password: string;
 }
 
 export interface LoginPayload {
@@ -559,7 +568,7 @@ export interface EntityDiscussionComment {
 
 export interface UserCommentActivity {
   id: number;
-  source: 'life' | 'discussion';
+  source: ProfileCommentSource;
   body: string;
   createdAt: string;
   target: {
@@ -760,6 +769,8 @@ export const api = {
     sendJson<{ message: string }>('/api/auth/reset-password', 'POST', payload),
   me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
   updateMe: (payload: UserProfilePayload) => sendJson<{ user: AuthUser }>('/api/auth/me', 'PATCH', payload),
+  changePassword: (payload: ChangePasswordPayload) =>
+    sendJson<{ message: string }>('/api/auth/me/password', 'PATCH', payload),
   referral: () => getJson<{ referral: ReferralSummary }>('/api/auth/referral'),
   logout: () => postEmpty('/api/auth/logout'),
   publicProfile: (id: string | number) => getJson<{ profile: PublicUserProfile }>(`/api/users/${id}/profile`),
@@ -774,14 +785,16 @@ export const api = {
     getJson<UserReactionActivityPage>(
       `/api/users/${id}/reactions${buildQuery({
         cursor: params.cursor ?? undefined,
-        limit: params.limit
+        limit: params.limit,
+        reactionType: params.reactionType
       })}`
     ),
   userComments: (id: string | number, params: ProfileActivityParams = {}) =>
     getJson<UserCommentActivityPage>(
       `/api/users/${id}/comments${buildQuery({
         cursor: params.cursor ?? undefined,
-        limit: params.limit
+        limit: params.limit,
+        source: params.source
       })}`
     ),
   adminUsers: () => getJson<AdminUser[]>('/api/admin/users'),

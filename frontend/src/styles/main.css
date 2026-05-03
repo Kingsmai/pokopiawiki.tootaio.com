@@ -4376,6 +4376,10 @@ button:disabled,
   grid-column: 2;
 }
 
+.profile-card--password {
+  grid-column: 1 / -1;
+}
+
 .profile-identity {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -4503,6 +4507,10 @@ button:disabled,
   min-width: 0;
 }
 
+.profile-secondary-tabs .tab-list {
+  border-bottom-color: color-mix(in srgb, var(--line) 72%, transparent);
+}
+
 .profile-layout--loading {
   grid-template-columns: minmax(260px, 0.5fr) minmax(0, 1fr);
 }
@@ -4564,6 +4572,50 @@ button:disabled,
   font-weight: 950;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.profile-referral-summary {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.profile-referral-summary > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-referral-summary span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.profile-referral-summary strong {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.profile-referral-summary .ui-button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.profile-referral-summary .status-message {
+  position: static;
+  grid-column: 1 / -1;
+  box-shadow: none;
 }
 
 .profile-section-grid,
@@ -5188,7 +5240,8 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 
-  .profile-card--referral {
+  .profile-card--referral,
+  .profile-card--password {
     grid-column: auto;
   }
 
@@ -5330,6 +5383,11 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 
+  .profile-referral-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-referral-summary .ui-button,
   .profile-referral-link-row .ui-button {
     width: 100%;
   }

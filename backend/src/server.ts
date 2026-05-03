@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { mkdir } from 'node:fs/promises';
 import {
+  changeCurrentUserPassword,
   createPermission,
   createRole,
   deletePermission,
@@ -299,6 +300,18 @@ app.patch('/api/auth/me', async (request, reply) => {
 
   const payload = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
   return { user: await updateCurrentUser(user.id, payload, requestLocale(request)) };
+});
+
+app.patch('/api/auth/me/password', async (request, reply) => {
+  const token = getBearerToken(request.headers.authorization);
+  const user = token ? await getUserBySessionToken(token) : null;
+
+  if (!user || !token) {
+    return reply.code(401).send({ message: await serverMessage(requestLocale(request), 'loginRequired') });
+  }
+
+  const payload = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
+  return changeCurrentUserPassword(user.id, payload, token, requestLocale(request));
 });
 
 app.get('/api/auth/referral', async (request, reply) => {

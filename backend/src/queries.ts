@@ -2205,6 +2205,28 @@ function cleanLifeReactionType(value: unknown): LifeReactionType {
   return value;
 }
 
+function cleanLifeReactionFilter(value: QueryValue): LifeReactionType | null {
+  const reactionType = asString(value);
+  if (!reactionType) {
+    return null;
+  }
+
+  return cleanLifeReactionType(reactionType);
+}
+
+function cleanUserCommentActivitySourceFilter(value: QueryValue): UserCommentActivitySource | null {
+  const source = asString(value);
+  if (!source) {
+    return null;
+  }
+
+  if (source !== 'life' && source !== 'discussion') {
+    throw validationError('server.validation.invalidField');
+  }
+
+  return source;
+}
+
 function lifePostProjection(locale = defaultLocale): string {
   const tagName = localizedName('life-tags', 'lt', locale);
 
@@ -2691,8 +2713,14 @@ export async function listUserReactionActivities(
 
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
+  const reactionType = cleanLifeReactionFilter(paramsQuery.reactionType);
   const params: unknown[] = [user.id];
   const conditions = ['lpr.user_id = $1', 'lp.deleted_at IS NULL'];
+
+  if (reactionType) {
+    params.push(reactionType);
+    conditions.push(`lpr.reaction_type = $${params.length}`);
+  }
 
   if (cursor) {
     params.push(cursor.createdAt, cursor.id);
@@ -2765,19 +2793,28 @@ export async function listUserCommentActivities(
 
   const cursor = decodeUserCommentActivityCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
+  const sourceFilter = cleanUserCommentActivitySourceFilter(paramsQuery.source);
   const pokemonName = localizedName('pokemon', 'p', locale);
   const itemName = localizedName('items', 'i', locale);
   const recipeItemName = localizedName('items', 'recipe_item', locale);
   const habitatName = localizedName('habitats', 'h', locale);
   const params: unknown[] = [user.id];
-  let cursorClause = '';
+  const outerConditions: string[] = [];
+
+  if (sourceFilter) {
+    params.push(sourceFilter);
+    outerConditions.push(`source = $${params.length}`);
+  }
 
   if (cursor) {
     params.push(cursor.createdAt, cursor.source, cursor.id);
-    cursorClause = `WHERE (created_at, source, id) < ($${params.length - 2}::timestamptz, $${params.length - 1}::text, $${params.length}::integer)`;
+    outerConditions.push(
+      `(created_at, source, id) < ($${params.length - 2}::timestamptz, $${params.length - 1}::text, $${params.length}::integer)`
+    );
   }
 
   params.push(limit + 1);
+  const outerWhere = outerConditions.length ? `WHERE ${outerConditions.join(' AND ')}` : '';
   const rows = await query<{
     id: number;
     source: UserCommentActivitySource;
@@ -2849,7 +2886,7 @@ export async function listUserCommentActivities(
         target_title AS "targetTitle",
         target_excerpt AS "targetExcerpt"
       FROM activity
-      ${cursorClause}
+      ${outerWhere}
       ORDER BY created_at DESC, source DESC, id DESC
       LIMIT $${params.length}
     `,

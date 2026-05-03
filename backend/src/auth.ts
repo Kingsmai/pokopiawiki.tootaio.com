@@ -53,9 +53,11 @@ type AuthMessageKey =
   | 'emailVerified'
   | 'checkPasswordResetEmail'
   | 'passwordResetComplete'
+  | 'passwordChanged'
   | 'invalidCredentials'
   | 'verifyEmailFirst'
   | 'invalidResetToken'
+  | 'currentPasswordInvalid'
   | 'invalidReferralCode'
   | 'emailSubject'
   | 'emailHtml'
@@ -171,9 +173,11 @@ function authMessage(locale: string, key: AuthMessageKey, params: Record<string,
     emailVerified: 'server.auth.emailVerified',
     checkPasswordResetEmail: 'server.auth.checkPasswordResetEmail',
     passwordResetComplete: 'server.auth.passwordResetComplete',
+    passwordChanged: 'server.auth.passwordChanged',
     invalidCredentials: 'server.auth.invalidCredentials',
     verifyEmailFirst: 'server.auth.verifyEmailFirst',
     invalidResetToken: 'server.auth.invalidResetToken',
+    currentPasswordInvalid: 'server.auth.currentPasswordInvalid',
     invalidReferralCode: 'server.auth.invalidReferralCode',
     emailSubject: 'email.auth.verificationSubject',
     emailHtml: 'email.auth.verificationHtml',
@@ -1005,6 +1009,40 @@ export async function updateCurrentUser(
   }
 
   return (await publicUserById(user.id)) ?? toPublicUser(user);
+}
+
+export async function changeCurrentUserPassword(
+  userId: number,
+  payload: Record<string, unknown>,
+  currentSessionToken: string,
+  locale = defaultLocale
+): Promise<{ message: string }> {
+  const currentPassword = typeof payload.currentPassword === 'string' ? payload.currentPassword : '';
+  const nextPassword = await cleanPassword(payload.password, locale);
+
+  if (!currentPassword) {
+    throw statusError(await authMessage(locale, 'currentPasswordInvalid'), 400);
+  }
+
+  const user = await queryOne<LoginUserRow>(
+    'SELECT id, email, display_name, email_verified_at, password_hash FROM users WHERE id = $1',
+    [userId]
+  );
+
+  if (!user || !(await verifyPassword(currentPassword, user.password_hash))) {
+    throw statusError(await authMessage(locale, 'currentPasswordInvalid'), 400);
+  }
+
+  const passwordHash = await hashPassword(nextPassword);
+  const currentSessionHash = hashToken(currentSessionToken);
+
+  await withTransaction(async (client) => {
+    await client.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [passwordHash, user.id]);
+    await client.query('UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL', [user.id]);
+    await client.query('DELETE FROM user_sessions WHERE user_id = $1 AND token_hash <> $2', [user.id, currentSessionHash]);
+  });
+
+  return { message: await authMessage(locale, 'passwordChanged') };
 }
 
 export async function getReferralSummary(userId: number): Promise<ReferralSummary> {

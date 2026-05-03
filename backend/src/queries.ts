@@ -914,10 +914,9 @@ async function nextSortOrder(client: DbClient, tableName: string): Promise<numbe
 
 async function nextPokemonInternalId(
   client: DbClient,
-  dataId: number | null,
-  isEventItem: boolean
+  dataId: number | null
 ): Promise<number> {
-  if (!isEventItem && dataId !== null) {
+  if (dataId !== null) {
     return dataId;
   }
 
@@ -2007,8 +2006,8 @@ async function pokemonEditChanges(
     .join(' / ');
 
   pushChange(changes, 'Name', before.name, after.name);
-  pushChange(changes, 'Pokemon ID', String(before.displayId), String(after.displayId));
-  pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
+  pushChange(changes, 'Pokopia ID', String(before.displayId), String(after.displayId));
+  pushChange(changes, 'Event Pokemon', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Genus', before.genus, after.genus);
   pushChange(changes, 'Details', before.details, after.details);
   pushTranslationChanges(changes, before.translations, after.translations, ['name', 'genus', 'details']);
@@ -2072,7 +2071,7 @@ async function habitatEditChanges(
 
   pushChange(changes, 'Name', before.name, after.name);
   pushTranslationChanges(changes, before.translations, after.translations, ['name']);
-  pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
+  pushChange(changes, 'Event Habitat', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Recipe', quantityListValue(before.recipe), await quantityPayloadValue(client, after.recipeItems));
   pushChange(changes, 'Possible Pokemon', appearanceListValue(before.pokemon), afterAppearances);
@@ -4442,16 +4441,22 @@ export async function reorderRecipes(payload: Record<string, unknown>, userId: n
 
 export async function reorderHabitats(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   await reorderContent('habitats', payload, userId);
-  return listHabitats(locale);
+  return listHabitats({}, locale);
 }
 
 export async function listPokemon(paramsQuery: QueryParams, locale = defaultLocale) {
   const params: unknown[] = [];
   const conditions: string[] = [];
   const search = asString(paramsQuery.search)?.trim();
+  const isEventItem = asString(paramsQuery.isEventItem);
   const environmentId = Number(asString(paramsQuery.environmentId));
   const skillIds = parseIdList(asString(paramsQuery.skillIds));
   const favoriteThingIds = parseIdList(asString(paramsQuery.favoriteThingIds));
+
+  if (isEventItem === 'true' || isEventItem === 'false') {
+    params.push(isEventItem === 'true');
+    conditions.push(`p.is_event_item = $${params.length}`);
+  }
 
   if (search) {
     params.push(`%${search}%`);
@@ -4777,7 +4782,7 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
   await normalizePokemonDataIdentity(cleanPayload);
 
   const id = await withTransaction(async (client) => {
-    const pokemonId = await nextPokemonInternalId(client, cleanPayload.dataId, cleanPayload.isEventItem);
+    const pokemonId = await nextPokemonInternalId(client, cleanPayload.dataId);
     const sortOrder = await nextSortOrder(client, 'pokemon');
     await client.query(
       `
@@ -4849,7 +4854,7 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
 export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanPokemonPayload(payload);
   await normalizePokemonDataIdentity(cleanPayload);
-  if (!cleanPayload.isEventItem && cleanPayload.dataId !== null && cleanPayload.dataId !== id) {
+  if (cleanPayload.dataId !== null && cleanPayload.dataId !== id) {
     throw validationError('server.validation.pokemonDataIdMismatch');
   }
   const before = await getPokemon(id, defaultLocale);
@@ -4937,10 +4942,20 @@ export async function deletePokemon(id: number, userId: number) {
   });
 }
 
-export async function listHabitats(locale = defaultLocale) {
+export async function listHabitats(paramsQuery: QueryParams = {}, locale = defaultLocale) {
   const habitatName = localizedName('habitats', 'h', locale);
   const itemName = localizedName('items', 'i', locale);
   const pokemonName = localizedName('pokemon', 'p', locale);
+  const params: unknown[] = [];
+  const conditions: string[] = [];
+  const isEventItem = asString(paramsQuery.isEventItem);
+
+  if (isEventItem === 'true' || isEventItem === 'false') {
+    params.push(isEventItem === 'true');
+    conditions.push(`h.is_event_item = $${params.length}`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   return query(`
     SELECT
@@ -4976,8 +4991,9 @@ export async function listHabitats(locale = defaultLocale) {
       ), '[]'::json) AS pokemon
     FROM habitats h
     ${auditJoins('h', 'habitat_created_user', 'habitat_updated_user')}
+    ${whereClause}
     ORDER BY ${orderByEntity('h')}
-  `);
+  `, params);
 }
 
 export async function getHabitat(id: number, locale = defaultLocale) {

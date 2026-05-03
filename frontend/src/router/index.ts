@@ -29,15 +29,40 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: HomeView, meta: { seo: seo({ titleKey: 'pages.home.title', descriptionKey: 'pages.home.subtitle', canonicalPath: '/' }) } },
-    { path: '/pokemon', name: 'pokemon-list', component: PokemonList, meta: { seo: seo({ titleKey: 'pages.pokemon.title', descriptionKey: 'pages.pokemon.subtitle' }) } },
+    {
+      path: '/pokemon',
+      name: 'pokemon-list',
+      component: PokemonList,
+      props: { eventOnly: false },
+      meta: { seo: seo({ titleKey: 'pages.pokemon.title', descriptionKey: 'pages.pokemon.subtitle' }) }
+    },
     {
       path: '/pokemon/new',
       name: 'pokemon-new',
       component: PokemonList,
+      props: { eventOnly: false },
       meta: {
         requiredPermission: 'pokemon.create',
         editorModal: true,
         seo: seo({ titleKey: 'pages.pokemon.newTitle', descriptionKey: 'pages.pokemon.editSubtitle', canonicalPath: '/pokemon', noindex: true })
+      }
+    },
+    {
+      path: '/event-pokemon',
+      name: 'event-pokemon-list',
+      component: PokemonList,
+      props: { eventOnly: true },
+      meta: { seo: seo({ titleKey: 'pages.eventPokemon.title', descriptionKey: 'pages.eventPokemon.subtitle', canonicalPath: '/event-pokemon' }) }
+    },
+    {
+      path: '/event-pokemon/new',
+      name: 'event-pokemon-new',
+      component: PokemonList,
+      props: { eventOnly: true },
+      meta: {
+        requiredPermission: 'pokemon.create',
+        editorModal: true,
+        seo: seo({ titleKey: 'pages.eventPokemon.newTitle', descriptionKey: 'pages.eventPokemon.editSubtitle', canonicalPath: '/event-pokemon', noindex: true })
       }
     },
     {
@@ -56,15 +81,40 @@ export const router = createRouter({
       }
     },
     { path: '/pokemon/:id', name: 'pokemon-detail', component: PokemonDetail, meta: { seo: seo({ titleKey: 'pages.pokemon.detailKicker', descriptionKey: 'pages.pokemon.subtitle' }) } },
-    { path: '/habitats', name: 'habitat-list', component: HabitatList, meta: { seo: seo({ titleKey: 'pages.habitats.title', descriptionKey: 'pages.habitats.subtitle' }) } },
+    {
+      path: '/habitats',
+      name: 'habitat-list',
+      component: HabitatList,
+      props: { eventOnly: false },
+      meta: { seo: seo({ titleKey: 'pages.habitats.title', descriptionKey: 'pages.habitats.subtitle' }) }
+    },
     {
       path: '/habitats/new',
       name: 'habitat-new',
       component: HabitatList,
+      props: { eventOnly: false },
       meta: {
         requiredPermission: 'habitats.create',
         editorModal: true,
         seo: seo({ titleKey: 'pages.habitats.newTitle', descriptionKey: 'pages.habitats.editSubtitle', canonicalPath: '/habitats', noindex: true })
+      }
+    },
+    {
+      path: '/event-habitats',
+      name: 'event-habitat-list',
+      component: HabitatList,
+      props: { eventOnly: true },
+      meta: { seo: seo({ titleKey: 'pages.eventHabitats.title', descriptionKey: 'pages.eventHabitats.subtitle', canonicalPath: '/event-habitats' }) }
+    },
+    {
+      path: '/event-habitats/new',
+      name: 'event-habitat-new',
+      component: HabitatList,
+      props: { eventOnly: true },
+      meta: {
+        requiredPermission: 'habitats.create',
+        editorModal: true,
+        seo: seo({ titleKey: 'pages.eventHabitats.newTitle', descriptionKey: 'pages.eventHabitats.editSubtitle', canonicalPath: '/event-habitats', noindex: true })
       }
     },
     {

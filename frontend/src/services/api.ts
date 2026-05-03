@@ -1080,7 +1080,7 @@ export const api = {
   ) =>
     sendJson<Skill | LifeCategory | GameVersion | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
-  pokemon: (params: Record<string, string | number | undefined>) =>
+  pokemon: (params: Record<string, string | number | boolean | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),
   pokemonDetail: (id: string | number) => getJson<PokemonDetail>(`/api/pokemon/${id}`),
   pokemonFetchOptions: (search: string, signal?: AbortSignal, all = false) =>
@@ -1096,7 +1096,8 @@ export const api = {
     sendJson<PokemonDetail>(`/api/pokemon/${id}`, 'PUT', payload),
   deletePokemon: (id: string | number) => deleteJson(`/api/pokemon/${id}`),
   reorderPokemon: (ids: number[]) => sendJson<Pokemon[]>('/api/admin/pokemon/order', 'PUT', { ids }),
-  habitats: () => getJson<Habitat[]>('/api/habitats'),
+  habitats: (params: Record<string, string | number | boolean | undefined> = {}) =>
+    getJson<Habitat[]>(`/api/habitats${buildQuery(params)}`),
   habitatDetail: (id: string | number) => getJson<HabitatDetail>(`/api/habitats/${id}`),
   createHabitat: (payload: HabitatPayload) => sendJson<HabitatDetail>('/api/habitats', 'POST', payload),
   updateHabitat: (id: string | number, payload: HabitatPayload) =>

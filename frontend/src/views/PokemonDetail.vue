@@ -121,6 +121,8 @@ const habitatRows = computed<HabitatRow[]>(() => {
 const skillDropRows = computed(() => pokemon.value?.skills.filter((skill) => skill.itemDrop) ?? []);
 const showEditor = computed(() => route.name === 'pokemon-edit');
 const canUpdatePokemon = computed(() => currentUser.value?.permissions.includes('pokemon.update') === true);
+const listPath = computed(() => (pokemon.value?.isEventItem ? '/event-pokemon' : '/pokemon'));
+const detailKicker = computed(() => t(pokemon.value?.isEventItem ? 'pages.eventPokemon.detailKicker' : 'pages.pokemon.detailKicker'));
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
   { value: 'discussion', label: t('discussion.title') },
@@ -225,7 +227,7 @@ async function loadPokemonDetail() {
 
   if (route.meta.editorModal !== true) {
     applySeo({
-      title: `${nextPokemon.name} - ${t('pages.pokemon.title')}`,
+      title: `${nextPokemon.name} - ${t(nextPokemon.isEventItem ? 'pages.eventPokemon.title' : 'pages.pokemon.title')}`,
       description: t('seo.pokemonDetailDescription', { name: nextPokemon.name }),
       canonicalPath: `/pokemon/${nextPokemon.id}`,
       image: nextPokemon.image?.url
@@ -324,13 +326,13 @@ watch(
   </section>
   <section v-else class="page-stack">
     <PageHeader :title="`#${pokemon.displayId} ${pokemon.name}`" :subtitle="t('pages.pokemon.environmentPrefix', { name: pokemon.environment.name })">
-      <template #kicker>Pokédex Detail</template>
+      <template #kicker>{{ detailKicker }}</template>
       <template #actions>
         <RouterLink v-if="canUpdatePokemon" class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/pokemon">
+        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="listPath">
           <Icon :icon="iconBack" class="ui-icon" aria-hidden="true" />
           {{ t('common.backToList') }}
         </RouterLink>

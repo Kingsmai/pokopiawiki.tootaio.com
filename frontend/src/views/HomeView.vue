@@ -32,7 +32,9 @@ const projectCommits = ref<ProjectUpdateCommit[]>([]);
 
 const primarySections = computed(() => [
   { key: 'pokemon', to: '/pokemon', icon: iconPokemon },
+  { key: 'eventPokemon', to: '/event-pokemon', icon: iconEvent },
   { key: 'habitats', to: '/habitats', icon: iconHabitat },
+  { key: 'eventHabitats', to: '/event-habitats', icon: iconEvent },
   { key: 'items', to: '/items', icon: iconItem },
   { key: 'recipes', to: '/recipes', icon: iconRecipe }
 ]);

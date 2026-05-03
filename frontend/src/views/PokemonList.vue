@@ -12,6 +12,10 @@ import { iconAdd } from '../icons';
 import { api, getAuthToken, type AuthUser, type Options, type Pokemon } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
+const props = defineProps<{
+  eventOnly?: boolean;
+}>();
+
 const options = ref<Options | null>(null);
 const route = useRoute();
 const { t } = useI18n();
@@ -29,14 +33,20 @@ const skeletonCardCount = 6;
 
 const query = computed(() => ({
   search: search.value,
+  isEventItem: props.eventOnly ? 'true' : 'false',
   environmentId: environmentId.value,
   skillIds: skillIds.value.join(','),
   skillMode: skillMode.value,
   favoriteThingIds: favoriteThingIds.value.join(','),
   favoriteThingMode: favoriteThingMode.value
 }));
-const showEditor = computed(() => route.name === 'pokemon-new');
+const showEditor = computed(() => route.name === 'pokemon-new' || route.name === 'event-pokemon-new');
 const canCreatePokemon = computed(() => currentUser.value?.permissions.includes('pokemon.create') === true);
+const pageTitle = computed(() => t(props.eventOnly ? 'pages.eventPokemon.title' : 'pages.pokemon.title'));
+const pageSubtitle = computed(() => t(props.eventOnly ? 'pages.eventPokemon.subtitle' : 'pages.pokemon.subtitle'));
+const pageKicker = computed(() => t(props.eventOnly ? 'pages.eventPokemon.kicker' : 'pages.pokemon.listKicker'));
+const newPokemonPath = computed(() => (props.eventOnly ? '/event-pokemon/new' : '/pokemon/new'));
+const loadingListLabel = computed(() => t(props.eventOnly ? 'pages.eventPokemon.loadingList' : 'pages.pokemon.loadingList'));
 
 async function loadPokemon() {
   loading.value = true;
@@ -65,10 +75,10 @@ watch(query, loadPokemon);
 
 <template>
   <section class="page-stack">
-    <PageHeader :title="t('pages.pokemon.title')" :subtitle="t('pages.pokemon.subtitle')">
-      <template #kicker>Pokédex</template>
+    <PageHeader :title="pageTitle" :subtitle="pageSubtitle">
+      <template #kicker>{{ pageKicker }}</template>
       <template #actions>
-        <RouterLink v-if="canCreatePokemon" class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">
+        <RouterLink v-if="canCreatePokemon" class="ui-button ui-button--primary ui-button--small" :to="newPokemonPath">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.add') }}
         </RouterLink>
@@ -131,7 +141,7 @@ watch(query, loadPokemon);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid pokemon-list-grid" aria-busy="true" :aria-label="t('pages.pokemon.loadingList')">
+    <div v-if="loading" class="entity-grid pokemon-list-grid" aria-busy="true" :aria-label="loadingListLabel">
       <article v-for="index in skeletonCardCount" :key="index" class="entity-card entity-card--skeleton">
         <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">

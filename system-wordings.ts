@@ -44,7 +44,9 @@ export const systemWordingMessages = {
     nav: {
       home: 'Home',
       pokemon: 'Pokemon',
+      eventPokemon: 'Event Pokemon',
       habitats: 'Habitats',
+      eventHabitats: 'Event Habitats',
       items: 'Items',
       recipes: 'Recipes',
       automation: 'Automation',
@@ -78,7 +80,7 @@ export const systemWordingMessages = {
     },
     seo: {
       siteDescription:
-        'Browse Pokopia Wiki for Pokemon, habitats, items, recipes, daily tasks, and Life community posts for Pokemon Pokopia.',
+        'Browse Pokopia Wiki for Pokemon, Event Pokemon, habitats, Event Habitats, items, recipes, daily tasks, and Life community posts for Pokemon Pokopia.',
       pokemonDetailDescription:
         'Read {name} details in Pokopia Wiki, including habitat, types, specialities, favourites, stats, related items, discussions, and edit history.',
       itemDetailDescription:
@@ -143,7 +145,7 @@ export const systemWordingMessages = {
       home: {
         kicker: 'Community Wiki',
         title: 'Pokopia Wiki',
-        subtitle: 'Browse Pokemon, habitats, items, recipes, daily tasks, and Life posts for Pokemon Pokopia.',
+        subtitle: 'Browse Pokemon, Event Pokemon, habitats, Event Habitats, items, recipes, daily tasks, and Life posts for Pokemon Pokopia.',
         primaryActions: 'Primary home actions',
         browsePokemon: 'Browse Pokemon',
         openChecklist: 'Daily CheckList',
@@ -173,9 +175,17 @@ export const systemWordingMessages = {
             title: 'Pokemon',
             description: 'Search Pokemon and filter by specialities, ideal habitat, and favourites.'
           },
+          eventPokemon: {
+            title: 'Event Pokemon',
+            description: 'Browse limited Pokemon entries with their own Pokopia IDs and list order.'
+          },
           habitats: {
             title: 'Habitats',
             description: 'View recipes, maps, weather, time, and Pokemon that may appear.'
+          },
+          eventHabitats: {
+            title: 'Event Habitats',
+            description: 'Browse limited habitats with event recipes and possible Pokemon appearances.'
           },
           items: {
             title: 'Items',
@@ -466,6 +476,7 @@ export const systemWordingMessages = {
       pokemon: {
         title: 'Pokemon',
         subtitle: 'Search Pokemon and filter by specialities, ideal habitat, and favourites.',
+        listKicker: 'Pokédex',
         detailKicker: 'Pokédex Detail',
         editKicker: 'Pokédex Edit',
         editSubtitle: 'Maintain Pokemon profile, details, types, stats, specialities, and favourites.',
@@ -474,14 +485,14 @@ export const systemWordingMessages = {
         editTabAdvance: 'Advance',
         newTitle: 'New Pokemon',
         editTitle: 'Edit #{id} {name}',
-        id: 'Pokemon ID',
+        id: 'Pokopia ID',
         fetchData: 'Fetch data',
         fetchingData: 'Fetching',
         fetchIdentifier: 'Data identifier',
         fetchIdentifierPlaceholder: 'bulbasaur or 1',
         fetchIdentifierRequired: 'Enter a Pokemon identifier',
         fetchFailed: 'Pokemon data fetch failed',
-        fetchIdMismatch: 'Fetched Pokemon ID #{id} does not match this editor.',
+        fetchIdMismatch: 'Fetched official ID #{id} does not match this editor.',
         fetchResults: 'Pokemon data results',
         fetchSearching: 'Searching data',
         fetchNoMatches: 'No matching Pokemon data',
@@ -497,7 +508,7 @@ export const systemWordingMessages = {
         clearImage: 'Clear image',
         imageEmpty: 'No Pokemon image selected',
         imageAlt: '{name} {variant} image',
-        eventItem: 'Event item',
+        eventItem: 'Event Pokemon',
         loadingList: 'Loading Pokemon list',
         loadingDetail: 'Loading Pokemon detail',
         loadingEdit: 'Loading Pokemon editor',
@@ -552,9 +563,20 @@ export const systemWordingMessages = {
         searchFavoriteThings: 'Search favourites',
         searchItems: 'Search items'
       },
+      eventPokemon: {
+        title: 'Event Pokemon',
+        subtitle: 'Search Event Pokemon and filter by specialities, ideal habitat, and favourites.',
+        kicker: 'Event Pokédex',
+        detailKicker: 'Event Pokemon Detail',
+        editSubtitle: 'Maintain Event Pokemon profile, Pokopia ID, official data identity, images, stats, specialities, and favourites.',
+        newTitle: 'New Event Pokemon',
+        editTitle: 'Edit Event #{id} {name}',
+        loadingList: 'Loading Event Pokemon list'
+      },
       habitats: {
         title: 'Habitats',
         subtitle: 'View recipes and Pokemon that may appear.',
+        listKicker: 'Habitats',
         detailKicker: 'Habitat Detail',
         detailSubtitle: 'Habitat detail',
         editSubtitle: 'Maintain habitat recipes and possible Pokemon appearances.',
@@ -564,7 +586,7 @@ export const systemWordingMessages = {
         loadingList: 'Loading habitat list',
         loadingDetail: 'Loading habitat detail',
         loadingEdit: 'Loading habitat editor',
-        eventItem: 'Event item',
+        eventItem: 'Event Habitat',
         recipe: 'Recipe',
         recipeList: 'Recipe list',
         possiblePokemon: 'Possible Pokemon',
@@ -572,6 +594,16 @@ export const systemWordingMessages = {
         addPokemon: 'Add Pokemon',
         maps: 'Maps',
         searchMaps: 'Search maps'
+      },
+      eventHabitats: {
+        title: 'Event Habitats',
+        subtitle: 'View limited habitats, event recipes, and Pokemon that may appear.',
+        kicker: 'Event Habitats',
+        detailKicker: 'Event Habitat Detail',
+        editSubtitle: 'Maintain Event Habitat recipes, possible Pokemon appearances, and image.',
+        newTitle: 'New Event Habitat',
+        editTitle: 'Edit Event Habitat {name}',
+        loadingList: 'Loading Event Habitat list'
       },
       items: {
         title: 'Items',
@@ -1078,7 +1110,7 @@ export const systemWordingMessages = {
       pokemonIdentifierRequired: 'Pokemon identifier is required',
       pokemonTypeDataUnavailable: 'Pokemon type data is unavailable',
       pokemonDataNotFound: 'Pokemon data was not found',
-      pokemonDataIdMismatch: 'Pokemon data ID does not match this Pokemon',
+      pokemonDataIdMismatch: 'Official Pokemon data ID does not match this Pokemon',
       dataToolScopeRequired: 'Select at least one data scope',
       dataToolScopeInvalid: 'Data scope is invalid',
       dataToolBundleInvalid: 'Data bundle is invalid',
@@ -1112,7 +1144,7 @@ export const systemWordingMessages = {
       skillMax: 'Choose at most 2 specialities',
       favoriteMax: 'Choose at most 6 favourites',
       dropItemSelectedSkill: 'Drop items must be linked to selected specialities',
-      pokemonIdRequired: 'Pokemon ID is required',
+      pokemonIdRequired: 'Pokopia ID is required',
       pokemonNameRequired: 'Pokemon name is required',
       heightNonNegative: 'Height must be a non-negative number',
       weightNonNegative: 'Weight must be a non-negative number',
@@ -1210,7 +1242,9 @@ export const systemWordingMessages = {
     nav: {
       home: '首页',
       pokemon: 'Pokemon',
+      eventPokemon: 'Event Pokemon',
       habitats: '栖息地',
+      eventHabitats: 'Event Habitats',
       items: '物品',
       recipes: '材料单',
       automation: '自动化',
@@ -1243,7 +1277,7 @@ export const systemWordingMessages = {
       }
     },
     seo: {
-      siteDescription: '浏览 Pokopia Wiki 的 Pokemon、栖息地、物品、材料单、每日清单和 Life 社区动态。',
+      siteDescription: '浏览 Pokopia Wiki 的 Pokemon、Event Pokemon、栖息地、Event Habitats、物品、材料单、每日清单和 Life 社区动态。',
       pokemonDetailDescription: '查看 {name} 在 Pokopia Wiki 中的栖息地、属性、特长、喜欢的东西、六维、相关物品、讨论和编辑历史。',
       itemDetailDescription: '查看 {name} 在 Pokopia Wiki 中的分类、用途、入手方式、自定义、相关材料单、栖息地和 Pokemon 掉落。',
       habitatDetailDescription: '查看 {name} 在 Pokopia Wiki 中的配方、可能出现的 Pokemon、地图、时间、天气、讨论和编辑历史。',
@@ -1304,7 +1338,7 @@ export const systemWordingMessages = {
       home: {
         kicker: '社区 Wiki',
         title: 'Pokopia Wiki',
-        subtitle: '浏览 Pokemon、栖息地、物品、材料单、每日任务和 Pokemon Pokopia 的 Life 动态。',
+        subtitle: '浏览 Pokemon、Event Pokemon、栖息地、Event Habitats、物品、材料单、每日任务和 Pokemon Pokopia 的 Life 动态。',
         primaryActions: '首页主要操作',
         browsePokemon: '浏览 Pokemon',
         openChecklist: '每日 CheckList',
@@ -1334,9 +1368,17 @@ export const systemWordingMessages = {
             title: 'Pokemon',
             description: '搜索 Pokemon，并按特长、喜欢的环境和喜欢的东西筛选。'
           },
+          eventPokemon: {
+            title: 'Event Pokemon',
+            description: '浏览限时 Pokemon 条目，并维护独立的 Pokopia ID 与排序。'
+          },
           habitats: {
             title: '栖息地',
             description: '查看配方、地图、天气、时间和可能出现的 Pokemon。'
+          },
+          eventHabitats: {
+            title: 'Event Habitats',
+            description: '浏览限时栖息地、活动配方和可能出现的 Pokemon。'
           },
           items: {
             title: '物品',
@@ -1607,6 +1649,7 @@ export const systemWordingMessages = {
       pokemon: {
         title: 'Pokemon',
         subtitle: '搜索宝可梦，并按特长、环境、喜欢的东西筛选。',
+        listKicker: 'Pokédex',
         detailKicker: 'Pokédex Detail',
         editKicker: 'Pokédex Edit',
         editSubtitle: '维护 Pokemon 介绍、属性、六维、特长和喜欢的东西。',
@@ -1615,14 +1658,14 @@ export const systemWordingMessages = {
         editTabAdvance: '进阶',
         newTitle: '新增 Pokemon',
         editTitle: '编辑 #{id} {name}',
-        id: 'Pokemon ID',
+        id: 'Pokopia ID',
         fetchData: '获取数据',
         fetchingData: '正在获取',
         fetchIdentifier: '数据标识',
         fetchIdentifierPlaceholder: 'bulbasaur 或 1',
         fetchIdentifierRequired: '请输入 Pokemon 数据标识',
         fetchFailed: 'Pokemon 数据获取失败',
-        fetchIdMismatch: '获取到的 Pokemon ID #{id} 与当前编辑内容不一致。',
+        fetchIdMismatch: '获取到的官方 ID #{id} 与当前编辑内容不一致。',
         fetchResults: 'Pokemon 数据结果',
         fetchSearching: '正在搜索数据',
         fetchNoMatches: '没有匹配的 Pokemon 数据',
@@ -1638,7 +1681,7 @@ export const systemWordingMessages = {
         clearImage: '清除图片',
         imageEmpty: '尚未选择 Pokemon 图片',
         imageAlt: '{name} {variant} 图片',
-        eventItem: '活动物品',
+        eventItem: 'Event Pokemon',
         loadingList: '正在加载 Pokemon 列表',
         loadingDetail: '正在加载 Pokemon 详情',
         loadingEdit: '正在加载 Pokemon 编辑内容',
@@ -1693,9 +1736,20 @@ export const systemWordingMessages = {
         searchFavoriteThings: '搜索喜欢的东西',
         searchItems: '搜索物品'
       },
+      eventPokemon: {
+        title: 'Event Pokemon',
+        subtitle: '搜索 Event Pokemon，并按特长、环境、喜欢的东西筛选。',
+        kicker: 'Event Pokédex',
+        detailKicker: 'Event Pokemon Detail',
+        editSubtitle: '维护 Event Pokemon 介绍、Pokopia ID、官方数据身份、图片、六维、特长和喜欢的东西。',
+        newTitle: '新增 Event Pokemon',
+        editTitle: '编辑 Event #{id} {name}',
+        loadingList: '正在加载 Event Pokemon 列表'
+      },
       habitats: {
         title: '栖息地',
         subtitle: '查看配方和可能出现的宝可梦。',
+        listKicker: 'Habitats',
         detailKicker: 'Habitat Detail',
         detailSubtitle: '栖息地详情',
         editSubtitle: '维护栖息地配方和可能出现的 Pokemon。',
@@ -1705,7 +1759,7 @@ export const systemWordingMessages = {
         loadingList: '正在加载栖息地列表',
         loadingDetail: '正在加载栖息地详情',
         loadingEdit: '正在加载栖息地编辑内容',
-        eventItem: '活动物品',
+        eventItem: 'Event Habitat',
         recipe: '配方',
         recipeList: '配方列表',
         possiblePokemon: '可能出现的宝可梦',
@@ -1713,6 +1767,16 @@ export const systemWordingMessages = {
         addPokemon: '添加 Pokemon',
         maps: '地图',
         searchMaps: '搜索地图'
+      },
+      eventHabitats: {
+        title: 'Event Habitats',
+        subtitle: '查看限时栖息地、活动配方和可能出现的 Pokemon。',
+        kicker: 'Event Habitats',
+        detailKicker: 'Event Habitat Detail',
+        editSubtitle: '维护 Event Habitat 配方、可能出现的 Pokemon 和图片。',
+        newTitle: '新增 Event Habitat',
+        editTitle: '编辑 Event Habitat {name}',
+        loadingList: '正在加载 Event Habitat 列表'
       },
       items: {
         title: '物品',
@@ -2219,7 +2283,7 @@ export const systemWordingMessages = {
         pokemonIdentifierRequired: '请输入 Pokemon 标识',
         pokemonTypeDataUnavailable: 'Pokemon 属性数据不可用',
         pokemonDataNotFound: '未找到 Pokemon 数据',
-        pokemonDataIdMismatch: 'Pokemon 数据 ID 与当前 Pokemon 不一致',
+        pokemonDataIdMismatch: '官方 Pokemon 数据 ID 与当前 Pokemon 不一致',
         dataToolScopeRequired: '请至少选择一个数据范围',
         dataToolScopeInvalid: '数据范围不合法',
         dataToolBundleInvalid: '数据包不合法',
@@ -2253,7 +2317,7 @@ export const systemWordingMessages = {
         skillMax: '最多选择 2 个特长',
         favoriteMax: '最多选择 6 个喜欢的东西',
         dropItemSelectedSkill: '掉落物必须关联到已选择的特长',
-        pokemonIdRequired: '请输入 Pokemon ID',
+        pokemonIdRequired: '请输入 Pokopia ID',
         pokemonNameRequired: '请输入 Pokemon 名称',
         heightNonNegative: '身高必须是不小于 0 的数字',
         weightNonNegative: '体重必须是不小于 0 的数字',

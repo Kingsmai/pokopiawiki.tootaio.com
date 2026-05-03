@@ -100,12 +100,17 @@ const pokemonForm = ref({
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
+const isEventCreate = computed(() => route.name === 'event-pokemon-new');
 const pageTitle = computed(() =>
   isEditing.value
-    ? t('pages.pokemon.editTitle', { id: pokemonForm.value.id || routeId.value, name: pokemonForm.value.name })
-    : t('pages.pokemon.newTitle')
+    ? t(pokemonForm.value.isEventItem ? 'pages.eventPokemon.editTitle' : 'pages.pokemon.editTitle', {
+        id: pokemonForm.value.id || routeId.value,
+        name: pokemonForm.value.name
+      })
+    : t(isEventCreate.value ? 'pages.eventPokemon.newTitle' : 'pages.pokemon.newTitle')
 );
-const cancelTo = computed(() => (isEditing.value ? `/pokemon/${routeId.value}` : '/pokemon'));
+const editSubtitle = computed(() => t(pokemonForm.value.isEventItem || isEventCreate.value ? 'pages.eventPokemon.editSubtitle' : 'pages.pokemon.editSubtitle'));
+const cancelTo = computed(() => (isEditing.value ? `/pokemon/${routeId.value}` : isEventCreate.value ? '/event-pokemon' : '/pokemon'));
 const selectedSkillDropRows = computed(() =>
   pokemonForm.value.skillItemDrops.filter((row) => pokemonForm.value.skillIds.includes(row.skillId) && skillSupportsItemDrop(row.skillId))
 );
@@ -262,7 +267,6 @@ function applyFetchedPokemon(fetchedPokemon: PokemonFetchResult): boolean {
   const routePokemonId = Number(routeId.value);
   if (
     isEditing.value &&
-    !pokemonForm.value.isEventItem &&
     Number.isInteger(routePokemonId) &&
     routePokemonId > 0 &&
     fetchedPokemon.id !== routePokemonId
@@ -336,6 +340,8 @@ async function loadEditor() {
       imageOptions.value = pokemon.image ? [pokemon.image] : [];
       imageHistory.value = pokemon.imageHistory;
       syncSkillItemDrops();
+    } else {
+      pokemonForm.value.isEventItem = isEventCreate.value;
     }
   } catch (error) {
     message.value = errorText(error, t('errors.loadFailed'));
@@ -743,7 +749,7 @@ watch(locale, () => {
 </script>
 
 <template>
-  <Modal :title="pageTitle" :subtitle="t('pages.pokemon.editSubtitle')" :close-label="t('common.close')" size="wide" @close="closeEditor">
+  <Modal :title="pageTitle" :subtitle="editSubtitle" :close-label="t('common.close')" size="wide" @close="closeEditor">
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
     <form v-if="!loading && options" id="pokemon-edit-form" class="modal-edit-form modal-edit-form--tabbed pokemon-edit-form" @submit.prevent="savePokemon">
@@ -825,7 +831,7 @@ watch(locale, () => {
         </div>
 
         <div class="check-row">
-          <label><input v-model="pokemonForm.isEventItem" type="checkbox" /> {{ t('pages.pokemon.eventItem') }}</label>
+          <label><input v-model="pokemonForm.isEventItem" type="checkbox" :disabled="isEventCreate" /> {{ t('pages.pokemon.eventItem') }}</label>
         </div>
 
         <div class="pokemon-edit-grid">

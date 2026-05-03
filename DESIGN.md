@@ -5,7 +5,7 @@
 - Pokopia Wiki 是一个面向 Pokopia 游戏资料的社区 Wiki。
 - 所有人都可以浏览 Wiki 内容。
 - 已注册并完成邮箱验证且拥有对应权限的用户可以创建、编辑、删除 Wiki 内容。
-- 前台以 Home 首页、Pokemon、栖息地、物品、材料单、每日 CheckList、Life、Automation、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
+- 前台以 Home 首页、Pokemon、Event Pokemon、栖息地、Event Habitats、物品、材料单、每日 CheckList、Life、Automation、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
 - Home 首页路径为 `/`，用于聚合公开 Wiki 入口；Logo 导航回到 Home，用户可从 Home 进入核心资料、每日 CheckList、Life 和正在准备中的分区。
 - 管理入口用于维护全局配置、语言、系统文案、列表排序和每日 CheckList。
 
@@ -206,7 +206,7 @@
   - Wipe Items 会先删除 Recipes，再删除物品、物品入手方式 / 喜欢的东西关联、栖息地配方项和 Pokemon 掉落关联。
   - Wipe Recipes 会删除材料单、材料项和入手方式关联，但不删除 Items。
   - Wipe Daily CheckList 会删除清单任务和任务翻译 / 编辑历史。
-  - 对被清空的 identity 主表重置自增 ID；Pokemon 内部 ID 不是 identity，自定义 / 活动 Pokemon 的系统分配区间仍按当前数据库最大值继续。
+  - 对被清空的 identity 主表重置自增 ID；Pokemon 内部 ID 不是 identity，未关联官方 data 的自定义 Pokemon 系统分配区间仍按当前数据库最大值继续。
 - Export 行为：
   - 导出为版本化 JSON bundle，包含 `version`、`exportedAt`、`scopes` 和对应范围数据。
   - JSON bundle 用于系统导入，不作为前台展示内容。
@@ -443,10 +443,10 @@
 
 Pokemon 可配置：
 
-- 内部 ID：`id`，系统唯一，用于路由、外键和实体关联；从 CSV Fetch 创建的普通 Pokemon 使用官方 data Pokemon ID 作为内部 ID，活动 Pokemon 和未关联官方 data 的自定义 Pokemon 由系统分配唯一内部 ID
+- 内部 ID：`id`，系统唯一，用于路由、外键和实体关联；所有关联官方 data 的 Pokemon（包含普通 Pokemon 和 Event Pokemon）使用官方 data Pokemon ID 作为内部 ID；未关联官方 data 的自定义 Pokemon 由系统分配唯一内部 ID
 - 官方 data 身份：`data_id` 和 `data_identifier`，可为空；用于记录该 Pokemon 对应的 CSV 官方 Pokemon ID 与 identifier，不作为用户可编辑展示 ID
-- 展示 ID：`display_id`，详情页、列表卡片和选择器中显示为 `#ID`
-- 是否为活动物品：`is_event_item`
+- Pokopia 展示 ID：`display_id`，详情页、列表卡片和选择器中显示为 `#ID`，由 Pokopia 业务单独维护，不作为路由、外键或官方 data 身份
+- 是否为 Event Pokemon：`is_event_item`
 - 名称
 - Genus：可为空，支持翻译
 - 介绍 / Details：可为空，支持翻译
@@ -469,7 +469,13 @@ Pokemon 可配置：
 - 翻译
 - 排序
 
-Pokemon 的展示 ID 在普通 Pokemon 和活动 Pokemon 之间可以重复，例如允许同时存在普通 `#1 妙蛙种子` 和活动 `#1 毽子草`。数据库只要求同一个 `display_id + is_event_item` 组合唯一；前端路由和实体关联必须继续使用内部 `id`，不能使用展示 ID 作为路由或外键。Fetch 得到的官方 data ID 必须与展示 ID 分开保存；例如 Zorua 的官方 data ID 为 `570` 时，用户把展示 ID 改成 `123` 后仍应通过 `/pokemon/570` 访问该 Pokemon，`/pokemon/123` 只代表内部 ID 为 `123` 的其他 Pokemon。
+普通 Pokemon 与 Event Pokemon 分开展示：
+
+- `/pokemon` 展示普通 Pokemon 列表。
+- `/event-pokemon` 展示 Event Pokemon 列表。
+- 两个列表复用 Pokemon 筛选、卡片和详情行为，但列表请求必须按 `is_event_item` 分开读取。
+
+Pokemon 的 Pokopia 展示 ID 在普通 Pokemon 和 Event Pokemon 之间可以重复，例如允许同时存在普通 `#1 妙蛙种子` 和 Event `#1 毽子草`。数据库只要求同一个 `display_id + is_event_item` 组合唯一；前端路由和实体关联必须继续使用内部 `id`，不能使用展示 ID 作为路由或外键。Fetch 得到的官方 data ID 必须与展示 ID 分开保存；例如 Zorua 的官方 data ID 为 `570` 时，用户把 Pokopia 展示 ID 改成 `123` 后仍应通过 `/pokemon/570` 访问该 Pokemon，`/pokemon/123` 只代表内部 ID 为 `123` 的其他 Pokemon。普通 Pokemon 和 Event Pokemon 不会同时存在同一个内部系统 ID；当 Event Pokemon 关联官方 data 时，内部 ID 同样使用官方 data Pokemon ID。
 
 Pokemon 编辑表单使用标签页组织字段：
 
@@ -481,7 +487,7 @@ Pokemon 编辑表单使用标签页组织字段：
   - Fetch 搜索不使用防抖或节流；前端在每次新搜索时取消上一条搜索请求，并且只渲染最新请求结果。
   - Fetch 只填入 CSV 可提供的字段：官方 data ID、官方 data identifier、名称、Genus、Height、Weight、Types、六维和名称/Genus 翻译；不填入 Details、喜欢的环境、特长、特长掉落物品或喜欢的东西。
   - Fetch data 不要求官方 data ID 与 Pokopia 展示 ID 相同；若表单 ID 已有用户输入则保留该展示 ID，只有新建且 ID 为空时才用官方 data ID 作为初始展示 ID。
-  - Fetch 后保存普通 Pokemon 时，官方 data ID 作为内部路由 ID；展示 ID 只保存到 `display_id`。
+  - Fetch 后保存关联官方 data 的 Pokemon 时，官方 data ID 作为内部路由 ID；Pokopia 展示 ID 只保存到 `display_id`。
   - Fetch 不直接创建或更新 Pokemon；用户仍需通过 Save 保存，保存时沿用现有编辑审计。
   - Fetch 根据 `languages.code` 自动匹配 CSV 语言列：`en`、`ja`、`ko`、`fr`、`de`、`es`、`it` 使用同名列；`zh-CN` / `zh-SG` 等简体语言使用 `zh_hans`；`zh-TW` / `zh-HK` / `zh-MO` 使用 `zh_hant`。
   - Fetch 会自动确保 canonical Pokemon Types 存在于 `pokemon_types`，Type ID 与 `data/localized_type_name.csv` 和 `frontend/public/types` 图标文件保持一致；用户不需要为 Fetch 手工创建 Type 配置。
@@ -495,7 +501,7 @@ Pokemon 编辑表单使用标签页组织字段：
   - Pokemon 保存显示图片的相对路径、风格、版本、状态和描述；API 对外返回可直接展示的图片 URL，但不暴露内部校验状态。
   - Pokemon 也支持社区上传图片；上传图片使用通用 Wiki 图片上传历史，当前显示图片可在静态候选和上传图片之间切换。
 - 基础标签页：
-  - 第一行：ID、名称
+  - 第一行：Pokopia 展示 ID、名称
   - 第二行：喜欢的环境、特长
   - 第三行：喜欢的东西
   - 特长掉落物品随已选择且支持掉落物的特长显示
@@ -520,6 +526,7 @@ Pokemon 列表功能：
 - 按自定义排序展示
 - Pokemon 列表卡片只展示 Pokemon 图片和下方的 `#ID 名称`；不展示喜欢的环境、属性、特长、喜欢的东西或编辑元信息。
 - Pokemon 卡片在已配置图片时展示所选图片缩略图；未配置图片时保留默认 Poké Ball 标记。
+- Event Pokemon 列表功能与 Pokemon 列表相同，但只展示 `is_event_item = true` 的 Pokemon；Pokemon 列表只展示 `is_event_item = false` 的 Pokemon。
 
 Pokemon 详情页展示：
 
@@ -546,7 +553,7 @@ Pokemon 详情页展示：
 物品可配置：
 
 - 名称
-- 是否为活动物品：`is_event_item`
+- 是否为 Event Habitat：`is_event_item`
 - 分类：必填
 - 用途：可为空
 - 入手方式：可多选
@@ -656,6 +663,9 @@ Pokemon 出现配置：
 - 按自定义排序展示
 - 栖息地列表卡片使用与 Pokemon 列表一致的居中图鉴式布局，只展示栖息地图片和名称；不展示配方摘要、可能出现的 Pokemon 摘要或编辑元信息。
 - 已配置图片时，栖息地卡片展示图片缩略图；未配置图片时保留默认栖息地标记。
+- `/habitats` 只展示 `is_event_item = false` 的普通栖息地。
+- `/event-habitats` 只展示 `is_event_item = true` 的 Event Habitats。
+- Event Habitats 列表复用栖息地列表的排序、卡片和详情行为；详情、编辑、关联和讨论继续使用内部 `id`。
 
 栖息地详情页展示：
 
@@ -821,8 +831,10 @@ API 暴露边界：
 - 多选和单选复用 `TagsSelect`，支持搜索、键盘操作和必要时的内联创建。
 - 主要实体的新建和编辑使用路由驱动的 Modal：
   - `/pokemon/new`
+  - `/event-pokemon/new`
   - `/pokemon/:id/edit`
   - `/habitats/new`
+  - `/event-habitats/new`
   - `/habitats/:id/edit`
   - `/items/new`
   - `/items/:id/edit`
@@ -843,7 +855,9 @@ API 暴露边界：
 - 前端入口 `index.html` 提供默认 title、description、robots、canonical、Open Graph、Twitter card 和 favicon；客户端路由切换后根据当前路由更新页面 metadata。
 - 主要公开浏览入口可索引：
   - `/pokemon`
+  - `/event-pokemon`
   - `/habitats`
+  - `/event-habitats`
   - `/items`
   - `/recipes`
   - `/checklist`
@@ -865,9 +879,9 @@ API 暴露边界：
 - `GET /api/options`
 - `GET /api/project-updates`：读取站点项目公开更新信息；支持 `cursor` / `limit` 分页读取最近提交；仅返回净化后的仓库、最近提交和发布版本展示字段。
 - `GET /api/daily-checklist`
-- `GET /api/pokemon`
+- `GET /api/pokemon`：支持 `isEventItem=true|false` 按普通 Pokemon / Event Pokemon 拆分列表；未传时返回全部 Pokemon 以兼容管理端和实体选择器
 - `GET /api/pokemon/:id`
-- `GET /api/habitats`
+- `GET /api/habitats`：支持 `isEventItem=true|false` 按普通栖息地 / Event Habitats 拆分列表；未传时返回全部栖息地以兼容管理端和实体选择器
 - `GET /api/habitats/:id`
 - `GET /api/items`
 - `GET /api/items/:id`

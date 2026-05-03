@@ -73,16 +73,20 @@ const weatherOptions = computed(() => [
 ]);
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
+const isEventCreate = computed(() => route.name === 'event-habitat-new');
 const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
 const pokemonSelectOptions = computed(() =>
   pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.displayId} ${pokemon.name}` }))
 );
 const pageTitle = computed(() =>
   isEditing.value
-    ? t('pages.habitats.editTitle', { name: habitatForm.value.name || t('pages.habitats.fallbackName') })
-    : t('pages.habitats.newTitle')
+    ? t(habitatForm.value.isEventItem ? 'pages.eventHabitats.editTitle' : 'pages.habitats.editTitle', {
+        name: habitatForm.value.name || t('pages.habitats.fallbackName')
+      })
+    : t(isEventCreate.value ? 'pages.eventHabitats.newTitle' : 'pages.habitats.newTitle')
 );
-const cancelTo = computed(() => (isEditing.value ? `/habitats/${routeId.value}` : '/habitats'));
+const editSubtitle = computed(() => t(habitatForm.value.isEventItem || isEventCreate.value ? 'pages.eventHabitats.editSubtitle' : 'pages.habitats.editSubtitle'));
+const cancelTo = computed(() => (isEditing.value ? `/habitats/${routeId.value}` : isEventCreate.value ? '/event-habitats' : '/habitats'));
 const imageEntityName = computed(() => habitatNameForSave().trim());
 const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
 const canUploadImage = computed(() => currentUser.value?.permissions.includes('habitats.upload') === true);
@@ -193,6 +197,8 @@ async function loadEditor() {
       };
       currentImage.value = habitat.image;
       imageHistory.value = habitat.imageHistory;
+    } else {
+      habitatForm.value.isEventItem = isEventCreate.value;
     }
   } catch (error) {
     message.value = errorText(error, t('errors.loadFailed'));
@@ -270,7 +276,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <Modal :title="pageTitle" :subtitle="t('pages.habitats.editSubtitle')" :close-label="t('common.close')" size="wide" @close="closeEditor">
+  <Modal :title="pageTitle" :subtitle="editSubtitle" :close-label="t('common.close')" size="wide" @close="closeEditor">
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
     <form v-if="!loading && options" id="habitat-edit-form" class="modal-edit-form" @submit.prevent="saveHabitat">
@@ -300,7 +306,7 @@ onMounted(() => {
       />
 
       <div class="check-row">
-        <label><input v-model="habitatForm.isEventItem" type="checkbox" /> {{ t('pages.habitats.eventItem') }}</label>
+        <label><input v-model="habitatForm.isEventItem" type="checkbox" :disabled="isEventCreate" /> {{ t('pages.habitats.eventItem') }}</label>
       </div>
 
       <div class="field">

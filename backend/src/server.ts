@@ -1549,7 +1549,9 @@ app.delete('/api/pokemon/:id', async (request, reply) => {
   return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
-app.get('/api/habitats', async (request) => listHabitats(requestLocale(request)));
+app.get('/api/habitats', async (request) =>
+  listHabitats(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
+);
 
 app.get('/api/habitats/:id', async (request, reply) => {
   const { id } = request.params as { id: string };

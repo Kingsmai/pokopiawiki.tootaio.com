@@ -45,7 +45,9 @@ const navItems = computed(() => {
   const items = [
     { label: t('nav.home'), to: '/', icon: iconHome },
     { label: t('nav.pokemon'), to: '/pokemon', icon: iconPokemon },
+    { label: t('nav.eventPokemon'), to: '/event-pokemon', icon: iconEvent },
     { label: t('nav.habitats'), to: '/habitats', icon: iconHabitat },
+    { label: t('nav.eventHabitats'), to: '/event-habitats', icon: iconEvent },
     { label: t('nav.items'), to: '/items', icon: iconItem },
     { label: t('nav.recipes'), to: '/recipes', icon: iconRecipe },
     { label: t('nav.automation'), to: '/automation', icon: iconAutomation, badge: inDevBadge() },

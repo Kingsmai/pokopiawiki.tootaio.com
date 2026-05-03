@@ -25,6 +25,8 @@ const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const showEditor = computed(() => route.name === 'habitat-edit');
 const canUpdateHabitat = computed(() => currentUser.value?.permissions.includes('habitats.update') === true);
+const listPath = computed(() => (habitat.value?.isEventItem ? '/event-habitats' : '/habitats'));
+const detailKicker = computed(() => t(habitat.value?.isEventItem ? 'pages.eventHabitats.detailKicker' : 'pages.habitats.detailKicker'));
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
   { value: 'discussion', label: t('discussion.title') },
@@ -122,7 +124,7 @@ async function loadHabitatDetail() {
 
   if (route.meta.editorModal !== true) {
     applySeo({
-      title: `${nextHabitat.name} - ${t('pages.habitats.title')}`,
+      title: `${nextHabitat.name} - ${t(nextHabitat.isEventItem ? 'pages.eventHabitats.title' : 'pages.habitats.title')}`,
       description: t('seo.habitatDetailDescription', { name: nextHabitat.name }),
       canonicalPath: `/habitats/${nextHabitat.id}`,
       image: nextHabitat.image?.url
@@ -208,13 +210,13 @@ watch(
   </section>
   <section v-else class="page-stack">
     <PageHeader :title="habitat.name" :subtitle="t('pages.habitats.detailSubtitle')">
-      <template #kicker>{{ t('pages.habitats.detailKicker') }}</template>
+      <template #kicker>{{ detailKicker }}</template>
       <template #actions>
         <RouterLink v-if="canUpdateHabitat" class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/habitats">
+        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="listPath">
           <Icon :icon="iconBack" class="ui-icon" aria-hidden="true" />
           {{ t('common.backToList') }}
         </RouterLink>

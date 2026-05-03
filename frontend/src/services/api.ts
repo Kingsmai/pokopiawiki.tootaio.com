@@ -1008,8 +1008,11 @@ export const api = {
   pokemon: (params: Record<string, string | number | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),
   pokemonDetail: (id: string | number) => getJson<PokemonDetail>(`/api/pokemon/${id}`),
-  pokemonFetchOptions: (search: string, signal?: AbortSignal) =>
-    getJson<PokemonFetchOption[]>(`/api/pokemon/fetch-options${buildQuery({ search: search.trim() })}`, signal),
+  pokemonFetchOptions: (search: string, signal?: AbortSignal, all = false) =>
+    getJson<PokemonFetchOption[]>(
+      `/api/pokemon/fetch-options${buildQuery({ search: search.trim(), all: all ? true : undefined })}`,
+      signal
+    ),
   fetchPokemonData: (identifier: string) => sendJson<PokemonFetchResult>('/api/pokemon/fetch', 'POST', { identifier }),
   fetchPokemonImageOptions: (identifier: string) =>
     sendJson<PokemonImageOptionsResult>('/api/pokemon/image-options', 'POST', { identifier }),

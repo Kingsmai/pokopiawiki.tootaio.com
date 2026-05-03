@@ -52,6 +52,9 @@ const message = ref('');
 const fetchInput = ref<HTMLInputElement | null>(null);
 const fetchIdentifier = ref('');
 const fetchOptions = ref<PokemonFetchOption[]>([]);
+const allFetchOptions = ref<PokemonFetchOption[]>([]);
+const fetchOptionsLoaded = ref(false);
+const fetchOptionsFailed = ref(false);
 const fetchResultsStyle = ref<CSSProperties>({});
 const imageOptions = ref<PokemonImage[]>([]);
 const currentPokemonImage = ref<PokemonImage | null>(null);
@@ -62,6 +65,7 @@ const heightUnit = ref<'imperial' | 'metric'>('imperial');
 const weightUnit = ref<'imperial' | 'metric'>('imperial');
 let fetchOptionsController: AbortController | null = null;
 let fetchPositionFrame = 0;
+const fetchOptionsLimit = 20;
 
 function defaultPokemonStats(): PokemonStats {
   return {
@@ -328,12 +332,43 @@ function cancelFetchOptionsRequest() {
   fetchOptionsLoading.value = false;
 }
 
+function resetFetchOptionsCache() {
+  cancelFetchOptionsRequest();
+  allFetchOptions.value = [];
+  fetchOptions.value = [];
+  fetchOptionsLoaded.value = false;
+  fetchOptionsFailed.value = false;
+}
+
 function fetchOptionLabel(option: PokemonFetchOption) {
   return `#${option.id} ${option.name}`;
 }
 
+function fetchOptionMatchesSearch(option: PokemonFetchOption, search: string) {
+  if (!search) {
+    return true;
+  }
+
+  const keyword = search.toLowerCase();
+  return [String(option.id), option.identifier, option.name].some((value) => value.toLowerCase().includes(keyword));
+}
+
+function applyLocalFetchOptions() {
+  const search = fetchIdentifier.value.trim();
+  fetchOptions.value = allFetchOptions.value.filter((option) => fetchOptionMatchesSearch(option, search)).slice(0, fetchOptionsLimit);
+}
+
 async function loadFetchOptions() {
   if (!canFetchPokemon.value) {
+    return;
+  }
+
+  if (fetchOptionsLoaded.value || fetchOptionsFailed.value) {
+    applyLocalFetchOptions();
+    return;
+  }
+
+  if (fetchOptionsController) {
     return;
   }
 
@@ -343,9 +378,11 @@ async function loadFetchOptions() {
   fetchOptionsLoading.value = true;
 
   try {
-    const rows = await api.pokemonFetchOptions(fetchIdentifier.value, controller.signal);
+    const rows = await api.pokemonFetchOptions('', controller.signal, true);
     if (fetchOptionsController === controller) {
-      fetchOptions.value = rows;
+      allFetchOptions.value = rows;
+      fetchOptionsLoaded.value = true;
+      applyLocalFetchOptions();
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -353,6 +390,7 @@ async function loadFetchOptions() {
     }
     if (fetchOptionsController === controller) {
       fetchOptions.value = [];
+      fetchOptionsFailed.value = true;
       message.value = errorText(error, t('pages.pokemon.fetchSearchFailed'));
     }
   } finally {
@@ -365,6 +403,11 @@ async function loadFetchOptions() {
 
 function refreshFetchOptions() {
   if (!fetchOptionsOpen.value) {
+    return;
+  }
+
+  if (fetchOptionsLoaded.value || fetchOptionsFailed.value) {
+    applyLocalFetchOptions();
     return;
   }
 
@@ -446,6 +489,9 @@ function closeFetchOptions() {
   fetchResultsStyle.value = {};
   removeFetchPositionListeners();
   cancelFetchOptionsRequest();
+  if (!fetchOptionsLoaded.value) {
+    fetchOptionsFailed.value = false;
+  }
 }
 
 function handleFetchIdentifierInput() {
@@ -670,6 +716,10 @@ onBeforeUnmount(() => {
 
 watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
 watch(fetchIdentifier, refreshFetchOptions);
+watch(locale, () => {
+  resetFetchOptionsCache();
+  refreshFetchOptions();
+});
 </script>
 
 <template>

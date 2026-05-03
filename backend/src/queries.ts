@@ -1804,12 +1804,13 @@ function pokemonFetchOptionMatches(
 
 export async function listPokemonFetchOptions(paramsQuery: QueryParams, locale = defaultLocale): Promise<PokemonFetchOption[]> {
   const search = asString(paramsQuery.search)?.trim() ?? '';
+  const includeAll = asString(paramsQuery.all) === 'true';
   const [data, languages] = await Promise.all([loadPokemonCsvData(), listLanguages()]);
+  const rows = data.pokemonRows.filter(
+    (row) => csvInteger(row, 'id') > 0 && pokemonFetchOptionMatches(row, data, languages, locale, search)
+  );
 
-  return data.pokemonRows
-    .filter((row) => csvInteger(row, 'id') > 0 && pokemonFetchOptionMatches(row, data, languages, locale, search))
-    .slice(0, 20)
-    .map((row) => pokemonFetchOption(row, data, languages, locale));
+  return (includeAll ? rows : rows.slice(0, 20)).map((row) => pokemonFetchOption(row, data, languages, locale));
 }
 
 function displayValue(value: string | null | undefined): string {

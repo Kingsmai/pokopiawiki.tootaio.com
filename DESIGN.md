@@ -852,7 +852,7 @@ API 暴露边界：
 受权限保护的编辑 API：
 
 - Pokemon、栖息地、物品、材料单的创建、更新、删除分别需要对应实体的 `create`、`update`、`delete` 权限。
-- `GET /api/pokemon/fetch-options`：按搜索词返回 Pokemon CSV data 搜索结果；需要 `pokemon.fetch`；只返回 `id`、`identifier`、`name`。
+- `GET /api/pokemon/fetch-options`：按搜索词返回 Pokemon CSV data 搜索结果；支持 `all=true` 返回完整候选列表供前端本地筛选；需要 `pokemon.fetch`；只返回 `id`、`identifier`、`name`。
 - `POST /api/pokemon/fetch`：按 data identifier 或 Pokemon ID 查询 CSV 资料并填充 Pokemon 编辑表单；需要 `pokemon.fetch`；不直接保存 Pokemon。
 - `POST /api/pokemon/image-options`：按 data identifier 或 Pokemon ID 查询 pokesprite 可用图片候选；需要 `pokemon.fetch`；只返回 `id`、`identifier` 和图片候选列表。
 - `POST /api/uploads/:entityType`：上传 Wiki 图片；需要对应实体上传权限；`entityType` 支持 `pokemon`、`items`、`habitats`；返回图片历史记录项和可展示 URL。

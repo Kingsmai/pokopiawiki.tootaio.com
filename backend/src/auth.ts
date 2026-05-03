@@ -11,6 +11,9 @@ const passwordResetTokenHours = 1;
 const rememberedSessionDays = 30;
 const sessionOnlySessionDays = 1;
 const defaultLocale = 'en';
+const referralCodeLength = 8;
+const referralAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const referralCodePattern = /^[A-Z0-9]{8,16}$/;
 
 type DbClient = PoolClient;
 
@@ -25,6 +28,15 @@ type UserRow = QueryResultRow & {
 
 type LoginUserRow = UserRow & {
   password_hash: string;
+};
+
+type RegistrationUserRow = UserRow & {
+  referral_code: string | null;
+  referred_by_user_id: number | null;
+};
+
+type ReferralCodeRow = QueryResultRow & {
+  referral_code: string | null;
 };
 
 type AuthMessageKey =
@@ -42,6 +54,7 @@ type AuthMessageKey =
   | 'invalidCredentials'
   | 'verifyEmailFirst'
   | 'invalidResetToken'
+  | 'invalidReferralCode'
   | 'emailSubject'
   | 'emailHtml'
   | 'emailText'
@@ -56,6 +69,12 @@ export type AuthUser = {
   email: string;
   displayName: string;
   emailVerified: boolean;
+};
+
+export type ReferralSummary = {
+  code: string;
+  url: string;
+  verifiedReferralCount: number;
 };
 
 function statusError(message: string, statusCode: number): StatusError {
@@ -80,6 +99,7 @@ function authMessage(locale: string, key: AuthMessageKey, params: Record<string,
     invalidCredentials: 'server.auth.invalidCredentials',
     verifyEmailFirst: 'server.auth.verifyEmailFirst',
     invalidResetToken: 'server.auth.invalidResetToken',
+    invalidReferralCode: 'server.auth.invalidReferralCode',
     emailSubject: 'email.auth.verificationSubject',
     emailHtml: 'email.auth.verificationHtml',
     emailText: 'email.auth.verificationText',
@@ -135,6 +155,27 @@ async function cleanToken(
   }
 
   return value.trim();
+}
+
+async function cleanReferralCode(value: unknown, locale: string): Promise<string | null> {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    throw statusError(await authMessage(locale, 'invalidReferralCode'), 400);
+  }
+
+  const referralCode = value.trim().toUpperCase();
+  if (!referralCode) {
+    return null;
+  }
+
+  if (!referralCodePattern.test(referralCode)) {
+    throw statusError(await authMessage(locale, 'invalidReferralCode'), 400);
+  }
+
+  return referralCode;
 }
 
 function toPublicUser(user: UserRow): AuthUser {
@@ -194,6 +235,80 @@ function createPlainToken(): string {
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+function createReferralCode(): string {
+  const bytes = randomBytes(referralCodeLength);
+  return [...bytes].map((byte) => referralAlphabet[byte % referralAlphabet.length]).join('');
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === '23505';
+}
+
+async function ensureReferralCode(client: DbClient, userId: number): Promise<string> {
+  const existing = await clientQueryOne<ReferralCodeRow>(client, 'SELECT referral_code FROM users WHERE id = $1', [userId]);
+  if (existing?.referral_code) {
+    return existing.referral_code;
+  }
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const referralCode = createReferralCode();
+    try {
+      const updated = await clientQueryOne<ReferralCodeRow>(
+        client,
+        `
+          UPDATE users
+          SET referral_code = $1, updated_at = now()
+          WHERE id = $2
+            AND referral_code IS NULL
+          RETURNING referral_code
+        `,
+        [referralCode, userId]
+      );
+
+      if (updated?.referral_code) {
+        return updated.referral_code;
+      }
+
+      const current = await clientQueryOne<ReferralCodeRow>(client, 'SELECT referral_code FROM users WHERE id = $1', [
+        userId
+      ]);
+      if (current?.referral_code) {
+        return current.referral_code;
+      }
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error('Failed to assign referral code');
+}
+
+async function referralUserId(
+  client: DbClient,
+  referralCode: string,
+  currentUserId: number | null,
+  locale: string
+): Promise<number> {
+  const row = await clientQueryOne<QueryResultRow & { id: number }>(client, 'SELECT id FROM users WHERE referral_code = $1', [
+    referralCode
+  ]);
+
+  if (!row || (currentUserId !== null && row.id === currentUserId)) {
+    throw statusError(await authMessage(locale, 'invalidReferralCode'), 400);
+  }
+
+  return row.id;
+}
+
+function buildReferralUrl(code: string): string {
+  const origin = process.env.APP_ORIGIN ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000';
+  const url = new URL('/register', origin);
+  url.searchParams.set('ref', code);
+  return url.toString();
 }
 
 function getEmailConfig() {
@@ -280,14 +395,15 @@ export async function registerUser(payload: Record<string, unknown>, locale = de
   const email = await cleanEmail(payload.email, locale);
   const displayName = await cleanDisplayName(payload.displayName, locale);
   const password = await cleanPassword(payload.password, locale);
+  const referralCode = await cleanReferralCode(payload.referralCode, locale);
   const passwordHash = await hashPassword(password);
   const verificationToken = createPlainToken();
   const verificationTokenHash = hashToken(verificationToken);
 
   await withTransaction(async (client) => {
-    const existingUser = await clientQueryOne<UserRow>(
+    const existingUser = await clientQueryOne<RegistrationUserRow>(
       client,
-      'SELECT id, email, display_name, email_verified_at FROM users WHERE email = $1',
+      'SELECT id, email, display_name, referral_code, referred_by_user_id, email_verified_at FROM users WHERE email = $1',
       [email]
     );
 
@@ -295,29 +411,38 @@ export async function registerUser(payload: Record<string, unknown>, locale = de
       throw statusError(await authMessage(locale, 'emailAlreadyRegistered'), 409);
     }
 
+    const referrerUserId = referralCode ? await referralUserId(client, referralCode, existingUser?.id ?? null, locale) : null;
     const user = existingUser
-      ? await clientQueryOne<UserRow>(
+      ? await clientQueryOne<RegistrationUserRow>(
           client,
           `
             UPDATE users
             SET display_name = $1, password_hash = $2, updated_at = now()
             WHERE id = $3
-            RETURNING id, email, display_name, email_verified_at
+            RETURNING id, email, display_name, referral_code, referred_by_user_id, email_verified_at
           `,
           [displayName, passwordHash, existingUser.id]
         )
-      : await clientQueryOne<UserRow>(
+      : await clientQueryOne<RegistrationUserRow>(
           client,
           `
             INSERT INTO users (email, display_name, password_hash)
             VALUES ($1, $2, $3)
-            RETURNING id, email, display_name, email_verified_at
+            RETURNING id, email, display_name, referral_code, referred_by_user_id, email_verified_at
           `,
           [email, displayName, passwordHash]
         );
 
     if (!user) {
       throw new Error('Failed to save user');
+    }
+
+    await ensureReferralCode(client, user.id);
+    if (referrerUserId && user.referred_by_user_id === null) {
+      await client.query('UPDATE users SET referred_by_user_id = $1, updated_at = now() WHERE id = $2', [
+        referrerUserId,
+        user.id
+      ]);
     }
 
     await client.query('DELETE FROM email_verification_tokens WHERE user_id = $1 AND used_at IS NULL', [user.id]);
@@ -528,6 +653,23 @@ export async function updateCurrentUser(
   }
 
   return toPublicUser(user);
+}
+
+export async function getReferralSummary(userId: number): Promise<ReferralSummary> {
+  return withTransaction(async (client) => {
+    const code = await ensureReferralCode(client, userId);
+    const countRow = await clientQueryOne<QueryResultRow & { count: string }>(
+      client,
+      'SELECT COUNT(*)::text AS count FROM users WHERE referred_by_user_id = $1 AND email_verified_at IS NOT NULL',
+      [userId]
+    );
+
+    return {
+      code,
+      url: buildReferralUrl(code),
+      verifiedReferralCount: Number(countRow?.count ?? 0)
+    };
+  });
 }
 
 export async function logoutSession(token: string): Promise<void> {

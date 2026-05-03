@@ -78,12 +78,27 @@ CREATE TABLE IF NOT EXISTS users (
   email text NOT NULL UNIQUE,
   display_name text NOT NULL,
   password_hash text NOT NULL,
+  referral_code text,
+  referred_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
   email_verified_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (email = lower(email)),
-  CHECK (length(display_name) BETWEEN 1 AND 40)
+  CHECK (length(display_name) BETWEEN 1 AND 40),
+  CHECK (referral_code IS NULL OR referral_code ~ '^[A-Z0-9]{8,16}$')
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_referral_code_check;
+ALTER TABLE users ADD CONSTRAINT users_referral_code_check CHECK (referral_code IS NULL OR referral_code ~ '^[A-Z0-9]{8,16}$');
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_idx
+  ON users(referral_code)
+  WHERE referral_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx
+  ON users(referred_by_user_id);
 
 CREATE TABLE IF NOT EXISTS system_wording_keys (
   key text PRIMARY KEY,

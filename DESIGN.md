@@ -121,6 +121,29 @@
   - 更新显示名后，API 仍只返回当前用户必要字段，不返回 session、token/hash、内部审计或调试数据。
   - 显示名用于编辑署名、讨论和 Life 内容作者展示。
 
+## Referral
+
+- Referral 是账号功能，用于让已注册用户邀请新用户加入 Pokopia Wiki。
+- 每个用户都有一个稳定的 Referral Code：
+  - 由系统生成。
+  - 全局唯一。
+  - 只包含大写英文字母和数字。
+  - 现有用户在首次读取 Referral 信息或重新注册未验证账号时自动补齐。
+- 登录用户可在 `/profile` 查看自己的 Referral Code、邀请链接和有效邀请数量。
+- 邀请链接使用前端注册页路径：`/register?ref=CODE`。
+- 注册页支持：
+  - 从 `ref` query 自动填入 Referral Code。
+  - 用户手动输入 Referral Code。
+  - Referral Code 可为空。
+- 注册提交时后端校验 Referral Code：
+  - 无效 Referral Code 拒绝注册并返回本地化错误。
+  - 用户不能使用自己的 Referral Code；如邮箱已存在且该账号已有 Referral Code，注册时不能将自己设为邀请人。
+  - 已存在未验证账号重新注册时，不覆盖已有邀请关系。
+- Referral 只有在被邀请用户完成邮箱验证后才计入有效邀请数量。
+- Referral 不改变现有邮箱验证要求；用户仍必须验证邮箱后才能登录和编辑。
+- 当前版本不提供积分奖励、排行榜、邀请邮件发送、邀请制注册限制、后台统计或公开邀请人资料页。
+- Referral API 对外只返回当前用户自己的 Referral 摘要，不返回被邀请用户邮箱、token/hash、内部审计字段或被邀请用户明细。
+
 ## Community 编辑与审计
 
 - 已验证用户可以通过前台或管理入口编辑 Wiki 内容。
@@ -600,6 +623,7 @@ API 暴露边界：
 - `POST /api/auth/reset-password`
 - `GET /api/auth/me`
 - `PATCH /api/auth/me`：更新当前用户显示名；需要登录；只接收并返回当前用户必要字段。
+- `GET /api/auth/referral`：读取当前用户 Referral 摘要；需要登录；返回 `referral`，其中只包含 `code`、`url`、`verifiedReferralCount`。
 - `POST /api/auth/logout`
 
 已验证用户编辑 API：

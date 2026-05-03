@@ -2,14 +2,17 @@
 import { Icon } from '@iconify/vue';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import { iconMail } from '../icons';
 import { api } from '../services/api';
 
+const route = useRoute();
 const email = ref('');
 const displayName = ref('');
 const password = ref('');
+const referralCode = ref(typeof route.query.ref === 'string' ? route.query.ref.trim().toUpperCase() : '');
 const busy = ref(false);
 const message = ref('');
 const errorMessage = ref('');
@@ -24,7 +27,8 @@ async function submitRegister() {
     const response = await api.register({
       email: email.value,
       displayName: displayName.value,
-      password: password.value
+      password: password.value,
+      referralCode: referralCode.value
     });
     message.value = response.message;
   } catch (error) {
@@ -63,6 +67,19 @@ async function submitRegister() {
             required
             type="password"
           />
+        </div>
+
+        <div class="field">
+          <label for="register-referral-code">{{ t('auth.referralCode') }}</label>
+          <input
+            id="register-referral-code"
+            v-model="referralCode"
+            autocomplete="off"
+            inputmode="text"
+            maxlength="16"
+            :placeholder="t('auth.referralCodePlaceholder')"
+          />
+          <small class="auth-field-note">{{ t('auth.referralCodeHint') }}</small>
         </div>
 
         <StatusMessage v-if="message" variant="success">{{ message }}</StatusMessage>

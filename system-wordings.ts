@@ -70,6 +70,9 @@ export const systemWordingMessages = {
       newPassword: 'New password',
       confirmPassword: 'Confirm password',
       displayName: 'Display name',
+      referralCode: 'Referral code',
+      referralCodePlaceholder: 'Optional code',
+      referralCodeHint: 'Use an invite code from another trainer.',
       loginTitle: 'Log in',
       loginSubtitle: 'Use a verified email to enter Pokopia Wiki.',
       loggingIn: 'Logging in',
@@ -121,7 +124,16 @@ export const systemWordingMessages = {
         emailVerified: 'Email verified',
         emailUnverified: 'Email unverified',
         saved: 'Profile saved',
-        saveFailed: 'Profile save failed'
+        saveFailed: 'Profile save failed',
+        referralTitle: 'Referral',
+        referralCode: 'Referral code',
+        referralUrl: 'Invite link',
+        referralHint: 'Share this link with new editors. Invites count after email verification.',
+        verifiedReferralCount: 'Verified invites',
+        copyReferralLink: 'Copy link',
+        referralCopied: 'Referral link copied',
+        referralCopyFailed: 'Referral link copy failed',
+        referralLoadFailed: 'Referral details failed to load'
       },
       pokemon: {
         title: 'Pokemon',
@@ -578,7 +590,8 @@ export const systemWordingMessages = {
       passwordResetComplete: 'Password updated. You can log in with the new password.',
       invalidCredentials: 'Email or password is incorrect',
       verifyEmailFirst: 'Please complete email verification first',
-      invalidResetToken: 'The password reset link is invalid or expired'
+      invalidResetToken: 'The password reset link is invalid or expired',
+      invalidReferralCode: 'Referral code is invalid'
     },
     validation: {
       nameRequired: 'Name is required',
@@ -723,6 +736,9 @@ export const systemWordingMessages = {
       newPassword: '新密码',
       confirmPassword: '确认密码',
       displayName: '显示名',
+      referralCode: '邀请码',
+      referralCodePlaceholder: '可选邀请码',
+      referralCodeHint: '可填写其他训练师分享的邀请码。',
       loginTitle: '登录',
       loginSubtitle: '使用已验证邮箱进入 Pokopia Wiki',
       loggingIn: '登录中',
@@ -774,7 +790,16 @@ export const systemWordingMessages = {
         emailVerified: '邮箱已验证',
         emailUnverified: '邮箱未验证',
         saved: '个人资料已保存',
-        saveFailed: '个人资料保存失败'
+        saveFailed: '个人资料保存失败',
+        referralTitle: '邀请',
+        referralCode: '邀请码',
+        referralUrl: '邀请链接',
+        referralHint: '分享给新编辑者，对方完成邮箱验证后会计入有效邀请。',
+        verifiedReferralCount: '有效邀请',
+        copyReferralLink: '复制链接',
+        referralCopied: '邀请链接已复制',
+        referralCopyFailed: '邀请链接复制失败',
+        referralLoadFailed: '邀请信息加载失败'
       },
       pokemon: {
         title: 'Pokemon',
@@ -1231,7 +1256,8 @@ export const systemWordingMessages = {
         passwordResetComplete: '密码已更新，请使用新密码登录。',
         invalidCredentials: '邮箱或密码不正确',
         verifyEmailFirst: '请先完成邮箱验证',
-        invalidResetToken: '密码重置链接无效或已过期'
+        invalidResetToken: '密码重置链接无效或已过期',
+        invalidReferralCode: '邀请码无效'
       },
       validation: {
         nameRequired: '请输入名称',

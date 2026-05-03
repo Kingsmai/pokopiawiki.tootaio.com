@@ -316,6 +316,12 @@ export interface AuthUser {
   emailVerified: boolean;
 }
 
+export interface ReferralSummary {
+  code: string;
+  url: string;
+  verifiedReferralCount: number;
+}
+
 export interface UserProfilePayload {
   displayName: string;
 }
@@ -328,6 +334,7 @@ export interface LoginPayload {
 
 export interface RegisterPayload extends LoginPayload {
   displayName: string;
+  referralCode?: string;
 }
 
 export interface AuthResponse {
@@ -637,6 +644,7 @@ export const api = {
     sendJson<{ message: string }>('/api/auth/reset-password', 'POST', payload),
   me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
   updateMe: (payload: UserProfilePayload) => sendJson<{ user: AuthUser }>('/api/auth/me', 'PATCH', payload),
+  referral: () => getJson<{ referral: ReferralSummary }>('/api/auth/referral'),
   logout: () => postEmpty('/api/auth/logout'),
   options: () => getJson<Options>('/api/options'),
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),

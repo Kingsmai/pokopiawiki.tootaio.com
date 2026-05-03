@@ -6,16 +6,19 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import StatusMessage from '../components/StatusMessage.vue';
-import { iconProfile, iconSave } from '../icons';
-import { api, notifyAuthChange, type AuthUser } from '../services/api';
+import { iconCopy, iconProfile, iconReferral, iconSave } from '../icons';
+import { api, notifyAuthChange, type AuthUser, type ReferralSummary } from '../services/api';
 
 const { t } = useI18n();
 const user = ref<AuthUser | null>(null);
+const referral = ref<ReferralSummary | null>(null);
 const displayName = ref('');
 const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
 const errorMessage = ref('');
+const referralMessage = ref('');
+const referralErrorMessage = ref('');
 
 const trimmedDisplayName = computed(() => displayName.value.trim());
 const hasChanges = computed(() => {
@@ -32,11 +35,21 @@ async function loadProfile() {
   loading.value = true;
   message.value = '';
   errorMessage.value = '';
+  referralMessage.value = '';
+  referralErrorMessage.value = '';
+  referral.value = null;
 
   try {
     const response = await api.me();
     user.value = response.user;
     displayName.value = response.user.displayName;
+
+    try {
+      const referralResponse = await api.referral();
+      referral.value = referralResponse.referral;
+    } catch {
+      referralErrorMessage.value = t('pages.profile.referralLoadFailed');
+    }
   } catch (error) {
     errorMessage.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
   } finally {
@@ -64,6 +77,40 @@ async function saveProfile() {
     errorMessage.value = error instanceof Error && error.message ? error.message : t('pages.profile.saveFailed');
   } finally {
     busy.value = false;
+  }
+}
+
+function writeClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(value);
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+
+  return copied ? Promise.resolve() : Promise.reject(new Error('Clipboard unavailable'));
+}
+
+async function copyReferralLink() {
+  if (!referral.value) {
+    return;
+  }
+
+  referralMessage.value = '';
+  referralErrorMessage.value = '';
+
+  try {
+    await writeClipboard(referral.value.url);
+    referralMessage.value = t('pages.profile.referralCopied');
+  } catch {
+    referralErrorMessage.value = t('pages.profile.referralCopyFailed');
   }
 }
 
@@ -99,6 +146,14 @@ onMounted(() => {
             <Skeleton width="70px" />
             <Skeleton variant="box" height="44px" />
           </div>
+          <Skeleton variant="box" width="120px" height="42px" />
+        </div>
+      </section>
+      <section class="profile-card profile-card--referral" aria-hidden="true">
+        <Skeleton width="180px" height="28px" />
+        <div class="auth-form">
+          <Skeleton variant="box" height="58px" />
+          <Skeleton variant="box" height="44px" />
           <Skeleton variant="box" width="120px" height="42px" />
         </div>
       </section>
@@ -152,6 +207,42 @@ onMounted(() => {
             {{ busy ? t('common.saving') : t('common.save') }}
           </button>
         </form>
+      </section>
+
+      <section class="profile-card profile-card--referral" :aria-label="t('pages.profile.referralTitle')">
+        <div class="profile-card__header">
+          <Icon :icon="iconReferral" class="profile-card__icon" aria-hidden="true" />
+          <h2>{{ t('pages.profile.referralTitle') }}</h2>
+        </div>
+
+        <div v-if="referral" class="profile-referral">
+          <div class="profile-referral__metric">
+            <span>{{ t('pages.profile.verifiedReferralCount') }}</span>
+            <strong>{{ referral.verifiedReferralCount }}</strong>
+          </div>
+
+          <div class="field">
+            <label for="profile-referral-code">{{ t('pages.profile.referralCode') }}</label>
+            <input id="profile-referral-code" class="profile-readonly-input profile-code-input" :value="referral.code" readonly />
+          </div>
+
+          <div class="field">
+            <label for="profile-referral-url">{{ t('pages.profile.referralUrl') }}</label>
+            <div class="profile-referral-link-row">
+              <input id="profile-referral-url" class="profile-readonly-input" :value="referral.url" readonly />
+              <button class="ui-button ui-button--blue" type="button" @click="copyReferralLink">
+                <Icon :icon="iconCopy" class="ui-icon" aria-hidden="true" />
+                {{ t('pages.profile.copyReferralLink') }}
+              </button>
+            </div>
+            <small class="profile-field-note">{{ t('pages.profile.referralHint') }}</small>
+          </div>
+
+          <StatusMessage v-if="referralMessage" variant="success">{{ referralMessage }}</StatusMessage>
+          <StatusMessage v-if="referralErrorMessage" variant="danger">{{ referralErrorMessage }}</StatusMessage>
+        </div>
+
+        <StatusMessage v-else-if="referralErrorMessage" variant="danger" :duration="0">{{ referralErrorMessage }}</StatusMessage>
       </section>
     </div>
 

@@ -4220,6 +4220,12 @@ button:disabled,
   background: color-mix(in srgb, var(--danger) 10%, var(--surface));
 }
 
+.auth-field-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
 .profile-page {
   display: grid;
   gap: 18px;
@@ -4245,6 +4251,10 @@ button:disabled,
 
 .profile-card--identity {
   align-content: start;
+}
+
+.profile-card--referral {
+  grid-column: 2;
 }
 
 .profile-identity {
@@ -4315,6 +4325,55 @@ button:disabled,
 .profile-readonly-input {
   color: var(--muted);
   cursor: default;
+}
+
+.profile-referral {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-referral__metric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 58px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.profile-referral__metric span {
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.profile-referral__metric strong {
+  color: var(--pokemon-blue-deep);
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 950;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-code-input {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-weight: 900;
+}
+
+.profile-referral-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-referral-link-row .ui-button {
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 .admin-layout {
@@ -4647,6 +4706,10 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 
+  .profile-card--referral {
+    grid-column: auto;
+  }
+
   .system-wording-sidebar {
     display: flex;
     overflow-x: auto;
@@ -4759,6 +4822,14 @@ button:disabled,
   .life-toolbar,
   .life-toolbar__search {
     grid-template-columns: 1fr;
+  }
+
+  .profile-referral-link-row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-referral-link-row .ui-button {
+    width: 100%;
   }
 
   .life-toolbar__actions,

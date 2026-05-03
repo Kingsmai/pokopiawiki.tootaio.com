@@ -184,6 +184,42 @@
   - 非 Owner 即使拥有 `admin.users.update` 或自定义高等级角色，也不能分配或移除 `owner` 角色。
 - 管理 API 只返回权限管理所需字段，不返回密码、session token hash、verification/reset token hash、内部审计 payload 或调试字段。
 
+## Admin Data Tools
+
+- Admin Data Tools 用于在管理端导出、导入和清空指定 Wiki 内容域数据。
+- Data Tools 只支持固定业务范围，不提供任意 SQL、任意表名输入或网页数据库控制台能力。
+- 权限：
+  - `admin.data.export`：可导出内容数据 bundle。
+  - `admin.data.import`：可导入内容数据 bundle，并可执行 Wipe。
+- 初始默认只有 `owner` 拥有 Data Tools 权限；如需开放给其他角色，必须通过权限管理显式授予。
+- Data Tools 支持范围：
+  - Pokemon
+  - Habitats
+  - Items
+  - Recipes
+  - Daily CheckList
+- Items 与 Recipes 存在依赖关系；选择 Items 进行导出、导入或 Wipe 时，系统必须自动同时纳入 Recipes，前端确认内容也必须显示 Recipes。
+- Wipe 行为：
+  - 删除所选范围的主数据、关联数据、实体翻译、编辑历史、图片上传记录和实体讨论评论。
+  - Wipe Pokemon 会删除 Pokemon 及其属性 / 特长 / 喜欢的东西 / 掉落关联，并移除栖息地中的 Pokemon 出现配置，但不删除栖息地本身。
+  - Wipe Habitats 会删除栖息地、栖息地配方项和 Pokemon 出现配置，但不删除 Pokemon、Items 或 Maps。
+  - Wipe Items 会先删除 Recipes，再删除物品、物品入手方式 / 喜欢的东西关联、栖息地配方项和 Pokemon 掉落关联。
+  - Wipe Recipes 会删除材料单、材料项和入手方式关联，但不删除 Items。
+  - Wipe Daily CheckList 会删除清单任务和任务翻译 / 编辑历史。
+  - 对被清空的 identity 主表重置自增 ID；Pokemon 内部 ID 不是 identity，自定义 / 活动 Pokemon 的系统分配区间仍按当前数据库最大值继续。
+- Export 行为：
+  - 导出为版本化 JSON bundle，包含 `version`、`exportedAt`、`scopes` 和对应范围数据。
+  - JSON bundle 用于系统导入，不作为前台展示内容。
+  - 导出包含所选范围的主数据、关联数据、实体翻译、编辑历史、图片上传记录和实体讨论评论。
+  - 导出必须包含对应 Wipe 会移除的跨范围关联行，例如 Pokemon 出现配置、Pokemon 掉落和栖息地配方项；导入这些关联时，引用的另一侧实体必须已存在。
+  - JSON 不包含上传文件本身；`backend_uploads` volume 需要单独备份。
+- Import 行为：
+  - 当前只支持 Replace selected scopes：导入前先 Wipe bundle 中包含的范围，再在同一事务中还原 bundle 数据。
+  - Import 不自动覆盖系统配置、语言、用户、角色、权限、系统文案或 Life 内容。
+  - 导入数据引用的 System config、Languages、Users 或上传文件路径必须已存在；缺失依赖会导致导入失败并回滚。
+  - Import 完成后重置相关 identity sequence 到当前最大 ID 之后。
+  - 前端导入和 Wipe 必须使用确认 Modal，并要求输入固定确认词后才能执行。
+
 ## Referral
 
 - Referral 是账号功能，用于让已注册用户邀请新用户加入 Pokopia Wiki。
@@ -773,7 +809,7 @@ API 暴露边界：
 - 全局主导航使用 `AppShell` 侧边栏；移动端通过导航按钮打开侧边栏抽屉。
 - 管理入口在全局侧边栏中保持单一 Admin 入口，`/admin` 内部使用页面内二级菜单分组组织管理模块：
   - 配置：System config。
-  - 内容：Daily CheckList、Pokemon、物品、材料单和栖息地的维护、排序或删除入口。
+  - 内容：Daily CheckList、Pokemon、物品、材料单、栖息地的维护、排序或删除入口，以及 Data Tools。
   - 本地化：Languages、System wordings。
   - 访问权限：Users、Roles、Permissions、Rate limits。
 - 登录用户的侧边栏账号入口进入 `/profile`；User Profile 属于账号入口，不作为 Wiki 主内容导航项。
@@ -870,6 +906,10 @@ API 暴露边界：
 - `POST /api/admin/permissions`：需要 `admin.permissions.create`
 - `PUT /api/admin/permissions/:id`：需要 `admin.permissions.update`
 - `DELETE /api/admin/permissions/:id`：需要 `admin.permissions.delete`
+- `GET /api/admin/data-tools/summary`：需要 `admin.data.export` 或 `admin.data.import`
+- `POST /api/admin/data-tools/export`：需要 `admin.data.export`
+- `POST /api/admin/data-tools/import`：需要 `admin.data.import`
+- `POST /api/admin/data-tools/wipe`：需要 `admin.data.import`
 
 受权限保护的编辑 API：
 

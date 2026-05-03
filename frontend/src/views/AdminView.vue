@@ -24,6 +24,7 @@ import {
   iconRecipe,
   iconSave,
   iconTranslate,
+  iconUpload,
   type AppIcon
 } from '../icons';
 import { defaultLocale, getCurrentLocale, loadSystemWordings, setCurrentLocale } from '../i18n';
@@ -36,6 +37,9 @@ import {
   type AuthUser,
   type AdminUser,
   type ConfigType,
+  type DataToolScope,
+  type DataToolsBundle,
+  type DataToolsSummary,
   type DailyChecklistItem,
   type GameVersion,
   type Habitat,
@@ -65,6 +69,7 @@ type AdminTab =
   | 'permissions'
   | 'rateLimits'
   | 'aiModeration'
+  | 'dataTools'
   | 'config'
   | 'languages'
   | 'wordings'
@@ -97,6 +102,7 @@ const rateLimitPolicyKeys: RateLimitPolicyKey[] = [
   'upload',
   'fetch'
 ];
+const dataToolScopeKeys: DataToolScope[] = ['pokemon', 'habitats', 'items', 'recipes', 'checklist'];
 const defaultRateLimitPolicies: Record<RateLimitPolicyKey, RateLimitPolicySettings> = {
   accountWrite: { maxRequests: 20, timeWindowSeconds: 60 * 60, cooldownSeconds: 5 },
   adminWrite: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 2 },
@@ -113,6 +119,7 @@ const adminTabIcons: Record<AdminTab, AppIcon> = {
   permissions: iconKey,
   rateLimits: iconAdmin,
   aiModeration: iconAdmin,
+  dataTools: iconAdmin,
   config: iconAdmin,
   languages: iconTranslate,
   wordings: iconTranslate,
@@ -140,7 +147,8 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
         { key: 'pokemon', label: t('pages.admin.pokemonList'), permission: ['pokemon.order', 'pokemon.delete'] },
         { key: 'items', label: t('pages.admin.itemList'), permission: ['items.order', 'items.delete'] },
         { key: 'recipes', label: t('pages.admin.recipeList'), permission: ['recipes.order', 'recipes.delete'] },
-        { key: 'habitats', label: t('pages.admin.habitatList'), permission: ['habitats.order', 'habitats.delete'] }
+        { key: 'habitats', label: t('pages.admin.habitatList'), permission: ['habitats.order', 'habitats.delete'] },
+        { key: 'dataTools', label: t('pages.admin.dataTools'), permission: ['admin.data.export', 'admin.data.import'] }
       ]
     },
     {
@@ -200,6 +208,7 @@ const habitatRows = ref<Habitat[]>([]);
 const wordingRows = ref<SystemWording[]>([]);
 const aiModerationSettings = ref<AiModerationSettings | null>(null);
 const rateLimitSettings = ref<RateLimitSettings | null>(null);
+const dataToolsSummary = ref<DataToolsSummary | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
@@ -251,10 +260,16 @@ const userRoleModalOpen = ref(false);
 const roleModalOpen = ref(false);
 const rolePermissionsModalOpen = ref(false);
 const permissionModalOpen = ref(false);
+const dataToolImportModalOpen = ref(false);
+const dataToolWipeModalOpen = ref(false);
 const wordingLocale = ref(getCurrentLocale());
 const wordingModule = ref('');
 const wordingSurface = ref<SystemWordingSurface | ''>('');
 const wordingMissingOnly = ref(false);
+const selectedExportScopes = ref<DataToolScope[]>(['pokemon']);
+const selectedWipeScopes = ref<DataToolScope[]>([]);
+const pendingImportBundle = ref<DataToolsBundle | null>(null);
+const dataToolConfirmText = ref('');
 
 const selectedConfig = computed(() => configTypes.value.find((item) => item.key === activeConfigType.value) ?? configTypes.value[0]);
 const configTabs = computed<TabOption[]>(() => configTypes.value.map((item) => ({ value: item.key, label: item.label })));
@@ -352,6 +367,23 @@ const rateLimitPolicyOptions = computed<Array<{ value: RateLimitPolicyKey; label
   { value: 'upload', label: t('pages.admin.rateLimitUpload') },
   { value: 'fetch', label: t('pages.admin.rateLimitFetch') }
 ]);
+const dataToolScopeOptions = computed<Array<{ value: DataToolScope; label: string; count: number }>>(() =>
+  dataToolScopeKeys.map((scope) => ({
+    value: scope,
+    label: t(`pages.admin.dataToolScope${scope.charAt(0).toUpperCase()}${scope.slice(1)}`),
+    count: dataToolsSummary.value?.scopes.find((item) => item.scope === scope)?.count ?? 0
+  }))
+);
+const importScopeLabels = computed(() =>
+  (pendingImportBundle.value?.scopes ?? [])
+    .map((scope) => dataToolScopeOptions.value.find((option) => option.value === scope)?.label ?? scope)
+    .join(' / ')
+);
+const wipeScopeLabels = computed(() =>
+  selectedWipeScopes.value
+    .map((scope) => dataToolScopeOptions.value.find((option) => option.value === scope)?.label ?? scope)
+    .join(' / ')
+);
 const filteredWordingRows = computed(() =>
   wordingRows.value.filter((item) => {
     if (wordingModule.value && item.module !== wordingModule.value) return false;
@@ -381,6 +413,36 @@ function can(permissionKey: string) {
 
 function canAny(permissionKey: string | string[]) {
   return Array.isArray(permissionKey) ? permissionKey.some((key) => can(key)) : can(permissionKey);
+}
+
+function toggleDataToolScope(values: DataToolScope[], scope: DataToolScope) {
+  const nextValues = new Set(values);
+  if (nextValues.has(scope)) {
+    nextValues.delete(scope);
+  } else {
+    nextValues.add(scope);
+  }
+  return normalizeDataToolScopes([...nextValues]);
+}
+
+function normalizeDataToolScopes(scopes: DataToolScope[]) {
+  const nextValues = new Set(scopes);
+  if (nextValues.has('items')) {
+    nextValues.add('recipes');
+  }
+  return dataToolScopeKeys.filter((item) => nextValues.has(item));
+}
+
+function dataToolScopeLocked(values: DataToolScope[], scope: DataToolScope) {
+  return scope === 'recipes' && values.includes('items');
+}
+
+function toggleExportScope(scope: DataToolScope) {
+  selectedExportScopes.value = toggleDataToolScope(selectedExportScopes.value, scope);
+}
+
+function toggleWipeScope(scope: DataToolScope) {
+  selectedWipeScopes.value = toggleDataToolScope(selectedWipeScopes.value, scope);
 }
 
 function dragSortLabel(name: string) {
@@ -928,6 +990,10 @@ async function loadRateLimitSettings() {
   resetRateLimitForm(rateLimitSettings.value);
 }
 
+async function loadDataToolsSummary() {
+  dataToolsSummary.value = await api.dataToolsSummary();
+}
+
 async function reloadWordings() {
   await run(loadWordings);
 }
@@ -1051,6 +1117,7 @@ async function loadCurrentTab(showSkeleton = false) {
     if (activeTab.value === 'languages') await loadLanguages();
     if (activeTab.value === 'wordings') await loadWordings();
     if (activeTab.value === 'aiModeration') await loadAiModerationSettings();
+    if (activeTab.value === 'dataTools') await loadDataToolsSummary();
     if (activeTab.value === 'checklist') await loadChecklist();
     if (activeTab.value === 'pokemon') await loadPokemon();
     if (activeTab.value === 'items') await loadItems();
@@ -1152,6 +1219,117 @@ async function removeHabitat(id: number) {
   await run(async () => {
     await api.deleteHabitat(id);
     await loadHabitats();
+  });
+}
+
+function downloadDataToolsBundle(bundle: DataToolsBundle) {
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `pokopia-data-${bundle.exportedAt.slice(0, 10)}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportDataTools() {
+  const scopes = normalizeDataToolScopes(selectedExportScopes.value);
+  if (!scopes.length) {
+    message.value = t('pages.admin.dataToolSelectScope');
+    return;
+  }
+  selectedExportScopes.value = scopes;
+
+  await run(async () => {
+    const bundle = await api.exportDataTools(scopes);
+    downloadDataToolsBundle(bundle);
+  });
+}
+
+function openWipeDataTools() {
+  const scopes = normalizeDataToolScopes(selectedWipeScopes.value);
+  if (!scopes.length) {
+    message.value = t('pages.admin.dataToolSelectScope');
+    return;
+  }
+  selectedWipeScopes.value = scopes;
+  dataToolConfirmText.value = '';
+  dataToolWipeModalOpen.value = true;
+}
+
+function closeWipeDataToolsModal() {
+  dataToolWipeModalOpen.value = false;
+  dataToolConfirmText.value = '';
+}
+
+async function confirmWipeDataTools() {
+  if (dataToolConfirmText.value !== 'WIPE') {
+    return;
+  }
+
+  await run(async () => {
+    dataToolsSummary.value = await api.wipeDataTools(normalizeDataToolScopes(selectedWipeScopes.value));
+    selectedWipeScopes.value = [];
+    closeWipeDataToolsModal();
+  });
+}
+
+function validDataToolsBundle(value: unknown): value is DataToolsBundle {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const bundle = value as Partial<DataToolsBundle>;
+  return (
+    bundle.version === 1 &&
+    Array.isArray(bundle.scopes) &&
+    bundle.scopes.length > 0 &&
+    bundle.scopes.every((scope) => dataToolScopeKeys.includes(scope)) &&
+    Boolean(bundle.data) &&
+    typeof bundle.data === 'object' &&
+    !Array.isArray(bundle.data)
+  );
+}
+
+async function selectImportDataToolsFile(event: Event) {
+  const input = event.target instanceof HTMLInputElement ? event.target : null;
+  const file = input?.files?.[0];
+  if (input) {
+    input.value = '';
+  }
+  if (!file) {
+    return;
+  }
+
+  try {
+    const bundle = JSON.parse(await file.text()) as unknown;
+    if (!validDataToolsBundle(bundle)) {
+      message.value = t('pages.admin.dataToolInvalidBundle');
+      return;
+    }
+    pendingImportBundle.value = { ...bundle, scopes: normalizeDataToolScopes(bundle.scopes) };
+    dataToolConfirmText.value = '';
+    dataToolImportModalOpen.value = true;
+  } catch {
+    message.value = t('pages.admin.dataToolInvalidBundle');
+  }
+}
+
+function closeImportDataToolsModal() {
+  dataToolImportModalOpen.value = false;
+  pendingImportBundle.value = null;
+  dataToolConfirmText.value = '';
+}
+
+async function confirmImportDataTools() {
+  if (!pendingImportBundle.value || dataToolConfirmText.value !== 'IMPORT') {
+    return;
+  }
+
+  await run(async () => {
+    dataToolsSummary.value = await api.importDataTools(pendingImportBundle.value as DataToolsBundle);
+    closeImportDataToolsModal();
   });
 }
 
@@ -1423,6 +1601,78 @@ onMounted(() => {
         </template>
       </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'dataTools'" class="detail-section">
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.dataTools') }}</h2>
+        <button type="button" class="ui-button ui-button--blue ui-button--small" :disabled="busy" @click="run(loadDataToolsSummary)">
+          <Icon :icon="iconAdmin" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.admin.dataToolRefresh') }}
+        </button>
+      </div>
+
+      <div class="data-tool-grid">
+        <section class="data-tool-panel" :aria-label="t('pages.admin.dataToolExport')">
+          <div class="data-tool-panel__header">
+            <h3>{{ t('pages.admin.dataToolExport') }}</h3>
+            <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy || !can('admin.data.export')" @click="exportDataTools">
+              <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+              {{ t('pages.admin.dataToolExportButton') }}
+            </button>
+          </div>
+          <div class="data-tool-scope-list">
+            <label v-for="option in dataToolScopeOptions" :key="`export-${option.value}`" class="data-tool-scope">
+              <input
+                type="checkbox"
+                :checked="selectedExportScopes.includes(option.value)"
+                :disabled="busy || !can('admin.data.export') || dataToolScopeLocked(selectedExportScopes, option.value)"
+                @change="toggleExportScope(option.value)"
+              />
+              <span>{{ option.label }}</span>
+              <span class="config-flag">{{ option.count }}</span>
+            </label>
+          </div>
+          <p class="meta-line">{{ t('pages.admin.dataToolDependencyNote') }}</p>
+          <p class="meta-line">{{ t('pages.admin.dataToolUploadsNote') }}</p>
+        </section>
+
+        <section class="data-tool-panel" :aria-label="t('pages.admin.dataToolImport')">
+          <div class="data-tool-panel__header">
+            <h3>{{ t('pages.admin.dataToolImport') }}</h3>
+          </div>
+          <div class="field">
+            <label for="data-tools-import-file">{{ t('pages.admin.dataToolImportFile') }}</label>
+            <input id="data-tools-import-file" type="file" accept="application/json,.json" :disabled="busy || !can('admin.data.import')" @change="selectImportDataToolsFile" />
+          </div>
+          <p class="meta-line">{{ t('pages.admin.dataToolDependencyNote') }}</p>
+          <p class="meta-line">{{ t('pages.admin.dataToolImportMode') }}</p>
+        </section>
+
+        <section class="data-tool-panel data-tool-panel--danger" :aria-label="t('pages.admin.dataToolWipe')">
+          <div class="data-tool-panel__header">
+            <h3>{{ t('pages.admin.dataToolWipe') }}</h3>
+            <button type="button" class="ui-button ui-button--red ui-button--small" :disabled="busy || !can('admin.data.import')" @click="openWipeDataTools">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('pages.admin.dataToolWipeButton') }}
+            </button>
+          </div>
+          <div class="data-tool-scope-list">
+            <label v-for="option in dataToolScopeOptions" :key="`wipe-${option.value}`" class="data-tool-scope">
+              <input
+                type="checkbox"
+                :checked="selectedWipeScopes.includes(option.value)"
+                :disabled="busy || !can('admin.data.import') || dataToolScopeLocked(selectedWipeScopes, option.value)"
+                @change="toggleWipeScope(option.value)"
+              />
+              <span>{{ option.label }}</span>
+              <span class="config-flag">{{ option.count }}</span>
+            </label>
+          </div>
+          <p class="meta-line">{{ t('pages.admin.dataToolDependencyNote') }}</p>
+          <p class="meta-line">{{ t('pages.admin.dataToolReplaceNote') }}</p>
+        </section>
+      </div>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'config'" class="detail-section">
@@ -1801,6 +2051,44 @@ onMounted(() => {
     </section>
       </div>
     </div>
+
+    <Modal v-if="dataToolImportModalOpen" :title="t('pages.admin.dataToolImport')" :close-label="t('common.close')" @close="closeImportDataToolsModal">
+      <form id="admin-data-tool-import-form" class="modal-edit-form" @submit.prevent="confirmImportDataTools">
+        <p class="meta-line">{{ t('pages.admin.dataToolImportConfirm', { scopes: importScopeLabels }) }}</p>
+        <div class="field">
+          <label for="data-tool-import-confirm">{{ t('pages.admin.dataToolConfirmImport') }}</label>
+          <input id="data-tool-import-confirm" v-model="dataToolConfirmText" autocomplete="off" required />
+        </div>
+      </form>
+      <template #footer>
+        <button type="button" class="link-button" :disabled="busy" @click="closeImportDataToolsModal">
+          {{ t('common.cancel') }}
+        </button>
+        <button type="submit" form="admin-data-tool-import-form" class="link-button" :disabled="busy || dataToolConfirmText !== 'IMPORT'">
+          <Icon :icon="iconUpload" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.admin.dataToolImportButton') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="dataToolWipeModalOpen" :title="t('pages.admin.dataToolWipe')" :close-label="t('common.close')" @close="closeWipeDataToolsModal">
+      <form id="admin-data-tool-wipe-form" class="modal-edit-form" @submit.prevent="confirmWipeDataTools">
+        <p class="meta-line">{{ t('pages.admin.dataToolWipeConfirm', { scopes: wipeScopeLabels }) }}</p>
+        <div class="field">
+          <label for="data-tool-wipe-confirm">{{ t('pages.admin.dataToolConfirmWipe') }}</label>
+          <input id="data-tool-wipe-confirm" v-model="dataToolConfirmText" autocomplete="off" required />
+        </div>
+      </form>
+      <template #footer>
+        <button type="button" class="link-button" :disabled="busy" @click="closeWipeDataToolsModal">
+          {{ t('common.cancel') }}
+        </button>
+        <button type="submit" form="admin-data-tool-wipe-form" class="link-button" :disabled="busy || dataToolConfirmText !== 'WIPE'">
+          <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+          {{ t('pages.admin.dataToolWipeButton') }}
+        </button>
+      </template>
+    </Modal>
 
     <Modal v-if="userRoleModalOpen" :title="userRoleModalTitle" :close-label="t('common.close')" size="wide" @close="closeUserRoleModal">
       <form id="admin-user-roles-form" class="modal-edit-form" @submit.prevent="saveUserRoles">

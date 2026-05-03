@@ -296,6 +296,24 @@ export interface DailyChecklistItem {
   translations?: TranslationMap;
 }
 
+export type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'recipes' | 'checklist';
+
+export interface DataToolScopeSummary {
+  scope: DataToolScope;
+  count: number;
+}
+
+export interface DataToolsSummary {
+  scopes: DataToolScopeSummary[];
+}
+
+export interface DataToolsBundle {
+  version: 1;
+  exportedAt: string;
+  scopes: DataToolScope[];
+  data: Partial<Record<DataToolScope, Record<string, unknown[]>>>;
+}
+
 export type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
 export type LifeReactionCounts = Record<LifeReactionType, number>;
 export type AiModerationStatus = 'unreviewed' | 'reviewing' | 'approved' | 'rejected' | 'failed';
@@ -906,6 +924,10 @@ export const api = {
   rateLimitSettings: () => getJson<RateLimitSettings>('/api/admin/rate-limits'),
   updateRateLimitSettings: (payload: RateLimitSettingsPayload) =>
     sendJson<RateLimitSettings>('/api/admin/rate-limits', 'PUT', payload),
+  dataToolsSummary: () => getJson<DataToolsSummary>('/api/admin/data-tools/summary'),
+  exportDataTools: (scopes: DataToolScope[]) => sendJson<DataToolsBundle>('/api/admin/data-tools/export', 'POST', { scopes }),
+  importDataTools: (bundle: DataToolsBundle) => sendJson<DataToolsSummary>('/api/admin/data-tools/import', 'POST', { bundle }),
+  wipeDataTools: (scopes: DataToolScope[]) => sendJson<DataToolsSummary>('/api/admin/data-tools/wipe', 'POST', { scopes }),
   register: (payload: RegisterPayload) => sendJson<{ message: string }>('/api/auth/register', 'POST', payload),
   verifyEmail: (token: string) =>
     sendJson<{ message: string; user: AuthUser }>('/api/auth/verify-email', 'POST', { token }),

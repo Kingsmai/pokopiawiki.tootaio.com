@@ -22,6 +22,19 @@ type QueryValue = string | string[] | undefined;
 type QueryParams = Record<string, QueryValue>;
 
 type DbClient = PoolClient;
+type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'recipes' | 'checklist';
+type DataToolScopeSummary = {
+  scope: DataToolScope;
+  count: number;
+};
+type DataToolRows = Record<string, unknown>[];
+type DataToolScopeData = Record<string, DataToolRows | undefined>;
+type DataToolsBundle = {
+  version: 1;
+  exportedAt: string;
+  scopes: DataToolScope[];
+  data: Partial<Record<DataToolScope, DataToolScopeData>>;
+};
 
 type TranslationField = 'name' | 'title' | 'details' | 'genus';
 type TranslationInput = Record<string, Partial<Record<TranslationField, unknown>>>;
@@ -5760,4 +5773,445 @@ export async function deleteRecipe(id: number, userId: number) {
     await recordEditLog(client, 'recipes', id, 'delete', userId);
     return true;
   });
+}
+
+const dataToolScopes = ['pokemon', 'habitats', 'items', 'recipes', 'checklist'] as const satisfies readonly DataToolScope[];
+const dataToolMainTables: Record<DataToolScope, string> = {
+  pokemon: 'pokemon',
+  habitats: 'habitats',
+  items: 'items',
+  recipes: 'recipes',
+  checklist: 'daily_checklist_items'
+};
+
+const dataToolColumns = {
+  pokemon: [
+    'id',
+    'data_id',
+    'data_identifier',
+    'display_id',
+    'name',
+    'is_event_item',
+    'genus',
+    'details',
+    'height_inches',
+    'weight_pounds',
+    'environment_id',
+    'hp',
+    'attack',
+    'defense',
+    'special_attack',
+    'special_defense',
+    'speed',
+    'image_path',
+    'image_style',
+    'image_version',
+    'image_variant',
+    'image_description',
+    'sort_order',
+    'created_by_user_id',
+    'updated_by_user_id',
+    'created_at',
+    'updated_at'
+  ],
+  pokemonTypeLinks: ['pokemon_id', 'type_id', 'slot_order'],
+  pokemonSkills: ['pokemon_id', 'skill_id'],
+  pokemonFavoriteThings: ['pokemon_id', 'favorite_thing_id'],
+  pokemonSkillItemDrops: ['pokemon_id', 'skill_id', 'item_id'],
+  habitats: ['id', 'name', 'is_event_item', 'image_path', 'sort_order', 'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'],
+  habitatRecipeItems: ['habitat_id', 'item_id', 'quantity'],
+  habitatPokemon: ['habitat_id', 'pokemon_id', 'map_id', 'time_of_day', 'weather', 'rarity'],
+  items: [
+    'id',
+    'name',
+    'category_id',
+    'usage_id',
+    'dyeable',
+    'dual_dyeable',
+    'pattern_editable',
+    'no_recipe',
+    'is_event_item',
+    'image_path',
+    'sort_order',
+    'created_by_user_id',
+    'updated_by_user_id',
+    'created_at',
+    'updated_at'
+  ],
+  itemAcquisitionMethods: ['item_id', 'acquisition_method_id'],
+  itemFavoriteThings: ['item_id', 'favorite_thing_id'],
+  recipes: ['id', 'item_id', 'sort_order', 'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'],
+  recipeAcquisitionMethods: ['recipe_id', 'acquisition_method_id'],
+  recipeMaterials: ['recipe_id', 'item_id', 'quantity'],
+  checklist: ['id', 'title', 'sort_order', 'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'],
+  translations: ['entity_type', 'entity_id', 'locale', 'field_name', 'value'],
+  editLogs: ['id', 'entity_type', 'entity_id', 'action', 'user_id', 'changes', 'created_at'],
+  imageUploads: [
+    'id',
+    'entity_type',
+    'entity_id',
+    'entity_name',
+    'path',
+    'original_filename',
+    'mime_type',
+    'byte_size',
+    'created_by_user_id',
+    'created_at'
+  ],
+  discussionComments: [
+    'id',
+    'entity_type',
+    'entity_id',
+    'parent_comment_id',
+    'body',
+    'ai_moderation_status',
+    'ai_moderation_language_code',
+    'ai_moderation_content_hash',
+    'ai_moderation_checked_at',
+    'ai_moderation_retry_count',
+    'ai_moderation_updated_at',
+    'created_by_user_id',
+    'deleted_by_user_id',
+    'deleted_at',
+    'created_at',
+    'updated_at'
+  ]
+} as const;
+
+function isDataToolScope(value: unknown): value is DataToolScope {
+  return typeof value === 'string' && dataToolScopes.includes(value as DataToolScope);
+}
+
+function normalizeDataToolScopes(scopes: DataToolScope[]): DataToolScope[] {
+  const scopeSet = new Set(scopes);
+  if (scopeSet.has('items')) {
+    scopeSet.add('recipes');
+  }
+  return dataToolScopes.filter((scope) => scopeSet.has(scope));
+}
+
+function cleanDataToolScopes(value: unknown): DataToolScope[] {
+  if (!Array.isArray(value)) {
+    throw validationError('server.validation.dataToolScopeRequired');
+  }
+
+  const scopes: DataToolScope[] = [];
+  for (const scope of value) {
+    if (!isDataToolScope(scope)) {
+      throw validationError('server.validation.dataToolScopeInvalid');
+    }
+    if (!scopes.includes(scope)) {
+      scopes.push(scope);
+    }
+  }
+
+  if (scopes.length === 0) {
+    throw validationError('server.validation.dataToolScopeRequired');
+  }
+  return normalizeDataToolScopes(scopes);
+}
+
+function cleanDataToolsBundle(value: unknown): DataToolsBundle {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw validationError('server.validation.dataToolBundleInvalid');
+  }
+
+  const bundle = value as Record<string, unknown>;
+  if (bundle.version !== 1 || !bundle.data || typeof bundle.data !== 'object' || Array.isArray(bundle.data)) {
+    throw validationError('server.validation.dataToolBundleInvalid');
+  }
+
+  return {
+    version: 1,
+    exportedAt: typeof bundle.exportedAt === 'string' ? bundle.exportedAt : new Date().toISOString(),
+    scopes: cleanDataToolScopes(bundle.scopes),
+    data: bundle.data as DataToolsBundle['data']
+  };
+}
+
+function dataToolTableRows(data: DataToolScopeData | undefined, key: string): DataToolRows {
+  const rows = data?.[key];
+  if (rows === undefined) {
+    return [];
+  }
+  if (!Array.isArray(rows) || rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) {
+    throw validationError('server.validation.dataToolBundleInvalid');
+  }
+  return rows as DataToolRows;
+}
+
+function dataToolDataWithRows(key: string, ...sources: Array<DataToolScopeData | undefined>): DataToolScopeData | undefined {
+  return sources.find((source) => source?.[key] !== undefined);
+}
+
+async function tableRows(client: DbClient, sql: string, params: unknown[] = []): Promise<DataToolRows> {
+  const result = await client.query<Record<string, unknown>>(sql, params);
+  return result.rows;
+}
+
+function normalizeImportValue(column: string, value: unknown): unknown {
+  if (value === undefined) {
+    return null;
+  }
+  if (column === 'changes' && typeof value !== 'string') {
+    return JSON.stringify(value ?? []);
+  }
+  return value;
+}
+
+async function insertRows(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
+  for (const row of rows) {
+    const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
+    const values = columns.map((column) => normalizeImportValue(column, row[column]));
+    await client.query(`INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`, values);
+  }
+}
+
+async function resetIdentity(client: DbClient, tableName: string): Promise<void> {
+  const result = await client.query<{ maxId: number | null }>(`SELECT MAX(id)::integer AS "maxId" FROM ${tableName}`);
+  const maxId = result.rows[0]?.maxId ?? null;
+  if (maxId === null) {
+    await client.query(`ALTER TABLE ${tableName} ALTER COLUMN id RESTART WITH 1`);
+    return;
+  }
+
+  await client.query('SELECT setval(pg_get_serial_sequence($1, $2), $3, true)', [tableName, 'id', maxId]);
+}
+
+async function resetDataToolIdentities(client: DbClient): Promise<void> {
+  for (const tableName of ['daily_checklist_items', 'items', 'recipes', 'habitats', 'wiki_edit_logs', 'entity_image_uploads', 'entity_discussion_comments']) {
+    await resetIdentity(client, tableName);
+  }
+}
+
+async function deleteGenericEntityRows(client: DbClient, entityTypes: string[]): Promise<void> {
+  await client.query('DELETE FROM entity_discussion_comments WHERE entity_type = ANY($1::text[])', [entityTypes]);
+  await client.query('DELETE FROM entity_image_uploads WHERE entity_type = ANY($1::text[])', [entityTypes]);
+  await client.query('DELETE FROM wiki_edit_logs WHERE entity_type = ANY($1::text[])', [entityTypes]);
+  await client.query('DELETE FROM entity_translations WHERE entity_type = ANY($1::text[])', [entityTypes]);
+}
+
+async function wipeRecipesData(client: DbClient): Promise<void> {
+  await deleteGenericEntityRows(client, ['recipes']);
+  await client.query('DELETE FROM recipe_acquisition_methods');
+  await client.query('DELETE FROM recipe_materials');
+  await client.query('DELETE FROM recipes');
+}
+
+async function wipeItemsData(client: DbClient): Promise<void> {
+  await wipeRecipesData(client);
+  await deleteGenericEntityRows(client, ['items']);
+  await client.query('DELETE FROM item_acquisition_methods');
+  await client.query('DELETE FROM item_favorite_things');
+  await client.query('DELETE FROM habitat_recipe_items');
+  await client.query('DELETE FROM pokemon_skill_item_drops');
+  await client.query('DELETE FROM items');
+}
+
+async function wipePokemonData(client: DbClient): Promise<void> {
+  await deleteGenericEntityRows(client, ['pokemon']);
+  await client.query('DELETE FROM habitat_pokemon');
+  await client.query('DELETE FROM pokemon_skill_item_drops');
+  await client.query('DELETE FROM pokemon_pokemon_types');
+  await client.query('DELETE FROM pokemon_skills');
+  await client.query('DELETE FROM pokemon_favorite_things');
+  await client.query('DELETE FROM pokemon');
+}
+
+async function wipeHabitatsData(client: DbClient): Promise<void> {
+  await deleteGenericEntityRows(client, ['habitats']);
+  await client.query('DELETE FROM habitat_recipe_items');
+  await client.query('DELETE FROM habitat_pokemon');
+  await client.query('DELETE FROM habitats');
+}
+
+async function wipeChecklistData(client: DbClient): Promise<void> {
+  await deleteGenericEntityRows(client, ['daily-checklist-items']);
+  await client.query('DELETE FROM daily_checklist_items');
+}
+
+async function wipeDataToolScopes(client: DbClient, scopes: DataToolScope[], resetIdentities = true): Promise<void> {
+  const scopeSet = new Set(scopes);
+  if (scopeSet.has('items')) {
+    await wipeItemsData(client);
+  } else if (scopeSet.has('recipes')) {
+    await wipeRecipesData(client);
+  }
+  if (scopeSet.has('pokemon')) {
+    await wipePokemonData(client);
+  }
+  if (scopeSet.has('habitats')) {
+    await wipeHabitatsData(client);
+  }
+  if (scopeSet.has('checklist')) {
+    await wipeChecklistData(client);
+  }
+  if (resetIdentities) {
+    await resetDataToolIdentities(client);
+  }
+}
+
+async function exportGenericScopeData(client: DbClient, entityType: string, includeImages: boolean): Promise<DataToolScopeData> {
+  const data: DataToolScopeData = {
+    translations: await tableRows(client, 'SELECT * FROM entity_translations WHERE entity_type = $1 ORDER BY entity_id, locale, field_name', [entityType]),
+    editLogs: await tableRows(client, 'SELECT * FROM wiki_edit_logs WHERE entity_type = $1 ORDER BY id', [entityType]),
+    discussionComments: await tableRows(
+      client,
+      `
+        SELECT *
+        FROM entity_discussion_comments
+        WHERE entity_type = $1
+        ORDER BY parent_comment_id NULLS FIRST, id
+      `,
+      [entityType]
+    )
+  };
+
+  if (includeImages) {
+    data.imageUploads = await tableRows(client, 'SELECT * FROM entity_image_uploads WHERE entity_type = $1 ORDER BY id', [entityType]);
+  }
+
+  return data;
+}
+
+async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<DataToolScopeData> {
+  if (scope === 'pokemon') {
+    return {
+      pokemon: await tableRows(client, 'SELECT * FROM pokemon ORDER BY sort_order, id'),
+      pokemonTypeLinks: await tableRows(client, 'SELECT * FROM pokemon_pokemon_types ORDER BY pokemon_id, slot_order'),
+      pokemonSkills: await tableRows(client, 'SELECT * FROM pokemon_skills ORDER BY pokemon_id, skill_id'),
+      pokemonFavoriteThings: await tableRows(client, 'SELECT * FROM pokemon_favorite_things ORDER BY pokemon_id, favorite_thing_id'),
+      pokemonSkillItemDrops: await tableRows(client, 'SELECT * FROM pokemon_skill_item_drops ORDER BY pokemon_id, skill_id'),
+      habitatPokemon: await tableRows(client, 'SELECT * FROM habitat_pokemon ORDER BY habitat_id, pokemon_id, map_id, time_of_day, weather'),
+      ...(await exportGenericScopeData(client, 'pokemon', true))
+    };
+  }
+
+  if (scope === 'habitats') {
+    return {
+      habitats: await tableRows(client, 'SELECT * FROM habitats ORDER BY sort_order, id'),
+      habitatRecipeItems: await tableRows(client, 'SELECT * FROM habitat_recipe_items ORDER BY habitat_id, item_id'),
+      habitatPokemon: await tableRows(client, 'SELECT * FROM habitat_pokemon ORDER BY habitat_id, pokemon_id, map_id, time_of_day, weather'),
+      ...(await exportGenericScopeData(client, 'habitats', true))
+    };
+  }
+
+  if (scope === 'items') {
+    return {
+      items: await tableRows(client, 'SELECT * FROM items ORDER BY sort_order, id'),
+      itemAcquisitionMethods: await tableRows(client, 'SELECT * FROM item_acquisition_methods ORDER BY item_id, acquisition_method_id'),
+      itemFavoriteThings: await tableRows(client, 'SELECT * FROM item_favorite_things ORDER BY item_id, favorite_thing_id'),
+      pokemonSkillItemDrops: await tableRows(client, 'SELECT * FROM pokemon_skill_item_drops ORDER BY pokemon_id, skill_id'),
+      habitatRecipeItems: await tableRows(client, 'SELECT * FROM habitat_recipe_items ORDER BY habitat_id, item_id'),
+      ...(await exportGenericScopeData(client, 'items', true))
+    };
+  }
+
+  if (scope === 'recipes') {
+    return {
+      recipes: await tableRows(client, 'SELECT * FROM recipes ORDER BY sort_order, id'),
+      recipeAcquisitionMethods: await tableRows(client, 'SELECT * FROM recipe_acquisition_methods ORDER BY recipe_id, acquisition_method_id'),
+      recipeMaterials: await tableRows(client, 'SELECT * FROM recipe_materials ORDER BY recipe_id, item_id'),
+      ...(await exportGenericScopeData(client, 'recipes', false))
+    };
+  }
+
+  return {
+    checklist: await tableRows(client, 'SELECT * FROM daily_checklist_items ORDER BY sort_order, id'),
+    translations: await tableRows(
+      client,
+      'SELECT * FROM entity_translations WHERE entity_type = $1 ORDER BY entity_id, locale, field_name',
+      ['daily-checklist-items']
+    ),
+    editLogs: await tableRows(client, 'SELECT * FROM wiki_edit_logs WHERE entity_type = $1 ORDER BY id', ['daily-checklist-items'])
+  };
+}
+
+async function importScopeMainRows(client: DbClient, bundle: DataToolsBundle): Promise<void> {
+  const itemData = bundle.data.items;
+  const pokemonData = bundle.data.pokemon;
+  const habitatData = bundle.data.habitats;
+  const checklistData = bundle.data.checklist;
+  const recipeData = bundle.data.recipes;
+
+  await insertRows(client, 'items', dataToolColumns.items, dataToolTableRows(itemData, 'items'));
+  await insertRows(client, 'pokemon', dataToolColumns.pokemon, dataToolTableRows(pokemonData, 'pokemon'));
+  await insertRows(client, 'habitats', dataToolColumns.habitats, dataToolTableRows(habitatData, 'habitats'));
+  await insertRows(client, 'daily_checklist_items', dataToolColumns.checklist, dataToolTableRows(checklistData, 'checklist'));
+  await insertRows(client, 'recipes', dataToolColumns.recipes, dataToolTableRows(recipeData, 'recipes'));
+}
+
+async function importScopeRelationRows(client: DbClient, bundle: DataToolsBundle): Promise<void> {
+  const itemData = bundle.data.items;
+  const pokemonData = bundle.data.pokemon;
+  const habitatData = bundle.data.habitats;
+  const recipeData = bundle.data.recipes;
+  const pokemonDropData = dataToolDataWithRows('pokemonSkillItemDrops', pokemonData, itemData);
+  const habitatRecipeData = dataToolDataWithRows('habitatRecipeItems', habitatData, itemData);
+  const habitatPokemonData = dataToolDataWithRows('habitatPokemon', habitatData, pokemonData);
+
+  await insertRows(client, 'item_acquisition_methods', dataToolColumns.itemAcquisitionMethods, dataToolTableRows(itemData, 'itemAcquisitionMethods'));
+  await insertRows(client, 'item_favorite_things', dataToolColumns.itemFavoriteThings, dataToolTableRows(itemData, 'itemFavoriteThings'));
+  await insertRows(client, 'pokemon_pokemon_types', dataToolColumns.pokemonTypeLinks, dataToolTableRows(pokemonData, 'pokemonTypeLinks'));
+  await insertRows(client, 'pokemon_skills', dataToolColumns.pokemonSkills, dataToolTableRows(pokemonData, 'pokemonSkills'));
+  await insertRows(client, 'pokemon_favorite_things', dataToolColumns.pokemonFavoriteThings, dataToolTableRows(pokemonData, 'pokemonFavoriteThings'));
+  await insertRows(client, 'pokemon_skill_item_drops', dataToolColumns.pokemonSkillItemDrops, dataToolTableRows(pokemonDropData, 'pokemonSkillItemDrops'));
+  await insertRows(client, 'recipe_acquisition_methods', dataToolColumns.recipeAcquisitionMethods, dataToolTableRows(recipeData, 'recipeAcquisitionMethods'));
+  await insertRows(client, 'recipe_materials', dataToolColumns.recipeMaterials, dataToolTableRows(recipeData, 'recipeMaterials'));
+  await insertRows(client, 'habitat_recipe_items', dataToolColumns.habitatRecipeItems, dataToolTableRows(habitatRecipeData, 'habitatRecipeItems'));
+  await insertRows(client, 'habitat_pokemon', dataToolColumns.habitatPokemon, dataToolTableRows(habitatPokemonData, 'habitatPokemon'));
+}
+
+async function importGenericScopeRows(client: DbClient, bundle: DataToolsBundle): Promise<void> {
+  for (const scope of bundle.scopes) {
+    const data = bundle.data[scope];
+    await insertRows(client, 'entity_translations', dataToolColumns.translations, dataToolTableRows(data, 'translations'));
+    await insertRows(client, 'wiki_edit_logs', dataToolColumns.editLogs, dataToolTableRows(data, 'editLogs'));
+    await insertRows(client, 'entity_image_uploads', dataToolColumns.imageUploads, dataToolTableRows(data, 'imageUploads'));
+    await insertRows(client, 'entity_discussion_comments', dataToolColumns.discussionComments, dataToolTableRows(data, 'discussionComments'));
+  }
+}
+
+async function importDataToolsBundle(client: DbClient, bundle: DataToolsBundle): Promise<void> {
+  await importScopeMainRows(client, bundle);
+  await importScopeRelationRows(client, bundle);
+  await importGenericScopeRows(client, bundle);
+  await resetDataToolIdentities(client);
+}
+
+export async function getAdminDataToolsSummary(): Promise<{ scopes: DataToolScopeSummary[] }> {
+  const scopes: DataToolScopeSummary[] = [];
+  for (const scope of dataToolScopes) {
+    const result = await queryOne<{ count: number }>(`SELECT COUNT(*)::integer AS count FROM ${dataToolMainTables[scope]}`);
+    scopes.push({ scope, count: result?.count ?? 0 });
+  }
+  return { scopes };
+}
+
+export async function exportAdminData(payload: Record<string, unknown>): Promise<DataToolsBundle> {
+  const scopes = cleanDataToolScopes(payload.scopes);
+  return withTransaction(async (client) => {
+    const data: DataToolsBundle['data'] = {};
+    for (const scope of scopes) {
+      data[scope] = await exportScopeData(client, scope);
+    }
+    return { version: 1, exportedAt: new Date().toISOString(), scopes, data };
+  });
+}
+
+export async function importAdminData(payload: Record<string, unknown>): Promise<{ scopes: DataToolScopeSummary[] }> {
+  const bundle = cleanDataToolsBundle(payload.bundle);
+  await withTransaction(async (client) => {
+    await wipeDataToolScopes(client, bundle.scopes, false);
+    await importDataToolsBundle(client, bundle);
+  });
+  return getAdminDataToolsSummary();
+}
+
+export async function wipeAdminData(payload: Record<string, unknown>): Promise<{ scopes: DataToolScopeSummary[] }> {
+  const scopes = cleanDataToolScopes(payload.scopes);
+  await withTransaction(async (client) => {
+    await wipeDataToolScopes(client, scopes);
+  });
+  return getAdminDataToolsSummary();
 }

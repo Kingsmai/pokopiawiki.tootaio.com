@@ -219,6 +219,8 @@ VALUES
   ('admin.config.update', 'Update system config', 'Edit management configuration records.', 'System config', true),
   ('admin.config.delete', 'Delete system config', 'Delete management configuration records.', 'System config', true),
   ('admin.config.order', 'Order system config', 'Reorder management configuration records.', 'System config', true),
+  ('admin.data.export', 'Export data', 'Export content data bundles.', 'Data tools', true),
+  ('admin.data.import', 'Import and wipe data', 'Import content data bundles and wipe content data.', 'Data tools', true),
   ('checklist.create', 'Create checklist tasks', 'Create Daily CheckList tasks.', 'CheckList', true),
   ('checklist.update', 'Update checklist tasks', 'Edit Daily CheckList tasks.', 'CheckList', true),
   ('checklist.delete', 'Delete checklist tasks', 'Delete Daily CheckList tasks.', 'CheckList', true),

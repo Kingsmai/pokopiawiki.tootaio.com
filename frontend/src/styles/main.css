@@ -835,6 +835,59 @@ button:disabled,
   gap: 12px;
 }
 
+.data-tool-grid {
+  display: grid;
+  gap: 0;
+}
+
+.data-tool-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.data-tool-panel:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.data-tool-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.data-tool-panel__header h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.data-tool-scope-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.data-tool-scope {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  color: var(--ink-soft);
+  font-weight: 800;
+}
+
+.data-tool-scope input {
+  width: 18px;
+  height: 18px;
+}
+
 .pokemon-edit-form {
   height: clamp(420px, calc(100dvh - 188px), 640px);
   min-height: 0;

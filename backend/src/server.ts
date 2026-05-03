@@ -59,14 +59,17 @@ import {
   deleteLifePostReaction,
   deletePokemon,
   deleteRecipe,
+  exportAdminData,
   fetchPokemonData,
   fetchPokemonImageOptions,
+  getAdminDataToolsSummary,
   getHabitat,
   getItem,
   getOptions,
   getPokemon,
   getPublicUserProfile,
   getRecipe,
+  importAdminData,
   isConfigType,
   listEntityDiscussionComments,
   listConfig,
@@ -101,7 +104,8 @@ import {
   updateLanguage,
   updateLifePost,
   updatePokemon,
-  updateRecipe
+  updateRecipe,
+  wipeAdminData
 } from './queries.ts';
 import {
   getAiModerationSettings,
@@ -178,7 +182,7 @@ app.setErrorHandler(async (error, _request, reply) => {
     return reply.code(409).send({ message: await serverMessage(locale, 'duplicate') });
   }
 
-  if (pgError.code === '23514') {
+  if (pgError.code === '23502' || pgError.code === '23514') {
     return reply.code(400).send({ message: await serverMessage(locale, 'invalidField') });
   }
 
@@ -1815,6 +1819,26 @@ app.put('/api/admin/rate-limits', async (request, reply) => {
     return;
   }
   return updateRateLimitSettings(request.body as Record<string, unknown>, user.id);
+});
+
+app.get('/api/admin/data-tools/summary', async (request, reply) => {
+  const user = await requireAnyPermission(request, reply, ['admin.data.export', 'admin.data.import']);
+  return user ? getAdminDataToolsSummary() : undefined;
+});
+
+app.post('/api/admin/data-tools/export', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.data.export', 'adminWrite');
+  return user ? exportAdminData(request.body as Record<string, unknown>) : undefined;
+});
+
+app.post('/api/admin/data-tools/import', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.data.import', 'adminWrite');
+  return user ? importAdminData(request.body as Record<string, unknown>) : undefined;
+});
+
+app.post('/api/admin/data-tools/wipe', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.data.import', 'adminWrite');
+  return user ? wipeAdminData(request.body as Record<string, unknown>) : undefined;
 });
 
 app.get('/api/admin/config/:type', async (request, reply) => {

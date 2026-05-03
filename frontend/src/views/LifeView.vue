@@ -35,10 +35,10 @@ import {
   type AiModerationStatus,
   type AuthUser,
   type Language,
+  type LifeCategory,
   type LifeComment,
   type LifePost,
-  type LifeReactionType,
-  type NamedEntity
+  type LifeReactionType
 } from '../services/api';
 
 type LifeCommentPageState = {
@@ -54,7 +54,7 @@ type LifeCommentPageState = {
 
 const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
-const lifeTags = ref<NamedEntity[]>([]);
+const lifeCategories = ref<LifeCategory[]>([]);
 const languages = ref<Language[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
@@ -63,10 +63,10 @@ const authReady = ref(false);
 const busy = ref(false);
 const searchDraft = ref('');
 const submittedSearch = ref('');
-const activeTagId = ref('all');
+const activeCategoryId = ref('all');
 const activeLanguageCode = ref('all');
 const body = ref('');
-const selectedTagIds = ref<string[]>([]);
+const selectedCategoryId = ref('');
 const editingPostId = ref<number | null>(null);
 const postModalOpen = ref(false);
 const formError = ref('');
@@ -97,7 +97,7 @@ let postsRequestId = 0;
 const nextCursor = ref<string | null>(null);
 const hasMorePosts = ref(false);
 const loadMorePaused = ref(false);
-const allTagValue = 'all';
+const allCategoryValue = 'all';
 const allLanguageValue = 'all';
 
 const reactionOptions = [
@@ -117,21 +117,25 @@ const canReact = computed(() => can('life.reactions.set'));
 const charactersLeft = computed(() => Math.max(0, bodyMaxLength - body.value.length));
 const isEditing = computed(() => editingPostId.value !== null);
 const searchQuery = computed(() => submittedSearch.value.trim());
-const selectedFeedTagId = computed(() => {
-  const tagId = Number(activeTagId.value);
-  return activeTagId.value === allTagValue || !Number.isInteger(tagId) || tagId <= 0 ? undefined : tagId;
+const selectedFeedCategoryId = computed(() => {
+  const categoryId = Number(activeCategoryId.value);
+  return activeCategoryId.value === allCategoryValue || !Number.isInteger(categoryId) || categoryId <= 0 ? undefined : categoryId;
 });
 const selectedFeedLanguageCode = computed(() =>
   activeLanguageCode.value === allLanguageValue ? undefined : activeLanguageCode.value
 );
-const tagFilterOptions = computed<TabOption[]>(() => [
-  { value: allTagValue, label: t('pages.life.allTags') },
-  ...lifeTags.value.map((tag) => ({ value: String(tag.id), label: tag.name }))
+const categoryFilterOptions = computed<TabOption[]>(() => [
+  { value: allCategoryValue, label: t('pages.life.allCategories') },
+  ...lifeCategories.value.map((category) => ({ value: String(category.id), label: category.name }))
 ]);
 const languageFilterOptions = computed<TabOption[]>(() => [
   { value: allLanguageValue, label: t('pages.life.allLanguages') },
   ...languages.value.map((language) => ({ value: language.code, label: language.name }))
 ]);
+const defaultLifeCategoryId = computed(() => {
+  const category = lifeCategories.value.find((item) => item.isDefault);
+  return category ? String(category.id) : '';
+});
 const postModalTitle = computed(() => (isEditing.value ? t('pages.life.editPost') : t('pages.life.newPost')));
 const submitLabel = computed(() => {
   if (busy.value) return isEditing.value ? t('pages.life.updating') : t('pages.life.publishing');
@@ -158,13 +162,19 @@ async function loadCurrentUser() {
   }
 }
 
-async function loadLifeTags() {
+async function loadLifeCategories() {
   try {
     const options = await api.options();
-    lifeTags.value = options.lifeTags;
+    lifeCategories.value = options.lifeCategories;
 
-    if (activeTagId.value !== allTagValue && !lifeTags.value.some((tag) => String(tag.id) === activeTagId.value)) {
-      activeTagId.value = allTagValue;
+    if (activeCategoryId.value !== allCategoryValue && !lifeCategories.value.some((category) => String(category.id) === activeCategoryId.value)) {
+      activeCategoryId.value = allCategoryValue;
+    }
+    if (!isEditing.value && postModalOpen.value && !selectedCategoryId.value) {
+      selectedCategoryId.value = defaultLifeCategoryId.value;
+    }
+    if (!isEditing.value && selectedCategoryId.value && !lifeCategories.value.some((category) => String(category.id) === selectedCategoryId.value)) {
+      selectedCategoryId.value = defaultLifeCategoryId.value;
     }
   } catch (error) {
     loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
@@ -199,7 +209,7 @@ async function loadPosts() {
     const page = await api.lifePosts({
       limit: lifePostPageSize,
       search: searchQuery.value,
-      tagId: selectedFeedTagId.value,
+      categoryId: selectedFeedCategoryId.value,
       language: selectedFeedLanguageCode.value
     });
     if (requestId !== postsRequestId) {
@@ -241,7 +251,7 @@ async function loadMorePosts() {
       cursor,
       limit: lifePostPageSize,
       search: searchQuery.value,
-      tagId: selectedFeedTagId.value,
+      categoryId: selectedFeedCategoryId.value,
       language: selectedFeedLanguageCode.value
     });
     if (requestId !== postsRequestId) {
@@ -266,7 +276,7 @@ async function loadMorePosts() {
 
 function resetForm() {
   body.value = '';
-  selectedTagIds.value = [];
+  selectedCategoryId.value = '';
   editingPostId.value = null;
   formError.value = '';
 }
@@ -274,13 +284,14 @@ function resetForm() {
 function payload() {
   return {
     body: body.value.trim(),
-    tagIds: selectedLifeTagIds(),
+    categoryId: selectedLifeCategoryId() ?? 0,
     languageCode: selectedFeedLanguageCode.value ?? null
   };
 }
 
-function selectedLifeTagIds() {
-  return selectedTagIds.value.map((tagId) => Number(tagId)).filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+function selectedLifeCategoryId() {
+  const categoryId = Number(selectedCategoryId.value);
+  return Number.isInteger(categoryId) && categoryId > 0 ? categoryId : null;
 }
 
 function submitSearch() {
@@ -314,16 +325,17 @@ function retryLoadMore() {
 
 function matchesCurrentFilters(post: LifePost) {
   const keyword = searchQuery.value.toLowerCase();
-  const tagId = selectedFeedTagId.value;
+  const categoryId = selectedFeedCategoryId.value;
   const matchesSearch = keyword === '' || post.body.toLowerCase().includes(keyword);
-  const matchesTag = tagId === undefined || post.tags.some((tag) => tag.id === tagId);
+  const matchesCategory = categoryId === undefined || post.category?.id === categoryId;
   const matchesLanguage =
     selectedFeedLanguageCode.value === undefined || post.moderationLanguageCode === selectedFeedLanguageCode.value;
-  return matchesSearch && matchesTag && matchesLanguage;
+  return matchesSearch && matchesCategory && matchesLanguage;
 }
 
 function openCreatePostModal() {
   resetForm();
+  selectedCategoryId.value = defaultLifeCategoryId.value;
   postModalOpen.value = true;
   void nextTick(() => bodyInput.value?.focus());
 }
@@ -344,9 +356,9 @@ async function submitPost() {
     return;
   }
 
-  if (selectedLifeTagIds().length === 0) {
-    formError.value = t('pages.life.tagRequired');
-    document.getElementById('life-post-tags')?.focus();
+  if (selectedLifeCategoryId() === null) {
+    formError.value = t('pages.life.categoryRequired');
+    document.getElementById('life-post-category')?.focus();
     return;
   }
 
@@ -696,7 +708,7 @@ async function toggleReaction(post: LifePost, reactionType: LifeReactionType) {
 function startEdit(post: LifePost) {
   editingPostId.value = post.id;
   body.value = post.body;
-  selectedTagIds.value = post.tags.map((tag) => String(tag.id));
+  selectedCategoryId.value = post.category ? String(post.category.id) : '';
   formError.value = '';
   postModalOpen.value = true;
   void nextTick(() => bodyInput.value?.focus());
@@ -879,7 +891,7 @@ function observeLoadMore() {
 }
 
 watch([loadMoreSentinel, hasMorePosts, loading, loadingMore, loadMorePaused], observeLoadMore, { flush: 'post' });
-watch(activeTagId, () => {
+watch(activeCategoryId, () => {
   void loadPosts();
 });
 watch(activeLanguageCode, () => {
@@ -889,7 +901,7 @@ watch(activeLanguageCode, () => {
 });
 watch(locale, () => {
   void loadLanguages();
-  void loadLifeTags();
+  void loadLifeCategories();
   void loadPosts();
 });
 
@@ -898,7 +910,7 @@ onMounted(() => {
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
   void loadCurrentUser();
   void loadLanguages();
-  void loadLifeTags();
+  void loadLifeCategories();
   void loadPosts();
   removeAuthListener = onAuthTokenChange(() => {
     void loadCurrentUser();
@@ -981,13 +993,14 @@ onUnmounted(() => {
         </div>
 
         <div class="field">
-          <label for="life-post-tags">{{ t('pages.life.tags') }}</label>
+          <label for="life-post-category">{{ t('pages.life.category') }}</label>
           <TagsSelect
-            id="life-post-tags"
-            v-model="selectedTagIds"
-            :options="lifeTags"
-            :placeholder="t('pages.life.tagPlaceholder')"
-            :search-placeholder="t('pages.life.searchTags')"
+            id="life-post-category"
+            v-model="selectedCategoryId"
+            :options="lifeCategories"
+            :multiple="false"
+            :placeholder="t('pages.life.categoryPlaceholder')"
+            :search-placeholder="t('pages.life.searchCategories')"
             dropdown-strategy="fixed"
           />
         </div>
@@ -1015,7 +1028,7 @@ onUnmounted(() => {
     </Modal>
 
     <Tabs id="life-language-filter" v-model="activeLanguageCode" :tabs="languageFilterOptions" :label="t('pages.life.languages')" />
-    <Tabs id="life-tag-filter" v-model="activeTagId" :tabs="tagFilterOptions" :label="t('pages.life.tags')" />
+    <Tabs id="life-category-filter" v-model="activeCategoryId" :tabs="categoryFilterOptions" :label="t('pages.life.category')" />
 
     <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
         <div v-if="loading" class="life-feed__list" :aria-label="t('pages.life.loading')">
@@ -1083,8 +1096,8 @@ onUnmounted(() => {
 
             <p class="life-post__body">{{ post.body }}</p>
 
-            <div v-if="post.tags.length" class="life-post__tags" :aria-label="t('pages.life.tags')">
-              <span v-for="tag in post.tags" :key="tag.id" class="life-post__tag">{{ tag.name }}</span>
+            <div v-if="post.category" class="life-post__tags" :aria-label="t('pages.life.category')">
+              <span class="life-post__tag">{{ post.category.name }}</span>
             </div>
 
             <div class="life-post__engagement">

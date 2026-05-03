@@ -55,6 +55,7 @@ type ConfigDefinition = {
   table: string;
   entityType: EntityType;
   hasItemDrop?: boolean;
+  hasDefault?: boolean;
 };
 type SortableContentType = 'pokemon' | 'items' | 'recipes' | 'habitats';
 type SortableContentDefinition = {
@@ -178,7 +179,7 @@ type DailyChecklistPayload = {
 
 type LifePostPayload = {
   body: string;
-  tagIds: number[];
+  categoryId: number;
   languageCode: string | null;
 };
 
@@ -250,7 +251,7 @@ type LifePostRow = {
   updatedAt: Date;
   author: { id: number; displayName: string } | null;
   updatedBy: { id: number; displayName: string } | null;
-  tags: Array<{ id: number; name: string }>;
+  category: { id: number; name: string } | null;
 };
 
 type LifePost = Omit<LifePostRow, 'createdAtCursor'> & {
@@ -459,7 +460,7 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'item-usages': { table: 'item_usages', entityType: 'item-usages' },
   'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
   maps: { table: 'maps', entityType: 'maps' },
-  'life-tags': { table: 'life_tags', entityType: 'life-tags' }
+  'life-tags': { table: 'life_tags', entityType: 'life-tags', hasDefault: true }
 };
 
 const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
@@ -684,6 +685,11 @@ function optionSelect(
   return query(`SELECT o.id, ${name} AS name FROM ${tableName} o ORDER BY ${orderByEntity('o')}`);
 }
 
+function lifeCategoryOptions(locale: string): Promise<Array<{ id: number; name: string; isDefault: boolean }>> {
+  const name = localizedName('life-tags', 'lc', locale);
+  return query(`SELECT lc.id, ${name} AS name, lc.is_default AS "isDefault" FROM life_tags lc ORDER BY ${orderByEntity('lc')}`);
+}
+
 function skillOptions(locale: string): Promise<Array<{ id: number; name: string; hasItemDrop: boolean }>> {
   const name = localizedName('skills', 's', locale);
   return query(`SELECT s.id, ${name} AS name, s.has_item_drop AS "hasItemDrop" FROM skills s ORDER BY ${orderByEntity('s')}`);
@@ -718,9 +724,14 @@ function configOrder(): string {
 function configSelect(definition: ConfigDefinition, locale: string): string {
   const name = localizedName(definition.entityType, 'c', locale);
   const translations = translationsSelect(definition.entityType, 'c.id');
-  return definition.hasItemDrop
-    ? `c.id, ${name} AS name, c.name AS "baseName", ${translations} AS translations, c.has_item_drop AS "hasItemDrop"`
-    : `c.id, ${name} AS name, c.name AS "baseName", ${translations} AS translations`;
+  const columns = [`c.id`, `${name} AS name`, `c.name AS "baseName"`, `${translations} AS translations`];
+  if (definition.hasItemDrop) {
+    columns.push(`c.has_item_drop AS "hasItemDrop"`);
+  }
+  if (definition.hasDefault) {
+    columns.push(`c.is_default AS "isDefault"`);
+  }
+  return columns.join(', ');
 }
 
 function validationError(message: string): ValidationError {
@@ -2045,7 +2056,7 @@ export async function getOptions(locale = defaultLocale) {
     itemUsages,
     acquisitionMethods,
     maps,
-    lifeTags
+    lifeCategories
   ] = await Promise.all([
     optionSelect('pokemon_types', 'pokemon-types', locale),
     skillOptions(locale),
@@ -2055,7 +2066,7 @@ export async function getOptions(locale = defaultLocale) {
     optionSelect('item_usages', 'item-usages', locale),
     optionSelect('acquisition_methods', 'acquisition-methods', locale),
     optionSelect('maps', 'maps', locale),
-    optionSelect('life_tags', 'life-tags', locale)
+    lifeCategoryOptions(locale)
   ]);
 
   return {
@@ -2068,7 +2079,7 @@ export async function getOptions(locale = defaultLocale) {
     acquisitionMethods,
     itemTags: favoriteThings,
     maps,
-    lifeTags
+    lifeCategories
   };
 }
 
@@ -2209,14 +2220,11 @@ function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload
   if (body.length > 2000) {
     throw validationError('server.validation.postTooLong');
   }
-  const tagIds = cleanIds(payload.tagIds);
-  if (tagIds.length === 0) {
-    throw validationError('server.validation.lifeTagRequired');
-  }
+  const categoryId = requirePositiveInteger(payload.categoryId, 'server.validation.lifeCategoryRequired');
 
   return {
     body,
-    tagIds,
+    categoryId,
     languageCode: cleanModerationLanguageCode(payload.languageCode)
   };
 }
@@ -2313,7 +2321,7 @@ function addModerationLanguageCondition(
 }
 
 function lifePostProjection(locale = defaultLocale): string {
-  const tagName = localizedName('life-tags', 'lt', locale);
+  const categoryName = localizedName('life-tags', 'lc', locale);
 
   return `
     SELECT
@@ -2332,13 +2340,12 @@ function lifePostProjection(locale = defaultLocale): string {
         WHEN updated_user.id IS NULL THEN NULL
         ELSE json_build_object('id', updated_user.id, 'displayName', updated_user.display_name)
       END AS "updatedBy",
-      COALESCE((
-        SELECT json_agg(json_build_object('id', lt.id, 'name', ${tagName}) ORDER BY ${orderByEntity('lt')})
-        FROM life_post_tags lpt
-        JOIN life_tags lt ON lt.id = lpt.tag_id
-        WHERE lpt.post_id = lp.id
-      ), '[]'::json) AS tags
+      CASE
+        WHEN lc.id IS NULL THEN NULL
+        ELSE json_build_object('id', lc.id, 'name', ${categoryName})
+      END AS category
     FROM life_posts lp
+    LEFT JOIN life_tags lc ON lc.id = lp.category_id
     LEFT JOIN users created_user ON created_user.id = lp.created_by_user_id
     LEFT JOIN users updated_user ON updated_user.id = lp.updated_by_user_id
   `;
@@ -2447,7 +2454,7 @@ function hydrateLifePost(
     updatedAt: post.updatedAt,
     author: post.author,
     updatedBy: post.updatedBy,
-    tags: post.tags,
+    category: post.category,
     commentPreview: commentPreviewByPost.get(post.id) ?? [],
     commentCount: commentCountsByPost.get(post.id) ?? 0,
     reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
@@ -2759,7 +2766,7 @@ async function listLifePostsWithFilters(
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
   const search = asString(paramsQuery.search)?.trim();
-  const tagIdValue = asString(paramsQuery.tagId)?.trim();
+  const categoryIdValue = asString(paramsQuery.categoryId)?.trim();
   const languageCode = cleanModerationLanguageFilter(paramsQuery.language);
   const params: unknown[] = [];
   const conditions: string[] = ['lp.deleted_at IS NULL'];
@@ -2777,15 +2784,10 @@ async function listLifePostsWithFilters(
     conditions.push(`lp.body ILIKE $${params.length}`);
   }
 
-  if (tagIdValue) {
-    const tagId = requirePositiveInteger(tagIdValue, 'server.validation.tagInvalid');
-    params.push(tagId);
-    conditions.push(`EXISTS (
-      SELECT 1
-      FROM life_post_tags lpt_filter
-      WHERE lpt_filter.post_id = lp.id
-        AND lpt_filter.tag_id = $${params.length}
-    )`);
+  if (categoryIdValue) {
+    const categoryId = requirePositiveInteger(categoryIdValue, 'server.validation.lifeCategoryInvalid');
+    params.push(categoryId);
+    conditions.push(`lp.category_id = $${params.length}`);
   }
 
   if (cursor) {
@@ -3224,35 +3226,40 @@ async function getLifePostById(id: number, userId: number | null = null, locale 
   return hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost);
 }
 
-async function replaceLifePostTags(client: DbClient, postId: number, tagIds: number[]): Promise<void> {
-  await client.query('DELETE FROM life_post_tags WHERE post_id = $1', [postId]);
-
-  for (const tagId of tagIds) {
-    await client.query(
-      `
-        INSERT INTO life_post_tags (post_id, tag_id)
-        VALUES ($1, $2)
-      `,
-      [postId, tagId]
-    );
+async function ensureLifeCategory(client: DbClient, categoryId: number): Promise<void> {
+  const result = await client.query<{ id: number }>('SELECT id FROM life_tags WHERE id = $1', [categoryId]);
+  if (result.rowCount === 0) {
+    throw validationError('server.validation.lifeCategoryInvalid');
   }
+}
+
+async function replaceLifePostCategoryLink(client: DbClient, postId: number, categoryId: number): Promise<void> {
+  await client.query('DELETE FROM life_post_tags WHERE post_id = $1', [postId]);
+  await client.query(
+    `
+      INSERT INTO life_post_tags (post_id, tag_id)
+      VALUES ($1, $2)
+    `,
+    [postId, categoryId]
+  );
 }
 
 export async function createLifePost(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanLifePostPayload(payload);
 
   const id = await withTransaction(async (client) => {
+    await ensureLifeCategory(client, cleanPayload.categoryId);
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO life_posts (body, ai_moderation_status, ai_moderation_language_code, created_by_user_id, updated_by_user_id)
-        VALUES ($1, 'reviewing', NULL, $2, $2)
+        INSERT INTO life_posts (body, category_id, ai_moderation_status, ai_moderation_language_code, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, 'reviewing', NULL, $3, $3)
         RETURNING id
       `,
-      [cleanPayload.body, userId]
+      [cleanPayload.body, cleanPayload.categoryId, userId]
     );
 
     const createdId = result.rows[0].id;
-    await replaceLifePostTags(client, createdId, cleanPayload.tagIds);
+    await replaceLifePostCategoryLink(client, createdId, cleanPayload.categoryId);
     return createdId;
   });
 
@@ -3270,24 +3277,26 @@ export async function updateLifePost(
   const cleanPayload = cleanLifePostPayload(payload);
 
   const updatedId = await withTransaction(async (client) => {
+    await ensureLifeCategory(client, cleanPayload.categoryId);
     const result = await client.query<{ id: number }>(
       `
         UPDATE life_posts
         SET body = $1,
+            category_id = $2,
             ai_moderation_status = 'reviewing',
             ai_moderation_language_code = NULL,
             ai_moderation_content_hash = NULL,
             ai_moderation_checked_at = NULL,
             ai_moderation_retry_count = 0,
             ai_moderation_updated_at = now(),
-            updated_by_user_id = $2,
+            updated_by_user_id = $3,
             updated_at = now()
-        WHERE id = $3
-          AND ($4 = true OR created_by_user_id = $2)
+        WHERE id = $4
+          AND ($5 = true OR created_by_user_id = $3)
           AND deleted_at IS NULL
         RETURNING id
       `,
-      [cleanPayload.body, userId, id, allowAny]
+      [cleanPayload.body, cleanPayload.categoryId, userId, id, allowAny]
     );
 
     const resultId = result.rows[0]?.id ?? null;
@@ -3295,7 +3304,7 @@ export async function updateLifePost(
       return null;
     }
 
-    await replaceLifePostTags(client, resultId, cleanPayload.tagIds);
+    await replaceLifePostCategoryLink(client, resultId, cleanPayload.categoryId);
     return resultId;
   });
 
@@ -3879,26 +3888,37 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
   const name = cleanName(payload.name);
   const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
+  const isDefault = definition.hasDefault ? Boolean(payload.isDefault) : false;
 
   const id = await withTransaction(async (client) => {
     const sortOrder = await nextSortOrder(client, definition.table);
-    const result = definition.hasItemDrop
-      ? await client.query<{ id: number }>(
-          `
-            INSERT INTO ${definition.table} (name, has_item_drop, sort_order, created_by_user_id, updated_by_user_id)
-            VALUES ($1, $2, $3, $4, $4)
-            RETURNING id
-          `,
-          [name, hasItemDrop, sortOrder, userId]
-        )
-      : await client.query<{ id: number }>(
-          `
-            INSERT INTO ${definition.table} (name, sort_order, created_by_user_id, updated_by_user_id)
-            VALUES ($1, $2, $3, $3)
-            RETURNING id
-          `,
-          [name, sortOrder, userId]
-        );
+    if (definition.hasDefault && isDefault) {
+      await client.query(
+        `UPDATE ${definition.table} SET is_default = false, updated_by_user_id = $1, updated_at = now() WHERE is_default = true`,
+        [userId]
+      );
+    }
+    const columns = ['name'];
+    const values: unknown[] = [name];
+    if (definition.hasItemDrop) {
+      columns.push('has_item_drop');
+      values.push(hasItemDrop);
+    }
+    if (definition.hasDefault) {
+      columns.push('is_default');
+      values.push(isDefault);
+    }
+    columns.push('sort_order', 'created_by_user_id', 'updated_by_user_id');
+    values.push(sortOrder, userId, userId);
+    const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO ${definition.table} (${columns.join(', ')})
+        VALUES (${placeholders})
+        RETURNING id
+      `,
+      values
+    );
 
     const createdId = result.rows[0].id;
     await replaceEntityTranslations(client, definition.entityType, createdId, translations, ['name']);
@@ -3934,25 +3954,37 @@ export async function updateConfig(
   const name = cleanName(payload.name);
   const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
+  const isDefault = definition.hasDefault ? Boolean(payload.isDefault) : false;
 
   const updated = await withTransaction(async (client) => {
-    const result = definition.hasItemDrop
-      ? await client.query(
-          `
-            UPDATE ${definition.table}
-            SET name = $1, has_item_drop = $2, updated_by_user_id = $3, updated_at = now()
-            WHERE id = $4
-          `,
-          [name, hasItemDrop, userId, id]
-        )
-      : await client.query(
-          `
-            UPDATE ${definition.table}
-            SET name = $1, updated_by_user_id = $2, updated_at = now()
-            WHERE id = $3
-          `,
-          [name, userId, id]
-        );
+    if (definition.hasDefault && isDefault) {
+      await client.query(
+        `UPDATE ${definition.table} SET is_default = false, updated_by_user_id = $2, updated_at = now() WHERE id <> $1 AND is_default = true`,
+        [id, userId]
+      );
+    }
+
+    const assignments = ['name = $1'];
+    const values: unknown[] = [name];
+    if (definition.hasItemDrop) {
+      values.push(hasItemDrop);
+      assignments.push(`has_item_drop = $${values.length}`);
+    }
+    if (definition.hasDefault) {
+      values.push(isDefault);
+      assignments.push(`is_default = $${values.length}`);
+    }
+    values.push(userId);
+    assignments.push(`updated_by_user_id = $${values.length}`, 'updated_at = now()');
+    values.push(id);
+    const result = await client.query(
+      `
+        UPDATE ${definition.table}
+        SET ${assignments.join(', ')}
+        WHERE id = $${values.length}
+      `,
+      values
+    );
 
     if (result.rowCount === 0) {
       return false;

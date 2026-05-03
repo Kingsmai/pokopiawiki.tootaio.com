@@ -40,6 +40,7 @@ import {
   type Habitat,
   type Item,
   type Language,
+  type LifeCategory,
   type NamedEntity,
   type Permission,
   type PermissionPayload,
@@ -69,7 +70,7 @@ type AdminTab =
 type AdminGroup = 'content' | 'configuration' | 'localization' | 'access';
 type AdminNavItem = { key: AdminTab; label: string; permission: string | string[] };
 type AdminNavGroup = { key: AdminGroup; label: string; items: AdminNavItem[] };
-type EditableConfig = (NamedEntity | Skill) & { hasItemDrop?: boolean };
+type EditableConfig = (NamedEntity | Skill | LifeCategory) & { hasItemDrop?: boolean; isDefault?: boolean };
 
 const adminTabIcons: Record<AdminTab, AppIcon> = {
   users: iconProfile,
@@ -132,7 +133,7 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
 });
 const tabs = computed<AdminNavItem[]>(() => adminNavigationGroups.value.flatMap((group) => group.items));
 
-const configTypes = computed<Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean }>>(() => [
+const configTypes = computed<Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean; supportsDefault?: boolean }>>(() => [
   { key: 'pokemon-types', label: t('config.pokemonTypes') },
   { key: 'skills', label: t('config.skills'), supportsItemDrop: true },
   { key: 'environments', label: t('config.environments') },
@@ -141,7 +142,7 @@ const configTypes = computed<Array<{ key: ConfigType; label: string; supportsIte
   { key: 'item-usages', label: t('config.itemUsages') },
   { key: 'acquisition-methods', label: t('config.acquisitionMethods') },
   { key: 'maps', label: t('config.maps') },
-  { key: 'life-tags', label: t('config.lifeTags') }
+  { key: 'life-tags', label: t('config.lifeCategories'), supportsDefault: true }
 ]);
 
 const activeTab = ref<AdminTab>('config');
@@ -162,7 +163,7 @@ const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
 const message = ref('');
-const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, hasItemDrop: false });
+const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, hasItemDrop: false, isDefault: false });
 const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
 const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
 const wordingForm = ref({ key: '', locale: defaultLocale, value: '', defaultValue: '', placeholders: [] as string[] });
@@ -375,7 +376,7 @@ async function loadLanguages() {
 }
 
 function resetConfigForm() {
-  configForm.value = { id: 0, name: '', translations: {}, hasItemDrop: false };
+  configForm.value = { id: 0, name: '', translations: {}, hasItemDrop: false, isDefault: false };
 }
 
 function resetChecklistForm() {
@@ -435,7 +436,13 @@ function closeConfigModal() {
 }
 
 function editConfig(item: EditableConfig) {
-  configForm.value = { id: item.id, name: item.baseName ?? item.name, translations: item.translations ?? {}, hasItemDrop: item.hasItemDrop === true };
+  configForm.value = {
+    id: item.id,
+    name: item.baseName ?? item.name,
+    translations: item.translations ?? {},
+    hasItemDrop: item.hasItemDrop === true,
+    isDefault: item.isDefault === true
+  };
   configModalOpen.value = true;
 }
 
@@ -709,7 +716,8 @@ async function saveConfig() {
     const payload = {
       name: configBaseNameForSave(),
       translations: configForm.value.translations,
-      hasItemDrop: selectedConfig.value.supportsItemDrop ? configForm.value.hasItemDrop : undefined
+      hasItemDrop: selectedConfig.value.supportsItemDrop ? configForm.value.hasItemDrop : undefined,
+      isDefault: selectedConfig.value.supportsDefault ? configForm.value.isDefault : undefined
     };
 
     if (configForm.value.id) {
@@ -1270,7 +1278,9 @@ onMounted(() => {
       >
         <template #default="{ item }">
           <span class="reorderable-row-title">
-            {{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span>
+            {{ item.name }}
+            <span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span>
+            <span v-if="item.isDefault" class="config-flag">{{ t('pages.admin.defaultCategory') }}</span>
           </span>
           <span class="row-actions">
             <button v-if="can('admin.config.update')" type="button" :disabled="busy" @click="editConfig(item)">
@@ -1797,6 +1807,12 @@ onMounted(() => {
           <label>
             <input v-model="configForm.hasItemDrop" type="checkbox" />
             {{ t('pages.admin.hasItemDrop') }}
+          </label>
+        </div>
+        <div v-if="selectedConfig.supportsDefault" class="check-row">
+          <label>
+            <input v-model="configForm.isDefault" type="checkbox" />
+            {{ t('pages.admin.defaultCategory') }}
           </label>
         </div>
       </form>

@@ -59,7 +59,7 @@
   - 地图
   - 栖息地
   - 每日 CheckList Task
-  - Life 标签
+  - Life Category
 - 支持翻译的字段：
   - `name`
   - `title`
@@ -379,9 +379,10 @@
 - 名称
 - 用于栖息地中 Pokemon 出现地点。
 
-### Life 标签
+### Life Category
 
 - 名称
+- 是否默认选中：最多一个 Life Category 可设为默认；新建 Life Post 时默认选中该分类。
 - 用于 Life Post 分类展示和 Feed 筛选。
 
 ## Pokemon
@@ -640,7 +641,7 @@ Life 是社区生活分享信息流，类似轻量社交动态。
 Life Post 可配置：
 
 - Post 内容正文
-- 标签：使用 Life 标签配置，至少选择 1 个，可多选
+- Category：使用 Life Category 配置，必须且只能选择 1 个
 - 创建者、最后编辑者、创建时间、最后编辑时间
 - 评论
 - 评论回复：仅支持回复顶层评论，不做无限嵌套
@@ -653,17 +654,17 @@ Life Post 可配置：
 - 已注册并完成邮箱验证且拥有 `life.posts.create` 权限的用户可以发布 Life Post。
 - 作者本人拥有 `life.posts.update` / `life.posts.delete` 权限时可以编辑、删除自己的 Life Post；删除 Life Post 使用软删除。
 - 拥有 `life.posts.update-any` / `life.posts.delete-any` 权限的用户可以管理其他用户的 Life Post。
-- 已注册并完成邮箱验证且拥有 `life.posts.create` 或 `life.posts.update` 权限的用户发布或编辑 Life Post 时必须选择至少 1 个 Life 标签，可选择多个。
+- 已注册并完成邮箱验证且拥有 `life.posts.create` 或 `life.posts.update` 权限的用户发布或编辑 Life Post 时必须选择 1 个 Life Category。
 - 已注册并完成邮箱验证且拥有 `life.comments.create` 权限的用户可以评论 Life Post，并回复顶层评论。
 - 评论作者拥有 `life.comments.delete` 权限时可以删除自己的评论；拥有 `life.comments.delete-any` 权限的用户可以删除其他用户评论；删除评论后正文不再展示，已有回复保留在原位置。
-- 已软删除的 Life Post 不出现在信息流、搜索或标签筛选结果中，也不能继续编辑、评论或设置 Reaction。
+- 已软删除的 Life Post 不出现在信息流、搜索或 Category 筛选结果中，也不能继续编辑、评论或设置 Reaction。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
 - Life Feed 只随每条 Life Post 返回评论总数和最近少量评论预览；完整评论列表在展开评论区后通过独立分页接口按顶层评论正序读取，每页顶层评论携带其一层回复。
 - 已注册并完成邮箱验证且拥有 `life.reactions.set` 权限的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
-- Feed 使用 Tabs 展示 Life 标签筛选；包含 All 和后台配置的 Life 标签；点击标签后按该标签筛选，搜索和标签筛选可以同时生效。
-- Feed 使用语言筛选展示 All languages 和启用语言；语言区筛选独立于系统 UI 语言，搜索、标签和语言筛选可以同时生效。
+- Feed 使用 Tabs 展示 Life Category 筛选；包含 All 和后台配置的 Life Category；点击 Category 后按该 Category 筛选，搜索和 Category 筛选可以同时生效。
+- Feed 使用语言筛选展示 All languages 和启用语言；语言区筛选独立于系统 UI 语言，搜索、Category 和语言筛选可以同时生效。
 - 信息流分页加载，初始展示最新一页，滚动到底部自动加载更多。
 - 当前没有图片上传、转发或置顶。
 - Life Post 和 Life Comment 必须进入 AI 审核；未审核通过的内容不向普通访客公开。
@@ -677,7 +678,7 @@ Life Post 可配置：
 API 暴露边界：
 
 - Life Post 作者信息只返回 `id` 和 `displayName`。
-- Life Post 标签只返回 `id` 和按当前语言解析后的 `name`。
+- Life Post Category 只返回 `id` 和按当前语言解析后的 `name`。
 - Life Post 可返回面向用户展示所需的审核状态、审核语言区和是否可重审；不返回内部错误、AI prompt、模型响应或 retry 细节。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
 - Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
@@ -769,7 +770,7 @@ API 暴露边界：
 - `GET /api/items/:id`
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
-- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `tagId` 按 Life 标签筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区。
+- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区。
 - `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。

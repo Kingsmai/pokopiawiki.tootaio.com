@@ -593,7 +593,7 @@ function contentTypeLabel(contentType: string): string {
     'item-usages': t('config.itemUsages'),
     'acquisition-methods': t('config.acquisitionMethods'),
     maps: t('config.maps'),
-    'life-tags': t('config.lifeTags')
+    'life-tags': t('config.lifeCategories')
   };
   return labels[contentType] ?? t('pages.profile.otherContributions');
 }
@@ -726,8 +726,8 @@ onMounted(() => {
 
             <p class="life-post__body">{{ post.body }}</p>
 
-            <div v-if="post.tags.length" class="life-post__tags" :aria-label="t('pages.life.tags')">
-              <span v-for="tag in post.tags" :key="tag.id" class="life-post__tag">{{ tag.name }}</span>
+            <div v-if="post.category" class="life-post__tags" :aria-label="t('pages.life.category')">
+              <span class="life-post__tag">{{ post.category.name }}</span>
             </div>
 
             <div class="profile-feed-card__metrics">

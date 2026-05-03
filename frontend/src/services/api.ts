@@ -37,6 +37,10 @@ export interface NamedEntity {
   translations?: TranslationMap;
 }
 
+export interface LifeCategory extends NamedEntity {
+  isDefault: boolean;
+}
+
 export interface Skill extends NamedEntity {
   hasItemDrop: boolean;
 }
@@ -256,7 +260,7 @@ export interface LifePost {
   updatedAt: string;
   author: UserSummary | null;
   updatedBy: UserSummary | null;
-  tags: NamedEntity[];
+  category: NamedEntity | null;
   commentPreview: LifeComment[];
   commentCount: number;
   reactionCounts: LifeReactionCounts;
@@ -273,7 +277,7 @@ export interface LifePostsParams {
   cursor?: string | null;
   limit?: number;
   search?: string;
-  tagId?: string | number;
+  categoryId?: string | number;
   language?: string;
 }
 
@@ -320,7 +324,7 @@ export interface Options {
   acquisitionMethods: NamedEntity[];
   itemTags: NamedEntity[];
   maps: NamedEntity[];
-  lifeTags: NamedEntity[];
+  lifeCategories: LifeCategory[];
 }
 
 export interface AuthUser {
@@ -558,7 +562,7 @@ export interface DailyChecklistPayload {
 
 export interface LifePostPayload {
   body: string;
-  tagIds: number[];
+  categoryId: number;
   languageCode?: string | null;
 }
 
@@ -876,7 +880,7 @@ export const api = {
         cursor: params.cursor ?? undefined,
         limit: params.limit,
         search: params.search?.trim(),
-        tagId: params.tagId,
+        categoryId: params.categoryId,
         language: params.language
       })}`
     ),
@@ -945,13 +949,13 @@ export const api = {
   reorderDailyChecklistItems: (ids: number[]) =>
     sendJson<DailyChecklistItem[]>('/api/admin/daily-checklist/order', 'PUT', { ids }),
   deleteDailyChecklistItem: (id: string | number) => deleteJson(`/api/admin/daily-checklist/${id}`),
-  config: (type: ConfigType) => getJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}`),
-  createConfig: (type: ConfigType, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean }) =>
-    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
+  config: (type: ConfigType) => getJson<Array<Skill | LifeCategory | NamedEntity>>(`/api/admin/config/${type}`),
+  createConfig: (type: ConfigType, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean; isDefault?: boolean }) =>
+    sendJson<Skill | LifeCategory | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
   reorderConfig: (type: ConfigType, ids: number[]) =>
-    sendJson<Array<Skill | NamedEntity>>(`/api/admin/config/${type}/order`, 'PUT', { ids }),
-  updateConfig: (type: ConfigType, id: number, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean }) =>
-    sendJson<Skill | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
+    sendJson<Array<Skill | LifeCategory | NamedEntity>>(`/api/admin/config/${type}/order`, 'PUT', { ids }),
+  updateConfig: (type: ConfigType, id: number, payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean; isDefault?: boolean }) =>
+    sendJson<Skill | LifeCategory | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
   pokemon: (params: Record<string, string | number | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),

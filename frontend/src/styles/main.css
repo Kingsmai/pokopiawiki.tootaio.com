@@ -413,6 +413,47 @@ svg {
   padding: 30px var(--page-padding-x) 58px;
 }
 
+.site-footer {
+  grid-column: 2;
+  width: min(100%, var(--container));
+  margin: 0 auto;
+  padding: 0 24px 34px;
+}
+
+.site-footer__inner {
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.site-footer__copyright,
+.site-footer__notice {
+  margin: 0;
+}
+
+.site-footer__copyright {
+  color: var(--ink-soft);
+  font-weight: 850;
+}
+
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.site-footer__links a {
+  color: var(--pokemon-blue-deep);
+  font-weight: 850;
+}
+
+.site-footer__links a:hover {
+  color: var(--pokemon-blue);
+}
+
 .page-stack {
   position: relative;
   display: grid;
@@ -3057,6 +3098,33 @@ button:disabled,
   font-weight: 850;
 }
 
+.legal-page__updated {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.legal-section__body {
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
+.legal-section__body p {
+  margin: 0;
+}
+
+.legal-source-list {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding-left: 22px;
+}
+
+.legal-source-list a {
+  word-break: break-word;
+}
+
 .edit-history-panel {
   display: grid;
   gap: 16px;
@@ -5657,6 +5725,12 @@ button:disabled,
   .page {
     padding-top: 22px;
     padding-bottom: 44px;
+  }
+
+  .site-footer {
+    padding-right: 16px;
+    padding-left: 16px;
+    padding-bottom: 28px;
   }
 
   .page-title {

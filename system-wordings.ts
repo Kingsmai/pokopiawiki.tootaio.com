@@ -65,6 +65,17 @@ export const systemWordingMessages = {
       logout: 'Log out',
       register: 'Register'
     },
+    legal: {
+      footer: {
+        copyright: 'Copyright {year} Tootaio Studio. All rights reserved.',
+        linksLabel: 'Legal pages',
+        privacy: 'Privacy Policy',
+        terms: 'Terms of Service',
+        disclaimers: 'Disclaimers',
+        notice:
+          'Pokopia Wiki uses community contributions and third-party references, including PokeAPI data and image resources. Pokemon-related names, images, and marks belong to their respective rights holders.'
+      }
+    },
     seo: {
       siteDescription:
         'Browse Pokopia Wiki for Pokemon, habitats, items, recipes, daily tasks, and Life community posts for Pokemon Pokopia.',
@@ -196,6 +207,163 @@ export const systemWordingMessages = {
           clothes: {
             title: 'Clothes',
             description: 'Outfit and clothing references are being prepared.'
+          }
+        }
+      },
+      legal: {
+        lastUpdated: 'Last updated: May 3, 2026',
+        sourceLinks: 'Source and reference links',
+        privacy: {
+          kicker: 'Legal',
+          title: 'Privacy Policy',
+          subtitle: 'How Pokopia Wiki handles account, contribution, and browsing information.',
+          sections: {
+            overview: {
+              title: 'Overview',
+              bodyOne: 'Pokopia Wiki is operated by Tootaio Studio as a community-editable game wiki.',
+              bodyTwo:
+                'This policy explains the information used to provide accounts, wiki editing, community features, and site security.'
+            },
+            information: {
+              title: 'Information we collect',
+              bodyOne:
+                'When you register, Pokopia Wiki collects your email address, display name, password hash, email verification state, session state, and referral information when a referral code is used.',
+              bodyTwo:
+                'When you use the wiki, Pokopia Wiki may store your edits, uploads, Life posts, comments, reactions, discussion activity, public profile activity, and audit records needed to maintain community content.'
+            },
+            storage: {
+              title: 'Cookies and local storage',
+              bodyOne:
+                'Pokopia Wiki uses browser storage for the selected language, login session token, Remember me choice, and local Daily CheckList completion state.',
+              bodyTwo:
+                'Server-side sessions, verification tokens, reset tokens, and passwords are stored as hashes where applicable. Token hashes and password hashes are not exposed through public API responses.'
+            },
+            content: {
+              title: 'Community content and edit history',
+              bodyOne:
+                'Wiki edits, image uploads, discussions, Life posts, reactions, and edit history may be visible to other users together with your display name and public profile link.',
+              bodyTwo:
+                'Do not submit private personal information in public content. Moderation and audit records may be retained when needed for safety, integrity, dispute handling, or legal obligations.'
+            },
+            sharing: {
+              title: 'Service providers and safety',
+              bodyOne:
+                'Pokopia Wiki may use hosting, database, email delivery, logging, and AI moderation providers to operate the service.',
+              bodyTwo:
+                'Tootaio Studio does not sell personal information. Information may be disclosed when required by law, to protect site security, or to enforce the Terms of Service.'
+            },
+            choices: {
+              title: 'Your choices',
+              bodyOne:
+                'You can log out to clear the active browser token, and registered users can update their display name and password from their profile.',
+              bodyTwo:
+                'Contact Tootaio Studio for privacy questions or requests. Some records may be retained when they are needed for security, audit history, content integrity, or legal compliance.'
+            }
+          }
+        },
+        terms: {
+          kicker: 'Legal',
+          title: 'Terms of Service',
+          subtitle: 'Rules for using and contributing to Pokopia Wiki.',
+          sections: {
+            acceptance: {
+              title: 'Agreement',
+              bodyOne:
+                'By accessing or using Pokopia Wiki, you agree to these Terms of Service and to any rules shown in the product for accounts, edits, discussions, and community features.',
+              bodyTwo:
+                'If you do not agree to these terms, do not use the site or submit content to Pokopia Wiki.'
+            },
+            accounts: {
+              title: 'Accounts',
+              bodyOne:
+                'You are responsible for the accuracy of your account information and for keeping your login credentials secure.',
+              bodyTwo:
+                'Editing and community actions may require a registered account, email verification, and the permissions assigned to that account.'
+            },
+            contributions: {
+              title: 'Contributions',
+              bodyOne:
+                'You are responsible for the content you submit, including wiki edits, images, comments, Life posts, reactions, and discussion replies.',
+              bodyTwo:
+                'By submitting content, you grant Tootaio Studio and the Pokopia Wiki community permission to host, display, reproduce, adapt, moderate, and maintain that content as part of the wiki. Do not submit content you do not have the right to share.'
+            },
+            acceptableUse: {
+              title: 'Acceptable use',
+              bodyOne:
+                'Do not use Pokopia Wiki for harassment, spam, illegal activity, malware, deceptive content, rights infringement, or attempts to bypass authentication, rate limits, moderation, or security controls.',
+              bodyTwo:
+                'Tootaio Studio may remove content, restrict features, or suspend access when needed to protect the wiki, its users, or third-party rights.'
+            },
+            availability: {
+              title: 'Availability and changes',
+              bodyOne:
+                'Pokopia Wiki is provided as a community resource and may change, pause, or become unavailable without prior notice.',
+              bodyTwo:
+                'Features, routes, data, moderation behavior, and account access may be updated as the project grows or as security, legal, or operational needs change.'
+            },
+            changes: {
+              title: 'Updates to these terms',
+              bodyOne:
+                'Tootaio Studio may update these Terms of Service from time to time. The latest version will be posted on this page.',
+              bodyTwo:
+                'Continuing to use Pokopia Wiki after changes are posted means you accept the updated terms.'
+            }
+          }
+        },
+        disclaimers: {
+          kicker: 'Legal',
+          title: 'Disclaimers',
+          subtitle: 'Important source, affiliation, accuracy, and rights notices for Pokopia Wiki.',
+          sections: {
+            community: {
+              title: 'Community-maintained information',
+              bodyOne:
+                'Pokopia Wiki is a community-maintained reference for Pokemon Pokopia game information.',
+              bodyTwo:
+                'Content may be incomplete, outdated, speculative, or edited by community members. It is provided for general reference only.'
+            },
+            affiliation: {
+              title: 'No official affiliation',
+              bodyOne:
+                'Pokopia Wiki is not affiliated with, sponsored by, endorsed by, or approved by Nintendo, The Pokemon Company, Game Freak, Creatures, PokeAPI, or pokopiawiki.com.',
+              bodyTwo:
+                'Pokemon-related names, images, artwork, marks, characters, and game materials belong to their respective rights holders.'
+            },
+            pokeapi: {
+              title: 'PokeAPI data and images',
+              bodyOne:
+                'Some Pokemon data and image resources used by Pokopia Wiki are sourced from or checked against PokeAPI and related PokeAPI repositories.',
+              bodyTwo:
+                'PokeAPI project data and sprite repository materials may include their own license notices, while Pokemon names, images, and related intellectual property remain owned by their respective rights holders.'
+            },
+            references: {
+              title: 'Reference sources',
+              bodyOne:
+                'Pokopia Wiki may refer to pokopiawiki.com and other public references when organizing game information.',
+              bodyTwo:
+                'References are used for research, comparison, and attribution. Referencing a source does not imply affiliation, endorsement, sponsorship, or approval.'
+            },
+            accuracy: {
+              title: 'Accuracy and reliance',
+              bodyOne:
+                'Game information can change, and community-maintained records may contain mistakes.',
+              bodyTwo:
+                'Tootaio Studio does not guarantee that Pokopia Wiki content is complete, current, accurate, or error-free.'
+            },
+            rights: {
+              title: 'Rights concerns',
+              bodyOne:
+                'If you believe content on Pokopia Wiki infringes rights, misattributes a source, or should be corrected, contact Tootaio Studio with the relevant page and source details.',
+              bodyTwo:
+                'Tootaio Studio may update, remove, or restrict content when needed to address source, accuracy, safety, or rights concerns.'
+            }
+          },
+          sources: {
+            pokeapiDocs: 'PokeAPI documentation',
+            pokeapiApiDataLicense: 'PokeAPI API data license',
+            pokeapiSpritesLicense: 'PokeAPI sprites license',
+            pokemonLegal: 'Pokemon legal information',
+            pokopiaWikiReference: 'pokopiawiki.com reference'
           }
         }
       },
@@ -964,6 +1132,17 @@ export const systemWordingMessages = {
       logout: '退出',
       register: '注册'
     },
+    legal: {
+      footer: {
+        copyright: 'Copyright {year} Tootaio Studio. All rights reserved.',
+        linksLabel: '法律页面',
+        privacy: '隐私政策',
+        terms: '服务条款',
+        disclaimers: '免责声明',
+        notice:
+          'Pokopia Wiki 使用社区贡献和第三方参考资料，包括 PokeAPI 数据与图片资源。Pokemon 相关名称、图片和标志归其各自权利人所有。'
+      }
+    },
     seo: {
       siteDescription: '浏览 Pokopia Wiki 的 Pokemon、栖息地、物品、材料单、每日清单和 Life 社区动态。',
       pokemonDetailDescription: '查看 {name} 在 Pokopia Wiki 中的栖息地、属性、特长、喜欢的东西、六维、相关物品、讨论和编辑历史。',
@@ -1090,6 +1269,143 @@ export const systemWordingMessages = {
           clothes: {
             title: 'Clothes',
             description: '服装和外观资料正在准备中。'
+          }
+        }
+      },
+      legal: {
+        lastUpdated: '最后更新：2026年5月3日',
+        sourceLinks: '来源与参考链接',
+        privacy: {
+          kicker: '法律信息',
+          title: '隐私政策',
+          subtitle: '说明 Pokopia Wiki 如何处理账号、贡献和浏览相关信息。',
+          sections: {
+            overview: {
+              title: '概览',
+              bodyOne: 'Pokopia Wiki 由 Tootaio Studio 运营，是一个社区可编辑的游戏 Wiki。',
+              bodyTwo: '本政策说明为了提供账号、Wiki 编辑、社区功能和站点安全而使用的信息。'
+            },
+            information: {
+              title: '我们收集的信息',
+              bodyOne:
+                '注册时，Pokopia Wiki 会收集邮箱地址、显示名、密码哈希、邮箱验证状态、会话状态，以及使用邀请码时的邀请信息。',
+              bodyTwo:
+                '使用 Wiki 时，Pokopia Wiki 可能保存你的编辑、上传、Life 动态、评论、互动、讨论活动、公开主页活动，以及维护社区内容所需的审计记录。'
+            },
+            storage: {
+              title: '浏览器存储',
+              bodyOne:
+                'Pokopia Wiki 使用浏览器存储保存当前语言、登录会话 token、Remember me 选择和本地每日 CheckList 完成状态。',
+              bodyTwo:
+                '服务端会在适用场景中以哈希形式保存 session、验证 token、重置 token 和密码。Token 哈希和密码哈希不会通过公开 API 返回。'
+            },
+            content: {
+              title: '社区内容和编辑历史',
+              bodyOne:
+                'Wiki 编辑、图片上传、讨论、Life 动态、互动和编辑历史可能会连同你的显示名和公开主页链接展示给其他用户。',
+              bodyTwo:
+                '请不要在公开内容中提交私人个人信息。出于安全、完整性、争议处理或法律义务需要，审核和审计记录可能会被保留。'
+            },
+            sharing: {
+              title: '服务提供方和安全',
+              bodyOne: 'Pokopia Wiki 可能使用托管、数据库、邮件发送、日志和 AI 审核服务提供方来运行服务。',
+              bodyTwo:
+                'Tootaio Studio 不出售个人信息。必要时，我们可能为了法律要求、站点安全或执行服务条款而披露相关信息。'
+            },
+            choices: {
+              title: '你的选择',
+              bodyOne: '你可以退出登录以清除浏览器中的当前 token，注册用户也可以在个人资料中更新显示名和密码。',
+              bodyTwo:
+                '如有隐私问题或请求，请联系 Tootaio Studio。出于安全、审计历史、内容完整性或法律合规需要，部分记录可能会被保留。'
+            }
+          }
+        },
+        terms: {
+          kicker: '法律信息',
+          title: '服务条款',
+          subtitle: '使用和贡献 Pokopia Wiki 时需要遵守的规则。',
+          sections: {
+            acceptance: {
+              title: '同意条款',
+              bodyOne:
+                '访问或使用 Pokopia Wiki 即表示你同意本服务条款，以及产品中针对账号、编辑、讨论和社区功能展示的规则。',
+              bodyTwo: '如果你不同意这些条款，请不要使用本网站，也不要向 Pokopia Wiki 提交内容。'
+            },
+            accounts: {
+              title: '账号',
+              bodyOne: '你需要对账号信息的准确性负责，并妥善保管登录凭据。',
+              bodyTwo: '编辑和社区操作可能需要注册账号、完成邮箱验证，并拥有该账号被分配的权限。'
+            },
+            contributions: {
+              title: '贡献内容',
+              bodyOne: '你需要对自己提交的内容负责，包括 Wiki 编辑、图片、评论、Life 动态、互动和讨论回复。',
+              bodyTwo:
+                '提交内容即表示你授权 Tootaio Studio 和 Pokopia Wiki 社区将该内容作为 Wiki 的一部分进行托管、展示、复制、改编、审核和维护。请不要提交你无权分享的内容。'
+            },
+            acceptableUse: {
+              title: '可接受使用',
+              bodyOne:
+                '不得将 Pokopia Wiki 用于骚扰、垃圾信息、违法活动、恶意软件、欺骗性内容、侵权行为，或试图绕过认证、限流、审核和安全控制。',
+              bodyTwo: '为保护 Wiki、用户或第三方权利，Tootaio Studio 可能移除内容、限制功能或暂停访问。'
+            },
+            availability: {
+              title: '可用性和变更',
+              bodyOne: 'Pokopia Wiki 作为社区资料服务提供，可能在不提前通知的情况下变更、暂停或不可用。',
+              bodyTwo: '随着项目发展，或因安全、法律、运营需要，功能、路由、数据、审核行为和账号访问可能会更新。'
+            },
+            changes: {
+              title: '条款更新',
+              bodyOne: 'Tootaio Studio 可能不定期更新本服务条款。最新版本会发布在本页面。',
+              bodyTwo: '变更发布后继续使用 Pokopia Wiki，即表示你接受更新后的条款。'
+            }
+          }
+        },
+        disclaimers: {
+          kicker: '法律信息',
+          title: '免责声明',
+          subtitle: 'Pokopia Wiki 的来源、关联关系、准确性和权利声明。',
+          sections: {
+            community: {
+              title: '社区维护信息',
+              bodyOne: 'Pokopia Wiki 是面向 Pokemon Pokopia 游戏资料的社区维护参考网站。',
+              bodyTwo: '内容可能不完整、过时、带有推测性，或由社区成员编辑；内容仅供一般参考。'
+            },
+            affiliation: {
+              title: '非官方关联',
+              bodyOne:
+                'Pokopia Wiki 与 Nintendo、The Pokemon Company、Game Freak、Creatures、PokeAPI 或 pokopiawiki.com 均不存在从属、赞助、背书或官方认可关系。',
+              bodyTwo: 'Pokemon 相关名称、图片、插画、标志、角色和游戏素材归其各自权利人所有。'
+            },
+            pokeapi: {
+              title: 'PokeAPI 数据和图片',
+              bodyOne:
+                'Pokopia Wiki 使用的部分 Pokemon 数据和图片资源来自或参考了 PokeAPI 及相关 PokeAPI 仓库。',
+              bodyTwo:
+                'PokeAPI 项目数据和 sprites 仓库材料可能包含其自身许可声明；Pokemon 名称、图片和相关知识产权仍归其各自权利人所有。'
+            },
+            references: {
+              title: '参考来源',
+              bodyOne: '整理游戏资料时，Pokopia Wiki 可能参考 pokopiawiki.com 和其他公开资料。',
+              bodyTwo: '参考来源用于研究、对照和署名；引用某个来源不代表从属、背书、赞助或官方认可。'
+            },
+            accuracy: {
+              title: '准确性和依赖',
+              bodyOne: '游戏信息可能发生变化，社区维护记录也可能存在错误。',
+              bodyTwo: 'Tootaio Studio 不保证 Pokopia Wiki 内容完整、最新、准确或没有错误。'
+            },
+            rights: {
+              title: '权利问题',
+              bodyOne:
+                '如果你认为 Pokopia Wiki 上的内容涉及侵权、来源标注不当或需要更正，请联系 Tootaio Studio，并提供相关页面和来源信息。',
+              bodyTwo: '为处理来源、准确性、安全或权利问题，Tootaio Studio 可能更新、移除或限制相关内容。'
+            }
+          },
+          sources: {
+            pokeapiDocs: 'PokeAPI 文档',
+            pokeapiApiDataLicense: 'PokeAPI API 数据许可',
+            pokeapiSpritesLicense: 'PokeAPI sprites 许可',
+            pokemonLegal: 'Pokemon 法律信息',
+            pokopiaWikiReference: 'pokopiawiki.com 参考来源'
           }
         }
       },

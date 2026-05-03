@@ -10,6 +10,7 @@ import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
 import LifeView from '../views/LifeView.vue';
+import LegalView from '../views/LegalView.vue';
 import ComingSoonView from '../views/ComingSoonView.vue';
 import AdminView from '../views/AdminView.vue';
 import ForgotPasswordView from '../views/ForgotPasswordView.vue';
@@ -179,6 +180,24 @@ export const router = createRouter({
     },
     { path: '/checklist', component: DailyChecklistView, meta: { seo: seo({ titleKey: 'pages.checklist.title', descriptionKey: 'pages.checklist.subtitle' }) } },
     { path: '/life', component: LifeView, meta: { seo: seo({ titleKey: 'pages.life.title', descriptionKey: 'pages.life.subtitle' }) } },
+    {
+      path: '/privacy-policy',
+      component: LegalView,
+      props: { page: 'privacy' },
+      meta: { seo: seo({ titleKey: 'pages.legal.privacy.title', descriptionKey: 'pages.legal.privacy.subtitle', canonicalPath: '/privacy-policy' }) }
+    },
+    {
+      path: '/terms-of-service',
+      component: LegalView,
+      props: { page: 'terms' },
+      meta: { seo: seo({ titleKey: 'pages.legal.terms.title', descriptionKey: 'pages.legal.terms.subtitle', canonicalPath: '/terms-of-service' }) }
+    },
+    {
+      path: '/disclaimers',
+      component: LegalView,
+      props: { page: 'disclaimers' },
+      meta: { seo: seo({ titleKey: 'pages.legal.disclaimers.title', descriptionKey: 'pages.legal.disclaimers.subtitle', canonicalPath: '/disclaimers' }) }
+    },
     { path: '/admin', component: AdminView, meta: { requiredPermission: 'admin.access', seo: seo({ titleKey: 'pages.admin.title', descriptionKey: 'pages.admin.subtitle', noindex: true }) } },
     { path: '/profile', component: UserProfileView, meta: { requiresAuth: true, seo: seo({ titleKey: 'pages.profile.title', descriptionKey: 'pages.profile.subtitle', noindex: true }) } },
     { path: '/profile/:id', component: UserProfileView, meta: { seo: seo({ titleKey: 'pages.profile.title', descriptionKey: 'pages.profile.publicSubtitle' }) } },

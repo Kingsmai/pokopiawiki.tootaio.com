@@ -30,6 +30,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const route = useRoute();
+const copyrightYear = new Date().getFullYear();
 const languageMenu = ref<HTMLElement | null>(null);
 const languageMenuButton = ref<HTMLButtonElement | null>(null);
 const languageMenuOpen = ref(false);
@@ -210,5 +211,19 @@ onBeforeUnmount(() => {
     <main class="page">
       <slot></slot>
     </main>
+
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <p class="site-footer__copyright">
+          {{ t('legal.footer.copyright', { year: copyrightYear }) }}
+        </p>
+        <nav class="site-footer__links" :aria-label="t('legal.footer.linksLabel')">
+          <RouterLink to="/privacy-policy" @click="closeSidebar">{{ t('legal.footer.privacy') }}</RouterLink>
+          <RouterLink to="/terms-of-service" @click="closeSidebar">{{ t('legal.footer.terms') }}</RouterLink>
+          <RouterLink to="/disclaimers" @click="closeSidebar">{{ t('legal.footer.disclaimers') }}</RouterLink>
+        </nav>
+        <p class="site-footer__notice">{{ t('legal.footer.notice') }}</p>
+      </div>
+    </footer>
   </div>
 </template>

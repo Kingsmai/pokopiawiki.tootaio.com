@@ -702,6 +702,22 @@ API 暴露边界：
 
 这些开发中入口在主导航和占位页中显示状态 Badge，便于用户识别当前功能状态。
 
+## 法律页面、版权与来源声明
+
+- 前台提供公开静态法律页面：
+  - `/privacy-policy`：隐私政策。
+  - `/terms-of-service`：服务条款。
+  - `/disclaimers`：免责声明、第三方来源和权利归属说明。
+- 法律页面只展示站点政策、来源和版权相关文案，不提供编辑表单、后端 API、数据库模型、管理入口或用户提交流程。
+- 全局 `AppShell` 页脚展示：
+  - `Copyright {year} Tootaio Studio. All rights reserved.`
+  - Privacy Policy、Terms of Service、Disclaimers 链接。
+  - PokeAPI 数据与图片资源、社区贡献和 Pokemon 相关权利归属的简短说明。
+- Pokopia Wiki 不是 Nintendo、The Pokemon Company、Game Freak、Creatures、PokeAPI 或 `pokopiawiki.com` 的官方、附属、赞助或背书项目。
+- Pokopia Wiki 会使用或参考 PokeAPI 数据、PokeAPI 图片资源、`https://www.pokopiawiki.com/` 和其他公开资料；页面必须清楚说明引用来源不代表从属、赞助、背书或官方认可。
+- Pokemon 相关名称、图片、标志、角色和游戏素材归其各自权利人所有。
+- 法律页面和页脚文案必须通过系统级文案 catalog 管理，并支持现有语言回退机制。
+
 ## 前端交互与 UI
 
 - UI 风格以 `DesignGuidelines.html` 为准。

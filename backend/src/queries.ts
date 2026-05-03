@@ -243,10 +243,85 @@ type LifePostCursor = {
   id: number;
 };
 
+type LifePostFilters = {
+  authorId?: number;
+};
+
 type LifePostsPage = {
   items: LifePost[];
   nextCursor: string | null;
   hasMore: boolean;
+};
+
+type PublicProfileUser = {
+  id: number;
+  displayName: string;
+  joinedAt: Date;
+};
+
+type PublicProfileStats = {
+  wikiEdits: number;
+  wikiCreates: number;
+  wikiUpdates: number;
+  wikiDeletes: number;
+  imageUploads: number;
+  lifePosts: number;
+  lifeComments: number;
+  lifeReactions: number;
+  discussionComments: number;
+};
+
+type PublicProfileContribution = {
+  contentType: string;
+  total: number;
+  creates: number;
+  updates: number;
+  deletes: number;
+  lastContributedAt: Date | null;
+};
+
+type PublicUserProfile = {
+  user: PublicProfileUser;
+  stats: PublicProfileStats;
+  contributions: PublicProfileContribution[];
+};
+
+type UserReactionActivity = {
+  postId: number;
+  reactionType: LifeReactionType;
+  reactedAt: Date;
+  post: LifePost;
+};
+
+type UserReactionActivityPage = {
+  items: UserReactionActivity[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+type UserCommentActivitySource = 'life' | 'discussion';
+
+type UserCommentActivity = {
+  id: number;
+  source: UserCommentActivitySource;
+  body: string;
+  createdAt: Date;
+  target: {
+    type: 'life-post' | DiscussionEntityType;
+    id: number;
+    title: string;
+    excerpt: string;
+  };
+};
+
+type UserCommentActivityPage = {
+  items: UserCommentActivity[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+type UserCommentActivityCursor = LifePostCursor & {
+  source: UserCommentActivitySource;
 };
 
 type HabitatPayload = {
@@ -2198,6 +2273,45 @@ function encodeLifePostCursor(post: LifePostRow): string {
   return Buffer.from(JSON.stringify({ createdAt: post.createdAtCursor, id: post.id }), 'utf8').toString('base64url');
 }
 
+function encodeProfileCursor(cursor: LifePostCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+function decodeUserCommentActivityCursor(value: QueryValue): UserCommentActivityCursor | null {
+  const rawCursor = asString(value);
+  if (!rawCursor) {
+    return null;
+  }
+
+  try {
+    const cursor = JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8')) as Partial<UserCommentActivityCursor>;
+    const createdAt = typeof cursor.createdAt === 'string' ? cursor.createdAt : '';
+    const id = Number(cursor.id);
+    const source = cursor.source;
+
+    if (
+      !createdAt ||
+      Number.isNaN(new Date(createdAt).getTime()) ||
+      !Number.isInteger(id) ||
+      id <= 0 ||
+      (source !== 'life' && source !== 'discussion')
+    ) {
+      throw validationError('server.validation.cursorInvalid');
+    }
+
+    return { createdAt, id, source };
+  } catch (error) {
+    if (error instanceof Error && 'statusCode' in error) {
+      throw error;
+    }
+    throw validationError('server.validation.cursorInvalid');
+  }
+}
+
+function encodeUserCommentActivityCursor(cursor: UserCommentActivityCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
 function hydrateLifePost(
   post: LifePostRow,
   commentsByPost: Map<number, LifeComment[]>,
@@ -2354,10 +2468,11 @@ async function getLifeCommentById(id: number): Promise<LifeComment | null> {
   return row ? { ...row, replies: [] } : null;
 }
 
-export async function listLifePosts(
+async function listLifePostsWithFilters(
   paramsQuery: QueryParams = {},
   userId: number | null = null,
-  locale = defaultLocale
+  locale = defaultLocale,
+  filters: LifePostFilters = {}
 ): Promise<LifePostsPage> {
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
@@ -2365,6 +2480,11 @@ export async function listLifePosts(
   const tagIdValue = asString(paramsQuery.tagId)?.trim();
   const params: unknown[] = [];
   const conditions: string[] = ['lp.deleted_at IS NULL'];
+
+  if (filters.authorId !== undefined) {
+    params.push(filters.authorId);
+    conditions.push(`lp.created_by_user_id = $${params.length}`);
+  }
 
   if (search) {
     params.push(`%${search}%`);
@@ -2408,6 +2528,357 @@ export async function listLifePosts(
   return {
     items: posts.map((post) => hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost)),
     nextCursor: hasMore && posts.length > 0 ? encodeLifePostCursor(posts[posts.length - 1]) : null,
+    hasMore
+  };
+}
+
+export async function listLifePosts(
+  paramsQuery: QueryParams = {},
+  userId: number | null = null,
+  locale = defaultLocale
+): Promise<LifePostsPage> {
+  return listLifePostsWithFilters(paramsQuery, userId, locale);
+}
+
+async function getPublicProfileUser(userIdValue: number): Promise<PublicProfileUser | null> {
+  const userId = requirePositiveInteger(userIdValue, 'server.validation.recordInvalid');
+  return queryOne<PublicProfileUser>(
+    `
+      SELECT
+        id,
+        display_name AS "displayName",
+        created_at AS "joinedAt"
+      FROM users
+      WHERE id = $1
+    `,
+    [userId]
+  );
+}
+
+function publicContributionType(entityType: string): string {
+  return entityType === 'daily-checklist-items' ? 'daily-checklist' : entityType;
+}
+
+export async function getPublicUserProfile(userIdValue: number): Promise<PublicUserProfile | null> {
+  const user = await getPublicProfileUser(userIdValue);
+  if (!user) {
+    return null;
+  }
+
+  const stats = await queryOne<PublicProfileStats>(
+    `
+      SELECT
+        COALESCE((SELECT COUNT(*)::integer FROM wiki_edit_logs WHERE user_id = $1), 0) AS "wikiEdits",
+        COALESCE((SELECT COUNT(*)::integer FROM wiki_edit_logs WHERE user_id = $1 AND action = 'create'), 0) AS "wikiCreates",
+        COALESCE((SELECT COUNT(*)::integer FROM wiki_edit_logs WHERE user_id = $1 AND action = 'update'), 0) AS "wikiUpdates",
+        COALESCE((SELECT COUNT(*)::integer FROM wiki_edit_logs WHERE user_id = $1 AND action = 'delete'), 0) AS "wikiDeletes",
+        COALESCE((SELECT COUNT(*)::integer FROM entity_image_uploads WHERE created_by_user_id = $1), 0) AS "imageUploads",
+        COALESCE((SELECT COUNT(*)::integer FROM life_posts WHERE created_by_user_id = $1 AND deleted_at IS NULL), 0) AS "lifePosts",
+        COALESCE((
+          SELECT COUNT(*)::integer
+          FROM life_post_comments lc
+          JOIN life_posts lp ON lp.id = lc.post_id
+          WHERE lc.created_by_user_id = $1
+            AND lc.deleted_at IS NULL
+            AND lp.deleted_at IS NULL
+        ), 0) AS "lifeComments",
+        COALESCE((
+          SELECT COUNT(*)::integer
+          FROM life_post_reactions lpr
+          JOIN life_posts lp ON lp.id = lpr.post_id
+          WHERE lpr.user_id = $1
+            AND lp.deleted_at IS NULL
+        ), 0) AS "lifeReactions",
+        COALESCE((
+          SELECT COUNT(*)::integer
+          FROM entity_discussion_comments
+          WHERE created_by_user_id = $1
+            AND deleted_at IS NULL
+        ), 0) AS "discussionComments"
+    `,
+    [user.id]
+  );
+
+  const contributions = await query<PublicProfileContribution>(
+    `
+      SELECT
+        entity_type AS "contentType",
+        COUNT(*)::integer AS total,
+        COUNT(*) FILTER (WHERE action = 'create')::integer AS creates,
+        COUNT(*) FILTER (WHERE action = 'update')::integer AS updates,
+        COUNT(*) FILTER (WHERE action = 'delete')::integer AS deletes,
+        MAX(created_at) AS "lastContributedAt"
+      FROM wiki_edit_logs
+      WHERE user_id = $1
+      GROUP BY entity_type
+      ORDER BY total DESC, "lastContributedAt" DESC, entity_type
+    `,
+    [user.id]
+  );
+
+  return {
+    user,
+    stats: stats ?? {
+      wikiEdits: 0,
+      wikiCreates: 0,
+      wikiUpdates: 0,
+      wikiDeletes: 0,
+      imageUploads: 0,
+      lifePosts: 0,
+      lifeComments: 0,
+      lifeReactions: 0,
+      discussionComments: 0
+    },
+    contributions: contributions.map((item) => ({
+      ...item,
+      contentType: publicContributionType(item.contentType)
+    }))
+  };
+}
+
+export async function listUserLifePosts(
+  userIdValue: number,
+  paramsQuery: QueryParams = {},
+  viewerUserId: number | null = null,
+  locale = defaultLocale
+): Promise<LifePostsPage | null> {
+  const user = await getPublicProfileUser(userIdValue);
+  if (!user) {
+    return null;
+  }
+
+  return listLifePostsWithFilters(paramsQuery, viewerUserId, locale, { authorId: user.id });
+}
+
+async function hydrateLifePostsById(
+  postIds: number[],
+  viewerUserId: number | null,
+  locale: string
+): Promise<Map<number, LifePost>> {
+  const postById = new Map<number, LifePost>();
+  if (postIds.length === 0) {
+    return postById;
+  }
+
+  const posts = await query<LifePostRow>(
+    `
+      ${lifePostProjection(locale)}
+      WHERE lp.id = ANY($1::integer[])
+        AND lp.deleted_at IS NULL
+    `,
+    [postIds]
+  );
+  const commentsByPost = await lifeCommentsForPosts(postIds);
+  const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, viewerUserId);
+
+  for (const post of posts) {
+    postById.set(post.id, hydrateLifePost(post, commentsByPost, countsByPost, myReactionsByPost));
+  }
+
+  return postById;
+}
+
+export async function listUserReactionActivities(
+  userIdValue: number,
+  paramsQuery: QueryParams = {},
+  viewerUserId: number | null = null,
+  locale = defaultLocale
+): Promise<UserReactionActivityPage | null> {
+  const user = await getPublicProfileUser(userIdValue);
+  if (!user) {
+    return null;
+  }
+
+  const cursor = decodeLifePostCursor(paramsQuery.cursor);
+  const limit = cleanLifePostLimit(paramsQuery.limit);
+  const params: unknown[] = [user.id];
+  const conditions = ['lpr.user_id = $1', 'lp.deleted_at IS NULL'];
+
+  if (cursor) {
+    params.push(cursor.createdAt, cursor.id);
+    conditions.push(`(lpr.updated_at, lpr.post_id) < ($${params.length - 1}::timestamptz, $${params.length}::integer)`);
+  }
+
+  params.push(limit + 1);
+  const rows = await query<{
+    postId: number;
+    reactionType: LifeReactionType;
+    reactedAt: Date;
+    reactedAtCursor: string;
+  }>(
+    `
+      SELECT
+        lpr.post_id AS "postId",
+        lpr.reaction_type AS "reactionType",
+        lpr.updated_at AS "reactedAt",
+        lpr.updated_at::text AS "reactedAtCursor"
+      FROM life_post_reactions lpr
+      JOIN life_posts lp ON lp.id = lpr.post_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY lpr.updated_at DESC, lpr.post_id DESC
+      LIMIT $${params.length}
+    `,
+    params
+  );
+  const hasMore = rows.length > limit;
+  const activities = hasMore ? rows.slice(0, limit) : rows;
+  const postById = await hydrateLifePostsById(
+    activities.map((activity) => activity.postId),
+    viewerUserId,
+    locale
+  );
+
+  return {
+    items: activities.flatMap((activity) => {
+      const post = postById.get(activity.postId);
+      return post
+        ? [
+            {
+              postId: activity.postId,
+              reactionType: activity.reactionType,
+              reactedAt: activity.reactedAt,
+              post
+            }
+          ]
+        : [];
+    }),
+    nextCursor:
+      hasMore && activities.length > 0
+        ? encodeProfileCursor({
+            createdAt: activities[activities.length - 1].reactedAtCursor,
+            id: activities[activities.length - 1].postId
+          })
+        : null,
+    hasMore
+  };
+}
+
+export async function listUserCommentActivities(
+  userIdValue: number,
+  paramsQuery: QueryParams = {},
+  locale = defaultLocale
+): Promise<UserCommentActivityPage | null> {
+  const user = await getPublicProfileUser(userIdValue);
+  if (!user) {
+    return null;
+  }
+
+  const cursor = decodeUserCommentActivityCursor(paramsQuery.cursor);
+  const limit = cleanLifePostLimit(paramsQuery.limit);
+  const pokemonName = localizedName('pokemon', 'p', locale);
+  const itemName = localizedName('items', 'i', locale);
+  const recipeItemName = localizedName('items', 'recipe_item', locale);
+  const habitatName = localizedName('habitats', 'h', locale);
+  const params: unknown[] = [user.id];
+  let cursorClause = '';
+
+  if (cursor) {
+    params.push(cursor.createdAt, cursor.source, cursor.id);
+    cursorClause = `WHERE (created_at, source, id) < ($${params.length - 2}::timestamptz, $${params.length - 1}::text, $${params.length}::integer)`;
+  }
+
+  params.push(limit + 1);
+  const rows = await query<{
+    id: number;
+    source: UserCommentActivitySource;
+    body: string;
+    createdAt: Date;
+    createdAtCursor: string;
+    targetType: 'life-post' | DiscussionEntityType;
+    targetId: number;
+    targetTitle: string;
+    targetExcerpt: string;
+  }>(
+    `
+      WITH activity AS (
+        SELECT
+          'life'::text AS source,
+          lc.id,
+          lc.body,
+          lc.created_at,
+          lc.created_at::text AS cursor_at,
+          'life-post'::text AS target_type,
+          lp.id AS target_id,
+          COALESCE(post_user.display_name, '') AS target_title,
+          lp.body AS target_excerpt
+        FROM life_post_comments lc
+        JOIN life_posts lp ON lp.id = lc.post_id
+        LEFT JOIN users post_user ON post_user.id = lp.created_by_user_id
+        WHERE lc.created_by_user_id = $1
+          AND lc.deleted_at IS NULL
+          AND lp.deleted_at IS NULL
+
+        UNION ALL
+
+        SELECT
+          'discussion'::text AS source,
+          edc.id,
+          edc.body,
+          edc.created_at,
+          edc.created_at::text AS cursor_at,
+          edc.entity_type AS target_type,
+          edc.entity_id AS target_id,
+          COALESCE(
+            CASE edc.entity_type
+              WHEN 'pokemon' THEN ${pokemonName}
+              WHEN 'items' THEN ${itemName}
+              WHEN 'recipes' THEN ${recipeItemName}
+              WHEN 'habitats' THEN ${habitatName}
+              ELSE ''
+            END,
+            ''
+          ) AS target_title,
+          ''::text AS target_excerpt
+        FROM entity_discussion_comments edc
+        LEFT JOIN pokemon p ON edc.entity_type = 'pokemon' AND p.id = edc.entity_id
+        LEFT JOIN items i ON edc.entity_type = 'items' AND i.id = edc.entity_id
+        LEFT JOIN recipes r ON edc.entity_type = 'recipes' AND r.id = edc.entity_id
+        LEFT JOIN items recipe_item ON recipe_item.id = r.item_id
+        LEFT JOIN habitats h ON edc.entity_type = 'habitats' AND h.id = edc.entity_id
+        WHERE edc.created_by_user_id = $1
+          AND edc.deleted_at IS NULL
+      )
+      SELECT
+        source,
+        id,
+        body,
+        created_at AS "createdAt",
+        cursor_at AS "createdAtCursor",
+        target_type AS "targetType",
+        target_id AS "targetId",
+        target_title AS "targetTitle",
+        target_excerpt AS "targetExcerpt"
+      FROM activity
+      ${cursorClause}
+      ORDER BY created_at DESC, source DESC, id DESC
+      LIMIT $${params.length}
+    `,
+    params
+  );
+  const hasMore = rows.length > limit;
+  const activities = hasMore ? rows.slice(0, limit) : rows;
+
+  return {
+    items: activities.map((activity) => ({
+      id: activity.id,
+      source: activity.source,
+      body: activity.body,
+      createdAt: activity.createdAt,
+      target: {
+        type: activity.targetType,
+        id: activity.targetId,
+        title: activity.targetTitle,
+        excerpt: activity.targetExcerpt
+      }
+    })),
+    nextCursor:
+      hasMore && activities.length > 0
+        ? encodeUserCommentActivityCursor({
+            createdAt: activities[activities.length - 1].createdAtCursor,
+            id: activities[activities.length - 1].id,
+            source: activities[activities.length - 1].source
+          })
+        : null,
     hasMore
   };
 }

@@ -1,59 +1,241 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import StatusMessage from '../components/StatusMessage.vue';
-import { iconCopy, iconProfile, iconReferral, iconSave } from '../icons';
-import { api, notifyAuthChange, type AuthUser, type ReferralSummary } from '../services/api';
+import Tabs, { type TabOption } from '../components/Tabs.vue';
+import {
+  iconComment,
+  iconCopy,
+  iconLife,
+  iconProfile,
+  iconReactionFun,
+  iconReactionHelpful,
+  iconReactionLike,
+  iconReactionThanks,
+  iconReferral,
+  iconSave
+} from '../icons';
+import {
+  api,
+  getAuthToken,
+  notifyAuthChange,
+  setAuthToken,
+  type AuthUser,
+  type DiscussionEntityType,
+  type LifePost,
+  type LifeReactionType,
+  type PublicUserProfile,
+  type ReferralSummary,
+  type UserCommentActivity,
+  type UserReactionActivity
+} from '../services/api';
 
-const { t } = useI18n();
-const user = ref<AuthUser | null>(null);
+type ProfileTab = 'feeds' | 'contributions' | 'reactions' | 'comments' | 'account';
+
+const { locale, t } = useI18n();
+const route = useRoute();
+const currentUser = ref<AuthUser | null>(null);
+const profile = ref<PublicUserProfile | null>(null);
 const referral = ref<ReferralSummary | null>(null);
 const displayName = ref('');
+const activeTab = ref<ProfileTab>('feeds');
 const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
 const errorMessage = ref('');
 const referralMessage = ref('');
 const referralErrorMessage = ref('');
+const feeds = ref<LifePost[]>([]);
+const feedsCursor = ref<string | null>(null);
+const feedsHasMore = ref(false);
+const feedsLoading = ref(false);
+const feedsError = ref('');
+const reactions = ref<UserReactionActivity[]>([]);
+const reactionsCursor = ref<string | null>(null);
+const reactionsHasMore = ref(false);
+const reactionsLoading = ref(false);
+const reactionsError = ref('');
+const comments = ref<UserCommentActivity[]>([]);
+const commentsCursor = ref<string | null>(null);
+const commentsHasMore = ref(false);
+const commentsLoading = ref(false);
+const commentsError = ref('');
+const activityLimit = 10;
+let profileRequestId = 0;
 
+const routeProfileId = computed(() => {
+  const value = route.params.id;
+  return Array.isArray(value) ? value[0] : value;
+});
+const isAccountRoute = computed(() => !routeProfileId.value);
+const canShowAccount = computed(() => {
+  return isAccountRoute.value && currentUser.value !== null && profile.value?.user.id === currentUser.value.id;
+});
 const trimmedDisplayName = computed(() => displayName.value.trim());
 const hasChanges = computed(() => {
-  const currentUser = user.value;
-  if (!currentUser) return false;
-  return trimmedDisplayName.value !== currentUser.displayName;
+  const user = currentUser.value;
+  if (!user || !canShowAccount.value) return false;
+  return trimmedDisplayName.value !== user.displayName;
 });
 const profileInitial = computed(() => {
-  const name = user.value?.displayName.trim() || user.value?.email.trim() || '';
-  return name.charAt(0).toUpperCase();
+  const name = profile.value?.user.displayName.trim() || currentUser.value?.displayName.trim() || '';
+  return name.charAt(0).toUpperCase() || '#';
+});
+const pageTitle = computed(() => profile.value?.user.displayName ?? t('pages.profile.title'));
+const pageSubtitle = computed(() => (isAccountRoute.value ? t('pages.profile.subtitle') : t('pages.profile.publicSubtitle')));
+const tabs = computed<TabOption[]>(() => {
+  const baseTabs: TabOption[] = [
+    { value: 'feeds', label: t('pages.profile.tabFeeds') },
+    { value: 'contributions', label: t('pages.profile.tabContributions') },
+    { value: 'reactions', label: t('pages.profile.tabReactions') },
+    { value: 'comments', label: t('pages.profile.tabComments') }
+  ];
+
+  return canShowAccount.value ? [...baseTabs, { value: 'account', label: t('pages.profile.tabAccount') }] : baseTabs;
+});
+const headlineStats = computed(() => {
+  const stats = profile.value?.stats;
+  return [
+    { label: t('pages.profile.lifePosts'), value: stats?.lifePosts ?? 0 },
+    { label: t('pages.profile.wikiEdits'), value: stats?.wikiEdits ?? 0 },
+    { label: t('pages.profile.lifeReactions'), value: stats?.lifeReactions ?? 0 },
+    { label: t('pages.profile.commentsMade'), value: (stats?.lifeComments ?? 0) + (stats?.discussionComments ?? 0) }
+  ];
+});
+const wikiStats = computed(() => {
+  const stats = profile.value?.stats;
+  return [
+    { label: t('pages.profile.wikiEdits'), value: stats?.wikiEdits ?? 0 },
+    { label: t('pages.profile.wikiCreates'), value: stats?.wikiCreates ?? 0 },
+    { label: t('pages.profile.wikiUpdates'), value: stats?.wikiUpdates ?? 0 },
+    { label: t('pages.profile.wikiDeletes'), value: stats?.wikiDeletes ?? 0 },
+    { label: t('pages.profile.imageUploads'), value: stats?.imageUploads ?? 0 }
+  ];
+});
+const communityStats = computed(() => {
+  const stats = profile.value?.stats;
+  return [
+    { label: t('pages.profile.lifePosts'), value: stats?.lifePosts ?? 0 },
+    { label: t('pages.profile.lifeComments'), value: stats?.lifeComments ?? 0 },
+    { label: t('pages.profile.lifeReactions'), value: stats?.lifeReactions ?? 0 },
+    { label: t('pages.profile.discussionComments'), value: stats?.discussionComments ?? 0 }
+  ];
 });
 
+watch(
+  tabs,
+  (nextTabs) => {
+    if (!nextTabs.some((tab) => tab.value === activeTab.value)) {
+      activeTab.value = 'feeds';
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => activeTab.value,
+  () => {
+    void loadActiveTab();
+  }
+);
+
+watch(
+  () => route.fullPath,
+  () => {
+    void loadProfile();
+  }
+);
+
+function resetActivity() {
+  feeds.value = [];
+  feedsCursor.value = null;
+  feedsHasMore.value = false;
+  feedsError.value = '';
+  reactions.value = [];
+  reactionsCursor.value = null;
+  reactionsHasMore.value = false;
+  reactionsError.value = '';
+  comments.value = [];
+  commentsCursor.value = null;
+  commentsHasMore.value = false;
+  commentsError.value = '';
+}
+
+async function loadOptionalCurrentUser() {
+  if (!getAuthToken()) {
+    currentUser.value = null;
+    return null;
+  }
+
+  try {
+    const response = await api.me();
+    currentUser.value = response.user;
+    return response.user;
+  } catch {
+    currentUser.value = null;
+    setAuthToken(null);
+    return null;
+  }
+}
+
 async function loadProfile() {
+  const nextRequestId = ++profileRequestId;
   loading.value = true;
   message.value = '';
   errorMessage.value = '';
   referralMessage.value = '';
   referralErrorMessage.value = '';
   referral.value = null;
+  profile.value = null;
+  resetActivity();
 
   try {
-    const response = await api.me();
-    user.value = response.user;
-    displayName.value = response.user.displayName;
+    let targetId = routeProfileId.value ?? '';
 
-    try {
-      const referralResponse = await api.referral();
-      referral.value = referralResponse.referral;
-    } catch {
-      referralErrorMessage.value = t('pages.profile.referralLoadFailed');
+    if (isAccountRoute.value) {
+      const response = await api.me();
+      currentUser.value = response.user;
+      targetId = String(response.user.id);
+      displayName.value = response.user.displayName;
+
+      try {
+        const referralResponse = await api.referral();
+        if (nextRequestId === profileRequestId) {
+          referral.value = referralResponse.referral;
+        }
+      } catch {
+        if (nextRequestId === profileRequestId) {
+          referralErrorMessage.value = t('pages.profile.referralLoadFailed');
+        }
+      }
+    } else {
+      await loadOptionalCurrentUser();
     }
+
+    const response = await api.publicProfile(targetId);
+    if (nextRequestId !== profileRequestId) {
+      return;
+    }
+
+    profile.value = response.profile;
+    if (canShowAccount.value) {
+      displayName.value = currentUser.value?.displayName ?? response.profile.user.displayName;
+    }
+    void loadActiveTab(true);
   } catch (error) {
-    errorMessage.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+    if (nextRequestId === profileRequestId) {
+      profile.value = null;
+      errorMessage.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+    }
   } finally {
-    loading.value = false;
+    if (nextRequestId === profileRequestId) {
+      loading.value = false;
+    }
   }
 }
 
@@ -69,8 +251,17 @@ async function saveProfile() {
   busy.value = true;
   try {
     const response = await api.updateMe({ displayName: trimmedDisplayName.value });
-    user.value = response.user;
+    currentUser.value = response.user;
     displayName.value = response.user.displayName;
+    if (profile.value) {
+      profile.value = {
+        ...profile.value,
+        user: {
+          ...profile.value.user,
+          displayName: response.user.displayName
+        }
+      };
+    }
     message.value = t('pages.profile.saved');
     notifyAuthChange();
   } catch (error) {
@@ -114,6 +305,182 @@ async function copyReferralLink() {
   }
 }
 
+async function loadActiveTab(force = false) {
+  if (!profile.value) {
+    return;
+  }
+
+  if (activeTab.value === 'feeds' && (force || feeds.value.length === 0)) {
+    await loadFeeds(true);
+  } else if (activeTab.value === 'reactions' && (force || reactions.value.length === 0)) {
+    await loadReactions(true);
+  } else if (activeTab.value === 'comments' && (force || comments.value.length === 0)) {
+    await loadComments(true);
+  }
+}
+
+async function loadFeeds(reset = false) {
+  if (!profile.value || feedsLoading.value) {
+    return;
+  }
+
+  feedsLoading.value = true;
+  feedsError.value = '';
+  try {
+    const page = await api.userLifePosts(profile.value.user.id, {
+      cursor: reset ? null : feedsCursor.value,
+      limit: activityLimit
+    });
+    feeds.value = reset ? page.items : [...feeds.value, ...page.items];
+    feedsCursor.value = page.nextCursor;
+    feedsHasMore.value = page.hasMore;
+  } catch (error) {
+    feedsError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+  } finally {
+    feedsLoading.value = false;
+  }
+}
+
+async function loadReactions(reset = false) {
+  if (!profile.value || reactionsLoading.value) {
+    return;
+  }
+
+  reactionsLoading.value = true;
+  reactionsError.value = '';
+  try {
+    const page = await api.userReactions(profile.value.user.id, {
+      cursor: reset ? null : reactionsCursor.value,
+      limit: activityLimit
+    });
+    reactions.value = reset ? page.items : [...reactions.value, ...page.items];
+    reactionsCursor.value = page.nextCursor;
+    reactionsHasMore.value = page.hasMore;
+  } catch (error) {
+    reactionsError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+  } finally {
+    reactionsLoading.value = false;
+  }
+}
+
+async function loadComments(reset = false) {
+  if (!profile.value || commentsLoading.value) {
+    return;
+  }
+
+  commentsLoading.value = true;
+  commentsError.value = '';
+  try {
+    const page = await api.userComments(profile.value.user.id, {
+      cursor: reset ? null : commentsCursor.value,
+      limit: activityLimit
+    });
+    comments.value = reset ? page.items : [...comments.value, ...page.items];
+    commentsCursor.value = page.nextCursor;
+    commentsHasMore.value = page.hasMore;
+  } catch (error) {
+    commentsError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+  } finally {
+    commentsLoading.value = false;
+  }
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: 'medium'
+  }).format(date);
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(date);
+}
+
+function authorInitial(post: LifePost): string {
+  const name = post.author?.displayName.trim() || t('pages.life.byUnknown');
+  return name.slice(0, 1).toUpperCase();
+}
+
+function commentTotal(post: LifePost): number {
+  return post.comments.reduce((total, comment) => total + 1 + comment.replies.length, 0);
+}
+
+function reactionTotal(post: LifePost): number {
+  return Object.values(post.reactionCounts).reduce((total, count) => total + count, 0);
+}
+
+function postExcerpt(post: LifePost): string {
+  return post.body.length > 180 ? `${post.body.slice(0, 180).trim()}...` : post.body;
+}
+
+function reactionIcon(type: LifeReactionType) {
+  return {
+    like: iconReactionLike,
+    helpful: iconReactionHelpful,
+    fun: iconReactionFun,
+    thanks: iconReactionThanks
+  }[type];
+}
+
+function reactionLabel(type: LifeReactionType): string {
+  return t(`pages.life.reaction${type.charAt(0).toUpperCase()}${type.slice(1)}`);
+}
+
+function contentTypeLabel(contentType: string): string {
+  const labels: Record<string, string> = {
+    pokemon: t('nav.pokemon'),
+    items: t('nav.items'),
+    recipes: t('nav.recipes'),
+    habitats: t('nav.habitats'),
+    'daily-checklist': t('nav.checklist'),
+    'pokemon-types': t('config.pokemonTypes'),
+    skills: t('config.skills'),
+    environments: t('config.environments'),
+    'favorite-things': t('config.favoriteThings'),
+    'item-categories': t('config.itemCategories'),
+    'item-usages': t('config.itemUsages'),
+    'acquisition-methods': t('config.acquisitionMethods'),
+    maps: t('config.maps'),
+    'life-tags': t('config.lifeTags')
+  };
+  return labels[contentType] ?? t('pages.profile.otherContributions');
+}
+
+function discussionTargetRoute(type: DiscussionEntityType, id: number): string {
+  return {
+    pokemon: `/pokemon/${id}`,
+    items: `/items/${id}`,
+    recipes: `/recipes/${id}`,
+    habitats: `/habitats/${id}`
+  }[type];
+}
+
+function commentTargetRoute(comment: UserCommentActivity): string {
+  return comment.target.type === 'life-post' ? '/life' : discussionTargetRoute(comment.target.type, comment.target.id);
+}
+
+function commentTargetTitle(comment: UserCommentActivity): string {
+  if (comment.target.type === 'life-post') {
+    return comment.target.title
+      ? t('pages.profile.lifePostBy', { name: comment.target.title })
+      : t('pages.profile.lifePostTarget');
+  }
+
+  return comment.target.title || contentTypeLabel(comment.target.type);
+}
+
 onMounted(() => {
   void loadProfile();
 });
@@ -121,11 +488,11 @@ onMounted(() => {
 
 <template>
   <section class="profile-page">
-    <PageHeader :title="t('pages.profile.title')" :subtitle="t('pages.profile.subtitle')">
-      <template #kicker>{{ t('auth.accountAccess') }}</template>
+    <PageHeader :title="pageTitle" :subtitle="pageSubtitle">
+      <template #kicker>{{ isAccountRoute ? t('auth.accountAccess') : t('pages.profile.publicKicker') }}</template>
     </PageHeader>
 
-    <div v-if="loading" class="profile-layout" aria-busy="true" :aria-label="t('pages.profile.loading')">
+    <div v-if="loading" class="profile-layout profile-layout--loading" aria-busy="true" :aria-label="t('pages.profile.loading')">
       <section class="profile-card profile-card--identity" aria-hidden="true">
         <div class="profile-identity">
           <Skeleton variant="box" width="58px" height="58px" />
@@ -135,117 +502,334 @@ onMounted(() => {
           </div>
         </div>
       </section>
-      <section class="profile-card" aria-hidden="true">
-        <Skeleton width="180px" height="28px" />
-        <div class="auth-form">
-          <div class="field">
-            <Skeleton width="110px" />
-            <Skeleton variant="box" height="44px" />
-          </div>
-          <div class="field">
-            <Skeleton width="70px" />
-            <Skeleton variant="box" height="44px" />
-          </div>
-          <Skeleton variant="box" width="120px" height="42px" />
+      <section class="profile-card profile-card--wide" aria-hidden="true">
+        <Skeleton width="210px" height="28px" />
+        <div class="profile-stat-grid">
+          <Skeleton v-for="index in 4" :key="index" variant="box" height="74px" />
         </div>
-      </section>
-      <section class="profile-card profile-card--referral" aria-hidden="true">
-        <Skeleton width="180px" height="28px" />
-        <div class="auth-form">
-          <Skeleton variant="box" height="58px" />
-          <Skeleton variant="box" height="44px" />
-          <Skeleton variant="box" width="120px" height="42px" />
-        </div>
-      </section>
-    </div>
-
-    <div v-else-if="user" class="profile-layout">
-      <section class="profile-card profile-card--identity" :aria-label="t('pages.profile.accountSummary')">
-        <div class="profile-identity">
-          <div class="profile-avatar" aria-hidden="true">{{ profileInitial }}</div>
-          <div class="profile-identity__copy">
-            <h2>{{ user.displayName }}</h2>
-            <p>{{ user.email }}</p>
-          </div>
-        </div>
-        <StatusBadge
-          :label="user.emailVerified ? t('pages.profile.emailVerified') : t('pages.profile.emailUnverified')"
-          :tone="user.emailVerified ? 'success' : 'warning'"
-        />
-      </section>
-
-      <section class="profile-card" :aria-label="t('pages.profile.profileDetails')">
-        <div class="profile-card__header">
-          <Icon :icon="iconProfile" class="profile-card__icon" aria-hidden="true" />
-          <h2>{{ t('pages.profile.profileDetails') }}</h2>
-        </div>
-
-        <form class="auth-form" @submit.prevent="saveProfile">
-          <div class="field">
-            <label for="profile-display-name">{{ t('auth.displayName') }}</label>
-            <input
-              id="profile-display-name"
-              v-model="displayName"
-              autocomplete="nickname"
-              maxlength="40"
-              required
-              :disabled="busy"
-            />
-            <small class="profile-field-note">{{ t('pages.profile.displayNameHint') }}</small>
-          </div>
-
-          <div class="field">
-            <label for="profile-email">{{ t('auth.email') }}</label>
-            <input id="profile-email" class="profile-readonly-input" :value="user.email" readonly type="email" />
-          </div>
-
-          <StatusMessage v-if="message" variant="success">{{ message }}</StatusMessage>
-          <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
-
-          <button class="ui-button ui-button--primary" :disabled="busy || !hasChanges" type="submit">
-            <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
-            {{ busy ? t('common.saving') : t('common.save') }}
-          </button>
-        </form>
-      </section>
-
-      <section class="profile-card profile-card--referral" :aria-label="t('pages.profile.referralTitle')">
-        <div class="profile-card__header">
-          <Icon :icon="iconReferral" class="profile-card__icon" aria-hidden="true" />
-          <h2>{{ t('pages.profile.referralTitle') }}</h2>
-        </div>
-
-        <div v-if="referral" class="profile-referral">
-          <div class="profile-referral__metric">
-            <span>{{ t('pages.profile.verifiedReferralCount') }}</span>
-            <strong>{{ referral.verifiedReferralCount }}</strong>
-          </div>
-
-          <div class="field">
-            <label for="profile-referral-code">{{ t('pages.profile.referralCode') }}</label>
-            <input id="profile-referral-code" class="profile-readonly-input profile-code-input" :value="referral.code" readonly />
-          </div>
-
-          <div class="field">
-            <label for="profile-referral-url">{{ t('pages.profile.referralUrl') }}</label>
-            <div class="profile-referral-link-row">
-              <input id="profile-referral-url" class="profile-readonly-input" :value="referral.url" readonly />
-              <button class="ui-button ui-button--blue" type="button" @click="copyReferralLink">
-                <Icon :icon="iconCopy" class="ui-icon" aria-hidden="true" />
-                {{ t('pages.profile.copyReferralLink') }}
-              </button>
-            </div>
-            <small class="profile-field-note">{{ t('pages.profile.referralHint') }}</small>
-          </div>
-
-          <StatusMessage v-if="referralMessage" variant="success">{{ referralMessage }}</StatusMessage>
-          <StatusMessage v-if="referralErrorMessage" variant="danger">{{ referralErrorMessage }}</StatusMessage>
-        </div>
-
-        <StatusMessage v-else-if="referralErrorMessage" variant="danger" :duration="0">{{ referralErrorMessage }}</StatusMessage>
       </section>
     </div>
 
     <StatusMessage v-else-if="errorMessage" variant="danger" :duration="0">{{ errorMessage }}</StatusMessage>
+
+    <div v-else-if="profile" class="profile-public-layout">
+      <section class="profile-card profile-hero" :aria-label="t('pages.profile.accountSummary')">
+        <div class="profile-identity">
+          <div class="profile-avatar" aria-hidden="true">{{ profileInitial }}</div>
+          <div class="profile-identity__copy">
+            <h2>{{ profile.user.displayName }}</h2>
+            <p>{{ t('pages.profile.joinedAt', { date: formatDate(profile.user.joinedAt) }) }}</p>
+          </div>
+        </div>
+
+        <StatusBadge
+          v-if="canShowAccount && currentUser"
+          :label="currentUser.emailVerified ? t('pages.profile.emailVerified') : t('pages.profile.emailUnverified')"
+          :tone="currentUser.emailVerified ? 'success' : 'warning'"
+        />
+
+        <dl class="profile-stat-strip">
+          <div v-for="item in headlineStats" :key="item.label">
+            <dt>{{ item.label }}</dt>
+            <dd>{{ item.value }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <Tabs id="profile-tabs" v-model="activeTab" :tabs="tabs" :label="t('pages.profile.tabsLabel')" />
+
+      <section v-if="activeTab === 'feeds'" class="profile-tab-panel" :aria-label="t('pages.profile.tabFeeds')">
+        <StatusMessage v-if="feedsError" variant="danger" :duration="0">{{ feedsError }}</StatusMessage>
+
+        <div v-if="feedsLoading && !feeds.length" class="life-feed__list" aria-hidden="true">
+          <article v-for="index in 3" :key="index" class="life-post life-post--skeleton">
+            <div class="life-post__header">
+              <Skeleton variant="box" width="46px" height="46px" />
+              <div class="life-post__byline">
+                <Skeleton width="140px" />
+                <Skeleton width="180px" />
+              </div>
+            </div>
+            <Skeleton width="90%" />
+            <Skeleton width="68%" />
+          </article>
+        </div>
+
+        <div v-else-if="feeds.length" class="life-feed__list">
+          <article v-for="post in feeds" :key="post.id" class="life-post profile-feed-card">
+            <header class="life-post__header">
+              <div class="life-post__avatar" aria-hidden="true">{{ authorInitial(post) }}</div>
+              <div class="life-post__byline">
+                <RouterLink v-if="post.author" class="user-profile-link" :to="`/profile/${post.author.id}`">
+                  {{ post.author.displayName }}
+                </RouterLink>
+                <strong v-else>{{ t('pages.life.byUnknown') }}</strong>
+                <span>
+                  <time :datetime="post.createdAt">{{ formatDateTime(post.createdAt) }}</time>
+                  <template v-if="post.updatedAt !== post.createdAt"> - {{ t('pages.life.edited') }}</template>
+                </span>
+              </div>
+            </header>
+
+            <p class="life-post__body">{{ post.body }}</p>
+
+            <div v-if="post.tags.length" class="life-post__tags" :aria-label="t('pages.life.tags')">
+              <span v-for="tag in post.tags" :key="tag.id" class="life-post__tag">{{ tag.name }}</span>
+            </div>
+
+            <div class="profile-feed-card__metrics">
+              <span>
+                <Icon :icon="iconReactionLike" class="ui-icon" aria-hidden="true" />
+                {{ t('pages.life.reactionsCount', { count: reactionTotal(post) }) }}
+              </span>
+              <span>
+                <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+                {{ t('pages.life.commentsCount', { count: commentTotal(post) }) }}
+              </span>
+            </div>
+          </article>
+
+          <div v-if="feedsHasMore" class="profile-load-more">
+            <button class="ui-button ui-button--blue" type="button" :disabled="feedsLoading" @click="loadFeeds(false)">
+              {{ feedsLoading ? t('common.loading') : t('pages.profile.loadMore') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="profile-empty">
+          <Icon :icon="iconLife" class="profile-empty__icon" aria-hidden="true" />
+          <h2>{{ t('pages.profile.feedsEmpty') }}</h2>
+        </div>
+      </section>
+
+      <section v-else-if="activeTab === 'contributions'" class="profile-tab-panel" :aria-label="t('pages.profile.tabContributions')">
+        <div class="profile-section-grid">
+          <section class="profile-card profile-card--soft" :aria-label="t('pages.profile.wikiContributionStats')">
+            <div class="profile-card__header">
+              <Icon :icon="iconProfile" class="profile-card__icon" aria-hidden="true" />
+              <h2>{{ t('pages.profile.wikiContributionStats') }}</h2>
+            </div>
+            <dl class="profile-stat-grid">
+              <div v-for="item in wikiStats" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="profile-card profile-card--soft" :aria-label="t('pages.profile.communityStats')">
+            <div class="profile-card__header">
+              <Icon :icon="iconLife" class="profile-card__icon" aria-hidden="true" />
+              <h2>{{ t('pages.profile.communityStats') }}</h2>
+            </div>
+            <dl class="profile-stat-grid">
+              <div v-for="item in communityStats" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+
+        <section class="profile-card profile-card--wide" :aria-label="t('pages.profile.contributionBreakdown')">
+          <div class="profile-card__header">
+            <Icon :icon="iconProfile" class="profile-card__icon" aria-hidden="true" />
+            <h2>{{ t('pages.profile.contributionBreakdown') }}</h2>
+          </div>
+
+          <div v-if="profile.contributions.length" class="profile-contribution-list">
+            <article v-for="item in profile.contributions" :key="item.contentType" class="profile-contribution-row">
+              <div>
+                <strong>{{ contentTypeLabel(item.contentType) }}</strong>
+                <span v-if="item.lastContributedAt">{{ formatDateTime(item.lastContributedAt) }}</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>{{ t('pages.profile.total') }}</dt>
+                  <dd>{{ item.total }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.profile.wikiCreates') }}</dt>
+                  <dd>{{ item.creates }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.profile.wikiUpdates') }}</dt>
+                  <dd>{{ item.updates }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.profile.wikiDeletes') }}</dt>
+                  <dd>{{ item.deletes }}</dd>
+                </div>
+              </dl>
+            </article>
+          </div>
+
+          <div v-else class="profile-empty profile-empty--compact">
+            <Icon :icon="iconProfile" class="profile-empty__icon" aria-hidden="true" />
+            <h2>{{ t('pages.profile.contributionsEmpty') }}</h2>
+          </div>
+        </section>
+      </section>
+
+      <section v-else-if="activeTab === 'reactions'" class="profile-tab-panel" :aria-label="t('pages.profile.tabReactions')">
+        <StatusMessage v-if="reactionsError" variant="danger" :duration="0">{{ reactionsError }}</StatusMessage>
+
+        <div v-if="reactionsLoading && !reactions.length" class="profile-activity-list" aria-hidden="true">
+          <article v-for="index in 3" :key="index" class="profile-activity-card">
+            <Skeleton width="180px" />
+            <Skeleton width="90%" />
+            <Skeleton width="64%" />
+          </article>
+        </div>
+
+        <div v-else-if="reactions.length" class="profile-activity-list">
+          <article v-for="activity in reactions" :key="`${activity.postId}-${activity.reactedAt}`" class="profile-activity-card">
+            <header class="profile-activity-card__header">
+              <span>
+                <Icon :icon="reactionIcon(activity.reactionType)" class="ui-icon" aria-hidden="true" />
+                {{ reactionLabel(activity.reactionType) }}
+              </span>
+              <time :datetime="activity.reactedAt">{{ formatDateTime(activity.reactedAt) }}</time>
+            </header>
+
+            <div class="profile-post-preview">
+              <div class="profile-post-preview__meta">
+                <RouterLink v-if="activity.post.author" class="user-profile-link" :to="`/profile/${activity.post.author.id}`">
+                  {{ activity.post.author.displayName }}
+                </RouterLink>
+                <strong v-else>{{ t('pages.life.byUnknown') }}</strong>
+                <span>{{ formatDateTime(activity.post.createdAt) }}</span>
+              </div>
+              <p>{{ postExcerpt(activity.post) }}</p>
+            </div>
+          </article>
+
+          <div v-if="reactionsHasMore" class="profile-load-more">
+            <button class="ui-button ui-button--blue" type="button" :disabled="reactionsLoading" @click="loadReactions(false)">
+              {{ reactionsLoading ? t('common.loading') : t('pages.profile.loadMore') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="profile-empty">
+          <Icon :icon="iconReactionLike" class="profile-empty__icon" aria-hidden="true" />
+          <h2>{{ t('pages.profile.reactionsEmpty') }}</h2>
+        </div>
+      </section>
+
+      <section v-else-if="activeTab === 'comments'" class="profile-tab-panel" :aria-label="t('pages.profile.tabComments')">
+        <StatusMessage v-if="commentsError" variant="danger" :duration="0">{{ commentsError }}</StatusMessage>
+
+        <div v-if="commentsLoading && !comments.length" class="profile-activity-list" aria-hidden="true">
+          <article v-for="index in 3" :key="index" class="profile-activity-card">
+            <Skeleton width="180px" />
+            <Skeleton width="94%" />
+            <Skeleton width="60%" />
+          </article>
+        </div>
+
+        <div v-else-if="comments.length" class="profile-activity-list">
+          <article v-for="comment in comments" :key="`${comment.source}-${comment.id}`" class="profile-activity-card">
+            <header class="profile-activity-card__header">
+              <span>
+                <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
+                {{ comment.source === 'life' ? t('pages.profile.lifeComment') : t('pages.profile.discussionComment') }}
+              </span>
+              <time :datetime="comment.createdAt">{{ formatDateTime(comment.createdAt) }}</time>
+            </header>
+
+            <p class="profile-comment-body">{{ comment.body }}</p>
+            <RouterLink class="profile-comment-target" :to="commentTargetRoute(comment)">
+              {{ commentTargetTitle(comment) }}
+            </RouterLink>
+            <p v-if="comment.target.excerpt" class="profile-comment-excerpt">{{ comment.target.excerpt }}</p>
+          </article>
+
+          <div v-if="commentsHasMore" class="profile-load-more">
+            <button class="ui-button ui-button--blue" type="button" :disabled="commentsLoading" @click="loadComments(false)">
+              {{ commentsLoading ? t('common.loading') : t('pages.profile.loadMore') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="profile-empty">
+          <Icon :icon="iconComment" class="profile-empty__icon" aria-hidden="true" />
+          <h2>{{ t('pages.profile.commentsEmpty') }}</h2>
+        </div>
+      </section>
+
+      <section v-else-if="activeTab === 'account' && canShowAccount && currentUser" class="profile-tab-panel profile-account-grid">
+        <section class="profile-card" :aria-label="t('pages.profile.profileDetails')">
+          <div class="profile-card__header">
+            <Icon :icon="iconProfile" class="profile-card__icon" aria-hidden="true" />
+            <h2>{{ t('pages.profile.profileDetails') }}</h2>
+          </div>
+
+          <form class="auth-form" @submit.prevent="saveProfile">
+            <div class="field">
+              <label for="profile-display-name">{{ t('auth.displayName') }}</label>
+              <input
+                id="profile-display-name"
+                v-model="displayName"
+                autocomplete="nickname"
+                maxlength="40"
+                required
+                :disabled="busy"
+              />
+              <small class="profile-field-note">{{ t('pages.profile.displayNameHint') }}</small>
+            </div>
+
+            <div class="field">
+              <label for="profile-email">{{ t('auth.email') }}</label>
+              <input id="profile-email" class="profile-readonly-input" :value="currentUser.email" readonly type="email" />
+            </div>
+
+            <StatusMessage v-if="message" variant="success">{{ message }}</StatusMessage>
+            <StatusMessage v-if="errorMessage" variant="danger">{{ errorMessage }}</StatusMessage>
+
+            <button class="ui-button ui-button--primary" :disabled="busy || !hasChanges" type="submit">
+              <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+              {{ busy ? t('common.saving') : t('common.save') }}
+            </button>
+          </form>
+        </section>
+
+        <section class="profile-card profile-card--referral" :aria-label="t('pages.profile.referralTitle')">
+          <div class="profile-card__header">
+            <Icon :icon="iconReferral" class="profile-card__icon" aria-hidden="true" />
+            <h2>{{ t('pages.profile.referralTitle') }}</h2>
+          </div>
+
+          <div v-if="referral" class="profile-referral">
+            <div class="profile-referral__metric">
+              <span>{{ t('pages.profile.verifiedReferralCount') }}</span>
+              <strong>{{ referral.verifiedReferralCount }}</strong>
+            </div>
+
+            <div class="field">
+              <label for="profile-referral-code">{{ t('pages.profile.referralCode') }}</label>
+              <input id="profile-referral-code" class="profile-readonly-input profile-code-input" :value="referral.code" readonly />
+            </div>
+
+            <div class="field">
+              <label for="profile-referral-url">{{ t('pages.profile.referralUrl') }}</label>
+              <div class="profile-referral-link-row">
+                <input id="profile-referral-url" class="profile-readonly-input" :value="referral.url" readonly />
+                <button class="ui-button ui-button--blue" type="button" @click="copyReferralLink">
+                  <Icon :icon="iconCopy" class="ui-icon" aria-hidden="true" />
+                  {{ t('pages.profile.copyReferralLink') }}
+                </button>
+              </div>
+              <small class="profile-field-note">{{ t('pages.profile.referralHint') }}</small>
+            </div>
+
+            <StatusMessage v-if="referralMessage" variant="success">{{ referralMessage }}</StatusMessage>
+            <StatusMessage v-if="referralErrorMessage" variant="danger">{{ referralErrorMessage }}</StatusMessage>
+          </div>
+
+          <StatusMessage v-else-if="referralErrorMessage" variant="danger" :duration="0">{{ referralErrorMessage }}</StatusMessage>
+        </section>
+      </section>
+    </div>
   </section>
 </template>

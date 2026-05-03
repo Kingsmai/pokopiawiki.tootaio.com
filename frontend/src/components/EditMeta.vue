@@ -18,6 +18,11 @@ function formatDateTime(value: string): string {
 
 <template>
   <p class="edit-meta">
-    {{ t('history.lastEdited') }}: {{ entity.updatedBy?.displayName ?? t('common.system') }} / {{ formatDateTime(entity.updatedAt) }}
+    {{ t('history.lastEdited') }}:
+    <RouterLink v-if="entity.updatedBy" class="user-profile-link" :to="`/profile/${entity.updatedBy.id}`">
+      {{ entity.updatedBy.displayName }}
+    </RouterLink>
+    <span v-else>{{ t('common.system') }}</span>
+    / {{ formatDateTime(entity.updatedAt) }}
   </p>
 </template>

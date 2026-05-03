@@ -1631,6 +1631,11 @@ button:disabled,
   font-weight: 750;
 }
 
+.edit-meta .user-profile-link {
+  color: var(--ink-soft);
+  font-weight: 850;
+}
+
 .checklist-list {
   display: grid;
   gap: 10px;
@@ -1862,6 +1867,14 @@ button:disabled,
 }
 
 .life-post__byline strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.life-post__byline .user-profile-link {
   overflow: hidden;
   color: var(--ink);
   font-weight: 950;
@@ -2273,6 +2286,11 @@ button:disabled,
 }
 
 .life-comment__meta strong {
+  color: var(--ink);
+  font-weight: 950;
+}
+
+.life-comment__meta .user-profile-link {
   color: var(--ink);
   font-weight: 950;
 }
@@ -3090,6 +3108,11 @@ button:disabled,
   color: var(--ink);
 }
 
+.edit-history-summary .user-profile-link {
+  color: var(--ink);
+  font-weight: 950;
+}
+
 .edit-history-summary time,
 .edit-timeline time {
   color: var(--muted);
@@ -3275,6 +3298,11 @@ button:disabled,
   overflow-wrap: anywhere;
 }
 
+.edit-history-detail-meta .user-profile-link {
+  color: var(--ink-soft);
+  font-weight: 850;
+}
+
 .entity-discussion-panel {
   display: grid;
   gap: 16px;
@@ -3418,6 +3446,12 @@ button:disabled,
 }
 
 .entity-discussion-comment__meta strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.entity-discussion-comment__meta .user-profile-link {
   color: var(--ink);
   font-size: 14px;
   font-weight: 950;
@@ -4461,6 +4495,270 @@ button:disabled,
   white-space: nowrap;
 }
 
+.profile-public-layout,
+.profile-tab-panel,
+.profile-activity-list {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.profile-layout--loading {
+  grid-template-columns: minmax(260px, 0.5fr) minmax(0, 1fr);
+}
+
+.profile-card--wide {
+  grid-column: 1 / -1;
+}
+
+.profile-card--soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.profile-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.profile-hero .profile-identity {
+  min-width: 0;
+}
+
+.profile-stat-strip,
+.profile-stat-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-stat-strip {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.profile-stat-strip div,
+.profile-stat-grid div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.profile-stat-strip dt,
+.profile-stat-grid dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.profile-stat-strip dd,
+.profile-stat-grid dd {
+  margin: 4px 0 0;
+  color: var(--pokemon-blue-deep);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 950;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-section-grid,
+.profile-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.profile-feed-card__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.profile-feed-card__metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-feed-card__metrics .ui-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--pokemon-blue);
+}
+
+.profile-load-more {
+  display: flex;
+  justify-content: center;
+}
+
+.profile-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  padding: 26px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+  text-align: center;
+}
+
+.profile-empty--compact {
+  min-height: 150px;
+}
+
+.profile-empty h2 {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.profile-empty__icon {
+  width: 42px;
+  height: 42px;
+  color: var(--pokemon-blue);
+}
+
+.profile-contribution-list,
+.profile-contribution-row,
+.profile-activity-card,
+.profile-post-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-contribution-row,
+.profile-activity-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.profile-contribution-row > div,
+.profile-activity-card__header,
+.profile-post-preview__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.profile-contribution-row strong,
+.profile-post-preview strong,
+.profile-post-preview .user-profile-link {
+  color: var(--ink);
+  font-weight: 950;
+}
+
+.profile-contribution-row span,
+.profile-activity-card time,
+.profile-post-preview span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.profile-contribution-row dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.profile-contribution-row dl div {
+  min-width: 0;
+  padding: 8px;
+  border-radius: var(--radius-small);
+  background: var(--surface);
+}
+
+.profile-contribution-row dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.profile-contribution-row dd {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-activity-card__header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-weight: 950;
+}
+
+.profile-activity-card__header .ui-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--pokemon-blue);
+}
+
+.profile-post-preview {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.profile-post-preview p,
+.profile-comment-body,
+.profile-comment-excerpt {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.profile-comment-target {
+  justify-self: start;
+  color: var(--pokemon-blue-deep);
+  font-weight: 950;
+}
+
+.profile-comment-excerpt {
+  padding: 10px 12px;
+  border-left: 3px solid var(--pokemon-yellow);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+.user-profile-link,
+.profile-comment-target {
+  text-decoration: none;
+}
+
+.user-profile-link:hover,
+.profile-comment-target:hover {
+  color: var(--pokemon-blue-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .admin-layout {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
@@ -4877,8 +5175,16 @@ button:disabled,
   .pokemon-profile-row,
   .pokemon-related-grid,
   .profile-layout,
+  .profile-layout--loading,
+  .profile-section-grid,
+  .profile-account-grid,
   .system-wording-layout,
   .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-hero,
+  .profile-stat-strip {
     grid-template-columns: 1fr;
   }
 
@@ -5026,6 +5332,10 @@ button:disabled,
 
   .profile-referral-link-row .ui-button {
     width: 100%;
+  }
+
+  .profile-contribution-row dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .life-toolbar__actions,

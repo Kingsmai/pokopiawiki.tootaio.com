@@ -821,7 +821,10 @@ onUnmounted(() => {
             <header class="life-post__header">
               <div class="life-post__avatar" aria-hidden="true">{{ authorInitial(post) }}</div>
               <div class="life-post__byline">
-                <strong>{{ post.author?.displayName ?? t('pages.life.byUnknown') }}</strong>
+                <RouterLink v-if="post.author" class="user-profile-link" :to="`/profile/${post.author.id}`">
+                  {{ post.author.displayName }}
+                </RouterLink>
+                <strong v-else>{{ t('pages.life.byUnknown') }}</strong>
                 <span>
                   <time :datetime="post.createdAt">{{ formatPostTime(post.createdAt) }}</time>
                   <template v-if="post.updatedAt !== post.createdAt"> - {{ t('pages.life.edited') }}</template>
@@ -1008,7 +1011,10 @@ onUnmounted(() => {
                     <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(comment) }}</div>
                     <div class="life-comment__content">
                       <div class="life-comment__meta">
-                        <strong>{{ commentAuthorName(comment) }}</strong>
+                        <RouterLink v-if="!comment.deleted && comment.author" class="user-profile-link" :to="`/profile/${comment.author.id}`">
+                          {{ comment.author.displayName }}
+                        </RouterLink>
+                        <strong v-else>{{ commentAuthorName(comment) }}</strong>
                         <time :datetime="comment.createdAt">{{ formatPostTime(comment.createdAt) }}</time>
                       </div>
                       <p v-if="!comment.deleted" class="life-comment__body">{{ comment.body }}</p>
@@ -1080,7 +1086,10 @@ onUnmounted(() => {
                           <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(reply) }}</div>
                           <div class="life-comment__content">
                             <div class="life-comment__meta">
-                              <strong>{{ commentAuthorName(reply) }}</strong>
+                              <RouterLink v-if="!reply.deleted && reply.author" class="user-profile-link" :to="`/profile/${reply.author.id}`">
+                                {{ reply.author.displayName }}
+                              </RouterLink>
+                              <strong v-else>{{ commentAuthorName(reply) }}</strong>
                               <time :datetime="reply.createdAt">{{ formatPostTime(reply.createdAt) }}</time>
                             </div>
                             <p v-if="!reply.deleted" class="life-comment__body">{{ reply.body }}</p>

@@ -318,7 +318,10 @@ onUnmounted(() => {
         <div class="entity-discussion-comment__avatar" aria-hidden="true">{{ commentInitial(comment) }}</div>
         <div class="entity-discussion-comment__content">
           <div class="entity-discussion-comment__meta">
-            <strong>{{ commentAuthorName(comment) }}</strong>
+            <RouterLink v-if="!comment.deleted && comment.author" class="user-profile-link" :to="`/profile/${comment.author.id}`">
+              {{ comment.author.displayName }}
+            </RouterLink>
+            <strong v-else>{{ commentAuthorName(comment) }}</strong>
             <time :datetime="comment.createdAt">{{ formatDateTime(comment.createdAt) }}</time>
           </div>
           <p v-if="!comment.deleted" class="entity-discussion-comment__body">{{ comment.body }}</p>
@@ -390,7 +393,10 @@ onUnmounted(() => {
               <div class="entity-discussion-comment__avatar" aria-hidden="true">{{ commentInitial(reply) }}</div>
               <div class="entity-discussion-comment__content">
                 <div class="entity-discussion-comment__meta">
-                  <strong>{{ commentAuthorName(reply) }}</strong>
+                  <RouterLink v-if="!reply.deleted && reply.author" class="user-profile-link" :to="`/profile/${reply.author.id}`">
+                    {{ reply.author.displayName }}
+                  </RouterLink>
+                  <strong v-else>{{ commentAuthorName(reply) }}</strong>
                   <time :datetime="reply.createdAt">{{ formatDateTime(reply.createdAt) }}</time>
                 </div>
                 <p v-if="!reply.deleted" class="entity-discussion-comment__body">{{ reply.body }}</p>

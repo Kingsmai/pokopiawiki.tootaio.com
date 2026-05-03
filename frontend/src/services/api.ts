@@ -324,6 +324,55 @@ export interface ReferralSummary {
   verifiedReferralCount: number;
 }
 
+export interface PublicProfileUser extends UserSummary {
+  joinedAt: string;
+}
+
+export interface PublicProfileStats {
+  wikiEdits: number;
+  wikiCreates: number;
+  wikiUpdates: number;
+  wikiDeletes: number;
+  imageUploads: number;
+  lifePosts: number;
+  lifeComments: number;
+  lifeReactions: number;
+  discussionComments: number;
+}
+
+export interface PublicProfileContribution {
+  contentType: string;
+  total: number;
+  creates: number;
+  updates: number;
+  deletes: number;
+  lastContributedAt: string | null;
+}
+
+export interface PublicUserProfile {
+  user: PublicProfileUser;
+  stats: PublicProfileStats;
+  contributions: PublicProfileContribution[];
+}
+
+export interface ProfileActivityParams {
+  cursor?: string | null;
+  limit?: number;
+}
+
+export interface UserReactionActivity {
+  postId: number;
+  reactionType: LifeReactionType;
+  reactedAt: string;
+  post: LifePost;
+}
+
+export interface UserReactionActivityPage {
+  items: UserReactionActivity[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface RoleSummary {
   id: number;
   key: string;
@@ -506,6 +555,25 @@ export interface EntityDiscussionComment {
   updatedAt: string;
   author: UserSummary | null;
   replies: EntityDiscussionComment[];
+}
+
+export interface UserCommentActivity {
+  id: number;
+  source: 'life' | 'discussion';
+  body: string;
+  createdAt: string;
+  target: {
+    type: 'life-post' | DiscussionEntityType;
+    id: number;
+    title: string;
+    excerpt: string;
+  };
+}
+
+export interface UserCommentActivityPage {
+  items: UserCommentActivity[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface EntityDiscussionCommentPayload {
@@ -694,6 +762,28 @@ export const api = {
   updateMe: (payload: UserProfilePayload) => sendJson<{ user: AuthUser }>('/api/auth/me', 'PATCH', payload),
   referral: () => getJson<{ referral: ReferralSummary }>('/api/auth/referral'),
   logout: () => postEmpty('/api/auth/logout'),
+  publicProfile: (id: string | number) => getJson<{ profile: PublicUserProfile }>(`/api/users/${id}/profile`),
+  userLifePosts: (id: string | number, params: ProfileActivityParams = {}) =>
+    getJson<LifePostsPage>(
+      `/api/users/${id}/life-posts${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
+  userReactions: (id: string | number, params: ProfileActivityParams = {}) =>
+    getJson<UserReactionActivityPage>(
+      `/api/users/${id}/reactions${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
+  userComments: (id: string | number, params: ProfileActivityParams = {}) =>
+    getJson<UserCommentActivityPage>(
+      `/api/users/${id}/comments${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   adminUsers: () => getJson<AdminUser[]>('/api/admin/users'),
   updateAdminUserRoles: (id: string | number, roleIds: number[]) =>
     sendJson<AdminUser[]>(`/api/admin/users/${id}/roles`, 'PUT', { roleIds }),

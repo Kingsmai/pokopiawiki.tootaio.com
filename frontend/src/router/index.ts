@@ -49,6 +49,7 @@ export const router = createRouter({
     { path: '/life', component: LifeView },
     { path: '/admin', component: AdminView, meta: { requiredPermission: 'admin.access' } },
     { path: '/profile', component: UserProfileView, meta: { requiresAuth: true } },
+    { path: '/profile/:id', component: UserProfileView },
     { path: '/login', component: LoginView },
     { path: '/forgot-password', component: ForgotPasswordView },
     { path: '/reset-password', component: ResetPasswordView },

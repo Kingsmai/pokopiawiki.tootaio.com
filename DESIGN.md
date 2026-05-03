@@ -116,8 +116,12 @@
   - 当前用户：`id`、`email`、`displayName`、`emailVerified`
   - 编辑署名：`id`、`displayName`
 - User Profile：
-  - 登录用户可通过 `/profile` 查看自己的邮箱、邮箱验证状态和显示名。
-  - 当前版本只允许用户更新自己的 `displayName`，不支持头像、公开个人主页、邮箱修改或直接密码修改。
+  - 登录用户可通过 `/profile` 查看自己的账号资料、邮箱验证状态、Referral 信息和公开主页内容。
+  - 任意用户可通过 `/profile/:id` 访问其他用户的公开 Profile。
+  - 公开 Profile 展示用户公开摘要、Life Feeds、Wiki 贡献统计、Like / Reaction 过的 Life Post 和评论过的内容。
+  - Profile 使用 Tabs 组织：Feeds、Contributions、Reactions、Comments；仅自己的 `/profile` 额外展示 Account。
+  - 公开用户摘要只包含 `id`、`displayName` 和公开展示需要的加入时间；不公开邮箱、角色、权限、Referral Code、邀请链接、session、token/hash 或内部审计 payload。
+  - 当前版本只允许用户在自己的 `/profile` Account Tab 更新 `displayName`，不支持头像、邮箱修改或直接密码修改。
   - 更新显示名后，API 仍只返回当前用户必要字段，不返回 session、token/hash、内部审计或调试数据。
   - 显示名用于编辑署名、讨论和 Life 内容作者展示。
 
@@ -215,6 +219,7 @@
   - `created_at`
 - 详情页展示最后编辑者、最后编辑时间和编辑历史面板。
 - 编辑历史中的用户信息只展示必要署名，不暴露邮箱、token、hash 或内部元数据。
+- 编辑署名、编辑历史署名、Life 作者和讨论作者可链接到对应公开 Profile。
 
 ## Wiki 图片上传
 
@@ -664,6 +669,10 @@ API 暴露边界：
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `tagId` 按 Life 标签筛选。
+- `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
+- `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
+- `GET /api/users/:id/reactions`：分页读取该用户设置过 Reaction 且目标未删除的 Life Post。
+- `GET /api/users/:id/comments`：分页读取该用户未删除的 Life 评论和实体讨论评论。
 - `GET /api/discussions/:entityType/:entityId/comments`：读取实体讨论；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`。
 
 认证 API：

@@ -61,6 +61,7 @@ import {
   getItem,
   getOptions,
   getPokemon,
+  getPublicUserProfile,
   getRecipe,
   isConfigType,
   listEntityDiscussionComments,
@@ -73,6 +74,9 @@ import {
   listPokemon,
   listPokemonFetchOptions,
   listRecipes,
+  listUserCommentActivities,
+  listUserLifePosts,
+  listUserReactionActivities,
   reorderConfig,
   reorderDailyChecklistItems,
   reorderHabitats,
@@ -405,6 +409,46 @@ app.get('/api/system-wordings', async (request) => getSystemWordings(requestLoca
 app.get('/api/options', async (request) => getOptions(requestLocale(request)));
 
 app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(requestLocale(request)));
+
+app.get('/api/users/:id/profile', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const profile = await getPublicUserProfile(Number(id));
+  return profile ? { profile } : notFound(reply, request);
+});
+
+app.get('/api/users/:id/life-posts', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const user = await optionalUser(request);
+  const posts = await listUserLifePosts(
+    Number(id),
+    request.query as Record<string, string | string[] | undefined>,
+    user?.id ?? null,
+    requestLocale(request)
+  );
+  return posts ? posts : notFound(reply, request);
+});
+
+app.get('/api/users/:id/reactions', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const user = await optionalUser(request);
+  const reactions = await listUserReactionActivities(
+    Number(id),
+    request.query as Record<string, string | string[] | undefined>,
+    user?.id ?? null,
+    requestLocale(request)
+  );
+  return reactions ? reactions : notFound(reply, request);
+});
+
+app.get('/api/users/:id/comments', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const comments = await listUserCommentActivities(
+    Number(id),
+    request.query as Record<string, string | string[] | undefined>,
+    requestLocale(request)
+  );
+  return comments ? comments : notFound(reply, request);
+});
 
 app.get('/api/life-posts', async (request) => {
   const user = await optionalUser(request);

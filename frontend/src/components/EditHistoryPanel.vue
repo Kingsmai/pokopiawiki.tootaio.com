@@ -120,14 +120,20 @@ function formatDateTime(value: string): string {
       <div>
         <dt>{{ t('history.createdBy') }}</dt>
         <dd>
-          <strong>{{ displayName(entity.createdBy) }}</strong>
+          <RouterLink v-if="entity.createdBy" class="user-profile-link" :to="`/profile/${entity.createdBy.id}`">
+            {{ entity.createdBy.displayName }}
+          </RouterLink>
+          <strong v-else>{{ displayName(entity.createdBy) }}</strong>
           <time :datetime="entity.createdAt">{{ formatDateTime(entity.createdAt) }}</time>
         </dd>
       </div>
       <div>
         <dt>{{ t('history.lastEdited') }}</dt>
         <dd>
-          <strong>{{ displayName(entity.updatedBy) }}</strong>
+          <RouterLink v-if="entity.updatedBy" class="user-profile-link" :to="`/profile/${entity.updatedBy.id}`">
+            {{ entity.updatedBy.displayName }}
+          </RouterLink>
+          <strong v-else>{{ displayName(entity.updatedBy) }}</strong>
           <time :datetime="entity.updatedAt">{{ formatDateTime(entity.updatedAt) }}</time>
         </dd>
       </div>
@@ -160,7 +166,12 @@ function formatDateTime(value: string): string {
                 <dl class="edit-history-detail-meta">
                   <div>
                     <dt>{{ t('history.author') }}</dt>
-                    <dd>{{ displayName(entry.user) }}</dd>
+                    <dd>
+                      <RouterLink v-if="entry.user" class="user-profile-link" :to="`/profile/${entry.user.id}`">
+                        {{ entry.user.displayName }}
+                      </RouterLink>
+                      <span v-else>{{ displayName(entry.user) }}</span>
+                    </dd>
                   </div>
                   <div>
                     <dt>{{ t('history.time') }}</dt>

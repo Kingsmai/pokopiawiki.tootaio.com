@@ -61,6 +61,7 @@
   - 栖息地
   - 每日 CheckList Task
   - Life Category
+  - Game Version
 - 支持翻译的字段：
   - `name`
   - `title`
@@ -384,7 +385,16 @@
 
 - 名称
 - 是否默认选中：最多一个 Life Category 可设为默认；新建 Life Post 时默认选中该分类。
+- 是否可评分：Rateable Life Category 下的 Life Post 可由用户进行 1-5 星评分。
 - 用于 Life Post 分类展示和 Feed 筛选。
+
+### Game Version
+
+- 版本号 / 名称
+- ChangeLog：可为空，用于说明该版本主要变化。
+- 用于 Life Post 发布时选择关联的游戏版本。
+- Life Post 可不选择游戏版本；未选择时前台不展示版本号。
+- Game Version 支持管理端创建、编辑、删除和排序。
 
 ## Pokemon
 
@@ -643,10 +653,12 @@ Life Post 可配置：
 
 - Post 内容正文
 - Category：使用 Life Category 配置，必须且只能选择 1 个
+- Game Version：可为空，使用 Game Version 配置；有值时在 Post 卡片展示版本号。
 - 创建者、最后编辑者、创建时间、最后编辑时间
 - 评论
 - 评论回复：仅支持回复顶层评论，不做无限嵌套
 - Reactions：`like`、`helpful`、`fun`、`thanks`
+- Ratings：Rateable Category 下的 Post 支持 1-5 星评分；每个用户每条 Post 最多一条评分，重复评分会替换原评分。
 
 前台行为：
 
@@ -663,9 +675,14 @@ Life Post 可配置：
 - Life Feed 只随每条 Life Post 返回评论总数和最近少量评论预览；完整评论列表在展开评论区后通过独立分页接口按顶层评论正序读取，每页顶层评论携带其一层回复。
 - 已注册并完成邮箱验证且拥有 `life.reactions.set` 权限的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
+- 已注册并完成邮箱验证且拥有 `life.ratings.set` 权限的用户可以对 Rateable Life Post 设置或取消 1-5 星评分；非 Rateable Category 下的 Post 不显示评分控件，也不能通过 API 评分。
+- Life Post 展示评分时只展示平均分、评分人数和当前用户自己的评分；不展示其他用户的评分明细。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
 - Feed 使用 Tabs 展示 Life Category 筛选；包含 All 和后台配置的 Life Category；点击 Category 后按该 Category 筛选，搜索和 Category 筛选可以同时生效。
 - Feed 使用语言筛选展示 All languages 和启用语言；语言区筛选独立于系统 UI 语言，搜索、Category 和语言筛选可以同时生效。
+- Feed 支持按 Game Version 筛选；All versions 表示不过滤版本。
+- Feed 支持 Rateable 筛选；All 表示不过滤，Rateable only 只展示可评分 Category 下的 Post。
+- Feed 支持排序：Latest 默认按创建时间倒序；Oldest 按创建时间正序；Top rated 按平均评分倒序，同分时按创建时间倒序。
 - 信息流分页加载，初始展示最新一页，滚动到底部自动加载更多。
 - 当前没有图片上传、转发或置顶。
 - Life Post 和 Life Comment 必须进入 AI 审核；未审核通过的内容不向普通访客公开。
@@ -680,6 +697,8 @@ API 暴露边界：
 
 - Life Post 作者信息只返回 `id` 和 `displayName`。
 - Life Post Category 只返回 `id` 和按当前语言解析后的 `name`。
+- Life Post Game Version 只返回 `id`、展示用 `name` 和可展示 `changeLog`；未选择版本时返回 `null`。
+- Life Post Rating 只返回 `ratingAverage`、`ratingCount` 和当前用户自己的 `myRating`；不返回其他用户的评分明细。
 - Life Post 可返回面向用户展示所需的审核状态、审核语言区和是否可重审；不返回内部错误、AI prompt、模型响应或 retry 细节。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
 - Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
@@ -787,7 +806,7 @@ API 暴露边界：
 - `GET /api/items/:id`
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
-- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区。
+- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区；支持 `gameVersionId` 按 Game Version 筛选；支持 `rateable` 按可评分 Category 筛选；支持 `sort` 为 `latest`、`oldest` 或 `top-rated`。
 - `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
@@ -846,6 +865,9 @@ API 暴露边界：
 - Life Reaction 的设置、替换和取消。
   - `PUT /api/life-posts/:id/reaction`
   - `DELETE /api/life-posts/:id/reaction`
+- Life Rating 的设置、替换和取消。
+  - `PUT /api/life-posts/:id/rating`
+  - `DELETE /api/life-posts/:id/rating`
 - 每日 CheckList 的创建、更新、删除、排序需要对应 `checklist.*` 权限。
 - 全局配置项的查看、创建、更新、删除、排序需要对应 `admin.config.*` 权限。
 - 语言的查看、创建、更新、删除、排序需要对应 `admin.languages.*` 权限。

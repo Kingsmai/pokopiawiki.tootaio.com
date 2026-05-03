@@ -38,7 +38,8 @@ type EntityType =
   | 'maps'
   | 'habitats'
   | 'daily-checklist-items'
-  | 'life-tags';
+  | 'life-tags'
+  | 'game-versions';
 
 type ConfigType =
   | 'pokemon-types'
@@ -49,13 +50,16 @@ type ConfigType =
   | 'item-usages'
   | 'acquisition-methods'
   | 'maps'
-  | 'life-tags';
+  | 'life-tags'
+  | 'game-versions';
 
 type ConfigDefinition = {
   table: string;
   entityType: EntityType;
   hasItemDrop?: boolean;
   hasDefault?: boolean;
+  hasRateable?: boolean;
+  hasChangeLog?: boolean;
 };
 type SortableContentType = 'pokemon' | 'items' | 'recipes' | 'habitats';
 type SortableContentDefinition = {
@@ -180,6 +184,7 @@ type DailyChecklistPayload = {
 type LifePostPayload = {
   body: string;
   categoryId: number;
+  gameVersionId: number | null;
   languageCode: string | null;
 };
 
@@ -251,7 +256,10 @@ type LifePostRow = {
   updatedAt: Date;
   author: { id: number; displayName: string } | null;
   updatedBy: { id: number; displayName: string } | null;
-  category: { id: number; name: string } | null;
+  category: { id: number; name: string; isRateable: boolean } | null;
+  gameVersion: { id: number; name: string; changeLog: string } | null;
+  ratingAverage: number | null;
+  ratingCount: number;
 };
 
 type LifePost = Omit<LifePostRow, 'createdAtCursor'> & {
@@ -259,12 +267,16 @@ type LifePost = Omit<LifePostRow, 'createdAtCursor'> & {
   commentCount: number;
   reactionCounts: LifeReactionCounts;
   myReaction: LifeReactionType | null;
+  myRating: number | null;
 };
 
 type LifePostCursor = {
   createdAt: string;
   id: number;
+  ratingAverage?: number;
 };
+
+type LifePostSort = 'latest' | 'oldest' | 'top-rated';
 
 type LifePostFilters = {
   authorId?: number;
@@ -460,7 +472,8 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'item-usages': { table: 'item_usages', entityType: 'item-usages' },
   'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
   maps: { table: 'maps', entityType: 'maps' },
-  'life-tags': { table: 'life_tags', entityType: 'life-tags', hasDefault: true }
+  'life-tags': { table: 'life_tags', entityType: 'life-tags', hasDefault: true, hasRateable: true },
+  'game-versions': { table: 'game_versions', entityType: 'game-versions', hasChangeLog: true }
 };
 
 const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
@@ -685,9 +698,16 @@ function optionSelect(
   return query(`SELECT o.id, ${name} AS name FROM ${tableName} o ORDER BY ${orderByEntity('o')}`);
 }
 
-function lifeCategoryOptions(locale: string): Promise<Array<{ id: number; name: string; isDefault: boolean }>> {
+function lifeCategoryOptions(locale: string): Promise<Array<{ id: number; name: string; isDefault: boolean; isRateable: boolean }>> {
   const name = localizedName('life-tags', 'lc', locale);
-  return query(`SELECT lc.id, ${name} AS name, lc.is_default AS "isDefault" FROM life_tags lc ORDER BY ${orderByEntity('lc')}`);
+  return query(
+    `SELECT lc.id, ${name} AS name, lc.is_default AS "isDefault", lc.is_rateable AS "isRateable" FROM life_tags lc ORDER BY ${orderByEntity('lc')}`
+  );
+}
+
+function gameVersionOptions(locale: string): Promise<Array<{ id: number; name: string; changeLog: string }>> {
+  const name = localizedName('game-versions', 'gv', locale);
+  return query(`SELECT gv.id, ${name} AS name, gv.change_log AS "changeLog" FROM game_versions gv ORDER BY ${orderByEntity('gv')}`);
 }
 
 function skillOptions(locale: string): Promise<Array<{ id: number; name: string; hasItemDrop: boolean }>> {
@@ -731,6 +751,12 @@ function configSelect(definition: ConfigDefinition, locale: string): string {
   if (definition.hasDefault) {
     columns.push(`c.is_default AS "isDefault"`);
   }
+  if (definition.hasRateable) {
+    columns.push(`c.is_rateable AS "isRateable"`);
+  }
+  if (definition.hasChangeLog) {
+    columns.push(`c.change_log AS "changeLog"`);
+  }
   return columns.join(', ');
 }
 
@@ -746,6 +772,14 @@ function requirePositiveInteger(value: unknown, message: string): number {
     throw validationError(message);
   }
   return numberValue;
+}
+
+function optionalPositiveInteger(value: unknown, message: string): number | null {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  return requirePositiveInteger(value, message);
 }
 
 function cleanName(value: unknown, message = 'server.validation.nameRequired'): string {
@@ -2056,7 +2090,8 @@ export async function getOptions(locale = defaultLocale) {
     itemUsages,
     acquisitionMethods,
     maps,
-    lifeCategories
+    lifeCategories,
+    gameVersions
   ] = await Promise.all([
     optionSelect('pokemon_types', 'pokemon-types', locale),
     skillOptions(locale),
@@ -2066,7 +2101,8 @@ export async function getOptions(locale = defaultLocale) {
     optionSelect('item_usages', 'item-usages', locale),
     optionSelect('acquisition_methods', 'acquisition-methods', locale),
     optionSelect('maps', 'maps', locale),
-    lifeCategoryOptions(locale)
+    lifeCategoryOptions(locale),
+    gameVersionOptions(locale)
   ]);
 
   return {
@@ -2079,7 +2115,8 @@ export async function getOptions(locale = defaultLocale) {
     acquisitionMethods,
     itemTags: favoriteThings,
     maps,
-    lifeCategories
+    lifeCategories,
+    gameVersions
   };
 }
 
@@ -2221,10 +2258,12 @@ function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload
     throw validationError('server.validation.postTooLong');
   }
   const categoryId = requirePositiveInteger(payload.categoryId, 'server.validation.lifeCategoryRequired');
+  const gameVersionId = optionalPositiveInteger(payload.gameVersionId, 'server.validation.gameVersionInvalid');
 
   return {
     body,
     categoryId,
+    gameVersionId,
     languageCode: cleanModerationLanguageCode(payload.languageCode)
   };
 }
@@ -2266,6 +2305,15 @@ function cleanLifeReactionFilter(value: QueryValue): LifeReactionType | null {
   }
 
   return cleanLifeReactionType(reactionType);
+}
+
+function cleanLifeRating(value: unknown): number {
+  const rating = Number(value);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw validationError('server.validation.ratingInvalid');
+  }
+
+  return rating;
 }
 
 function cleanUserCommentActivitySourceFilter(value: QueryValue): UserCommentActivitySource | null {
@@ -2322,6 +2370,7 @@ function addModerationLanguageCondition(
 
 function lifePostProjection(locale = defaultLocale): string {
   const categoryName = localizedName('life-tags', 'lc', locale);
+  const gameVersionName = localizedName('game-versions', 'gv', locale);
 
   return `
     SELECT
@@ -2342,10 +2391,27 @@ function lifePostProjection(locale = defaultLocale): string {
       END AS "updatedBy",
       CASE
         WHEN lc.id IS NULL THEN NULL
-        ELSE json_build_object('id', lc.id, 'name', ${categoryName})
-      END AS category
+        ELSE json_build_object('id', lc.id, 'name', ${categoryName}, 'isRateable', lc.is_rateable)
+      END AS category,
+      CASE
+        WHEN gv.id IS NULL THEN NULL
+        ELSE json_build_object('id', gv.id, 'name', ${gameVersionName}, 'changeLog', gv.change_log)
+      END AS "gameVersion",
+      CASE
+        WHEN rating_stats.rating_count = 0 THEN NULL
+        ELSE rating_stats.rating_average::double precision
+      END AS "ratingAverage",
+      rating_stats.rating_count AS "ratingCount"
     FROM life_posts lp
     LEFT JOIN life_tags lc ON lc.id = lp.category_id
+    LEFT JOIN game_versions gv ON gv.id = lp.game_version_id
+    LEFT JOIN LATERAL (
+      SELECT
+        ROUND(AVG(lpr.rating)::numeric, 2) AS rating_average,
+        COUNT(*)::integer AS rating_count
+      FROM life_post_ratings lpr
+      WHERE lpr.post_id = lp.id
+    ) rating_stats ON true
     LEFT JOIN users created_user ON created_user.id = lp.created_by_user_id
     LEFT JOIN users updated_user ON updated_user.id = lp.updated_by_user_id
   `;
@@ -2359,6 +2425,22 @@ function cleanLifePostLimit(value: QueryValue): number {
 
   const limit = Number(rawLimit);
   return Number.isInteger(limit) && limit > 0 ? Math.min(limit, maxLifePostLimit) : defaultLifePostLimit;
+}
+
+function cleanLifePostSort(value: QueryValue): LifePostSort {
+  const sort = asString(value);
+  return sort === 'oldest' || sort === 'top-rated' ? sort : 'latest';
+}
+
+function cleanRateableFilter(value: QueryValue): boolean | null {
+  const rateable = asString(value);
+  if (rateable === 'true') {
+    return true;
+  }
+  if (rateable === 'false') {
+    return false;
+  }
+  return null;
 }
 
 function cleanCommentLimit(value: QueryValue): number {
@@ -2381,12 +2463,19 @@ function decodeLifePostCursor(value: QueryValue): LifePostCursor | null {
     const cursor = JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8')) as Partial<LifePostCursor>;
     const createdAt = typeof cursor.createdAt === 'string' ? cursor.createdAt : '';
     const id = Number(cursor.id);
+    const ratingAverage = cursor.ratingAverage === undefined ? undefined : Number(cursor.ratingAverage);
 
-    if (!createdAt || Number.isNaN(new Date(createdAt).getTime()) || !Number.isInteger(id) || id <= 0) {
+    if (
+      !createdAt ||
+      Number.isNaN(new Date(createdAt).getTime()) ||
+      !Number.isInteger(id) ||
+      id <= 0 ||
+      (ratingAverage !== undefined && (Number.isNaN(ratingAverage) || ratingAverage < 0))
+    ) {
       throw validationError('server.validation.cursorInvalid');
     }
 
-    return { createdAt, id };
+    return { createdAt, id, ratingAverage };
   } catch (error) {
     if (error instanceof Error && 'statusCode' in error) {
       throw error;
@@ -2396,7 +2485,10 @@ function decodeLifePostCursor(value: QueryValue): LifePostCursor | null {
 }
 
 function encodeLifePostCursor(post: LifePostRow): string {
-  return Buffer.from(JSON.stringify({ createdAt: post.createdAtCursor, id: post.id }), 'utf8').toString('base64url');
+  return Buffer.from(
+    JSON.stringify({ createdAt: post.createdAtCursor, id: post.id, ratingAverage: post.ratingAverage ?? 0 }),
+    'utf8'
+  ).toString('base64url');
 }
 
 function encodeProfileCursor(cursor: LifePostCursor): string {
@@ -2443,7 +2535,8 @@ function hydrateLifePost(
   commentPreviewByPost: Map<number, LifeComment[]>,
   commentCountsByPost: Map<number, number>,
   countsByPost: Map<number, LifeReactionCounts>,
-  myReactionsByPost: Map<number, LifeReactionType>
+  myReactionsByPost: Map<number, LifeReactionType>,
+  myRatingsByPost: Map<number, number>
 ): LifePost {
   return {
     id: post.id,
@@ -2455,10 +2548,14 @@ function hydrateLifePost(
     author: post.author,
     updatedBy: post.updatedBy,
     category: post.category,
+    gameVersion: post.gameVersion,
+    ratingAverage: post.ratingAverage,
+    ratingCount: post.ratingCount,
     commentPreview: commentPreviewByPost.get(post.id) ?? [],
     commentCount: commentCountsByPost.get(post.id) ?? 0,
     reactionCounts: countsByPost.get(post.id) ?? emptyLifeReactionCounts(),
-    myReaction: myReactionsByPost.get(post.id) ?? null
+    myReaction: myReactionsByPost.get(post.id) ?? null,
+    myRating: myRatingsByPost.get(post.id) ?? null
   };
 }
 
@@ -2740,6 +2837,30 @@ async function lifeReactionsForPosts(
   return { countsByPost, myReactionsByPost };
 }
 
+async function lifeRatingsForPosts(postIds: number[], userId: number | null): Promise<Map<number, number>> {
+  const myRatingsByPost = new Map<number, number>();
+
+  if (postIds.length === 0 || userId === null) {
+    return myRatingsByPost;
+  }
+
+  const rows = await query<{ postId: number; rating: number }>(
+    `
+      SELECT post_id AS "postId", rating
+      FROM life_post_ratings
+      WHERE post_id = ANY($1::integer[])
+        AND user_id = $2
+    `,
+    [postIds, userId]
+  );
+
+  for (const row of rows) {
+    myRatingsByPost.set(row.postId, row.rating);
+  }
+
+  return myRatingsByPost;
+}
+
 async function getLifeCommentById(id: number): Promise<LifeComment | null> {
   const row = await queryOne<LifeCommentRow>(
     `
@@ -2765,8 +2886,11 @@ async function listLifePostsWithFilters(
 ): Promise<LifePostsPage> {
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
+  const sort = cleanLifePostSort(paramsQuery.sort);
   const search = asString(paramsQuery.search)?.trim();
   const categoryIdValue = asString(paramsQuery.categoryId)?.trim();
+  const gameVersionIdValue = asString(paramsQuery.gameVersionId)?.trim();
+  const rateable = cleanRateableFilter(paramsQuery.rateable);
   const languageCode = cleanModerationLanguageFilter(paramsQuery.language);
   const params: unknown[] = [];
   const conditions: string[] = ['lp.deleted_at IS NULL'];
@@ -2790,18 +2914,42 @@ async function listLifePostsWithFilters(
     conditions.push(`lp.category_id = $${params.length}`);
   }
 
-  if (cursor) {
-    params.push(cursor.createdAt, cursor.id);
-    conditions.push(`(lp.created_at, lp.id) < ($${params.length - 1}::timestamptz, $${params.length}::integer)`);
+  if (gameVersionIdValue && gameVersionIdValue !== 'all') {
+    const gameVersionId = requirePositiveInteger(gameVersionIdValue, 'server.validation.gameVersionInvalid');
+    params.push(gameVersionId);
+    conditions.push(`lp.game_version_id = $${params.length}`);
   }
 
+  if (rateable !== null) {
+    params.push(rateable);
+    conditions.push(`lc.is_rateable = $${params.length}`);
+  }
+
+  if (cursor) {
+    if (sort === 'top-rated') {
+      params.push(cursor.ratingAverage ?? 0, cursor.createdAt, cursor.id);
+      conditions.push(
+        `(COALESCE(rating_stats.rating_average, 0), lp.created_at, lp.id) < ($${params.length - 2}::numeric, $${params.length - 1}::timestamptz, $${params.length}::integer)`
+      );
+    } else {
+      params.push(cursor.createdAt, cursor.id);
+      conditions.push(
+        `(lp.created_at, lp.id) ${sort === 'oldest' ? '>' : '<'} ($${params.length - 1}::timestamptz, $${params.length}::integer)`
+      );
+    }
+  }
+
+  const orderClause =
+    sort === 'top-rated'
+      ? 'ORDER BY COALESCE(rating_stats.rating_average, 0) DESC, lp.created_at DESC, lp.id DESC'
+      : `ORDER BY lp.created_at ${sort === 'oldest' ? 'ASC' : 'DESC'}, lp.id ${sort === 'oldest' ? 'ASC' : 'DESC'}`;
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   params.push(limit + 1);
   const rows = await query<LifePostRow>(
     `
       ${lifePostProjection(locale)}
       ${whereClause}
-      ORDER BY lp.created_at DESC, lp.id DESC
+      ${orderClause}
       LIMIT $${params.length}
     `,
     params
@@ -2813,9 +2961,12 @@ async function listLifePostsWithFilters(
   const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds, userId, canViewAll);
   const commentCountsByPost = await lifeCommentCountsForPosts(postIds, userId, canViewAll);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, userId);
+  const myRatingsByPost = await lifeRatingsForPosts(postIds, userId);
 
   return {
-    items: posts.map((post) => hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost)),
+    items: posts.map((post) =>
+      hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost, myRatingsByPost)
+    ),
     nextCursor: hasMore && posts.length > 0 ? encodeLifePostCursor(posts[posts.length - 1]) : null,
     hasMore
   };
@@ -2975,9 +3126,10 @@ async function hydrateLifePostsById(
   const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds, viewerUserId, canViewAll);
   const commentCountsByPost = await lifeCommentCountsForPosts(postIds, viewerUserId, canViewAll);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, viewerUserId);
+  const myRatingsByPost = await lifeRatingsForPosts(postIds, viewerUserId);
 
   for (const post of posts) {
-    postById.set(post.id, hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost));
+    postById.set(post.id, hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost, myRatingsByPost));
   }
 
   return postById;
@@ -3223,13 +3375,25 @@ async function getLifePostById(id: number, userId: number | null = null, locale 
   const commentPreviewByPost = await lifeCommentPreviewForPosts([post.id], userId, false);
   const commentCountsByPost = await lifeCommentCountsForPosts([post.id], userId, false);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts([post.id], userId);
-  return hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost);
+  const myRatingsByPost = await lifeRatingsForPosts([post.id], userId);
+  return hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost, myRatingsByPost);
 }
 
 async function ensureLifeCategory(client: DbClient, categoryId: number): Promise<void> {
   const result = await client.query<{ id: number }>('SELECT id FROM life_tags WHERE id = $1', [categoryId]);
   if (result.rowCount === 0) {
     throw validationError('server.validation.lifeCategoryInvalid');
+  }
+}
+
+async function ensureGameVersion(client: DbClient, gameVersionId: number | null): Promise<void> {
+  if (gameVersionId === null) {
+    return;
+  }
+
+  const result = await client.query<{ id: number }>('SELECT id FROM game_versions WHERE id = $1', [gameVersionId]);
+  if (result.rowCount === 0) {
+    throw validationError('server.validation.gameVersionInvalid');
   }
 }
 
@@ -3249,13 +3413,22 @@ export async function createLifePost(payload: Record<string, unknown>, userId: n
 
   const id = await withTransaction(async (client) => {
     await ensureLifeCategory(client, cleanPayload.categoryId);
+    await ensureGameVersion(client, cleanPayload.gameVersionId);
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO life_posts (body, category_id, ai_moderation_status, ai_moderation_language_code, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, 'reviewing', NULL, $3, $3)
+        INSERT INTO life_posts (
+          body,
+          category_id,
+          game_version_id,
+          ai_moderation_status,
+          ai_moderation_language_code,
+          created_by_user_id,
+          updated_by_user_id
+        )
+        VALUES ($1, $2, $3, 'reviewing', NULL, $4, $4)
         RETURNING id
       `,
-      [cleanPayload.body, cleanPayload.categoryId, userId]
+      [cleanPayload.body, cleanPayload.categoryId, cleanPayload.gameVersionId, userId]
     );
 
     const createdId = result.rows[0].id;
@@ -3278,25 +3451,27 @@ export async function updateLifePost(
 
   const updatedId = await withTransaction(async (client) => {
     await ensureLifeCategory(client, cleanPayload.categoryId);
+    await ensureGameVersion(client, cleanPayload.gameVersionId);
     const result = await client.query<{ id: number }>(
       `
         UPDATE life_posts
         SET body = $1,
             category_id = $2,
+            game_version_id = $3,
             ai_moderation_status = 'reviewing',
             ai_moderation_language_code = NULL,
             ai_moderation_content_hash = NULL,
             ai_moderation_checked_at = NULL,
             ai_moderation_retry_count = 0,
             ai_moderation_updated_at = now(),
-            updated_by_user_id = $3,
+            updated_by_user_id = $4,
             updated_at = now()
-        WHERE id = $4
-          AND ($5 = true OR created_by_user_id = $3)
+        WHERE id = $5
+          AND ($6 = true OR created_by_user_id = $4)
           AND deleted_at IS NULL
         RETURNING id
       `,
-      [cleanPayload.body, cleanPayload.categoryId, userId, id, allowAny]
+      [cleanPayload.body, cleanPayload.categoryId, cleanPayload.gameVersionId, userId, id, allowAny]
     );
 
     const resultId = result.rows[0]?.id ?? null;
@@ -3406,6 +3581,57 @@ export async function deleteLifePostReaction(postId: number, userId: number, loc
   );
 
   return getLifePostById(postId, userId, locale);
+}
+
+export async function setLifePostRating(
+  postId: number,
+  payload: Record<string, unknown>,
+  userId: number,
+  locale = defaultLocale
+) {
+  const rating = cleanLifeRating(payload.rating);
+
+  const result = await queryOne<{ postId: number }>(
+    `
+      INSERT INTO life_post_ratings (post_id, user_id, rating)
+      SELECT $1, $2, $3
+      FROM life_posts lp
+      JOIN life_tags lt ON lt.id = lp.category_id
+      WHERE lp.id = $1
+        AND lp.deleted_at IS NULL
+        AND lp.ai_moderation_status = 'approved'
+        AND lt.is_rateable = true
+      ON CONFLICT (post_id, user_id)
+      DO UPDATE SET rating = EXCLUDED.rating, updated_at = now()
+      RETURNING post_id AS "postId"
+    `,
+    [postId, userId, rating]
+  );
+
+  return result ? getLifePostById(result.postId, userId, locale) : null;
+}
+
+export async function deleteLifePostRating(postId: number, userId: number, locale = defaultLocale) {
+  const result = await queryOne<{ postId: number }>(
+    `
+      DELETE FROM life_post_ratings
+      WHERE post_id = $1
+        AND user_id = $2
+        AND EXISTS (
+          SELECT 1
+          FROM life_posts lp
+          JOIN life_tags lt ON lt.id = lp.category_id
+          WHERE lp.id = $1
+            AND lp.deleted_at IS NULL
+            AND lp.ai_moderation_status = 'approved'
+            AND lt.is_rateable = true
+        )
+      RETURNING post_id AS "postId"
+    `,
+    [postId, userId]
+  );
+
+  return result ? getLifePostById(postId, userId, locale) : null;
 }
 
 export async function createLifeComment(postId: number, payload: Record<string, unknown>, userId: number) {
@@ -3889,6 +4115,8 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
   const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
   const isDefault = definition.hasDefault ? Boolean(payload.isDefault) : false;
+  const isRateable = definition.hasRateable ? Boolean(payload.isRateable) : false;
+  const changeLog = definition.hasChangeLog ? cleanOptionalText(payload.changeLog) : '';
 
   const id = await withTransaction(async (client) => {
     const sortOrder = await nextSortOrder(client, definition.table);
@@ -3907,6 +4135,14 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
     if (definition.hasDefault) {
       columns.push('is_default');
       values.push(isDefault);
+    }
+    if (definition.hasRateable) {
+      columns.push('is_rateable');
+      values.push(isRateable);
+    }
+    if (definition.hasChangeLog) {
+      columns.push('change_log');
+      values.push(changeLog);
     }
     columns.push('sort_order', 'created_by_user_id', 'updated_by_user_id');
     values.push(sortOrder, userId, userId);
@@ -3955,6 +4191,8 @@ export async function updateConfig(
   const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
   const isDefault = definition.hasDefault ? Boolean(payload.isDefault) : false;
+  const isRateable = definition.hasRateable ? Boolean(payload.isRateable) : false;
+  const changeLog = definition.hasChangeLog ? cleanOptionalText(payload.changeLog) : '';
 
   const updated = await withTransaction(async (client) => {
     if (definition.hasDefault && isDefault) {
@@ -3973,6 +4211,14 @@ export async function updateConfig(
     if (definition.hasDefault) {
       values.push(isDefault);
       assignments.push(`is_default = $${values.length}`);
+    }
+    if (definition.hasRateable) {
+      values.push(isRateable);
+      assignments.push(`is_rateable = $${values.length}`);
+    }
+    if (definition.hasChangeLog) {
+      values.push(changeLog);
+      assignments.push(`change_log = $${values.length}`);
     }
     values.push(userId);
     assignments.push(`updated_by_user_id = $${values.length}`, 'updated_at = now()');

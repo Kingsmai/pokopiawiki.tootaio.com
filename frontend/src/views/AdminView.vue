@@ -37,6 +37,7 @@ import {
   type AdminUser,
   type ConfigType,
   type DailyChecklistItem,
+  type GameVersion,
   type Habitat,
   type Item,
   type Language,
@@ -70,7 +71,12 @@ type AdminTab =
 type AdminGroup = 'content' | 'configuration' | 'localization' | 'access';
 type AdminNavItem = { key: AdminTab; label: string; permission: string | string[] };
 type AdminNavGroup = { key: AdminGroup; label: string; items: AdminNavItem[] };
-type EditableConfig = (NamedEntity | Skill | LifeCategory) & { hasItemDrop?: boolean; isDefault?: boolean };
+type EditableConfig = (NamedEntity | Skill | LifeCategory | GameVersion) & {
+  hasItemDrop?: boolean;
+  isDefault?: boolean;
+  isRateable?: boolean;
+  changeLog?: string;
+};
 
 const adminTabIcons: Record<AdminTab, AppIcon> = {
   users: iconProfile,
@@ -133,7 +139,9 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
 });
 const tabs = computed<AdminNavItem[]>(() => adminNavigationGroups.value.flatMap((group) => group.items));
 
-const configTypes = computed<Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean; supportsDefault?: boolean }>>(() => [
+const configTypes = computed<
+  Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean; supportsDefault?: boolean; supportsRateable?: boolean; supportsChangeLog?: boolean }>
+>(() => [
   { key: 'pokemon-types', label: t('config.pokemonTypes') },
   { key: 'skills', label: t('config.skills'), supportsItemDrop: true },
   { key: 'environments', label: t('config.environments') },
@@ -142,7 +150,8 @@ const configTypes = computed<Array<{ key: ConfigType; label: string; supportsIte
   { key: 'item-usages', label: t('config.itemUsages') },
   { key: 'acquisition-methods', label: t('config.acquisitionMethods') },
   { key: 'maps', label: t('config.maps') },
-  { key: 'life-tags', label: t('config.lifeCategories'), supportsDefault: true }
+  { key: 'life-tags', label: t('config.lifeCategories'), supportsDefault: true, supportsRateable: true },
+  { key: 'game-versions', label: t('config.gameVersions'), supportsChangeLog: true }
 ]);
 
 const activeTab = ref<AdminTab>('config');
@@ -163,7 +172,15 @@ const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
 const message = ref('');
-const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, hasItemDrop: false, isDefault: false });
+const configForm = ref({
+  id: 0,
+  name: '',
+  translations: {} as TranslationMap,
+  hasItemDrop: false,
+  isDefault: false,
+  isRateable: false,
+  changeLog: ''
+});
 const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
 const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
 const wordingForm = ref({ key: '', locale: defaultLocale, value: '', defaultValue: '', placeholders: [] as string[] });
@@ -376,7 +393,7 @@ async function loadLanguages() {
 }
 
 function resetConfigForm() {
-  configForm.value = { id: 0, name: '', translations: {}, hasItemDrop: false, isDefault: false };
+  configForm.value = { id: 0, name: '', translations: {}, hasItemDrop: false, isDefault: false, isRateable: false, changeLog: '' };
 }
 
 function resetChecklistForm() {
@@ -441,7 +458,9 @@ function editConfig(item: EditableConfig) {
     name: item.baseName ?? item.name,
     translations: item.translations ?? {},
     hasItemDrop: item.hasItemDrop === true,
-    isDefault: item.isDefault === true
+    isDefault: item.isDefault === true,
+    isRateable: item.isRateable === true,
+    changeLog: item.changeLog ?? ''
   };
   configModalOpen.value = true;
 }
@@ -717,7 +736,9 @@ async function saveConfig() {
       name: configBaseNameForSave(),
       translations: configForm.value.translations,
       hasItemDrop: selectedConfig.value.supportsItemDrop ? configForm.value.hasItemDrop : undefined,
-      isDefault: selectedConfig.value.supportsDefault ? configForm.value.isDefault : undefined
+      isDefault: selectedConfig.value.supportsDefault ? configForm.value.isDefault : undefined,
+      isRateable: selectedConfig.value.supportsRateable ? configForm.value.isRateable : undefined,
+      changeLog: selectedConfig.value.supportsChangeLog ? configForm.value.changeLog : undefined
     };
 
     if (configForm.value.id) {
@@ -1281,6 +1302,7 @@ onMounted(() => {
             {{ item.name }}
             <span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span>
             <span v-if="item.isDefault" class="config-flag">{{ t('pages.admin.defaultCategory') }}</span>
+            <span v-if="item.isRateable" class="config-flag">{{ t('pages.admin.rateableCategory') }}</span>
           </span>
           <span class="row-actions">
             <button v-if="can('admin.config.update')" type="button" :disabled="busy" @click="editConfig(item)">
@@ -1814,6 +1836,16 @@ onMounted(() => {
             <input v-model="configForm.isDefault" type="checkbox" />
             {{ t('pages.admin.defaultCategory') }}
           </label>
+        </div>
+        <div v-if="selectedConfig.supportsRateable" class="check-row">
+          <label>
+            <input v-model="configForm.isRateable" type="checkbox" />
+            {{ t('pages.admin.rateableCategory') }}
+          </label>
+        </div>
+        <div v-if="selectedConfig.supportsChangeLog" class="field">
+          <label for="config-change-log">{{ t('pages.admin.changeLog') }}</label>
+          <textarea id="config-change-log" v-model="configForm.changeLog"></textarea>
         </div>
       </form>
 

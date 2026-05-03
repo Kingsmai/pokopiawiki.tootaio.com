@@ -55,6 +55,7 @@ import {
   deleteLanguage,
   deleteLifeComment,
   deleteLifePost,
+  deleteLifePostRating,
   deleteLifePostReaction,
   deletePokemon,
   deleteRecipe,
@@ -91,6 +92,7 @@ import {
   retryEntityDiscussionCommentModeration,
   retryLifeCommentModeration,
   retryLifePostModeration,
+  setLifePostRating,
   setLifePostReaction,
   updateConfig,
   updateDailyChecklistItem,
@@ -917,6 +919,26 @@ app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const post = await deleteLifePostReaction(Number(id), user.id, requestLocale(request));
+  return post ? post : notFound(reply, request);
+});
+
+app.put('/api/life-posts/:id/rating', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.ratings.set', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const post = await setLifePostRating(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
+  return post ? post : notFound(reply, request);
+});
+
+app.delete('/api/life-posts/:id/rating', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.ratings.set', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const post = await deleteLifePostRating(Number(id), user.id, requestLocale(request));
   return post ? post : notFound(reply, request);
 });
 

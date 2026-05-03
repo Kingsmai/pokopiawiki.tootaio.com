@@ -1727,7 +1727,7 @@ button:disabled,
 }
 
 .life-toolbar {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(300px, 1fr) auto;
   align-items: end;
   gap: 16px;
 }
@@ -1742,6 +1742,21 @@ button:disabled,
 
 .life-toolbar__field {
   min-width: 0;
+}
+
+.life-toolbar__filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.life-toolbar__select {
+  min-width: 0;
+}
+
+.life-toolbar__select select {
+  width: 100%;
 }
 
 .life-search-control {
@@ -1967,6 +1982,7 @@ button:disabled,
   min-height: 30px;
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 4px 9px;
   border: 1px solid color-mix(in srgb, var(--pokemon-blue) 38%, var(--line));
   border-radius: var(--radius-small);
@@ -1977,8 +1993,96 @@ button:disabled,
   line-height: 1.2;
 }
 
+.life-post__tag .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.life-post__tag--version {
+  border-color: color-mix(in srgb, var(--pokemon-yellow) 70%, var(--line));
+  background: color-mix(in srgb, var(--pokemon-yellow) 24%, var(--surface));
+  color: var(--ink-soft);
+}
+
 [data-theme="night"] .life-post__tag {
   color: var(--pokemon-yellow);
+}
+
+.life-version-note {
+  max-width: 72ch;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+
+.life-version-note summary {
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.life-version-note p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.life-rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.life-rating__stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.life-rating__star {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: color-mix(in srgb, var(--warning) 80%, var(--ink-soft));
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.life-rating__star:hover,
+.life-rating__star.is-active {
+  border-color: color-mix(in srgb, var(--warning) 72%, var(--line));
+  background: color-mix(in srgb, var(--warning) 16%, var(--surface-soft));
+  color: color-mix(in srgb, var(--warning) 84%, var(--ink));
+}
+
+.life-rating__star:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.life-rating__star .ui-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.life-rating__summary {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 850;
 }
 
 .life-post__engagement {
@@ -5538,6 +5642,10 @@ button:disabled,
 }
 
 @media (max-width: 900px) {
+  .life-toolbar {
+    grid-template-columns: 1fr;
+  }
+
   .app-shell {
     display: block;
     padding-top: 64px;
@@ -5832,7 +5940,8 @@ button:disabled,
   }
 
   .life-toolbar,
-  .life-toolbar__search {
+  .life-toolbar__search,
+  .life-toolbar__filters {
     grid-template-columns: 1fr;
   }
 

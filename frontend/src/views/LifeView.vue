@@ -25,6 +25,9 @@ import {
   iconReply,
   iconSave,
   iconSearch,
+  iconStar,
+  iconStarOutline,
+  iconVersion,
   iconWarning
 } from '../icons';
 import {
@@ -34,6 +37,7 @@ import {
   setAuthToken,
   type AiModerationStatus,
   type AuthUser,
+  type GameVersion,
   type Language,
   type LifeCategory,
   type LifeComment,
@@ -52,9 +56,12 @@ type LifeCommentPageState = {
   error: string;
 };
 
+type LifePostSort = 'latest' | 'oldest' | 'top-rated';
+
 const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
 const lifeCategories = ref<LifeCategory[]>([]);
+const gameVersions = ref<GameVersion[]>([]);
 const languages = ref<Language[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
@@ -65,8 +72,12 @@ const searchDraft = ref('');
 const submittedSearch = ref('');
 const activeCategoryId = ref('all');
 const activeLanguageCode = ref('all');
+const activeGameVersionId = ref('all');
+const activeRateableFilter = ref('all');
+const activeSort = ref<LifePostSort>('latest');
 const body = ref('');
 const selectedCategoryId = ref('');
+const selectedGameVersionId = ref('');
 const editingPostId = ref<number | null>(null);
 const postModalOpen = ref(false);
 const formError = ref('');
@@ -81,6 +92,8 @@ const commentErrors = ref<Record<string, string>>({});
 const reactionPickerPostId = ref<number | null>(null);
 const reactionBusyPostId = ref<number | null>(null);
 const reactionErrors = ref<Record<number, string>>({});
+const ratingBusyPostId = ref<number | null>(null);
+const ratingErrors = ref<Record<number, string>>({});
 const moderationBusyPostId = ref<number | null>(null);
 const moderationErrors = ref<Record<number, string>>({});
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
@@ -99,6 +112,7 @@ const hasMorePosts = ref(false);
 const loadMorePaused = ref(false);
 const allCategoryValue = 'all';
 const allLanguageValue = 'all';
+const allGameVersionValue = 'all';
 
 const reactionOptions = [
   { type: 'like', icon: iconReactionLike, labelKey: 'pages.life.reactionLike' },
@@ -114,6 +128,7 @@ function can(permissionKey: string) {
 const canPost = computed(() => can('life.posts.create'));
 const canComment = computed(() => can('life.comments.create'));
 const canReact = computed(() => can('life.reactions.set'));
+const canRate = computed(() => can('life.ratings.set'));
 const charactersLeft = computed(() => Math.max(0, bodyMaxLength - body.value.length));
 const isEditing = computed(() => editingPostId.value !== null);
 const searchQuery = computed(() => submittedSearch.value.trim());
@@ -124,6 +139,21 @@ const selectedFeedCategoryId = computed(() => {
 const selectedFeedLanguageCode = computed(() =>
   activeLanguageCode.value === allLanguageValue ? undefined : activeLanguageCode.value
 );
+const selectedFeedGameVersionId = computed(() => {
+  const gameVersionId = Number(activeGameVersionId.value);
+  return activeGameVersionId.value === allGameVersionValue || !Number.isInteger(gameVersionId) || gameVersionId <= 0
+    ? undefined
+    : gameVersionId;
+});
+const selectedRateableFilter = computed(() => {
+  if (activeRateableFilter.value === 'rateable') {
+    return true;
+  }
+  if (activeRateableFilter.value === 'not-rateable') {
+    return false;
+  }
+  return null;
+});
 const categoryFilterOptions = computed<TabOption[]>(() => [
   { value: allCategoryValue, label: t('pages.life.allCategories') },
   ...lifeCategories.value.map((category) => ({ value: String(category.id), label: category.name }))
@@ -131,6 +161,20 @@ const categoryFilterOptions = computed<TabOption[]>(() => [
 const languageFilterOptions = computed<TabOption[]>(() => [
   { value: allLanguageValue, label: t('pages.life.allLanguages') },
   ...languages.value.map((language) => ({ value: language.code, label: language.name }))
+]);
+const gameVersionFilterOptions = computed(() => [
+  { value: allGameVersionValue, label: t('pages.life.allVersions') },
+  ...gameVersions.value.map((version) => ({ value: String(version.id), label: version.name }))
+]);
+const rateableFilterOptions = computed(() => [
+  { value: 'all', label: t('pages.life.allRatingModes') },
+  { value: 'rateable', label: t('pages.life.rateableOnly') },
+  { value: 'not-rateable', label: t('pages.life.notRateableOnly') }
+]);
+const sortOptions = computed<Array<{ value: LifePostSort; label: string }>>(() => [
+  { value: 'latest', label: t('pages.life.sortLatest') },
+  { value: 'oldest', label: t('pages.life.sortOldest') },
+  { value: 'top-rated', label: t('pages.life.sortTopRated') }
 ]);
 const defaultLifeCategoryId = computed(() => {
   const category = lifeCategories.value.find((item) => item.isDefault);
@@ -166,15 +210,25 @@ async function loadLifeCategories() {
   try {
     const options = await api.options();
     lifeCategories.value = options.lifeCategories;
+    gameVersions.value = options.gameVersions;
 
     if (activeCategoryId.value !== allCategoryValue && !lifeCategories.value.some((category) => String(category.id) === activeCategoryId.value)) {
       activeCategoryId.value = allCategoryValue;
+    }
+    if (
+      activeGameVersionId.value !== allGameVersionValue &&
+      !gameVersions.value.some((gameVersion) => String(gameVersion.id) === activeGameVersionId.value)
+    ) {
+      activeGameVersionId.value = allGameVersionValue;
     }
     if (!isEditing.value && postModalOpen.value && !selectedCategoryId.value) {
       selectedCategoryId.value = defaultLifeCategoryId.value;
     }
     if (!isEditing.value && selectedCategoryId.value && !lifeCategories.value.some((category) => String(category.id) === selectedCategoryId.value)) {
       selectedCategoryId.value = defaultLifeCategoryId.value;
+    }
+    if (selectedGameVersionId.value && !gameVersions.value.some((gameVersion) => String(gameVersion.id) === selectedGameVersionId.value)) {
+      selectedGameVersionId.value = '';
     }
   } catch (error) {
     loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
@@ -210,7 +264,10 @@ async function loadPosts() {
       limit: lifePostPageSize,
       search: searchQuery.value,
       categoryId: selectedFeedCategoryId.value,
-      language: selectedFeedLanguageCode.value
+      language: selectedFeedLanguageCode.value,
+      gameVersionId: selectedFeedGameVersionId.value,
+      rateable: selectedRateableFilter.value,
+      sort: activeSort.value
     });
     if (requestId !== postsRequestId) {
       return;
@@ -252,7 +309,10 @@ async function loadMorePosts() {
       limit: lifePostPageSize,
       search: searchQuery.value,
       categoryId: selectedFeedCategoryId.value,
-      language: selectedFeedLanguageCode.value
+      language: selectedFeedLanguageCode.value,
+      gameVersionId: selectedFeedGameVersionId.value,
+      rateable: selectedRateableFilter.value,
+      sort: activeSort.value
     });
     if (requestId !== postsRequestId) {
       return;
@@ -277,6 +337,7 @@ async function loadMorePosts() {
 function resetForm() {
   body.value = '';
   selectedCategoryId.value = '';
+  selectedGameVersionId.value = '';
   editingPostId.value = null;
   formError.value = '';
 }
@@ -285,6 +346,7 @@ function payload() {
   return {
     body: body.value.trim(),
     categoryId: selectedLifeCategoryId() ?? 0,
+    gameVersionId: selectedGameVersionForPost(),
     languageCode: selectedFeedLanguageCode.value ?? null
   };
 }
@@ -292,6 +354,11 @@ function payload() {
 function selectedLifeCategoryId() {
   const categoryId = Number(selectedCategoryId.value);
   return Number.isInteger(categoryId) && categoryId > 0 ? categoryId : null;
+}
+
+function selectedGameVersionForPost() {
+  const gameVersionId = Number(selectedGameVersionId.value);
+  return Number.isInteger(gameVersionId) && gameVersionId > 0 ? gameVersionId : null;
 }
 
 function submitSearch() {
@@ -326,11 +393,15 @@ function retryLoadMore() {
 function matchesCurrentFilters(post: LifePost) {
   const keyword = searchQuery.value.toLowerCase();
   const categoryId = selectedFeedCategoryId.value;
+  const gameVersionId = selectedFeedGameVersionId.value;
+  const rateable = selectedRateableFilter.value;
   const matchesSearch = keyword === '' || post.body.toLowerCase().includes(keyword);
   const matchesCategory = categoryId === undefined || post.category?.id === categoryId;
+  const matchesGameVersion = gameVersionId === undefined || post.gameVersion?.id === gameVersionId;
+  const matchesRateable = rateable === null || post.category?.isRateable === rateable;
   const matchesLanguage =
     selectedFeedLanguageCode.value === undefined || post.moderationLanguageCode === selectedFeedLanguageCode.value;
-  return matchesSearch && matchesCategory && matchesLanguage;
+  return matchesSearch && matchesCategory && matchesGameVersion && matchesRateable && matchesLanguage;
 }
 
 function openCreatePostModal() {
@@ -371,7 +442,9 @@ async function submitPost() {
       replacePost(updated);
     } else {
       const created = await api.createLifePost(payload());
-      if (matchesCurrentFilters(created)) {
+      if (activeSort.value !== 'latest') {
+        void loadPosts();
+      } else if (matchesCurrentFilters(created)) {
         posts.value = [created, ...posts.value];
       }
     }
@@ -599,6 +672,10 @@ function isReactionBusy(postId: number) {
   return reactionBusyPostId.value === postId;
 }
 
+function isRatingBusy(postId: number) {
+  return ratingBusyPostId.value === postId;
+}
+
 function commentAuthorName(comment: LifeComment) {
   return comment.deleted ? t('pages.life.commentDeleted') : comment.author?.displayName ?? t('pages.life.byUnknown');
 }
@@ -632,8 +709,37 @@ function clearReactionError(postId: number) {
   reactionErrors.value = nextErrors;
 }
 
+function setRatingError(postId: number, message: string) {
+  ratingErrors.value = { ...ratingErrors.value, [postId]: message };
+}
+
+function clearRatingError(postId: number) {
+  const nextErrors = { ...ratingErrors.value };
+  delete nextErrors[postId];
+  ratingErrors.value = nextErrors;
+}
+
 function canUseReactions() {
   return canReact.value && reactionBusyPostId.value === null;
+}
+
+function canUseRatings(post: LifePost) {
+  return canRate.value && ratingBusyPostId.value === null && post.moderationStatus === 'approved' && post.category?.isRateable === true;
+}
+
+function ratingButtonLabel(post: LifePost, rating: number) {
+  return post.myRating === rating ? t('pages.life.removeRating') : t('pages.life.setRating', { count: rating });
+}
+
+function ratingAverageLabel(post: LifePost) {
+  if (post.ratingAverage === null || post.ratingCount === 0) {
+    return t('pages.life.noRatings');
+  }
+
+  return t('pages.life.ratingAverage', {
+    average: new Intl.NumberFormat(locale.value, { maximumFractionDigits: 2 }).format(post.ratingAverage),
+    count: post.ratingCount
+  });
 }
 
 function closeReactionPicker() {
@@ -705,10 +811,32 @@ async function toggleReaction(post: LifePost, reactionType: LifeReactionType) {
   }
 }
 
+async function toggleRating(post: LifePost, rating: number) {
+  if (!canUseRatings(post)) {
+    return;
+  }
+
+  ratingBusyPostId.value = post.id;
+  clearRatingError(post.id);
+
+  try {
+    const updatedPost = post.myRating === rating ? await api.deleteLifeRating(post.id) : await api.setLifeRating(post.id, rating);
+    replacePost(updatedPost);
+    if (activeSort.value === 'top-rated') {
+      void loadPosts();
+    }
+  } catch (error) {
+    setRatingError(post.id, error instanceof Error && error.message ? error.message : t('pages.life.ratingFailed'));
+  } finally {
+    ratingBusyPostId.value = null;
+  }
+}
+
 function startEdit(post: LifePost) {
   editingPostId.value = post.id;
   body.value = post.body;
   selectedCategoryId.value = post.category ? String(post.category.id) : '';
+  selectedGameVersionId.value = post.gameVersion ? String(post.gameVersion.id) : '';
   formError.value = '';
   postModalOpen.value = true;
   void nextTick(() => bodyInput.value?.focus());
@@ -899,6 +1027,15 @@ watch(activeLanguageCode, () => {
   commentPages.value = {};
   void loadPosts();
 });
+watch(activeGameVersionId, () => {
+  void loadPosts();
+});
+watch(activeRateableFilter, () => {
+  void loadPosts();
+});
+watch(activeSort, () => {
+  void loadPosts();
+});
 watch(locale, () => {
   void loadLanguages();
   void loadLifeCategories();
@@ -955,6 +1092,33 @@ onUnmounted(() => {
         </button>
       </form>
 
+      <div class="life-toolbar__filters">
+        <div class="field life-toolbar__select">
+          <label for="life-version-filter">{{ t('pages.life.versionFilter') }}</label>
+          <select id="life-version-filter" v-model="activeGameVersionId">
+            <option v-for="option in gameVersionFilterOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="field life-toolbar__select">
+          <label for="life-rateable-filter">{{ t('pages.life.ratingFilter') }}</label>
+          <select id="life-rateable-filter" v-model="activeRateableFilter">
+            <option v-for="option in rateableFilterOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="field life-toolbar__select">
+          <label for="life-sort">{{ t('pages.life.sort') }}</label>
+          <select id="life-sort" v-model="activeSort">
+            <option v-for="option in sortOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+      </div>
+
       <div class="life-toolbar__actions">
         <button class="ui-button ui-button--primary" :disabled="!authReady" type="button" @click="openCreatePostModal">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
@@ -1001,6 +1165,19 @@ onUnmounted(() => {
             :multiple="false"
             :placeholder="t('pages.life.categoryPlaceholder')"
             :search-placeholder="t('pages.life.searchCategories')"
+            dropdown-strategy="fixed"
+          />
+        </div>
+
+        <div class="field">
+          <label for="life-post-version">{{ t('pages.life.gameVersion') }}</label>
+          <TagsSelect
+            id="life-post-version"
+            v-model="selectedGameVersionId"
+            :options="gameVersions"
+            :multiple="false"
+            :placeholder="t('pages.life.versionPlaceholder')"
+            :search-placeholder="t('pages.life.searchVersions')"
             dropdown-strategy="fixed"
           />
         </div>
@@ -1096,9 +1273,37 @@ onUnmounted(() => {
 
             <p class="life-post__body">{{ post.body }}</p>
 
-            <div v-if="post.category" class="life-post__tags" :aria-label="t('pages.life.category')">
-              <span class="life-post__tag">{{ post.category.name }}</span>
+            <div v-if="post.category || post.gameVersion" class="life-post__tags" :aria-label="t('pages.life.postMeta')">
+              <span v-if="post.category" class="life-post__tag">{{ post.category.name }}</span>
+              <span v-if="post.gameVersion" class="life-post__tag life-post__tag--version">
+                <Icon :icon="iconVersion" class="ui-icon" aria-hidden="true" />
+                {{ post.gameVersion.name }}
+              </span>
             </div>
+            <details v-if="post.gameVersion?.changeLog" class="life-version-note">
+              <summary>{{ t('pages.life.changeLog') }}</summary>
+              <p>{{ post.gameVersion.changeLog }}</p>
+            </details>
+
+            <div v-if="post.category?.isRateable" class="life-rating">
+              <div class="life-rating__stars" role="group" :aria-label="t('pages.life.rating')">
+                <button
+                  v-for="rating in 5"
+                  :key="rating"
+                  class="life-rating__star"
+                  :class="{ 'is-active': post.myRating !== null && rating <= post.myRating }"
+                  type="button"
+                  :aria-label="ratingButtonLabel(post, rating)"
+                  :aria-pressed="post.myRating === rating"
+                  :disabled="!canUseRatings(post) || isRatingBusy(post.id)"
+                  @click="toggleRating(post, rating)"
+                >
+                  <Icon :icon="post.myRating !== null && rating <= post.myRating ? iconStar : iconStarOutline" class="ui-icon" aria-hidden="true" />
+                </button>
+              </div>
+              <span class="life-rating__summary">{{ ratingAverageLabel(post) }}</span>
+            </div>
+            <p v-if="ratingErrors[post.id]" class="life-form__error" role="alert">{{ ratingErrors[post.id] }}</p>
 
             <div class="life-post__engagement">
               <div class="life-post__engagement-actions">

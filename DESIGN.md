@@ -746,6 +746,24 @@ API 暴露边界：
 - Pokemon 相关名称、图片、标志、角色和游戏素材归其各自权利人所有。
 - 法律页面和页脚文案必须通过系统级文案 catalog 管理，并支持现有语言回退机制。
 
+## 项目更新展示
+
+- Home 首页可展示 Pokopia Wiki 站点项目的公开更新信息，用于让访客了解站点代码与发布进展。
+- 完整项目更新页路径为 `/project-updates`，由 Home 首页项目更新预览区的 View All 入口进入。
+- 更新信息来源为公开 Gitea 仓库 `https://git.tootaio.com/Kingsmai/pokopiawiki.tootaio.com`。
+- 前端不得直接读取 Gitea API；后端通过 `GET /api/project-updates` 代理并净化公开仓库数据。
+- 项目更新 API 只返回展示所需字段：
+  - 仓库：`name`、`fullName`、公开仓库 `url`、`defaultBranch`、`updatedAt`。
+  - 最近提交分页：`items`、`nextCursor`、`hasMore`；每条提交只包含 `sha`、`shortSha`、提交标题 `title`、完整提交消息 `message`、`createdAt`、不含邮箱的 `authorName`、公开提交 `url`。
+  - 发布版本：`tagName`、`name`、`publishedAt`、公开发布 `url`。
+- 最近提交支持 `limit` 和不透明 `cursor` 增量读取；前端不得依赖 Gitea 的 `page` / `limit` 实现细节。
+- 项目更新 API 不返回 Gitea token、用户邮箱、内部 API URL、内网地址、文件列表、提交统计、Actions 日志、构建日志或调试字段。
+- Home 首页默认展示最近提交预览；用户可通过 View All 进入 `/project-updates` 完整页面。
+- `/project-updates` 按 Life Post 相同的增量方式继续显示更多提交。
+- `/project-updates` 的每条提交默认折叠，仅展示标题、短 SHA、作者和时间；用户可展开单条提交查看完整 Commit Message，并可再次收起。
+- 若仓库后续提供 Release，可展示发布版本。没有 Release 时不展示空发布区块。
+- Gitea 读取失败时不得在前台展示内部错误或调试信息。
+
 ## 前端交互与 UI
 
 - UI 风格以 `DesignGuidelines.html` 为准。
@@ -792,6 +810,7 @@ API 暴露边界：
   - `/recipes`
   - `/checklist`
   - `/life`
+  - `/project-updates`
 - `sitemap.xml` 当前只包含稳定的公开顶层浏览入口；实体详情页和公开 Profile 依赖运行时数据与站内链接可达性，当前不静态写入 sitemap。
 - Pokemon、物品、材料单和栖息地详情页在公开详情数据加载完成后，用实体名称、公开展示图片和本地化 SEO 文案更新 title、description、canonical、Open Graph 和 Twitter card。
 - 认证、管理、新建、编辑和开发中入口必须设置 `noindex`，避免搜索引擎索引受保护、低价值或临时流程页面。
@@ -806,6 +825,7 @@ API 暴露边界：
 - `GET /api/languages`
 - `GET /api/system-wordings`
 - `GET /api/options`
+- `GET /api/project-updates`：读取站点项目公开更新信息；支持 `cursor` / `limit` 分页读取最近提交；仅返回净化后的仓库、最近提交和发布版本展示字段。
 - `GET /api/daily-checklist`
 - `GET /api/pokemon`
 - `GET /api/pokemon/:id`

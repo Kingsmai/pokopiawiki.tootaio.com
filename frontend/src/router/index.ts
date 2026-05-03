@@ -10,6 +10,7 @@ import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
 import LifeView from '../views/LifeView.vue';
+import ProjectUpdatesView from '../views/ProjectUpdatesView.vue';
 import LegalView from '../views/LegalView.vue';
 import ComingSoonView from '../views/ComingSoonView.vue';
 import AdminView from '../views/AdminView.vue';
@@ -180,6 +181,17 @@ export const router = createRouter({
     },
     { path: '/checklist', component: DailyChecklistView, meta: { seo: seo({ titleKey: 'pages.checklist.title', descriptionKey: 'pages.checklist.subtitle' }) } },
     { path: '/life', component: LifeView, meta: { seo: seo({ titleKey: 'pages.life.title', descriptionKey: 'pages.life.subtitle' }) } },
+    {
+      path: '/project-updates',
+      component: ProjectUpdatesView,
+      meta: {
+        seo: seo({
+          titleKey: 'pages.projectUpdates.title',
+          descriptionKey: 'pages.projectUpdates.subtitle',
+          canonicalPath: '/project-updates'
+        })
+      }
+    },
     {
       path: '/privacy-policy',
       component: LegalView,

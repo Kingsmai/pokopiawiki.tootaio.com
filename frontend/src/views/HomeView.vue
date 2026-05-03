@@ -1,25 +1,34 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PokeBallMark from '../components/PokeBallMark.vue';
+import Skeleton from '../components/Skeleton.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import {
   iconAction,
   iconAutomation,
+  iconChevronRight,
   iconChecklist,
   iconClothes,
   iconDish,
   iconDreamIsland,
   iconEvent,
+  iconExternal,
+  iconGitCommit,
   iconHabitat,
   iconItem,
   iconLife,
   iconPokemon,
   iconRecipe
 } from '../icons';
+import { api, type ProjectUpdateCommit, type ProjectUpdates } from '../services/api';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+const projectCommitPageSize = 5;
+const projectUpdates = ref<ProjectUpdates | null>(null);
+const projectUpdatesLoading = ref(true);
+const projectCommits = ref<ProjectUpdateCommit[]>([]);
 
 const primarySections = computed(() => [
   { key: 'pokemon', to: '/pokemon', icon: iconPokemon },
@@ -42,12 +51,51 @@ const futureSections = computed(() => [
   { key: 'clothes', to: '/clothes', icon: iconClothes }
 ]);
 
+const latestReleases = computed(() => projectUpdates.value?.releases.slice(0, 3) ?? []);
+const showProjectUpdates = computed(
+  () => projectUpdatesLoading.value || projectCommits.value.length > 0 || latestReleases.value.length > 0
+);
+const showProjectUpdatesViewAll = computed(() => projectCommits.value.length > 0 || latestReleases.value.length > 0);
+const repositoryUpdatedAt = computed(() => formatDateTime(projectUpdates.value?.repository.updatedAt ?? null));
+
+onMounted(() => {
+  void loadProjectUpdates();
+});
+
 function sectionTitleKey(key: string) {
   return `pages.home.sections.${key}.title`;
 }
 
 function sectionDescriptionKey(key: string) {
   return `pages.home.sections.${key}.description`;
+}
+
+async function loadProjectUpdates(): Promise<void> {
+  projectUpdatesLoading.value = true;
+  try {
+    const updates = await api.projectUpdates({ limit: projectCommitPageSize });
+    projectUpdates.value = updates;
+    projectCommits.value = updates.commits.items;
+  } catch {
+    projectUpdates.value = null;
+    projectCommits.value = [];
+  } finally {
+    projectUpdatesLoading.value = false;
+  }
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(date);
 }
 </script>
 
@@ -142,6 +190,84 @@ function sectionDescriptionKey(key: string) {
             <span>{{ t(sectionDescriptionKey(section.key)) }}</span>
           </span>
         </RouterLink>
+      </div>
+    </section>
+
+    <section v-if="showProjectUpdates" class="home-section home-project-updates" aria-labelledby="home-project-updates-title">
+      <div class="home-section__header">
+        <span class="page-kicker">{{ t('pages.home.projectUpdatesKicker') }}</span>
+        <h2 id="home-project-updates-title">{{ t('pages.home.projectUpdatesTitle') }}</h2>
+      </div>
+
+      <div class="home-project-updates__panel">
+        <div v-if="projectUpdates" class="home-project-updates__repo">
+          <span class="home-project-updates__repo-label">{{ t('pages.home.projectUpdatesRepo') }}</span>
+          <a :href="projectUpdates.repository.url" target="_blank" rel="noreferrer">
+            <Icon :icon="iconGitCommit" class="ui-icon" aria-hidden="true" />
+            {{ projectUpdates.repository.fullName }}
+          </a>
+          <span v-if="repositoryUpdatedAt" class="home-project-updates__updated">
+            {{ t('pages.home.projectUpdatesUpdatedAt', { date: repositoryUpdatedAt }) }}
+          </span>
+        </div>
+
+        <div v-if="projectUpdatesLoading" class="home-project-updates__skeleton">
+          <Skeleton width="42%" />
+          <Skeleton width="76%" />
+          <Skeleton width="64%" />
+        </div>
+
+        <div v-else-if="projectUpdates" class="home-project-updates__content">
+          <div v-if="latestReleases.length" class="home-project-updates__group">
+            <h3>{{ t('pages.home.projectUpdatesReleases') }}</h3>
+            <ol class="home-project-updates__list">
+              <li v-for="release in latestReleases" :key="release.tagName" class="home-project-updates__item">
+                <div class="home-project-updates__commit">
+                  <div class="home-project-updates__title">
+                    <span class="home-project-updates__sha">{{ release.tagName }}</span>
+                    <strong>{{ release.name }}</strong>
+                  </div>
+                  <div v-if="release.publishedAt" class="home-project-updates__meta">
+                    <time :datetime="release.publishedAt">{{ formatDateTime(release.publishedAt) }}</time>
+                  </div>
+                </div>
+                <a class="ui-button ui-button--ghost home-project-updates__link" :href="release.url" target="_blank" rel="noreferrer">
+                  <Icon :icon="iconExternal" class="ui-icon" aria-hidden="true" />
+                  {{ t('pages.home.projectUpdatesViewRelease') }}
+                </a>
+              </li>
+            </ol>
+          </div>
+
+          <div v-if="projectCommits.length" class="home-project-updates__group">
+            <h3>{{ t('pages.home.projectUpdatesCommits') }}</h3>
+            <ol class="home-project-updates__list">
+              <li v-for="commit in projectCommits" :key="commit.sha" class="home-project-updates__item">
+                <div class="home-project-updates__commit">
+                  <div class="home-project-updates__title">
+                    <span class="home-project-updates__sha">{{ commit.shortSha }}</span>
+                    <strong>{{ commit.title }}</strong>
+                  </div>
+                  <div class="home-project-updates__meta">
+                    <span>{{ commit.authorName }}</span>
+                    <time :datetime="commit.createdAt">{{ formatDateTime(commit.createdAt) }}</time>
+                  </div>
+                </div>
+                <a class="ui-button ui-button--ghost home-project-updates__link" :href="commit.url" target="_blank" rel="noreferrer">
+                  <Icon :icon="iconExternal" class="ui-icon" aria-hidden="true" />
+                  {{ t('pages.home.projectUpdatesViewCommit') }}
+                </a>
+              </li>
+            </ol>
+
+            <div v-if="showProjectUpdatesViewAll" class="home-project-updates__actions">
+              <RouterLink class="ui-button ui-button--blue ui-button--small" to="/project-updates">
+                <Icon :icon="iconChevronRight" class="ui-icon" aria-hidden="true" />
+                {{ t('pages.home.projectUpdatesViewAll') }}
+              </RouterLink>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 

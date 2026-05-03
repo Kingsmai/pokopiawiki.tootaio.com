@@ -4852,6 +4852,332 @@ button:disabled,
   align-self: end;
 }
 
+.home-project-updates__panel {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+.home-project-updates__repo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.home-project-updates__repo-label,
+.home-project-updates__updated {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.home-project-updates__repo a {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--pokemon-blue-deep);
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.home-project-updates__repo a:hover {
+  color: var(--pokemon-blue);
+}
+
+.home-project-updates__updated {
+  margin-left: auto;
+}
+
+.home-project-updates__skeleton,
+.home-project-updates__content,
+.home-project-updates__group,
+.home-project-updates__commit {
+  display: grid;
+}
+
+.home-project-updates__skeleton,
+.home-project-updates__content {
+  gap: 18px;
+}
+
+.home-project-updates__skeleton {
+  padding: 8px 0;
+}
+
+.home-project-updates__group {
+  gap: 10px;
+}
+
+.home-project-updates__group h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.home-project-updates__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-project-updates__item {
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.home-project-updates__item:first-child {
+  border-top: 0;
+}
+
+.home-project-updates__commit {
+  min-width: 0;
+  gap: 8px;
+}
+
+.home-project-updates__title {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.home-project-updates__title strong {
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 950;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.home-project-updates__sha {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-soft);
+  color: var(--pokemon-blue-deep);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.home-project-updates__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.home-project-updates__link {
+  white-space: nowrap;
+}
+
+.home-project-updates__actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.project-updates-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+.project-updates-panel h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 950;
+  line-height: 1.12;
+}
+
+.project-updates-repo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.project-updates-repo__icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--pokemon-yellow);
+  box-shadow: 0 3px 0 var(--line-strong);
+  color: #172036;
+}
+
+.project-updates-repo__copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.project-updates-repo__copy span,
+.project-updates-repo__meta {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.project-updates-repo__copy a {
+  color: var(--pokemon-blue-deep);
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.project-updates-repo__copy a:hover {
+  color: var(--pokemon-blue);
+}
+
+.project-updates-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-updates-list__item {
+  display: grid;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.project-updates-list__item:first-child {
+  border-top: 0;
+}
+
+.project-updates-list__row,
+.project-updates-list__item:not(.project-updates-list__item--commit) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.project-updates-list__main {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.project-updates-list__title {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.project-updates-list__title strong {
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 950;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.project-updates-list__sha {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-soft);
+  color: var(--pokemon-blue-deep);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.project-updates-list__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.project-updates-list__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.project-updates-message {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.project-updates-message span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.project-updates-message pre {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.project-updates-more-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 8px 0 2px;
+}
+
+.project-updates-sentinel {
+  min-height: 1px;
+}
+
+.project-updates-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
 .auth-page {
   display: grid;
   justify-items: center;
@@ -5898,6 +6224,21 @@ button:disabled,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .home-project-updates__updated {
+    margin-left: 0;
+  }
+
+  .project-updates-repo,
+  .project-updates-list__row,
+  .project-updates-list__item:not(.project-updates-list__item--commit) {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .project-updates-list__actions {
+    justify-content: flex-start;
+  }
+
   .appearance-row__main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5971,6 +6312,36 @@ button:disabled,
 
   .home-card--wide {
     grid-template-columns: 1fr;
+  }
+
+  .home-project-updates__item,
+  .home-project-updates__title {
+    grid-template-columns: 1fr;
+  }
+
+  .home-project-updates__item {
+    align-items: start;
+  }
+
+  .home-project-updates__title {
+    display: grid;
+  }
+
+  .home-project-updates__link {
+    width: 100%;
+  }
+
+  .project-updates-panel {
+    padding: 16px;
+  }
+
+  .project-updates-list__title {
+    display: grid;
+  }
+
+  .project-updates-list__actions .ui-button,
+  .project-updates-list__item > .ui-button {
+    width: 100%;
   }
 
   .home-dex__screen {

@@ -157,6 +157,15 @@ export const systemWordingMessages = {
         wikiTitle: 'Browse game records',
         communityKicker: 'Daily & Community',
         communityTitle: 'Follow daily tasks and community updates',
+        projectUpdatesKicker: 'Project Updates',
+        projectUpdatesTitle: 'Latest site changes',
+        projectUpdatesRepo: 'Source repository',
+        projectUpdatesUpdatedAt: 'Updated {date}',
+        projectUpdatesCommits: 'Recent commits',
+        projectUpdatesReleases: 'Releases',
+        projectUpdatesViewCommit: 'View commit',
+        projectUpdatesViewRelease: 'View release',
+        projectUpdatesViewAll: 'View all',
         futureKicker: 'More Sections',
         futureTitle: 'Planned wiki areas',
         sections: {
@@ -209,6 +218,24 @@ export const systemWordingMessages = {
             description: 'Outfit and clothing references are being prepared.'
           }
         }
+      },
+      projectUpdates: {
+        kicker: 'Project Updates',
+        title: 'Project Updates',
+        subtitle: 'Follow public site changes from the Pokopia Wiki source repository.',
+        sourceRepository: 'Source repository',
+        updatedAt: 'Updated {date}',
+        openRepository: 'Open repository',
+        commits: 'Commits',
+        releases: 'Releases',
+        viewCommit: 'View commit',
+        viewRelease: 'View release',
+        expandMessage: 'Expand',
+        collapseMessage: 'Collapse',
+        commitMessage: 'Commit message',
+        loading: 'Loading project updates',
+        retry: 'Retry',
+        empty: 'No commits yet'
       },
       legal: {
         lastUpdated: 'Last updated: May 3, 2026',
@@ -1263,6 +1290,15 @@ export const systemWordingMessages = {
         wikiTitle: '浏览游戏资料',
         communityKicker: '每日与社区',
         communityTitle: '查看每日任务和社区更新',
+        projectUpdatesKicker: '项目更新',
+        projectUpdatesTitle: '最近站点改动',
+        projectUpdatesRepo: '源码仓库',
+        projectUpdatesUpdatedAt: '更新于 {date}',
+        projectUpdatesCommits: '最近提交',
+        projectUpdatesReleases: '发布版本',
+        projectUpdatesViewCommit: '查看提交',
+        projectUpdatesViewRelease: '查看发布',
+        projectUpdatesViewAll: '查看全部',
         futureKicker: '更多分区',
         futureTitle: '规划中的 Wiki 区域',
         sections: {
@@ -1315,6 +1351,24 @@ export const systemWordingMessages = {
             description: '服装和外观资料正在准备中。'
           }
         }
+      },
+      projectUpdates: {
+        kicker: '项目更新',
+        title: '项目更新',
+        subtitle: '查看 Pokopia Wiki 源码仓库中的公开站点改动。',
+        sourceRepository: '源码仓库',
+        updatedAt: '更新于 {date}',
+        openRepository: '打开仓库',
+        commits: '提交记录',
+        releases: '发布版本',
+        viewCommit: '查看提交',
+        viewRelease: '查看发布',
+        expandMessage: '展开',
+        collapseMessage: '收起',
+        commitMessage: 'Commit Message',
+        loading: '正在加载项目更新',
+        retry: '重试',
+        empty: '暂无提交'
       },
       legal: {
         lastUpdated: '最后更新：2026年5月3日',

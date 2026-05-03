@@ -212,6 +212,287 @@ function requestLocale(request: FastifyRequest): string {
   return cleanLocale(queryLocale ?? (Array.isArray(headerLocale) ? headerLocale[0] : headerLocale));
 }
 
+type ProjectUpdatesRepository = {
+  name: string;
+  fullName: string;
+  url: string;
+  defaultBranch: string;
+  updatedAt: string | null;
+};
+
+type ProjectUpdateCommit = {
+  sha: string;
+  shortSha: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  authorName: string;
+  url: string;
+};
+
+type ProjectUpdateRelease = {
+  tagName: string;
+  name: string;
+  publishedAt: string | null;
+  url: string;
+};
+
+type ProjectCommitPage = {
+  items: ProjectUpdateCommit[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+type ProjectUpdatesCursor = {
+  page: number;
+  limit: number;
+};
+
+type ProjectUpdatesResponse = {
+  repository: ProjectUpdatesRepository;
+  commits: ProjectCommitPage;
+  releases: ProjectUpdateRelease[];
+};
+
+const projectUpdatesConfig = {
+  apiBaseUrl: 'https://git.tootaio.com/api/v1',
+  publicBaseUrl: 'https://git.tootaio.com',
+  owner: 'Kingsmai',
+  repo: 'pokopiawiki.tootaio.com',
+  commitLimit: 5,
+  maxCommitLimit: 20,
+  releaseLimit: 3,
+  timeoutMs: 5000
+} as const;
+
+function projectRepositoryPath(): string {
+  return `${encodeURIComponent(projectUpdatesConfig.owner)}/${encodeURIComponent(projectUpdatesConfig.repo)}`;
+}
+
+function projectRepositoryUrl(): string {
+  return `${projectUpdatesConfig.publicBaseUrl}/${projectUpdatesConfig.owner}/${projectUpdatesConfig.repo}`;
+}
+
+function projectApiUrl(path = '', params: Record<string, string | number | boolean> = {}): string {
+  const apiBaseUrl = projectUpdatesConfig.apiBaseUrl.replace(/\/$/, '');
+  const url = new URL(`${apiBaseUrl}/repos/${projectRepositoryPath()}${path}`);
+
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, String(value));
+  }
+
+  return url.toString();
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function objectField(record: Record<string, unknown> | null, key: string): Record<string, unknown> | null {
+  if (!record) return null;
+  const value = record[key];
+  return isObjectRecord(value) ? value : null;
+}
+
+function stringField(record: Record<string, unknown> | null, key: string): string | null {
+  if (!record) return null;
+  const value = record[key];
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+function normalizedDate(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function projectCommitTitle(message: string | null, fallback: string): string {
+  const [firstLine] = (message ?? '').split('\n');
+  return firstLine?.trim() || fallback;
+}
+
+function projectUpdatesQueryValue(value: string | string[] | undefined): string | null {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return rawValue?.trim() || null;
+}
+
+function cleanProjectUpdatesLimit(query: Record<string, string | string[] | undefined>): number {
+  const rawLimit = Number(projectUpdatesQueryValue(query.limit));
+  if (!Number.isInteger(rawLimit)) {
+    return projectUpdatesConfig.commitLimit;
+  }
+
+  return Math.min(Math.max(rawLimit, 1), projectUpdatesConfig.maxCommitLimit);
+}
+
+function encodeProjectUpdatesCursor(page: number, limit: number): string {
+  return Buffer.from(JSON.stringify({ page, limit }), 'utf8').toString('base64url');
+}
+
+function decodeProjectUpdatesCursor(cursor: string | null): ProjectUpdatesCursor | null {
+  if (!cursor) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
+    if (!isObjectRecord(payload)) {
+      return null;
+    }
+
+    const { page, limit } = payload;
+    if (
+      typeof page === 'number' &&
+      Number.isInteger(page) &&
+      page > 0 &&
+      typeof limit === 'number' &&
+      Number.isInteger(limit) &&
+      limit > 0 &&
+      limit <= projectUpdatesConfig.maxCommitLimit
+    ) {
+      return { page, limit };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function fallbackProjectRepository(): ProjectUpdatesRepository {
+  return {
+    name: projectUpdatesConfig.repo,
+    fullName: `${projectUpdatesConfig.owner}/${projectUpdatesConfig.repo}`,
+    url: projectRepositoryUrl(),
+    defaultBranch: 'main',
+    updatedAt: null
+  };
+}
+
+async function fetchProjectJson(path = '', params: Record<string, string | number | boolean> = {}): Promise<unknown> {
+  const response = await fetch(projectApiUrl(path, params), {
+    headers: {
+      Accept: 'application/json'
+    },
+    signal: AbortSignal.timeout(projectUpdatesConfig.timeoutMs)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Project updates source failed (${response.status})`);
+  }
+
+  return response.json() as Promise<unknown>;
+}
+
+function mapProjectRepository(value: unknown): ProjectUpdatesRepository {
+  if (!isObjectRecord(value)) {
+    return fallbackProjectRepository();
+  }
+
+  return {
+    name: stringField(value, 'name') ?? projectUpdatesConfig.repo,
+    fullName: stringField(value, 'full_name') ?? `${projectUpdatesConfig.owner}/${projectUpdatesConfig.repo}`,
+    url: projectRepositoryUrl(),
+    defaultBranch: stringField(value, 'default_branch') ?? 'main',
+    updatedAt: normalizedDate(stringField(value, 'updated_at'))
+  };
+}
+
+function mapProjectCommit(value: unknown): ProjectUpdateCommit | null {
+  if (!isObjectRecord(value)) return null;
+
+  const sha = stringField(value, 'sha');
+  if (!sha) return null;
+
+  const commit = objectField(value, 'commit');
+  const commitAuthor = objectField(commit, 'author');
+  const message = stringField(commit, 'message') ?? sha.slice(0, 7);
+  const fallback = sha.slice(0, 7);
+  const createdAt =
+    normalizedDate(stringField(value, 'created')) ??
+    normalizedDate(stringField(commitAuthor, 'date')) ??
+    normalizedDate(stringField(objectField(commit, 'committer'), 'date'));
+
+  if (!createdAt) return null;
+
+  return {
+    sha,
+    shortSha: sha.slice(0, 7),
+    title: projectCommitTitle(message, fallback),
+    message,
+    createdAt,
+    authorName:
+      stringField(commitAuthor, 'name') ??
+      stringField(objectField(value, 'author'), 'login') ??
+      projectUpdatesConfig.owner,
+    url: `${projectRepositoryUrl()}/commit/${sha}`
+  };
+}
+
+function mapProjectRelease(value: unknown): ProjectUpdateRelease | null {
+  if (!isObjectRecord(value)) return null;
+
+  const tagName = stringField(value, 'tag_name');
+  if (!tagName) return null;
+
+  return {
+    tagName,
+    name: stringField(value, 'name') ?? tagName,
+    publishedAt: normalizedDate(stringField(value, 'published_at')) ?? normalizedDate(stringField(value, 'created_at')),
+    url: `${projectRepositoryUrl()}/releases/tag/${encodeURIComponent(tagName)}`
+  };
+}
+
+function logProjectUpdatesError(source: string, error: unknown): void {
+  app.log.warn({ err: error, source }, 'Project updates source unavailable');
+}
+
+async function getProjectCommitPage(query: Record<string, string | string[] | undefined>): Promise<ProjectCommitPage> {
+  const cursor = decodeProjectUpdatesCursor(projectUpdatesQueryValue(query.cursor));
+  const limit = cursor?.limit ?? cleanProjectUpdatesLimit(query);
+  const page = cursor?.page ?? 1;
+  const value = await fetchProjectJson('/commits', {
+    page,
+    limit: limit + 1,
+    stat: false,
+    files: false,
+    verification: false
+  });
+  const commits = Array.isArray(value)
+    ? value.map(mapProjectCommit).filter((commit): commit is ProjectUpdateCommit => commit !== null)
+    : [];
+  const hasMore = commits.length > limit;
+
+  return {
+    items: commits.slice(0, limit),
+    nextCursor: hasMore ? encodeProjectUpdatesCursor(page + 1, limit) : null,
+    hasMore
+  };
+}
+
+async function getProjectUpdates(query: Record<string, string | string[] | undefined> = {}): Promise<ProjectUpdatesResponse> {
+  const [repository, commits, releases] = await Promise.all([
+    fetchProjectJson()
+      .then(mapProjectRepository)
+      .catch((error: unknown) => {
+        logProjectUpdatesError('repository', error);
+        return fallbackProjectRepository();
+      }),
+    getProjectCommitPage(query).catch((error: unknown) => {
+      logProjectUpdatesError('commits', error);
+      throw error;
+    }),
+    fetchProjectJson('/releases', { limit: projectUpdatesConfig.releaseLimit, draft: false, 'pre-release': false })
+      .then((value) =>
+        Array.isArray(value) ? value.map(mapProjectRelease).filter((release): release is ProjectUpdateRelease => release !== null) : []
+      )
+      .catch((error: unknown) => {
+        logProjectUpdatesError('releases', error);
+        return [];
+      })
+  ]);
+
+  return { repository, commits, releases };
+}
+
 function serverMessage(
   locale: string,
   key:
@@ -843,6 +1124,10 @@ app.get('/api/languages', async () => listLanguages());
 app.get('/api/system-wordings', async (request) => getSystemWordings(requestLocale(request)));
 
 app.get('/api/options', async (request) => getOptions(requestLocale(request)));
+
+app.get('/api/project-updates', async (request) =>
+  getProjectUpdates(request.query as Record<string, string | string[] | undefined>)
+);
 
 app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(requestLocale(request)));
 

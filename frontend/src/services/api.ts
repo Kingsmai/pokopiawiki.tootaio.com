@@ -64,6 +64,48 @@ export interface UserSummary {
   displayName: string;
 }
 
+export interface ProjectUpdatesRepository {
+  name: string;
+  fullName: string;
+  url: string;
+  defaultBranch: string;
+  updatedAt: string | null;
+}
+
+export interface ProjectUpdateCommit {
+  sha: string;
+  shortSha: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  authorName: string;
+  url: string;
+}
+
+export interface ProjectUpdateRelease {
+  tagName: string;
+  name: string;
+  publishedAt: string | null;
+  url: string;
+}
+
+export interface ProjectCommitPage {
+  items: ProjectUpdateCommit[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface ProjectUpdates {
+  repository: ProjectUpdatesRepository;
+  commits: ProjectCommitPage;
+  releases: ProjectUpdateRelease[];
+}
+
+export interface ProjectUpdatesParams {
+  cursor?: string | null;
+  limit?: number;
+}
+
 export interface EntityImage {
   path: string;
   url: string;
@@ -836,6 +878,13 @@ async function deleteAndGetJson<T>(path: string): Promise<T> {
 
 export const api = {
   languages: () => getJson<Language[]>('/api/languages'),
+  projectUpdates: (params: ProjectUpdatesParams = {}) =>
+    getJson<ProjectUpdates>(
+      `/api/project-updates${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   adminLanguages: () => getJson<Language[]>('/api/admin/languages'),
   createLanguage: (payload: Omit<Language, 'sortOrder'> & { sortOrder?: number }) =>
     sendJson<Language[]>('/api/admin/languages', 'POST', payload),

@@ -12,16 +12,18 @@ import PokeBallMark from '../components/PokeBallMark.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconHabitat } from '../icons';
-import { api, type HabitatDetail } from '../services/api';
+import { api, getAuthToken, type AuthUser, type HabitatDetail } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
 const habitat = ref<HabitatDetail | null>(null);
+const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const showEditor = computed(() => route.name === 'habitat-edit');
+const canUpdateHabitat = computed(() => currentUser.value?.permissions.includes('habitats.update') === true);
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
   { value: 'discussion', label: t('discussion.title') },
@@ -118,6 +120,13 @@ async function loadHabitatDetail() {
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   await loadHabitatDetail();
 });
 
@@ -190,7 +199,7 @@ watch(
     <PageHeader :title="habitat.name" :subtitle="t('pages.habitats.detailSubtitle')">
       <template #kicker>{{ t('pages.habitats.detailKicker') }}</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">
+        <RouterLink v-if="canUpdateHabitat" class="ui-button ui-button--primary ui-button--small" :to="`/habitats/${habitat.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>

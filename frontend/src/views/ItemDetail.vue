@@ -12,14 +12,17 @@ import PokeBallMark from '../components/PokeBallMark.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconAdd, iconBack, iconEdit, iconHabitat, iconItem } from '../icons';
-import { api, type ItemDetail } from '../services/api';
+import { api, getAuthToken, type AuthUser, type ItemDetail } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
 const item = ref<ItemDetail | null>(null);
+const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
 const showEditor = computed(() => route.name === 'item-edit');
+const canUpdateItem = computed(() => currentUser.value?.permissions.includes('items.update') === true);
+const canCreateRecipe = computed(() => currentUser.value?.permissions.includes('recipes.create') === true);
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
   { value: 'discussion', label: t('discussion.title') },
@@ -50,6 +53,13 @@ async function loadItemDetail() {
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   await loadItemDetail();
 });
 
@@ -129,7 +139,7 @@ watch(
     <PageHeader :title="item.name" :subtitle="itemSubtitle">
       <template #kicker>{{ t('pages.items.detailKicker') }}</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">
+        <RouterLink v-if="canUpdateItem" class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>
@@ -211,7 +221,7 @@ watch(
             <p v-else-if="item.noRecipe" class="meta-line">{{ t('pages.items.noRecipe') }}</p>
             <template v-else>
               <p class="meta-line">{{ t('common.none') }}</p>
-              <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/new?itemId=${item.id}`">
+              <RouterLink v-if="canCreateRecipe" class="ui-button ui-button--primary ui-button--small" :to="`/recipes/new?itemId=${item.id}`">
                 <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
                 {{ t('pages.items.createRecipe') }}
               </RouterLink>

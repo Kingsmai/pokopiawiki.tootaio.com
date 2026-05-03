@@ -14,12 +14,13 @@ import PokemonStatsPanel from '../components/PokemonStatsPanel.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconHabitat, iconItem } from '../icons';
-import { api, type PokemonDetail } from '../services/api';
+import { api, getAuthToken, type AuthUser, type PokemonDetail } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
 const pokemon = ref<PokemonDetail | null>(null);
+const currentUser = ref<AuthUser | null>(null);
 const itemCategoryTab = ref('');
 const relatedHabitatTab = ref('');
 const detailTab = ref('details');
@@ -118,6 +119,7 @@ const habitatRows = computed<HabitatRow[]>(() => {
 });
 const skillDropRows = computed(() => pokemon.value?.skills.filter((skill) => skill.itemDrop) ?? []);
 const showEditor = computed(() => route.name === 'pokemon-edit');
+const canUpdatePokemon = computed(() => currentUser.value?.permissions.includes('pokemon.update') === true);
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
   { value: 'discussion', label: t('discussion.title') },
@@ -222,6 +224,13 @@ async function loadPokemonDetail() {
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   await loadPokemonDetail();
 });
 
@@ -307,7 +316,7 @@ watch(
     <PageHeader :title="`#${pokemon.displayId} ${pokemon.name}`" :subtitle="t('pages.pokemon.environmentPrefix', { name: pokemon.environment.name })">
       <template #kicker>Pokédex Detail</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">
+        <RouterLink v-if="canUpdatePokemon" class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>

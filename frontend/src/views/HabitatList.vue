@@ -7,21 +7,30 @@ import EntityCard from '../components/EntityCard.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { iconAdd, iconHabitat } from '../icons';
-import { api, type Habitat } from '../services/api';
+import { api, getAuthToken, type AuthUser, type Habitat } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
 const habitats = ref<Habitat[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const route = useRoute();
 const { t } = useI18n();
 const loading = ref(true);
 const skeletonCardCount = 6;
 const showEditor = computed(() => route.name === 'habitat-new');
+const canCreateHabitat = computed(() => currentUser.value?.permissions.includes('habitats.create') === true);
 
 function habitatCardImage(item: Habitat) {
   return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : undefined;
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   habitats.value = await api.habitats();
   loading.value = false;
 });
@@ -32,7 +41,7 @@ onMounted(async () => {
     <PageHeader :title="t('pages.habitats.title')" :subtitle="t('pages.habitats.subtitle')">
       <template #kicker>Habitats</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/habitats/new">
+        <RouterLink v-if="canCreateHabitat" class="ui-button ui-button--primary ui-button--small" to="/habitats/new">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.add') }}
         </RouterLink>

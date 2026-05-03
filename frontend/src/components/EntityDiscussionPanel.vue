@@ -36,7 +36,11 @@ const commentMaxLength = 1000;
 let requestId = 0;
 let removeAuthListener: (() => void) | null = null;
 
-const canComment = computed(() => currentUser.value?.emailVerified === true);
+function can(permissionKey: string) {
+  return currentUser.value?.permissions.includes(permissionKey) === true;
+}
+
+const canComment = computed(() => can('discussions.comments.create'));
 const charactersLeft = computed(() => Math.max(0, commentMaxLength - body.value.length));
 const commentTotal = computed(() => comments.value.reduce((total, comment) => total + 1 + comment.replies.length, 0));
 
@@ -108,7 +112,11 @@ function clearCommentError(key: string) {
 }
 
 function canManageComment(comment: EntityDiscussionComment) {
-  return !comment.deleted && currentUser.value?.id === comment.author?.id;
+  return (
+    !comment.deleted &&
+    ((currentUser.value?.id === comment.author?.id && can('discussions.comments.delete')) ||
+      can('discussions.comments.delete-any'))
+  );
 }
 
 function commentAuthorName(comment: EntityDiscussionComment) {

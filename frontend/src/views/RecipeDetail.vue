@@ -11,14 +11,16 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconRecipe } from '../icons';
-import { api, type RecipeDetail } from '../services/api';
+import { api, getAuthToken, type AuthUser, type RecipeDetail } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
 const recipe = ref<RecipeDetail | null>(null);
+const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
 const showEditor = computed(() => route.name === 'recipe-edit');
+const canUpdateRecipe = computed(() => currentUser.value?.permissions.includes('recipes.update') === true);
 const detailTabs = computed<TabOption[]>(() => [
   { value: 'details', label: t('common.details') },
   { value: 'discussion', label: t('discussion.title') },
@@ -44,6 +46,13 @@ async function loadRecipeDetail() {
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   await loadRecipeDetail();
 });
 
@@ -97,7 +106,7 @@ watch(
     <PageHeader :title="recipe.name" :subtitle="recipeSubtitle">
       <template #kicker>{{ t('pages.recipes.detailKicker') }}</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">
+        <RouterLink v-if="canUpdateRecipe" class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>

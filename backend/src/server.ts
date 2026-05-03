@@ -5,14 +5,27 @@ import Fastify from 'fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { mkdir } from 'node:fs/promises';
 import {
+  createPermission,
+  createRole,
+  deletePermission,
+  deleteRole,
   getReferralSummary,
   getUserBySessionToken,
+  listAdminUsers,
+  listPermissions,
+  listRoles,
   loginUser,
   logoutSession,
   registerUser,
   requestPasswordReset,
   resetPassword,
+  updateAdminUserRoles,
   updateCurrentUser,
+  updatePermission,
+  updateRole,
+  updateRolePermissions,
+  userHasAnyPermission,
+  userHasPermission,
   verifyEmail,
   type AuthUser
 } from './auth.ts';
@@ -155,7 +168,15 @@ function requestLocale(request: FastifyRequest): string {
 
 function serverMessage(
   locale: string,
-  key: 'foreignKey' | 'duplicate' | 'invalidField' | 'serverError' | 'loginRequired' | 'verifyEmailFirst' | 'notFound'
+  key:
+    | 'foreignKey'
+    | 'duplicate'
+    | 'invalidField'
+    | 'serverError'
+    | 'loginRequired'
+    | 'verifyEmailFirst'
+    | 'permissionDenied'
+    | 'notFound'
 ): Promise<string> {
   return systemMessage(locale, `server.errors.${key}`);
 }
@@ -182,6 +203,42 @@ async function requireVerifiedUser(request: FastifyRequest, reply: FastifyReply)
 
   if (!user.emailVerified) {
     reply.code(403).send({ message: await serverMessage(locale, 'verifyEmailFirst') });
+    return null;
+  }
+
+  return user;
+}
+
+async function requirePermission(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  permissionKey: string
+): Promise<AuthUser | null> {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return null;
+  }
+
+  if (!userHasPermission(user, permissionKey)) {
+    reply.code(403).send({ message: await serverMessage(requestLocale(request), 'permissionDenied') });
+    return null;
+  }
+
+  return user;
+}
+
+async function requireAnyPermission(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  permissionKeys: string[]
+): Promise<AuthUser | null> {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return null;
+  }
+
+  if (!userHasAnyPermission(user, permissionKeys)) {
+    reply.code(403).send({ message: await serverMessage(requestLocale(request), 'permissionDenied') });
     return null;
   }
 
@@ -260,6 +317,87 @@ app.post('/api/auth/logout', async (request, reply) => {
   return reply.code(204).send();
 });
 
+app.get('/api/admin/users', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.users.read');
+  return user ? listAdminUsers() : undefined;
+});
+
+app.put('/api/admin/users/:id/roles', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.users.update');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  return updateAdminUserRoles(Number(id), request.body as Record<string, unknown>, user.id);
+});
+
+app.get('/api/admin/roles', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.roles.read');
+  return user ? listRoles() : undefined;
+});
+
+app.post('/api/admin/roles', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.roles.create');
+  return user ? reply.code(201).send(await createRole(request.body as Record<string, unknown>)) : undefined;
+});
+
+app.put('/api/admin/roles/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.roles.update');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  return updateRole(Number(id), request.body as Record<string, unknown>);
+});
+
+app.put('/api/admin/roles/:id/permissions', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.roles.update');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  return updateRolePermissions(Number(id), request.body as Record<string, unknown>);
+});
+
+app.delete('/api/admin/roles/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.roles.delete');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  await deleteRole(Number(id));
+  return reply.code(204).send();
+});
+
+app.get('/api/admin/permissions', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.permissions.read');
+  return user ? listPermissions() : undefined;
+});
+
+app.post('/api/admin/permissions', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.permissions.create');
+  return user ? reply.code(201).send(await createPermission(request.body as Record<string, unknown>)) : undefined;
+});
+
+app.put('/api/admin/permissions/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.permissions.update');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  return updatePermission(Number(id), request.body as Record<string, unknown>);
+});
+
+app.delete('/api/admin/permissions/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.permissions.delete');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  await deletePermission(Number(id));
+  return reply.code(204).send();
+});
+
 app.get('/api/languages', async () => listLanguages());
 
 app.get('/api/system-wordings', async (request) => getSystemWordings(requestLocale(request)));
@@ -274,14 +412,14 @@ app.get('/api/life-posts', async (request) => {
 });
 
 app.post('/api/life-posts', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'life.posts.create');
   return user
     ? reply.code(201).send(await createLifePost(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.post('/api/life-posts/:postId/comments', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'life.comments.create');
   if (!user) {
     return;
   }
@@ -291,7 +429,7 @@ app.post('/api/life-posts/:postId/comments', async (request, reply) => {
 });
 
 app.post('/api/life-posts/:postId/comments/:commentId/replies', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'life.comments.create');
   if (!user) {
     return;
   }
@@ -306,17 +444,23 @@ app.post('/api/life-posts/:postId/comments/:commentId/replies', async (request, 
 });
 
 app.put('/api/life-posts/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requireAnyPermission(request, reply, ['life.posts.update', 'life.posts.update-any']);
   if (!user) {
     return;
   }
   const { id } = request.params as { id: string };
-  const post = await updateLifePost(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
+  const post = await updateLifePost(
+    Number(id),
+    request.body as Record<string, unknown>,
+    user.id,
+    requestLocale(request),
+    userHasPermission(user, 'life.posts.update-any')
+  );
   return post ? post : notFound(reply, request);
 });
 
 app.put('/api/life-posts/:id/reaction', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'life.reactions.set');
   if (!user) {
     return;
   }
@@ -326,7 +470,7 @@ app.put('/api/life-posts/:id/reaction', async (request, reply) => {
 });
 
 app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'life.reactions.set');
   if (!user) {
     return;
   }
@@ -336,22 +480,22 @@ app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
 });
 
 app.delete('/api/life-posts/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requireAnyPermission(request, reply, ['life.posts.delete', 'life.posts.delete-any']);
   if (!user) {
     return;
   }
   const { id } = request.params as { id: string };
-  const deleted = await deleteLifePost(Number(id), user.id);
+  const deleted = await deleteLifePost(Number(id), user.id, userHasPermission(user, 'life.posts.delete-any'));
   return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
 app.delete('/api/life-comments/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requireAnyPermission(request, reply, ['life.comments.delete', 'life.comments.delete-any']);
   if (!user) {
     return;
   }
   const { id } = request.params as { id: string };
-  const deleted = await deleteLifeComment(Number(id), user.id);
+  const deleted = await deleteLifeComment(Number(id), user.id, userHasPermission(user, 'life.comments.delete-any'));
   return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
@@ -362,7 +506,7 @@ app.get('/api/discussions/:entityType/:entityId/comments', async (request, reply
 });
 
 app.post('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'discussions.comments.create');
   if (!user) {
     return;
   }
@@ -378,7 +522,7 @@ app.post('/api/discussions/:entityType/:entityId/comments', async (request, repl
 });
 
 app.post('/api/discussions/:entityType/:entityId/comments/:commentId/replies', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'discussions.comments.create');
   if (!user) {
     return;
   }
@@ -399,13 +543,20 @@ app.post('/api/discussions/:entityType/:entityId/comments/:commentId/replies', a
 });
 
 app.delete('/api/discussions/comments/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requireAnyPermission(request, reply, [
+    'discussions.comments.delete',
+    'discussions.comments.delete-any'
+  ]);
   if (!user) {
     return;
   }
 
   const { id } = request.params as { id: string };
-  const deleted = await deleteEntityDiscussionComment(Number(id), user.id);
+  const deleted = await deleteEntityDiscussionComment(
+    Number(id),
+    user.id,
+    userHasPermission(user, 'discussions.comments.delete-any')
+  );
   return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
@@ -414,7 +565,7 @@ app.get('/api/pokemon', async (request) =>
 );
 
 app.get('/api/pokemon/fetch-options', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'pokemon.fetch');
   return user
     ? listPokemonFetchOptions(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
     : undefined;
@@ -432,31 +583,33 @@ app.get('/api/pokemon/:id', async (request, reply) => {
 });
 
 app.post('/api/pokemon', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'pokemon.create');
   return user
     ? reply.code(201).send(await createPokemon(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.post('/api/pokemon/fetch', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'pokemon.fetch');
   return user ? fetchPokemonData(request.body as Record<string, unknown>, user.id) : undefined;
 });
 
 app.post('/api/pokemon/image-options', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'pokemon.fetch');
   return user ? fetchPokemonImageOptions(request.body as Record<string, unknown>) : undefined;
 });
 
 app.post('/api/uploads/:entityType', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
-  if (!user) {
-    return;
-  }
-
   const { entityType } = request.params as { entityType: string };
   if (!isUploadEntityType(entityType)) {
     return notFound(reply, request);
+  }
+
+  const permissionKey =
+    entityType === 'pokemon' ? 'pokemon.upload' : entityType === 'items' ? 'items.upload' : 'habitats.upload';
+  const user = await requirePermission(request, reply, permissionKey);
+  if (!user) {
+    return;
   }
 
   let file: MultipartFile | undefined;
@@ -474,7 +627,7 @@ app.post('/api/uploads/:entityType', async (request, reply) => {
 });
 
 app.put('/api/pokemon/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'pokemon.update');
   if (!user) {
     return;
   }
@@ -489,7 +642,7 @@ app.put('/api/pokemon/:id', async (request, reply) => {
 });
 
 app.delete('/api/pokemon/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'pokemon.delete');
   if (!user) {
     return;
   }
@@ -512,14 +665,14 @@ app.get('/api/habitats/:id', async (request, reply) => {
 });
 
 app.post('/api/habitats', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'habitats.create');
   return user
     ? reply.code(201).send(await createHabitat(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.put('/api/habitats/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'habitats.update');
   if (!user) {
     return;
   }
@@ -534,7 +687,7 @@ app.put('/api/habitats/:id', async (request, reply) => {
 });
 
 app.delete('/api/habitats/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'habitats.delete');
   if (!user) {
     return;
   }
@@ -559,14 +712,14 @@ app.get('/api/items/:id', async (request, reply) => {
 });
 
 app.post('/api/items', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'items.create');
   return user
     ? reply.code(201).send(await createItem(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.put('/api/items/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'items.update');
   if (!user) {
     return;
   }
@@ -581,7 +734,7 @@ app.put('/api/items/:id', async (request, reply) => {
 });
 
 app.delete('/api/items/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'items.delete');
   if (!user) {
     return;
   }
@@ -606,14 +759,14 @@ app.get('/api/recipes/:id', async (request, reply) => {
 });
 
 app.post('/api/recipes', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'recipes.create');
   return user
     ? reply.code(201).send(await createRecipe(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.put('/api/recipes/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'recipes.update');
   if (!user) {
     return;
   }
@@ -628,7 +781,7 @@ app.put('/api/recipes/:id', async (request, reply) => {
 });
 
 app.delete('/api/recipes/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'recipes.delete');
   if (!user) {
     return;
   }
@@ -638,7 +791,7 @@ app.delete('/api/recipes/:id', async (request, reply) => {
 });
 
 app.post('/api/admin/daily-checklist', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'checklist.create');
   return user
     ? reply
         .code(201)
@@ -647,12 +800,12 @@ app.post('/api/admin/daily-checklist', async (request, reply) => {
 });
 
 app.put('/api/admin/daily-checklist/order', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'checklist.order');
   return user ? reorderDailyChecklistItems(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/daily-checklist/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'checklist.update');
   if (!user) {
     return;
   }
@@ -667,7 +820,7 @@ app.put('/api/admin/daily-checklist/:id', async (request, reply) => {
 });
 
 app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'checklist.delete');
   if (!user) {
     return;
   }
@@ -677,42 +830,42 @@ app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
 });
 
 app.put('/api/admin/pokemon/order', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'pokemon.order');
   return user ? reorderPokemon(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/items/order', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'items.order');
   return user ? reorderItems(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/recipes/order', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'recipes.order');
   return user ? reorderRecipes(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/habitats/order', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'habitats.order');
   return user ? reorderHabitats(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.get('/api/admin/languages', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.languages.read');
   return user ? listLanguages(true) : undefined;
 });
 
 app.post('/api/admin/languages', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.languages.create');
   return user ? reply.code(201).send(await createLanguage(request.body as Record<string, unknown>)) : undefined;
 });
 
 app.put('/api/admin/languages/order', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.languages.order');
   return user ? reorderLanguages(request.body as Record<string, unknown>) : undefined;
 });
 
 app.put('/api/admin/languages/:code', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.languages.update');
   if (!user) {
     return;
   }
@@ -721,7 +874,7 @@ app.put('/api/admin/languages/:code', async (request, reply) => {
 });
 
 app.delete('/api/admin/languages/:code', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.languages.delete');
   if (!user) {
     return;
   }
@@ -731,12 +884,12 @@ app.delete('/api/admin/languages/:code', async (request, reply) => {
 });
 
 app.get('/api/admin/system-wordings', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.wordings.read');
   return user ? listSystemWordingRows(request.query as Record<string, unknown>) : undefined;
 });
 
 app.put('/api/admin/system-wordings/:key', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.wordings.update');
   if (!user) {
     return;
   }
@@ -745,7 +898,7 @@ app.put('/api/admin/system-wordings/:key', async (request, reply) => {
 });
 
 app.get('/api/admin/config/:type', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.config.read');
   if (!user) {
     return;
   }
@@ -757,7 +910,7 @@ app.get('/api/admin/config/:type', async (request, reply) => {
 });
 
 app.post('/api/admin/config/:type', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.config.create');
   if (!user) {
     return;
   }
@@ -771,7 +924,7 @@ app.post('/api/admin/config/:type', async (request, reply) => {
 });
 
 app.put('/api/admin/config/:type/order', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.config.order');
   if (!user) {
     return;
   }
@@ -783,7 +936,7 @@ app.put('/api/admin/config/:type/order', async (request, reply) => {
 });
 
 app.put('/api/admin/config/:type/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.config.update');
   if (!user) {
     return;
   }
@@ -796,7 +949,7 @@ app.put('/api/admin/config/:type/:id', async (request, reply) => {
 });
 
 app.delete('/api/admin/config/:type/:id', async (request, reply) => {
-  const user = await requireVerifiedUser(request, reply);
+  const user = await requirePermission(request, reply, 'admin.config.delete');
   if (!user) {
     return;
   }

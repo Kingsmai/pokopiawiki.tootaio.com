@@ -314,12 +314,60 @@ export interface AuthUser {
   email: string;
   displayName: string;
   emailVerified: boolean;
+  roles: RoleSummary[];
+  permissions: string[];
 }
 
 export interface ReferralSummary {
   code: string;
   url: string;
   verifiedReferralCount: number;
+}
+
+export interface RoleSummary {
+  id: number;
+  key: string;
+  name: string;
+  level: number;
+}
+
+export interface RoleDetail extends RoleSummary {
+  description: string;
+  enabled: boolean;
+  systemRole: boolean;
+  permissionIds: number[];
+}
+
+export interface Permission {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  systemPermission: boolean;
+}
+
+export interface AdminUser extends AuthUser {
+  roleIds: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RolePayload {
+  key?: string;
+  name: string;
+  description: string;
+  level: number;
+  enabled: boolean;
+}
+
+export interface PermissionPayload {
+  key?: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
 }
 
 export interface UserProfilePayload {
@@ -646,6 +694,22 @@ export const api = {
   updateMe: (payload: UserProfilePayload) => sendJson<{ user: AuthUser }>('/api/auth/me', 'PATCH', payload),
   referral: () => getJson<{ referral: ReferralSummary }>('/api/auth/referral'),
   logout: () => postEmpty('/api/auth/logout'),
+  adminUsers: () => getJson<AdminUser[]>('/api/admin/users'),
+  updateAdminUserRoles: (id: string | number, roleIds: number[]) =>
+    sendJson<AdminUser[]>(`/api/admin/users/${id}/roles`, 'PUT', { roleIds }),
+  roles: () => getJson<RoleDetail[]>('/api/admin/roles'),
+  createRole: (payload: RolePayload & { key: string }) => sendJson<RoleDetail[]>('/api/admin/roles', 'POST', payload),
+  updateRole: (id: string | number, payload: RolePayload) =>
+    sendJson<RoleDetail[]>(`/api/admin/roles/${id}`, 'PUT', payload),
+  updateRolePermissions: (id: string | number, permissionIds: number[]) =>
+    sendJson<RoleDetail[]>(`/api/admin/roles/${id}/permissions`, 'PUT', { permissionIds }),
+  deleteRole: (id: string | number) => deleteJson(`/api/admin/roles/${id}`),
+  permissions: () => getJson<Permission[]>('/api/admin/permissions'),
+  createPermission: (payload: PermissionPayload & { key: string }) =>
+    sendJson<Permission[]>('/api/admin/permissions', 'POST', payload),
+  updatePermission: (id: string | number, payload: PermissionPayload) =>
+    sendJson<Permission[]>(`/api/admin/permissions/${id}`, 'PUT', payload),
+  deletePermission: (id: string | number) => deleteJson(`/api/admin/permissions/${id}`),
   options: () => getJson<Options>('/api/options'),
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),
   lifePosts: (params: LifePostsParams = {}) =>

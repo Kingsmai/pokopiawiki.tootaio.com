@@ -86,7 +86,13 @@ const reactionOptions = [
   { type: 'thanks', icon: iconReactionThanks, labelKey: 'pages.life.reactionThanks' }
 ] as const satisfies ReadonlyArray<{ type: LifeReactionType; icon: string; labelKey: string }>;
 
-const canPost = computed(() => currentUser.value?.emailVerified === true);
+function can(permissionKey: string) {
+  return currentUser.value?.permissions.includes(permissionKey) === true;
+}
+
+const canPost = computed(() => can('life.posts.create'));
+const canComment = computed(() => can('life.comments.create'));
+const canReact = computed(() => can('life.reactions.set'));
 const charactersLeft = computed(() => Math.max(0, bodyMaxLength - body.value.length));
 const isEditing = computed(() => editingPostId.value !== null);
 const searchQuery = computed(() => submittedSearch.value.trim());
@@ -303,11 +309,15 @@ async function submitPost() {
 }
 
 function canManage(post: LifePost) {
-  return currentUser.value?.id === post.author?.id;
+  return (currentUser.value?.id === post.author?.id && can('life.posts.update')) || can('life.posts.update-any');
+}
+
+function canDeletePost(post: LifePost) {
+  return (currentUser.value?.id === post.author?.id && can('life.posts.delete')) || can('life.posts.delete-any');
 }
 
 function canManageComment(comment: LifeComment) {
-  return !comment.deleted && currentUser.value?.id === comment.author?.id;
+  return !comment.deleted && ((currentUser.value?.id === comment.author?.id && can('life.comments.delete')) || can('life.comments.delete-any'));
 }
 
 function commentKey(postId: number) {
@@ -411,7 +421,7 @@ function clearReactionError(postId: number) {
 }
 
 function canUseReactions() {
-  return canPost.value && reactionBusyPostId.value === null;
+  return canReact.value && reactionBusyPostId.value === null;
 }
 
 function closeReactionPicker() {
@@ -808,12 +818,13 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <div v-if="canManage(post)" class="life-post__actions">
-                <button class="life-icon-button" type="button" :aria-label="t('pages.life.editPost')" @click="startEdit(post)">
+              <div v-if="canManage(post) || canDeletePost(post)" class="life-post__actions">
+                <button v-if="canManage(post)" class="life-icon-button" type="button" :aria-label="t('pages.life.editPost')" @click="startEdit(post)">
                   <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
                   <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.editPost') }}</span>
                 </button>
                 <button
+                  v-if="canDeletePost(post)"
                   class="life-icon-button life-icon-button--danger"
                   type="button"
                   :aria-label="t('pages.life.deletePost')"
@@ -842,7 +853,7 @@ onUnmounted(() => {
                       :aria-controls="`life-reactions-${post.id}`"
                       :aria-expanded="reactionPickerPostId === post.id"
                       :aria-label="reactionButtonLabel(post)"
-                      :disabled="!canPost || reactionBusyPostId !== null"
+                      :disabled="!canReact || reactionBusyPostId !== null"
                       @click="toggleDefaultReaction(post)"
                       @contextmenu="handleReactionContextMenu($event, post.id)"
                       @keydown="handleReactionKeydown($event, post.id)"
@@ -857,7 +868,7 @@ onUnmounted(() => {
                       :aria-controls="`life-reactions-${post.id}`"
                       :aria-expanded="reactionPickerPostId === post.id"
                       :aria-label="t('pages.life.chooseReaction')"
-                      :disabled="!canPost || reactionBusyPostId !== null"
+                      :disabled="!canReact || reactionBusyPostId !== null"
                       @click="toggleReactionPicker(post.id)"
                       @contextmenu="handleReactionContextMenu($event, post.id)"
                       @keydown="handleReactionKeydown($event, post.id)"
@@ -868,7 +879,7 @@ onUnmounted(() => {
                   </div>
 
                   <div
-                    v-if="reactionPickerPostId === post.id && canPost"
+                    v-if="reactionPickerPostId === post.id && canReact"
                     :id="`life-reactions-${post.id}`"
                     class="life-reaction-picker"
                     role="group"
@@ -953,7 +964,7 @@ onUnmounted(() => {
                 <span>{{ commentCount(post) }}</span>
               </div>
 
-              <form v-if="canPost" class="life-comment-form" @submit.prevent="submitComment(post)">
+              <form v-if="canComment" class="life-comment-form" @submit.prevent="submitComment(post)">
                 <div class="field">
                   <label :for="`life-comment-${post.id}`">{{ t('pages.life.comment') }}</label>
                   <textarea
@@ -994,7 +1005,7 @@ onUnmounted(() => {
 
                       <div v-if="!comment.deleted" class="life-comment__actions">
                         <button
-                          v-if="canPost"
+                          v-if="canComment"
                           class="life-icon-button life-icon-button--flat"
                           type="button"
                           :aria-label="t('pages.life.reply')"
@@ -1020,7 +1031,7 @@ onUnmounted(() => {
                       </p>
 
                       <form
-                        v-if="canPost && replyTargetId === comment.id"
+                        v-if="canComment && replyTargetId === comment.id"
                         class="life-comment-form life-comment-form--reply"
                         @submit.prevent="submitReply(post, comment)"
                       >

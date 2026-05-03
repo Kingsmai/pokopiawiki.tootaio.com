@@ -10,13 +10,14 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconNoRecipe, iconRecipe } from '../icons';
-import { api, type Item, type Options } from '../services/api';
+import { api, getAuthToken, type AuthUser, type Item, type Options } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
 const options = ref<Options | null>(null);
 const route = useRoute();
 const { t } = useI18n();
 const items = ref<Item[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
 const search = ref('');
 const categoryId = ref('');
@@ -40,6 +41,7 @@ const itemQuery = computed(() => ({
   recipeOrder: 1
 }));
 const showEditor = computed(() => route.name === 'recipe-new');
+const canCreateRecipe = computed(() => currentUser.value?.permissions.includes('recipes.create') === true);
 
 function recipeTarget(item: Item) {
   return item.recipe ? `/recipes/${item.recipe.id}` : undefined;
@@ -68,6 +70,13 @@ async function loadItems() {
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   options.value = await api.options();
   await loadItems();
 });
@@ -80,7 +89,7 @@ watch(itemQuery, loadItems);
     <PageHeader :title="t('pages.recipes.title')" :subtitle="t('pages.recipes.subtitle')">
       <template #kicker>Recipes</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/recipes/new">
+        <RouterLink v-if="canCreateRecipe" class="ui-button ui-button--primary ui-button--small" to="/recipes/new">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.add') }}
         </RouterLink>
@@ -172,7 +181,7 @@ watch(itemQuery, loadItems);
             {{ t('pages.items.createRecipe') }}
           </button>
           <RouterLink
-            v-else
+            v-else-if="canCreateRecipe"
             class="ui-button ui-button--primary ui-button--small catalog-card-action"
             :to="createRecipeTarget(item)"
           >

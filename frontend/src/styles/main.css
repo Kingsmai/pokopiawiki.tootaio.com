@@ -2828,6 +2828,87 @@ button:disabled,
   overflow-wrap: anywhere;
 }
 
+.access-list li {
+  align-items: flex-start;
+}
+
+.access-row,
+.access-modal-heading {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.access-row strong,
+.access-modal-heading strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.permission-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.permission-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.permission-group h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.permission-toggle {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.permission-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--pokemon-blue);
+}
+
+.permission-toggle strong,
+.permission-toggle small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.permission-toggle strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.permission-toggle small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

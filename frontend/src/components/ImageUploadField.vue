@@ -15,6 +15,7 @@ const props = withDefaults(
     currentImage?: EntityImage | null;
     history?: EntityImageUpload[];
     disabled?: boolean;
+    allowUpload?: boolean;
     showPreview?: boolean;
   }>(),
   {
@@ -22,6 +23,7 @@ const props = withDefaults(
     currentImage: null,
     history: () => [],
     disabled: false,
+    allowUpload: true,
     showPreview: true
   }
 );
@@ -39,7 +41,7 @@ const uploadBusy = ref(false);
 const localUploads = ref<EntityImageUpload[]>([]);
 
 const imageLabel = computed(() => props.label || t('media.image'));
-const uploadDisabled = computed(() => props.disabled || uploadBusy.value || props.entityName.trim() === '');
+const uploadDisabled = computed(() => !props.allowUpload || props.disabled || uploadBusy.value || props.entityName.trim() === '');
 const imageOptions = computed<EntityImage[]>(() => {
   const images = [
     ...localUploads.value,
@@ -115,6 +117,7 @@ async function uploadImage(event: Event) {
       <span class="field-label">{{ imageLabel }}</span>
       <div class="image-upload-field__actions">
         <input
+          v-if="allowUpload"
           ref="fileInput"
           class="image-upload-field__input"
           type="file"
@@ -122,7 +125,7 @@ async function uploadImage(event: Event) {
           :disabled="uploadDisabled"
           @change="uploadImage"
         />
-        <button type="button" class="ui-button ui-button--blue ui-button--small" :disabled="uploadDisabled" @click="openFilePicker">
+        <button v-if="allowUpload" type="button" class="ui-button ui-button--blue ui-button--small" :disabled="uploadDisabled" @click="openFilePicker">
           <Icon :icon="iconUpload" class="ui-icon" aria-hidden="true" />
           {{ uploadBusy ? t('media.uploading') : t('media.uploadImage') }}
         </button>

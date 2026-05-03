@@ -2462,7 +2462,13 @@ export async function createLifePost(payload: Record<string, unknown>, userId: n
   return getLifePostById(id, userId, locale);
 }
 
-export async function updateLifePost(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+export async function updateLifePost(
+  id: number,
+  payload: Record<string, unknown>,
+  userId: number,
+  locale = defaultLocale,
+  allowAny = false
+) {
   const cleanPayload = cleanLifePostPayload(payload);
 
   const updatedId = await withTransaction(async (client) => {
@@ -2471,11 +2477,11 @@ export async function updateLifePost(id: number, payload: Record<string, unknown
         UPDATE life_posts
         SET body = $1, updated_by_user_id = $2, updated_at = now()
         WHERE id = $3
-          AND created_by_user_id = $2
+          AND ($4 = true OR created_by_user_id = $2)
           AND deleted_at IS NULL
         RETURNING id
       `,
-      [cleanPayload.body, userId, id]
+      [cleanPayload.body, userId, id, allowAny]
     );
 
     const resultId = result.rows[0]?.id ?? null;
@@ -2490,7 +2496,7 @@ export async function updateLifePost(id: number, payload: Record<string, unknown
   return updatedId ? getLifePostById(updatedId, userId, locale) : null;
 }
 
-export async function deleteLifePost(id: number, userId: number) {
+export async function deleteLifePost(id: number, userId: number, allowAny = false) {
   const result = await queryOne<{ id: number }>(
     `
       UPDATE life_posts
@@ -2499,11 +2505,11 @@ export async function deleteLifePost(id: number, userId: number) {
           updated_by_user_id = $2,
           updated_at = now()
       WHERE id = $1
-        AND created_by_user_id = $2
+        AND ($3 = true OR created_by_user_id = $2)
         AND deleted_at IS NULL
       RETURNING id
     `,
-    [id, userId]
+    [id, userId, allowAny]
   );
 
   return Boolean(result);
@@ -2605,17 +2611,17 @@ export async function createLifeCommentReply(
   return result ? getLifeCommentById(result.id) : null;
 }
 
-export async function deleteLifeComment(id: number, userId: number) {
+export async function deleteLifeComment(id: number, userId: number, allowAny = false) {
   const result = await queryOne<{ id: number }>(
     `
       UPDATE life_post_comments
       SET deleted_at = now(), deleted_by_user_id = $2, updated_at = now()
       WHERE id = $1
-        AND created_by_user_id = $2
+        AND ($3 = true OR created_by_user_id = $2)
         AND deleted_at IS NULL
       RETURNING id
     `,
-    [id, userId]
+    [id, userId, allowAny]
   );
 
   return Boolean(result);
@@ -2805,7 +2811,7 @@ export async function createEntityDiscussionReply(
   return id ? getEntityDiscussionCommentById(id) : null;
 }
 
-export async function deleteEntityDiscussionComment(id: number, userId: number): Promise<boolean> {
+export async function deleteEntityDiscussionComment(id: number, userId: number, allowAny = false): Promise<boolean> {
   const commentId = requirePositiveInteger(id, 'Comment is invalid');
   const result = await queryOne<{ id: number }>(
     `
@@ -2814,11 +2820,11 @@ export async function deleteEntityDiscussionComment(id: number, userId: number):
           deleted_by_user_id = $2,
           updated_at = now()
       WHERE id = $1
-        AND created_by_user_id = $2
+        AND ($3 = true OR created_by_user_id = $2)
         AND deleted_at IS NULL
       RETURNING id
     `,
-    [commentId, userId]
+    [commentId, userId, allowAny]
   );
 
   return Boolean(result);

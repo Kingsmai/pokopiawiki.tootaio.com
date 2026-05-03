@@ -18,7 +18,9 @@ import {
   iconEdit,
   iconHabitat,
   iconItem,
+  iconKey,
   iconPokemon,
+  iconProfile,
   iconRecipe,
   iconSave,
   iconTranslate,
@@ -28,24 +30,43 @@ import { defaultLocale, getCurrentLocale, loadSystemWordings, setCurrentLocale }
 import {
   api,
   type AuthUser,
+  type AdminUser,
   type ConfigType,
   type DailyChecklistItem,
   type Habitat,
   type Item,
   type Language,
   type NamedEntity,
+  type Permission,
+  type PermissionPayload,
   type Pokemon,
   type Recipe,
+  type RoleDetail,
+  type RolePayload,
   type Skill,
   type SystemWording,
   type SystemWordingSurface,
   type TranslationMap
 } from '../services/api';
 
-type AdminTab = 'config' | 'languages' | 'wordings' | 'checklist' | 'pokemon' | 'items' | 'recipes' | 'habitats';
+type AdminTab =
+  | 'users'
+  | 'roles'
+  | 'permissions'
+  | 'config'
+  | 'languages'
+  | 'wordings'
+  | 'checklist'
+  | 'pokemon'
+  | 'items'
+  | 'recipes'
+  | 'habitats';
 type EditableConfig = (NamedEntity | Skill) & { hasItemDrop?: boolean };
 
 const adminTabIcons: Record<AdminTab, AppIcon> = {
+  users: iconProfile,
+  roles: iconKey,
+  permissions: iconKey,
   config: iconAdmin,
   languages: iconTranslate,
   wordings: iconTranslate,
@@ -58,16 +79,21 @@ const adminTabIcons: Record<AdminTab, AppIcon> = {
 
 const { locale, t } = useI18n();
 
-const tabs = computed<Array<{ key: AdminTab; label: string }>>(() => [
-  { key: 'config', label: t('pages.admin.config') },
-  { key: 'languages', label: t('pages.admin.languages') },
-  { key: 'wordings', label: t('pages.admin.wordings') },
-  { key: 'checklist', label: t('pages.admin.checklist') },
-  { key: 'pokemon', label: 'Pokemon' },
-  { key: 'items', label: t('pages.items.title') },
-  { key: 'recipes', label: t('pages.recipes.title') },
-  { key: 'habitats', label: t('pages.habitats.title') }
-]);
+const tabs = computed<Array<{ key: AdminTab; label: string; permission: string | string[] }>>(() =>
+  [
+    { key: 'users' as const, label: t('pages.admin.users'), permission: 'admin.users.read' },
+    { key: 'roles' as const, label: t('pages.admin.roles'), permission: 'admin.roles.read' },
+    { key: 'permissions' as const, label: t('pages.admin.permissions'), permission: 'admin.permissions.read' },
+    { key: 'config' as const, label: t('pages.admin.config'), permission: 'admin.config.read' },
+    { key: 'languages' as const, label: t('pages.admin.languages'), permission: 'admin.languages.read' },
+    { key: 'wordings' as const, label: t('pages.admin.wordings'), permission: 'admin.wordings.read' },
+    { key: 'checklist' as const, label: t('pages.admin.checklist'), permission: ['checklist.create', 'checklist.update', 'checklist.delete', 'checklist.order'] },
+    { key: 'pokemon' as const, label: 'Pokemon', permission: ['pokemon.order', 'pokemon.delete'] },
+    { key: 'items' as const, label: t('pages.items.title'), permission: ['items.order', 'items.delete'] },
+    { key: 'recipes' as const, label: t('pages.recipes.title'), permission: ['recipes.order', 'recipes.delete'] },
+    { key: 'habitats' as const, label: t('pages.habitats.title'), permission: ['habitats.order', 'habitats.delete'] }
+  ].filter((tab) => canAny(tab.permission))
+);
 
 const configTypes = computed<Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean }>>(() => [
   { key: 'pokemon-types', label: t('config.pokemonTypes') },
@@ -83,6 +109,9 @@ const configTypes = computed<Array<{ key: ConfigType; label: string; supportsIte
 
 const activeTab = ref<AdminTab>('config');
 const activeConfigType = ref<ConfigType>('skills');
+const userRows = ref<AdminUser[]>([]);
+const roleRows = ref<RoleDetail[]>([]);
+const permissionRows = ref<Permission[]>([]);
 const configRows = ref<EditableConfig[]>([]);
 const languageRows = ref<Language[]>([]);
 const checklistRows = ref<DailyChecklistItem[]>([]);
@@ -99,11 +128,19 @@ const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, ha
 const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
 const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
 const wordingForm = ref({ key: '', locale: defaultLocale, value: '', defaultValue: '', placeholders: [] as string[] });
+const userRoleForm = ref({ userId: 0, roleIds: [] as number[] });
+const roleForm = ref({ id: 0, key: '', name: '', description: '', level: 100, enabled: true });
+const rolePermissionForm = ref({ roleId: 0, permissionIds: [] as number[] });
+const permissionForm = ref({ id: 0, key: '', name: '', description: '', category: 'General', enabled: true });
 const editingLanguageCode = ref('');
 const configModalOpen = ref(false);
 const checklistModalOpen = ref(false);
 const languageModalOpen = ref(false);
 const wordingModalOpen = ref(false);
+const userRoleModalOpen = ref(false);
+const roleModalOpen = ref(false);
+const rolePermissionsModalOpen = ref(false);
+const permissionModalOpen = ref(false);
 const wordingLocale = ref(getCurrentLocale());
 const wordingModule = ref('');
 const wordingSurface = ref<SystemWordingSurface | ''>('');
@@ -143,7 +180,7 @@ const activeConfigTab = computed({
     void run(loadConfig);
   }
 });
-const canEdit = computed(() => currentUser.value?.emailVerified === true);
+const canEdit = computed(() => can('admin.access'));
 const showAdminSkeleton = computed(() => busy.value && !message.value && (!currentUser.value || contentLoading.value));
 const canSetLanguageDefault = computed(() => languageForm.value.code === 'en');
 const configModalTitle = computed(() =>
@@ -152,6 +189,21 @@ const configModalTitle = computed(() =>
 const checklistModalTitle = computed(() => (checklistForm.value.id ? t('pages.checklist.editTask') : t('pages.checklist.newTask')));
 const languageModalTitle = computed(() => (editingLanguageCode.value ? t('pages.admin.editLanguage') : t('pages.admin.newLanguage')));
 const wordingModalTitle = computed(() => t('pages.admin.editWording'));
+const roleModalTitle = computed(() => (roleForm.value.id ? t('pages.admin.editRole') : t('pages.admin.newRole')));
+const permissionModalTitle = computed(() =>
+  permissionForm.value.id ? t('pages.admin.editPermission') : t('pages.admin.newPermission')
+);
+const rolePermissionsModalTitle = computed(() => t('pages.admin.rolePermissions'));
+const userRoleModalTitle = computed(() => t('pages.admin.userRoles'));
+const editingUser = computed(() => userRows.value.find((user) => user.id === userRoleForm.value.userId) ?? null);
+const editingRole = computed(() => roleRows.value.find((role) => role.id === rolePermissionForm.value.roleId) ?? null);
+const permissionGroups = computed(() => {
+  const groups = new Map<string, Permission[]>();
+  for (const permission of permissionRows.value) {
+    groups.set(permission.category, [...(groups.get(permission.category) ?? []), permission]);
+  }
+  return [...groups.entries()].map(([category, permissions]) => ({ category, permissions }));
+});
 const wordingLocaleOptions = computed(() =>
   languageRows.value.length
     ? languageRows.value
@@ -196,8 +248,49 @@ const recipeLabel = (item: Recipe) => item.name;
 const habitatKey = (item: Habitat) => item.id;
 const habitatLabel = (item: Habitat) => item.name;
 
+function can(permissionKey: string) {
+  return currentUser.value?.permissions.includes(permissionKey) === true;
+}
+
+function canAny(permissionKey: string | string[]) {
+  return Array.isArray(permissionKey) ? permissionKey.some((key) => can(key)) : can(permissionKey);
+}
+
 function dragSortLabel(name: string) {
   return t('pages.admin.dragSort', { name });
+}
+
+function roleNames(roleIds: number[], fallbackRoles: AuthUser['roles'] = []) {
+  const names = roleIds
+    .map((roleId) => roleRows.value.find((role) => role.id === roleId)?.name)
+    .filter((name): name is string => Boolean(name));
+  const fallbackNames = fallbackRoles.map((role) => role.name);
+  const visibleNames = names.length ? names : fallbackNames;
+  return visibleNames.length ? visibleNames.join(', ') : t('pages.admin.noRoles');
+}
+
+function rolePermissionCount(role: RoleDetail) {
+  return t('pages.admin.permissionCount', { count: role.permissionIds.length });
+}
+
+function toggleUserRole(roleId: number) {
+  const roleIds = new Set(userRoleForm.value.roleIds);
+  if (roleIds.has(roleId)) {
+    roleIds.delete(roleId);
+  } else {
+    roleIds.add(roleId);
+  }
+  userRoleForm.value.roleIds = [...roleIds].sort((a, b) => a - b);
+}
+
+function toggleRolePermission(permissionId: number) {
+  const permissionIds = new Set(rolePermissionForm.value.permissionIds);
+  if (permissionIds.has(permissionId)) {
+    permissionIds.delete(permissionId);
+  } else {
+    permissionIds.add(permissionId);
+  }
+  rolePermissionForm.value.permissionIds = [...permissionIds].sort((a, b) => a - b);
 }
 
 function errorText(error: unknown, fallback: string) {
@@ -240,6 +333,22 @@ function resetLanguageForm() {
 
 function resetWordingForm() {
   wordingForm.value = { key: '', locale: wordingLocale.value || defaultLocale, value: '', defaultValue: '', placeholders: [] };
+}
+
+function resetUserRoleForm() {
+  userRoleForm.value = { userId: 0, roleIds: [] };
+}
+
+function resetRoleForm() {
+  roleForm.value = { id: 0, key: '', name: '', description: '', level: 100, enabled: true };
+}
+
+function resetRolePermissionForm() {
+  rolePermissionForm.value = { roleId: 0, permissionIds: [] };
+}
+
+function resetPermissionForm() {
+  permissionForm.value = { id: 0, key: '', name: '', description: '', category: 'General', enabled: true };
 }
 
 function selectWordingModule(module: string) {
@@ -289,6 +398,70 @@ function closeLanguageModal() {
 function closeWordingModal() {
   wordingModalOpen.value = false;
   resetWordingForm();
+}
+
+function openUserRoles(user: AdminUser) {
+  userRoleForm.value = { userId: user.id, roleIds: [...user.roleIds] };
+  userRoleModalOpen.value = true;
+}
+
+function closeUserRoleModal() {
+  userRoleModalOpen.value = false;
+  resetUserRoleForm();
+}
+
+function openNewRole() {
+  resetRoleForm();
+  roleModalOpen.value = true;
+}
+
+function editRole(role: RoleDetail) {
+  roleForm.value = {
+    id: role.id,
+    key: role.key,
+    name: role.name,
+    description: role.description,
+    level: role.level,
+    enabled: role.enabled
+  };
+  roleModalOpen.value = true;
+}
+
+function closeRoleModal() {
+  roleModalOpen.value = false;
+  resetRoleForm();
+}
+
+function editRolePermissions(role: RoleDetail) {
+  rolePermissionForm.value = { roleId: role.id, permissionIds: [...role.permissionIds] };
+  rolePermissionsModalOpen.value = true;
+}
+
+function closeRolePermissionsModal() {
+  rolePermissionsModalOpen.value = false;
+  resetRolePermissionForm();
+}
+
+function openNewPermission() {
+  resetPermissionForm();
+  permissionModalOpen.value = true;
+}
+
+function editPermission(permission: Permission) {
+  permissionForm.value = {
+    id: permission.id,
+    key: permission.key,
+    name: permission.name,
+    description: permission.description,
+    category: permission.category,
+    enabled: permission.enabled
+  };
+  permissionModalOpen.value = true;
+}
+
+function closePermissionModal() {
+  permissionModalOpen.value = false;
+  resetPermissionForm();
 }
 
 function editLanguage(item: Language) {
@@ -550,6 +723,26 @@ async function loadHabitats() {
   habitatRows.value = await api.habitats();
 }
 
+async function loadUsers() {
+  if (can('admin.roles.read')) {
+    roleRows.value = await api.roles();
+  }
+  userRows.value = await api.adminUsers();
+}
+
+async function loadRoles() {
+  const [roles, permissions] = await Promise.all([
+    api.roles(),
+    can('admin.permissions.read') ? api.permissions() : Promise.resolve(permissionRows.value)
+  ]);
+  roleRows.value = roles;
+  permissionRows.value = permissions;
+}
+
+async function loadPermissions() {
+  permissionRows.value = await api.permissions();
+}
+
 async function loadWordings() {
   await loadLanguages();
   if (!wordingLocaleOptions.value.some((language) => language.code === wordingLocale.value)) {
@@ -576,6 +769,58 @@ async function saveWording() {
   });
 }
 
+async function saveUserRoles() {
+  await run(async () => {
+    userRows.value = await api.updateAdminUserRoles(userRoleForm.value.userId, userRoleForm.value.roleIds);
+    closeUserRoleModal();
+    if (can('admin.roles.read')) {
+      roleRows.value = await api.roles();
+    }
+  });
+}
+
+async function saveRole() {
+  await run(async () => {
+    const payload: RolePayload = {
+      name: roleForm.value.name,
+      description: roleForm.value.description,
+      level: roleForm.value.level,
+      enabled: roleForm.value.enabled
+    };
+
+    roleRows.value = roleForm.value.id
+      ? await api.updateRole(roleForm.value.id, payload)
+      : await api.createRole({ ...payload, key: roleForm.value.key });
+    closeRoleModal();
+  });
+}
+
+async function saveRolePermissions() {
+  await run(async () => {
+    roleRows.value = await api.updateRolePermissions(rolePermissionForm.value.roleId, rolePermissionForm.value.permissionIds);
+    closeRolePermissionsModal();
+  });
+}
+
+async function savePermission() {
+  await run(async () => {
+    const payload: PermissionPayload = {
+      name: permissionForm.value.name,
+      description: permissionForm.value.description,
+      category: permissionForm.value.category,
+      enabled: permissionForm.value.enabled
+    };
+
+    permissionRows.value = permissionForm.value.id
+      ? await api.updatePermission(permissionForm.value.id, payload)
+      : await api.createPermission({ ...payload, key: permissionForm.value.key });
+    closePermissionModal();
+    if (can('admin.roles.read')) {
+      roleRows.value = await api.roles();
+    }
+  });
+}
+
 async function loadCurrentTab(showSkeleton = false) {
   if (showSkeleton) {
     contentLoading.value = true;
@@ -583,6 +828,9 @@ async function loadCurrentTab(showSkeleton = false) {
 
   try {
     if (activeTab.value === 'config') await loadConfig();
+    if (activeTab.value === 'users') await loadUsers();
+    if (activeTab.value === 'roles') await loadRoles();
+    if (activeTab.value === 'permissions') await loadPermissions();
     if (activeTab.value === 'languages') await loadLanguages();
     if (activeTab.value === 'wordings') await loadWordings();
     if (activeTab.value === 'checklist') await loadChecklist();
@@ -599,12 +847,18 @@ async function loadCurrentTab(showSkeleton = false) {
 
 function setTab(tab: AdminTab) {
   if (!canEdit.value) {
-    message.value = t('errors.completeEmailVerification');
+    message.value = t('errors.permissionDenied');
     return;
   }
 
   activeTab.value = tab;
   void run(() => loadCurrentTab(true));
+}
+
+function ensureActiveTabAllowed() {
+  if (!tabs.value.some((tab) => tab.key === activeTab.value)) {
+    activeTab.value = tabs.value[0]?.key ?? 'config';
+  }
 }
 
 async function loadAdmin() {
@@ -615,7 +869,12 @@ async function loadAdmin() {
     message.value = t('errors.completeEmailVerification');
     return;
   }
+  if (!canEdit.value || !tabs.value.length) {
+    message.value = t('errors.permissionDenied');
+    return;
+  }
 
+  ensureActiveTabAllowed();
   await loadCurrentTab(true);
 }
 
@@ -678,6 +937,32 @@ async function removeHabitat(id: number) {
   });
 }
 
+async function removeRole(id: number) {
+  await run(async () => {
+    await api.deleteRole(id);
+    if (roleForm.value.id === id) {
+      closeRoleModal();
+    }
+    if (rolePermissionForm.value.roleId === id) {
+      closeRolePermissionsModal();
+    }
+    await loadRoles();
+  });
+}
+
+async function removePermission(id: number) {
+  await run(async () => {
+    await api.deletePermission(id);
+    if (permissionForm.value.id === id) {
+      closePermissionModal();
+    }
+    await loadPermissions();
+    if (can('admin.roles.read')) {
+      roleRows.value = await api.roles();
+    }
+  });
+}
+
 onMounted(() => {
   void run(loadAdmin);
 });
@@ -710,10 +995,110 @@ onMounted(() => {
       </ul>
     </section>
 
+    <section v-else-if="canEdit && activeTab === 'users'" class="detail-section">
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.users') }}</h2>
+      </div>
+      <ul v-if="userRows.length" class="row-list access-list">
+        <li v-for="user in userRows" :key="user.id">
+          <span class="access-row">
+            <strong>{{ user.displayName }}</strong>
+            <span class="meta-line">{{ user.email }}</span>
+            <span class="system-wording-row__meta">
+              <span class="config-flag">{{ user.emailVerified ? t('pages.profile.emailVerified') : t('pages.profile.emailUnverified') }}</span>
+              <span class="config-flag">{{ roleNames(user.roleIds, user.roles) }}</span>
+            </span>
+          </span>
+          <span class="row-actions">
+            <button v-if="can('admin.users.update') && can('admin.roles.read')" type="button" :disabled="busy" @click="openUserRoles(user)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('pages.admin.userRoles') }}
+            </button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'roles'" class="detail-section">
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.roles') }}</h2>
+        <button v-if="can('admin.roles.create')" type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewRole">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('common.new') }}
+        </button>
+      </div>
+      <ul v-if="roleRows.length" class="row-list access-list">
+        <li v-for="role in roleRows" :key="role.id">
+          <span class="access-row">
+            <strong>{{ role.name }}</strong>
+            <span class="meta-line">{{ role.description }}</span>
+            <span class="system-wording-row__meta">
+              <span class="config-flag">{{ role.key }}</span>
+              <span class="config-flag">{{ t('pages.admin.roleLevel', { level: role.level }) }}</span>
+              <span class="config-flag">{{ role.enabled ? t('pages.admin.enabled') : t('pages.admin.disabled') }}</span>
+              <span v-if="role.systemRole" class="config-flag">{{ t('pages.admin.systemRole') }}</span>
+              <span class="config-flag">{{ rolePermissionCount(role) }}</span>
+            </span>
+          </span>
+          <span class="row-actions">
+            <button v-if="can('admin.roles.update')" type="button" :disabled="busy" @click="editRole(role)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button v-if="can('admin.roles.update') && can('admin.permissions.read')" type="button" :disabled="busy || role.key === 'owner'" @click="editRolePermissions(role)">
+              <Icon :icon="iconKey" class="ui-icon" aria-hidden="true" />
+              {{ t('pages.admin.rolePermissions') }}
+            </button>
+            <button v-if="can('admin.roles.delete')" type="button" :disabled="busy || role.key === 'owner'" @click="removeRole(role.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'permissions'" class="detail-section">
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.permissions') }}</h2>
+        <button v-if="can('admin.permissions.create')" type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewPermission">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('common.new') }}
+        </button>
+      </div>
+      <ul v-if="permissionRows.length" class="row-list access-list">
+        <li v-for="permission in permissionRows" :key="permission.id">
+          <span class="access-row">
+            <strong>{{ permission.name }}</strong>
+            <span class="meta-line">{{ permission.description }}</span>
+            <span class="system-wording-row__meta">
+              <span class="config-flag">{{ permission.key }}</span>
+              <span class="config-flag">{{ permission.category }}</span>
+              <span class="config-flag">{{ permission.enabled ? t('pages.admin.enabled') : t('pages.admin.disabled') }}</span>
+              <span v-if="permission.systemPermission" class="config-flag">{{ t('pages.admin.systemPermission') }}</span>
+            </span>
+          </span>
+          <span class="row-actions">
+            <button v-if="can('admin.permissions.update')" type="button" :disabled="busy" @click="editPermission(permission)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button v-if="can('admin.permissions.delete')" type="button" :disabled="busy" @click="removePermission(permission.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
     <section v-else-if="canEdit && activeTab === 'checklist'" class="detail-section">
       <div class="detail-section__header">
         <h2>{{ t('pages.admin.checklist') }}</h2>
-        <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewChecklistItem">
+        <button v-if="can('checklist.create')" type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewChecklistItem">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.new') }}
         </button>
@@ -725,7 +1110,7 @@ onMounted(() => {
         :item-key="checklistKey"
         :item-label="checklistLabel"
         list-key-prefix="checklist"
-        :disabled="busy"
+        :disabled="busy || !can('checklist.order')"
         :handle-label="dragSortLabel"
         :handle-title="t('pages.admin.dragSortTitle')"
         @preview="previewChecklistOrder"
@@ -735,11 +1120,11 @@ onMounted(() => {
         <template #default="{ item }">
           <span class="reorderable-row-title">{{ item.title }}</span>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="editChecklistItem(item)">
+            <button v-if="can('checklist.update')" type="button" :disabled="busy" @click="editChecklistItem(item)">
               <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
               {{ t('common.edit') }}
             </button>
-            <button type="button" :disabled="busy" @click="removeChecklistItem(item.id)">
+            <button v-if="can('checklist.delete')" type="button" :disabled="busy" @click="removeChecklistItem(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
@@ -752,7 +1137,7 @@ onMounted(() => {
     <section v-else-if="canEdit && activeTab === 'config'" class="detail-section">
       <div class="detail-section__header">
         <h2>{{ t('pages.admin.config') }}</h2>
-        <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewConfig">
+        <button v-if="can('admin.config.create')" type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewConfig">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.new') }}
         </button>
@@ -765,7 +1150,7 @@ onMounted(() => {
         :item-key="configKey"
         :item-label="configLabel"
         :list-key-prefix="`config-${activeConfigType}`"
-        :disabled="busy"
+        :disabled="busy || !can('admin.config.order')"
         :handle-label="dragSortLabel"
         :handle-title="t('pages.admin.dragSortTitle')"
         @preview="previewConfigOrder"
@@ -777,11 +1162,11 @@ onMounted(() => {
             {{ item.name }}<span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span>
           </span>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="editConfig(item)">
+            <button v-if="can('admin.config.update')" type="button" :disabled="busy" @click="editConfig(item)">
               <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
               {{ t('common.edit') }}
             </button>
-            <button type="button" :disabled="busy" @click="removeConfig(item.id)">
+            <button v-if="can('admin.config.delete')" type="button" :disabled="busy" @click="removeConfig(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
@@ -794,7 +1179,7 @@ onMounted(() => {
     <section v-else-if="canEdit && activeTab === 'languages'" class="detail-section">
       <div class="detail-section__header">
         <h2>{{ t('pages.admin.languages') }}</h2>
-        <button type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewLanguage">
+        <button v-if="can('admin.languages.create')" type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewLanguage">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.new') }}
         </button>
@@ -805,7 +1190,7 @@ onMounted(() => {
         :item-key="languageKey"
         :item-label="languageLabel"
         list-key-prefix="languages"
-        :disabled="busy"
+        :disabled="busy || !can('admin.languages.order')"
         :handle-label="dragSortLabel"
         :handle-title="t('pages.admin.dragSortTitle')"
         @preview="previewLanguageOrder"
@@ -818,11 +1203,11 @@ onMounted(() => {
             <span v-if="item.isDefault" class="config-flag">{{ t('pages.admin.defaultLanguage') }}</span>
           </span>
           <span class="row-actions">
-            <button type="button" @click="editLanguage(item)">
+            <button v-if="can('admin.languages.update')" type="button" @click="editLanguage(item)">
               <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
               {{ t('common.edit') }}
             </button>
-            <button type="button" :disabled="item.isDefault" @click="removeLanguage(item.code)">
+            <button v-if="can('admin.languages.delete')" type="button" :disabled="item.isDefault" @click="removeLanguage(item.code)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
@@ -893,7 +1278,7 @@ onMounted(() => {
                 <span class="system-wording-row__value">{{ item.value || item.defaultValue }}</span>
               </span>
               <span class="row-actions">
-                <button type="button" :disabled="busy" @click="editWording(item)">
+                <button v-if="can('admin.wordings.update')" type="button" :disabled="busy" @click="editWording(item)">
                   <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
                   {{ t('common.edit') }}
                 </button>
@@ -913,7 +1298,7 @@ onMounted(() => {
         :item-key="pokemonKey"
         :item-label="pokemonLabel"
         list-key-prefix="pokemon"
-        :disabled="busy"
+        :disabled="busy || !can('pokemon.order')"
         :handle-label="dragSortLabel"
         :handle-title="t('pages.admin.dragSortTitle')"
         @preview="previewPokemonOrder"
@@ -923,7 +1308,7 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/pokemon/${item.id}`">#{{ item.displayId }} {{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removePokemon(item.id)">
+            <button v-if="can('pokemon.delete')" type="button" :disabled="busy" @click="removePokemon(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
@@ -941,7 +1326,7 @@ onMounted(() => {
         :item-key="itemKey"
         :item-label="itemLabel"
         list-key-prefix="items"
-        :disabled="busy"
+        :disabled="busy || !can('items.order')"
         :handle-label="dragSortLabel"
         :handle-title="t('pages.admin.dragSortTitle')"
         @preview="previewItemOrder"
@@ -951,7 +1336,7 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removeItem(item.id)">
+            <button v-if="can('items.delete')" type="button" :disabled="busy" @click="removeItem(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
@@ -969,7 +1354,7 @@ onMounted(() => {
         :item-key="recipeKey"
         :item-label="recipeLabel"
         list-key-prefix="recipes"
-        :disabled="busy"
+        :disabled="busy || !can('recipes.order')"
         :handle-label="dragSortLabel"
         :handle-title="t('pages.admin.dragSortTitle')"
         @preview="previewRecipeOrder"
@@ -979,7 +1364,7 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/recipes/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removeRecipe(item.id)">
+            <button v-if="can('recipes.delete')" type="button" :disabled="busy" @click="removeRecipe(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
@@ -997,7 +1382,7 @@ onMounted(() => {
         :item-key="habitatKey"
         :item-label="habitatLabel"
         list-key-prefix="habitats"
-        :disabled="busy"
+        :disabled="busy || !can('habitats.order')"
         :handle-label="dragSortLabel"
         :handle-title="t('pages.admin.dragSortTitle')"
         @preview="previewHabitatOrder"
@@ -1007,7 +1392,7 @@ onMounted(() => {
         <template #default="{ item }">
           <RouterLink :to="`/habitats/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
-            <button type="button" :disabled="busy" @click="removeHabitat(item.id)">
+            <button v-if="can('habitats.delete')" type="button" :disabled="busy" @click="removeHabitat(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>
@@ -1016,6 +1401,149 @@ onMounted(() => {
       </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
+
+    <Modal v-if="userRoleModalOpen" :title="userRoleModalTitle" :close-label="t('common.close')" size="wide" @close="closeUserRoleModal">
+      <form id="admin-user-roles-form" class="modal-edit-form" @submit.prevent="saveUserRoles">
+        <div v-if="editingUser" class="access-modal-heading">
+          <strong>{{ editingUser.displayName }}</strong>
+          <span class="meta-line">{{ editingUser.email }}</span>
+        </div>
+        <div class="permission-grid" role="group" :aria-label="t('pages.admin.roles')">
+          <label v-for="role in roleRows" :key="role.id" class="permission-toggle">
+            <input
+              type="checkbox"
+              :checked="userRoleForm.roleIds.includes(role.id)"
+              :disabled="busy || !role.enabled"
+              @change="toggleUserRole(role.id)"
+            />
+            <span>
+              <strong>{{ role.name }}</strong>
+              <small>{{ role.description }}</small>
+            </span>
+          </label>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-user-roles-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeUserRoleModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="roleModalOpen" :title="roleModalTitle" :close-label="t('common.close')" @close="closeRoleModal">
+      <form id="admin-role-form" class="modal-edit-form" @submit.prevent="saveRole">
+        <div class="field">
+          <label for="role-key">{{ t('pages.admin.roleKey') }}</label>
+          <input id="role-key" v-model="roleForm.key" :disabled="Boolean(roleForm.id)" required />
+        </div>
+        <div class="field">
+          <label for="role-name">{{ t('pages.admin.roleName') }}</label>
+          <input id="role-name" v-model="roleForm.name" required />
+        </div>
+        <div class="field">
+          <label for="role-description">{{ t('pages.admin.description') }}</label>
+          <textarea id="role-description" v-model="roleForm.description"></textarea>
+        </div>
+        <div class="field">
+          <label for="role-level">{{ t('pages.admin.level') }}</label>
+          <input id="role-level" v-model.number="roleForm.level" type="number" min="0" step="1" required />
+        </div>
+        <div class="check-row">
+          <label><input v-model="roleForm.enabled" type="checkbox" /> {{ t('pages.admin.enabled') }}</label>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-role-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeRoleModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="rolePermissionsModalOpen" :title="rolePermissionsModalTitle" :close-label="t('common.close')" size="wide" @close="closeRolePermissionsModal">
+      <form id="admin-role-permissions-form" class="modal-edit-form" @submit.prevent="saveRolePermissions">
+        <div v-if="editingRole" class="access-modal-heading">
+          <strong>{{ editingRole.name }}</strong>
+          <span class="meta-line">{{ editingRole.description }}</span>
+        </div>
+        <div class="permission-groups">
+          <section v-for="group in permissionGroups" :key="group.category" class="permission-group">
+            <h3>{{ group.category }}</h3>
+            <div class="permission-grid" role="group" :aria-label="group.category">
+              <label v-for="permission in group.permissions" :key="permission.id" class="permission-toggle">
+                <input
+                  type="checkbox"
+                  :checked="rolePermissionForm.permissionIds.includes(permission.id)"
+                  :disabled="busy || !permission.enabled"
+                  @change="toggleRolePermission(permission.id)"
+                />
+                <span>
+                  <strong>{{ permission.name }}</strong>
+                  <small>{{ permission.key }}</small>
+                </span>
+              </label>
+            </div>
+          </section>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-role-permissions-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeRolePermissionsModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="permissionModalOpen" :title="permissionModalTitle" :close-label="t('common.close')" @close="closePermissionModal">
+      <form id="admin-permission-form" class="modal-edit-form" @submit.prevent="savePermission">
+        <div class="field">
+          <label for="permission-key">{{ t('pages.admin.permissionKey') }}</label>
+          <input id="permission-key" v-model="permissionForm.key" :disabled="Boolean(permissionForm.id)" required />
+        </div>
+        <div class="field">
+          <label for="permission-name">{{ t('pages.admin.permissionName') }}</label>
+          <input id="permission-name" v-model="permissionForm.name" required />
+        </div>
+        <div class="field">
+          <label for="permission-category">{{ t('pages.admin.category') }}</label>
+          <input id="permission-category" v-model="permissionForm.category" required />
+        </div>
+        <div class="field">
+          <label for="permission-description">{{ t('pages.admin.description') }}</label>
+          <textarea id="permission-description" v-model="permissionForm.description"></textarea>
+        </div>
+        <div class="check-row">
+          <label><input v-model="permissionForm.enabled" type="checkbox" /> {{ t('pages.admin.enabled') }}</label>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-permission-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closePermissionModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
 
     <Modal v-if="checklistModalOpen" :title="checklistModalTitle" :close-label="t('common.close')" size="wide" @close="closeChecklistModal">
       <form id="admin-checklist-form" class="modal-edit-form" @submit.prevent="saveChecklistItem">

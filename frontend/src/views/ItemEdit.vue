@@ -10,13 +10,25 @@ import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import TranslationFields from '../components/TranslationFields.vue';
 import { iconCancel, iconSave } from '../icons';
-import { api, type ConfigType, type EntityImage, type EntityImageUpload, type ItemPayload, type Language, type Options, type TranslationMap } from '../services/api';
+import {
+  api,
+  getAuthToken,
+  type AuthUser,
+  type ConfigType,
+  type EntityImage,
+  type EntityImageUpload,
+  type ItemPayload,
+  type Language,
+  type Options,
+  type TranslationMap
+} from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
 const { locale, t } = useI18n();
 const options = ref<Options | null>(null);
 const languages = ref<Language[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const currentImage = ref<EntityImage | null>(null);
 const imageHistory = ref<EntityImageUpload[]>([]);
 const loading = ref(true);
@@ -48,6 +60,8 @@ const pageTitle = computed(() =>
 const cancelTo = computed(() => (isEditing.value ? `/items/${routeId.value}` : '/items'));
 const hasRecipe = ref(false);
 const imageEntityName = computed(() => itemNameForSave().trim());
+const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
+const canUploadImage = computed(() => currentUser.value?.permissions.includes('items.upload') === true);
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -76,12 +90,25 @@ async function loadOptions() {
   languages.value = loadedLanguages;
 }
 
+async function loadCurrentUser() {
+  if (!getAuthToken()) {
+    currentUser.value = null;
+    return;
+  }
+
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
+  }
+}
+
 async function loadEditor() {
   loading.value = true;
   message.value = '';
 
   try {
-    await loadOptions();
+    await Promise.all([loadCurrentUser(), loadOptions()]);
     if (isEditing.value) {
       const item = await api.itemDetail(routeId.value);
       itemForm.value = {
@@ -111,7 +138,7 @@ async function loadEditor() {
 
 async function createSingleOption(selectKey: string, type: ConfigType, name: string, assign: (value: string) => void) {
   const cleanName = name.trim();
-  if (!cleanName) return;
+  if (!cleanName || !canCreateConfig.value) return;
 
   creatingSelect.value = selectKey;
   message.value = '';
@@ -128,7 +155,7 @@ async function createSingleOption(selectKey: string, type: ConfigType, name: str
 
 async function createMultiOption(selectKey: string, type: ConfigType, name: string, values: string[]) {
   const cleanName = name.trim();
-  if (!cleanName) return;
+  if (!cleanName || !canCreateConfig.value) return;
 
   creatingSelect.value = selectKey;
   message.value = '';
@@ -212,6 +239,7 @@ onMounted(() => {
         :current-image="currentImage"
         :history="imageHistory"
         :disabled="busy"
+        :allow-upload="canUploadImage"
         @selected="handleImageSelected"
         @uploaded="handleImageUploaded"
         @error="message = $event"
@@ -224,7 +252,7 @@ onMounted(() => {
           v-model="itemForm.categoryId"
           :options="options.itemCategories"
           :multiple="false"
-          allow-create
+          :allow-create="canCreateConfig"
           :creating="creatingSelect === 'item-category'"
           :placeholder="t('common.select')"
           :search-placeholder="t('pages.items.searchCategory')"
@@ -239,7 +267,7 @@ onMounted(() => {
           v-model="itemForm.usageId"
           :options="options.itemUsages"
           :multiple="false"
-          allow-create
+          :allow-create="canCreateConfig"
           :creating="creatingSelect === 'item-usage'"
           :placeholder="t('common.none')"
           :search-placeholder="t('pages.items.searchUsage')"
@@ -261,7 +289,7 @@ onMounted(() => {
           id="item-methods"
           v-model="itemForm.acquisitionMethodIds"
           :options="options.acquisitionMethods"
-          allow-create
+          :allow-create="canCreateConfig"
           :creating="creatingSelect === 'item-methods'"
           :placeholder="t('pages.items.searchMethods')"
           @create="createMultiOption('item-methods', 'acquisition-methods', $event, itemForm.acquisitionMethodIds)"
@@ -274,7 +302,7 @@ onMounted(() => {
           id="item-tags"
           v-model="itemForm.tagIds"
           :options="options.itemTags"
-          allow-create
+          :allow-create="canCreateConfig"
           :creating="creatingSelect === 'item-tags'"
           :placeholder="t('pages.items.searchTags')"
           @create="createMultiOption('item-tags', 'favorite-things', $event, itemForm.tagIds)"

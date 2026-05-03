@@ -110,7 +110,8 @@ export const systemWordingMessages = {
       loadFailed: 'Load failed',
       addFailed: 'Add failed',
       saveFailed: 'Save failed',
-      completeEmailVerification: 'Please complete email verification first.'
+      completeEmailVerification: 'Please complete email verification first.',
+      permissionDenied: 'You do not have permission to use this action.'
     },
     pages: {
       profile: {
@@ -445,6 +446,9 @@ export const systemWordingMessages = {
         subtitle: 'Maintain system configuration and manage Wiki records.',
         modules: 'Admin modules',
         loading: 'Loading admin list',
+        users: 'Users',
+        roles: 'Roles',
+        permissions: 'Permissions',
         config: 'System config',
         configType: 'System config type',
         checklist: 'CheckList',
@@ -480,7 +484,26 @@ export const systemWordingMessages = {
         surfaceFrontend: 'Frontend',
         surfaceBackend: 'Backend',
         surfaceEmail: 'Email',
-        editWording: 'Edit wording'
+        editWording: 'Edit wording',
+        userRoles: 'User roles',
+        noRoles: 'No roles',
+        newRole: 'New role',
+        editRole: 'Edit role',
+        roleKey: 'Role key',
+        roleName: 'Role name',
+        description: 'Description',
+        level: 'Level',
+        disabled: 'Disabled',
+        systemRole: 'System role',
+        roleLevel: 'Level {level}',
+        permissionCount: '{count} permissions',
+        rolePermissions: 'Role permissions',
+        newPermission: 'New permission',
+        editPermission: 'Edit permission',
+        permissionKey: 'Permission key',
+        permissionName: 'Permission name',
+        category: 'Category',
+        systemPermission: 'System permission'
       }
     },
     config: {
@@ -574,6 +597,7 @@ export const systemWordingMessages = {
       serverError: 'Server error',
       loginRequired: 'Please log in first',
       verifyEmailFirst: 'Please complete email verification first',
+      permissionDenied: 'Permission denied',
       notFound: 'Not found'
     },
     auth: {
@@ -656,6 +680,20 @@ export const systemWordingMessages = {
       localeRequired: 'Locale is required',
       valueRequired: 'Wording is required',
       placeholderMismatch: 'Placeholders must match the default wording'
+    },
+    permissions: {
+      nameRequired: 'Name is required',
+      valueTooLong: 'Value is too long',
+      invalidSelection: 'Selection is invalid',
+      roleKeyInvalid: 'Role key is invalid',
+      roleNotFound: 'Role not found',
+      ownerRequired: 'At least one Owner is required',
+      ownerRoleLocked: 'Owner role permissions cannot be edited',
+      permissionKeyInvalid: 'Permission key is invalid',
+      permissionNotFound: 'Permission not found',
+      criticalPermissionRequired: 'Critical administration permissions must remain enabled',
+      permissionManagerRequired: 'At least one verified user must be able to manage permissions',
+      userNotFound: 'User not found'
     }
   },
   email: {
@@ -776,7 +814,8 @@ export const systemWordingMessages = {
       loadFailed: '加载失败',
       addFailed: '添加失败',
       saveFailed: '保存失败',
-      completeEmailVerification: '请先完成邮箱验证'
+      completeEmailVerification: '请先完成邮箱验证',
+      permissionDenied: '你没有权限执行这个操作'
     },
     pages: {
       profile: {
@@ -1111,6 +1150,9 @@ export const systemWordingMessages = {
         subtitle: '维护系统配置，查看并删除 Wiki 数据记录。',
         modules: '管理模块',
         loading: '正在加载管理列表',
+        users: '用户',
+        roles: '角色',
+        permissions: '权限',
         config: '系统配置',
         configType: '系统配置类型',
         checklist: 'CheckList',
@@ -1146,7 +1188,26 @@ export const systemWordingMessages = {
         surfaceFrontend: '前端',
         surfaceBackend: '后端',
         surfaceEmail: '邮件',
-        editWording: '编辑文案'
+        editWording: '编辑文案',
+        userRoles: '用户角色',
+        noRoles: '无角色',
+        newRole: '新增角色',
+        editRole: '编辑角色',
+        roleKey: '角色 Key',
+        roleName: '角色名称',
+        description: '说明',
+        level: '层级',
+        disabled: '停用',
+        systemRole: '系统角色',
+        roleLevel: '层级 {level}',
+        permissionCount: '{count} 个权限',
+        rolePermissions: '角色权限',
+        newPermission: '新增权限',
+        editPermission: '编辑权限',
+        permissionKey: '权限 Key',
+        permissionName: '权限名称',
+        category: '分类',
+        systemPermission: '系统权限'
       }
     },
     config: {
@@ -1240,6 +1301,7 @@ export const systemWordingMessages = {
         serverError: '服务器错误',
         loginRequired: '请先登录',
         verifyEmailFirst: '请先完成邮箱验证',
+        permissionDenied: '权限不足',
         notFound: '未找到记录'
       },
       auth: {
@@ -1322,6 +1384,20 @@ export const systemWordingMessages = {
         localeRequired: '请选择语言',
         valueRequired: '请输入文案',
         placeholderMismatch: '占位符必须与默认文案一致'
+      },
+      permissions: {
+        nameRequired: '请输入名称',
+        valueTooLong: '内容过长',
+        invalidSelection: '选择项不合法',
+        roleKeyInvalid: '角色 Key 不合法',
+        roleNotFound: '角色不存在',
+        ownerRequired: '必须至少保留一个 Owner',
+        ownerRoleLocked: 'Owner 角色权限不能编辑',
+        permissionKeyInvalid: '权限 Key 不合法',
+        permissionNotFound: '权限不存在',
+        criticalPermissionRequired: '关键管理权限必须保持启用',
+        permissionManagerRequired: '必须至少保留一个可管理权限的已验证用户',
+        userNotFound: '用户不存在'
       }
     },
     email: {

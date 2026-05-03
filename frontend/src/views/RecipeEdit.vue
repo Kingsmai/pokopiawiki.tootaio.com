@@ -8,13 +8,14 @@ import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconCancel, iconDelete, iconSave } from '../icons';
-import { api, type ConfigType, type Item, type Options, type RecipePayload } from '../services/api';
+import { api, getAuthToken, type AuthUser, type ConfigType, type Item, type Options, type RecipePayload } from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const options = ref<Options | null>(null);
 const itemRows = ref<Item[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
@@ -40,6 +41,7 @@ const pageTitle = computed(() =>
     : t('pages.recipes.newTitle')
 );
 const cancelTo = computed(() => (isEditing.value ? `/recipes/${routeId.value}` : '/recipes'));
+const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -73,7 +75,7 @@ async function loadEditor() {
   message.value = '';
 
   try {
-    const [loadedOptions, loadedItems] = await Promise.all([api.options(), api.items({})]);
+    const [, loadedOptions, loadedItems] = await Promise.all([loadCurrentUser(), api.options(), api.items({})]);
     options.value = loadedOptions;
     itemRows.value = loadedItems;
 
@@ -102,9 +104,22 @@ async function loadOptions() {
   options.value = await api.options();
 }
 
+async function loadCurrentUser() {
+  if (!getAuthToken()) {
+    currentUser.value = null;
+    return;
+  }
+
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
+  }
+}
+
 async function createMultiOption(selectKey: string, type: ConfigType, name: string, values: string[]) {
   const cleanName = name.trim();
-  if (!cleanName) return;
+  if (!cleanName || !canCreateConfig.value) return;
 
   creatingSelect.value = selectKey;
   message.value = '';
@@ -169,7 +184,7 @@ onMounted(() => {
           id="recipe-methods"
           v-model="recipeForm.acquisitionMethodIds"
           :options="options.acquisitionMethods"
-          allow-create
+          :allow-create="canCreateConfig"
           :creating="creatingSelect === 'recipe-methods'"
           :placeholder="t('pages.items.searchMethods')"
           @create="createMultiOption('recipe-methods', 'acquisition-methods', $event, recipeForm.acquisitionMethodIds)"

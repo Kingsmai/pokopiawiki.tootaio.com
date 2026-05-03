@@ -14,6 +14,8 @@ import TranslationFields from '../components/TranslationFields.vue';
 import { iconCancel, iconSave, iconSearch } from '../icons';
 import {
   api,
+  getAuthToken,
+  type AuthUser,
   type ConfigType,
   type EntityImage,
   type EntityImageUpload,
@@ -39,6 +41,7 @@ const { locale, t } = useI18n();
 const options = ref<Options | null>(null);
 const itemOptions = ref<NamedEntity[]>([]);
 const languages = ref<Language[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
 const busy = ref(false);
 const fetchBusy = ref(false);
@@ -125,6 +128,9 @@ const displayedImageOptions = computed(() => {
   return [selectedImage, ...imageOptions.value];
 });
 const selectedUploadImage = computed(() => (selectedPokemonImage.value?.source === 'upload' ? selectedPokemonImage.value : null));
+const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
+const canFetchPokemon = computed(() => currentUser.value?.permissions.includes('pokemon.fetch') === true);
+const canUploadImage = computed(() => currentUser.value?.permissions.includes('pokemon.upload') === true);
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -169,6 +175,19 @@ async function loadOptions() {
   options.value = loadedOptions;
   itemOptions.value = loadedItems.map((item) => ({ id: item.id, name: item.name }));
   languages.value = loadedLanguages;
+}
+
+async function loadCurrentUser() {
+  if (!getAuthToken()) {
+    currentUser.value = null;
+    return;
+  }
+
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
+  }
 }
 
 function syncSkillItemDrops() {
@@ -270,7 +289,7 @@ async function loadEditor() {
   message.value = '';
 
   try {
-    await loadOptions();
+    await Promise.all([loadCurrentUser(), loadOptions()]);
     if (isEditing.value) {
       const pokemon = await api.pokemonDetail(routeId.value);
       pokemonForm.value = {
@@ -316,6 +335,10 @@ function fetchOptionLabel(option: PokemonFetchOption) {
 }
 
 async function loadFetchOptions() {
+  if (!canFetchPokemon.value) {
+    return;
+  }
+
   cancelFetchOptionsRequest();
   const controller = new AbortController();
   fetchOptionsController = controller;
@@ -351,6 +374,10 @@ function refreshFetchOptions() {
 }
 
 function openFetchOptions() {
+  if (!canFetchPokemon.value) {
+    return;
+  }
+
   fetchOptionsOpen.value = true;
   refreshFetchOptions();
 }
@@ -361,6 +388,10 @@ function closeFetchOptions() {
 }
 
 function handleFetchIdentifierInput() {
+  if (!canFetchPokemon.value) {
+    return;
+  }
+
   fetchOptionsOpen.value = true;
 }
 
@@ -375,6 +406,10 @@ async function selectFetchOption(option: PokemonFetchOption) {
 }
 
 async function fetchPokemonByIdentifier(identifierValue?: string) {
+  if (!canFetchPokemon.value) {
+    return;
+  }
+
   const identifier = (identifierValue ?? fetchIdentifier.value).trim() || pokemonForm.value.id.trim();
   if (!identifier) {
     message.value = t('pages.pokemon.fetchIdentifierRequired');
@@ -446,6 +481,10 @@ function handleUploadImageUploaded(image: EntityImageUpload) {
 }
 
 async function fetchPokemonImages() {
+  if (!canFetchPokemon.value) {
+    return;
+  }
+
   const identifier = fetchIdentifier.value.trim() || pokemonForm.value.id.trim();
   if (!identifier) {
     message.value = t('pages.pokemon.fetchIdentifierRequired');
@@ -487,7 +526,7 @@ function fetchPokemonImagesFromInput() {
 
 async function createSingleOption(selectKey: string, type: ConfigType, name: string, assign: (value: string) => void) {
   const cleanName = name.trim();
-  if (!cleanName) return;
+  if (!cleanName || !canCreateConfig.value) return;
 
   creatingSelect.value = selectKey;
   message.value = '';
@@ -504,7 +543,7 @@ async function createSingleOption(selectKey: string, type: ConfigType, name: str
 
 async function createMultiOption(selectKey: string, type: ConfigType, name: string, values: string[], max = 0) {
   const cleanName = name.trim();
-  if (!cleanName || (max > 0 && values.length >= max)) return;
+  if (!cleanName || !canCreateConfig.value || (max > 0 && values.length >= max)) return;
 
   creatingSelect.value = selectKey;
   message.value = '';
@@ -581,7 +620,7 @@ watch(fetchIdentifier, refreshFetchOptions);
     <form v-if="!loading && options" id="pokemon-edit-form" class="modal-edit-form modal-edit-form--tabbed pokemon-edit-form" @submit.prevent="savePokemon">
       <Tabs id="pokemon-edit-tabs" v-model="activeEditTab" :tabs="editTabs" :label="t('pages.pokemon.editSections')" />
 
-      <div class="pokemon-fetch-panel" :aria-label="t('pages.pokemon.fetchData')">
+      <div v-if="canFetchPokemon" class="pokemon-fetch-panel" :aria-label="t('pages.pokemon.fetchData')">
         <div class="field pokemon-fetch-panel__input">
           <label for="pokemon-fetch-identifier">{{ t('pages.pokemon.fetchIdentifier') }}</label>
           <input
@@ -660,7 +699,7 @@ watch(fetchIdentifier, refreshFetchOptions);
               v-model="pokemonForm.environmentId"
               :options="options.environments"
               :multiple="false"
-              allow-create
+              :allow-create="canCreateConfig"
               :creating="creatingSelect === 'pokemon-environment'"
               :placeholder="t('common.select')"
               :search-placeholder="t('pages.pokemon.searchEnvironment')"
@@ -675,7 +714,7 @@ watch(fetchIdentifier, refreshFetchOptions);
               v-model="pokemonForm.skillIds"
               :options="options.skills"
               :max="2"
-              allow-create
+              :allow-create="canCreateConfig"
               :creating="creatingSelect === 'pokemon-skills'"
               :placeholder="t('pages.pokemon.searchSkills')"
               @create="createMultiOption('pokemon-skills', 'skills', $event, pokemonForm.skillIds, 2)"
@@ -690,7 +729,7 @@ watch(fetchIdentifier, refreshFetchOptions);
             v-model="pokemonForm.favoriteThingIds"
             :options="options.favoriteThings"
             :max="6"
-            allow-create
+            :allow-create="canCreateConfig"
             :creating="creatingSelect === 'pokemon-things'"
             :placeholder="t('pages.pokemon.searchFavoriteThings')"
             @create="createMultiOption('pokemon-things', 'favorite-things', $event, pokemonForm.favoriteThingIds, 6)"
@@ -764,6 +803,7 @@ watch(fetchIdentifier, refreshFetchOptions);
           :current-image="selectedUploadImage"
           :history="imageHistory"
           :disabled="busy || imageBusy"
+          :allow-upload="canUploadImage"
           :show-preview="false"
           @selected="handleUploadImageSelected"
           @uploaded="handleUploadImageUploaded"

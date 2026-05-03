@@ -9,13 +9,14 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd } from '../icons';
-import { api, type Options, type Pokemon } from '../services/api';
+import { api, getAuthToken, type AuthUser, type Options, type Pokemon } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const options = ref<Options | null>(null);
 const route = useRoute();
 const { t } = useI18n();
 const pokemon = ref<Pokemon[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
 const search = ref('');
 const environmentId = ref('');
@@ -35,6 +36,7 @@ const query = computed(() => ({
   favoriteThingMode: favoriteThingMode.value
 }));
 const showEditor = computed(() => route.name === 'pokemon-new');
+const canCreatePokemon = computed(() => currentUser.value?.permissions.includes('pokemon.create') === true);
 
 async function loadPokemon() {
   loading.value = true;
@@ -47,6 +49,13 @@ function pokemonCardImage(item: Pokemon) {
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   options.value = await api.options();
   await loadPokemon();
 });
@@ -59,7 +68,7 @@ watch(query, loadPokemon);
     <PageHeader :title="t('pages.pokemon.title')" :subtitle="t('pages.pokemon.subtitle')">
       <template #kicker>Pokédex</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">
+        <RouterLink v-if="canCreatePokemon" class="ui-button ui-button--primary ui-button--small" to="/pokemon/new">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.add') }}
         </RouterLink>

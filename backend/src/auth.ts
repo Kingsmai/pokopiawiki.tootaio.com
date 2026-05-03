@@ -1,7 +1,7 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { PoolClient, QueryResultRow } from 'pg';
-import { pool, queryOne } from './db.ts';
+import { pool, query, queryOne } from './db.ts';
 import { systemMessage } from './systemWordingQueries.ts';
 
 const scrypt = promisify(scryptCallback);
@@ -24,6 +24,8 @@ type UserRow = QueryResultRow & {
   email: string;
   display_name: string;
   email_verified_at: string | null;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type LoginUserRow = UserRow & {
@@ -69,6 +71,8 @@ export type AuthUser = {
   email: string;
   displayName: string;
   emailVerified: boolean;
+  roles: RoleSummary[];
+  permissions: string[];
 };
 
 export type ReferralSummary = {
@@ -76,6 +80,77 @@ export type ReferralSummary = {
   url: string;
   verifiedReferralCount: number;
 };
+
+export type RoleSummary = {
+  id: number;
+  key: string;
+  name: string;
+  level: number;
+};
+
+export type PermissionSummary = {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  systemPermission: boolean;
+};
+
+export type RoleDetail = RoleSummary & {
+  description: string;
+  enabled: boolean;
+  systemRole: boolean;
+  permissionIds: number[];
+};
+
+export type AdminUser = AuthUser & {
+  roleIds: number[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type RoleRow = QueryResultRow & {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  level: number;
+  enabled: boolean;
+  system_role: boolean;
+};
+
+type PermissionRow = QueryResultRow & {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  system_permission: boolean;
+};
+
+type RolePermissionRow = QueryResultRow & {
+  role_id: number;
+  permission_id: number;
+};
+
+const roleKeyPattern = /^[a-z][a-z0-9-]{1,63}$/;
+const permissionKeyPattern = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
+const criticalPermissionKeys = [
+  'admin.access',
+  'admin.users.read',
+  'admin.users.update',
+  'admin.roles.read',
+  'admin.roles.create',
+  'admin.roles.update',
+  'admin.roles.delete',
+  'admin.permissions.read',
+  'admin.permissions.create',
+  'admin.permissions.update',
+  'admin.permissions.delete'
+];
 
 function statusError(message: string, statusCode: number): StatusError {
   const error = new Error(message) as StatusError;
@@ -178,13 +253,24 @@ async function cleanReferralCode(value: unknown, locale: string): Promise<string
   return referralCode;
 }
 
-function toPublicUser(user: UserRow): AuthUser {
+function toPublicUser(user: UserRow, roles: RoleSummary[] = [], permissions: string[] = []): AuthUser {
   return {
     id: user.id,
     email: user.email,
     displayName: user.display_name,
-    emailVerified: user.email_verified_at !== null
+    emailVerified: user.email_verified_at !== null,
+    roles,
+    permissions
   };
+}
+
+async function clientQuery<T extends QueryResultRow>(
+  client: DbClient,
+  sql: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  const result = await client.query<T>(sql, params);
+  return result.rows;
 }
 
 async function clientQueryOne<T extends QueryResultRow>(
@@ -194,6 +280,22 @@ async function clientQueryOne<T extends QueryResultRow>(
 ): Promise<T | null> {
   const result = await client.query<T>(sql, params);
   return result.rows[0] ?? null;
+}
+
+async function runQuery<T extends QueryResultRow>(
+  client: DbClient | null,
+  sql: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  return client ? clientQuery<T>(client, sql, params) : query<T>(sql, params);
+}
+
+async function runQueryOne<T extends QueryResultRow>(
+  client: DbClient | null,
+  sql: string,
+  params: unknown[] = []
+): Promise<T | null> {
+  return client ? clientQueryOne<T>(client, sql, params) : queryOne<T>(sql, params);
 }
 
 async function withTransaction<T>(callback: (client: DbClient) => Promise<T>): Promise<T> {
@@ -285,6 +387,236 @@ async function ensureReferralCode(client: DbClient, userId: number): Promise<str
   }
 
   throw new Error('Failed to assign referral code');
+}
+
+async function ensureOwnerRoleForUser(client: DbClient, userId: number): Promise<void> {
+  const existingOwner = await clientQueryOne<QueryResultRow & { id: number }>(
+    client,
+    `
+      SELECT u.id
+      FROM user_roles ur
+      JOIN users u ON u.id = ur.user_id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE r.key = 'owner'
+        AND u.email_verified_at IS NOT NULL
+      LIMIT 1
+    `
+  );
+
+  if (existingOwner) {
+    return;
+  }
+
+  const ownerRole = await clientQueryOne<QueryResultRow & { id: number }>(client, "SELECT id FROM roles WHERE key = 'owner'");
+  if (!ownerRole) {
+    return;
+  }
+
+  await client.query(
+    `
+      INSERT INTO user_roles (user_id, role_id)
+      VALUES ($1, $2)
+      ON CONFLICT DO NOTHING
+    `,
+    [userId, ownerRole.id]
+  );
+}
+
+function toRoleSummary(row: RoleRow): RoleSummary {
+  return {
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    level: row.level
+  };
+}
+
+function toPermissionSummary(row: PermissionRow): PermissionSummary {
+  return {
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    description: row.description,
+    category: row.category,
+    enabled: row.enabled,
+    systemPermission: row.system_permission
+  };
+}
+
+function toRoleDetail(row: RoleRow, permissionIds: number[]): RoleDetail {
+  return {
+    ...toRoleSummary(row),
+    description: row.description,
+    enabled: row.enabled,
+    systemRole: row.system_role,
+    permissionIds
+  };
+}
+
+async function userRoles(userId: number, client: DbClient | null = null): Promise<RoleSummary[]> {
+  const rows = await runQuery<RoleRow>(
+    client,
+    `
+      SELECT r.id, r.key, r.name, r.description, r.level, r.enabled, r.system_role
+      FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = $1
+        AND r.enabled = true
+      ORDER BY r.level DESC, r.name ASC, r.id ASC
+    `,
+    [userId]
+  );
+
+  return rows.map(toRoleSummary);
+}
+
+async function userPermissions(userId: number, client: DbClient | null = null): Promise<string[]> {
+  const rows = await runQuery<QueryResultRow & { key: string }>(
+    client,
+    `
+      SELECT DISTINCT p.key
+      FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      JOIN role_permissions rp ON rp.role_id = r.id
+      JOIN permissions p ON p.id = rp.permission_id
+      WHERE ur.user_id = $1
+        AND r.enabled = true
+        AND p.enabled = true
+      ORDER BY p.key
+    `,
+    [userId]
+  );
+
+  return rows.map((row) => row.key);
+}
+
+async function publicUserById(userId: number, client: DbClient | null = null): Promise<AuthUser | null> {
+  const user = await runQueryOne<UserRow>(
+    client,
+    'SELECT id, email, display_name, email_verified_at FROM users WHERE id = $1',
+    [userId]
+  );
+
+  if (!user) {
+    return null;
+  }
+
+  return toPublicUser(user, await userRoles(user.id, client), await userPermissions(user.id, client));
+}
+
+function hasPermission(user: AuthUser, permissionKey: string): boolean {
+  return user.emailVerified && user.permissions.includes(permissionKey);
+}
+
+export function userHasPermission(user: AuthUser, permissionKey: string): boolean {
+  return hasPermission(user, permissionKey);
+}
+
+export function userHasAnyPermission(user: AuthUser, permissionKeys: string[]): boolean {
+  return user.emailVerified && permissionKeys.some((permissionKey) => user.permissions.includes(permissionKey));
+}
+
+function cleanKey(value: unknown, pattern: RegExp, message: string): string {
+  const key = typeof value === 'string' ? value.trim() : '';
+  if (!pattern.test(key)) {
+    throw statusError(message, 400);
+  }
+  return key;
+}
+
+function cleanText(value: unknown, options: { required?: boolean; max?: number } = {}): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (options.required && !text) {
+    throw statusError('server.permissions.nameRequired', 400);
+  }
+  if (options.max && text.length > options.max) {
+    throw statusError('server.permissions.valueTooLong', 400);
+  }
+  return text;
+}
+
+function cleanInteger(value: unknown, fallback = 0): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    return fallback;
+  }
+  return numeric;
+}
+
+function cleanBoolean(value: unknown, fallback = true): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function cleanIdList(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    throw statusError('server.permissions.invalidSelection', 400);
+  }
+
+  const ids = [...new Set(value.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0))];
+  if (ids.length !== value.length) {
+    throw statusError('server.permissions.invalidSelection', 400);
+  }
+
+  return ids;
+}
+
+async function assertCriticalPermissionsEnabled(client: DbClient): Promise<void> {
+  const row = await clientQueryOne<QueryResultRow & { count: string }>(
+    client,
+    'SELECT COUNT(*)::text AS count FROM permissions WHERE key = ANY($1::text[]) AND enabled = true',
+    [criticalPermissionKeys]
+  );
+
+  if (Number(row?.count ?? 0) !== criticalPermissionKeys.length) {
+    throw statusError('server.permissions.criticalPermissionRequired', 400);
+  }
+}
+
+async function assertOwnerExists(client: DbClient): Promise<void> {
+  const row = await clientQueryOne<QueryResultRow & { count: string }>(
+    client,
+    `
+      SELECT COUNT(DISTINCT u.id)::text AS count
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE r.key = 'owner'
+        AND r.enabled = true
+        AND u.email_verified_at IS NOT NULL
+    `
+  );
+
+  if (Number(row?.count ?? 0) < 1) {
+    throw statusError('server.permissions.ownerRequired', 400);
+  }
+}
+
+async function assertPermissionManagerExists(client: DbClient): Promise<void> {
+  const row = await clientQueryOne<QueryResultRow & { count: string }>(
+    client,
+    `
+      SELECT COUNT(DISTINCT u.id)::text AS count
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      JOIN roles r ON r.id = ur.role_id
+      JOIN role_permissions rp ON rp.role_id = r.id
+      JOIN permissions p ON p.id = rp.permission_id
+      WHERE u.email_verified_at IS NOT NULL
+        AND r.enabled = true
+        AND p.enabled = true
+        AND p.key = 'admin.permissions.update'
+    `
+  );
+
+  if (Number(row?.count ?? 0) < 1) {
+    throw statusError('server.permissions.permissionManagerRequired', 400);
+  }
+}
+
+async function assertAccessControlSafe(client: DbClient): Promise<void> {
+  await assertCriticalPermissionsEnabled(client);
+  await assertOwnerExists(client);
+  await assertPermissionManagerExists(client);
 }
 
 async function referralUserId(
@@ -499,8 +831,10 @@ export async function verifyEmail(payload: Record<string, unknown>, locale = def
     await client.query('UPDATE email_verification_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL', [
       user.id
     ]);
+    await ensureOwnerRoleForUser(client, user.id);
 
-    return { message: await authMessage(locale, 'emailVerified'), user: toPublicUser(user) };
+    const publicUser = await publicUserById(user.id, client);
+    return { message: await authMessage(locale, 'emailVerified'), user: publicUser ?? toPublicUser(user) };
   });
 }
 
@@ -610,7 +944,7 @@ export async function loginUser(payload: Record<string, unknown>, locale = defau
     [user.id, hashToken(sessionToken), sessionDays]
   );
 
-  return { token: sessionToken, user: toPublicUser(user) };
+  return { token: sessionToken, user: (await publicUserById(user.id)) ?? toPublicUser(user) };
 }
 
 export async function getUserBySessionToken(token: string): Promise<AuthUser | null> {
@@ -618,18 +952,17 @@ export async function getUserBySessionToken(token: string): Promise<AuthUser | n
     return null;
   }
 
-  const user = await queryOne<UserRow>(
+  const session = await queryOne<QueryResultRow & { user_id: number }>(
     `
-      SELECT u.id, u.email, u.display_name, u.email_verified_at
+      SELECT s.user_id
       FROM user_sessions s
-      JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = $1
         AND s.expires_at > now()
     `,
     [hashToken(token)]
   );
 
-  return user ? toPublicUser(user) : null;
+  return session ? publicUserById(session.user_id) : null;
 }
 
 export async function updateCurrentUser(
@@ -652,7 +985,7 @@ export async function updateCurrentUser(
     throw statusError(await systemMessage(locale || defaultLocale, 'server.errors.loginRequired'), 401);
   }
 
-  return toPublicUser(user);
+  return (await publicUserById(user.id)) ?? toPublicUser(user);
 }
 
 export async function getReferralSummary(userId: number): Promise<ReferralSummary> {
@@ -670,6 +1003,329 @@ export async function getReferralSummary(userId: number): Promise<ReferralSummar
       verifiedReferralCount: Number(countRow?.count ?? 0)
     };
   });
+}
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const rows = await query<UserRow & { created_at: string; updated_at: string }>(
+    `
+      SELECT id, email, display_name, email_verified_at, created_at, updated_at
+      FROM users
+      ORDER BY created_at DESC, id DESC
+    `
+  );
+
+  const roleRows = await query<QueryResultRow & { user_id: number; role_id: number }>(
+    `
+      SELECT ur.user_id, ur.role_id
+      FROM user_roles ur
+      JOIN users u ON u.id = ur.user_id
+      ORDER BY ur.user_id, ur.role_id
+    `
+  );
+  const rolesByUserId = new Map<number, number[]>();
+  for (const roleRow of roleRows) {
+    rolesByUserId.set(roleRow.user_id, [...(rolesByUserId.get(roleRow.user_id) ?? []), roleRow.role_id]);
+  }
+
+  return Promise.all(
+    rows.map(async (row) => {
+      const publicUser = (await publicUserById(row.id)) ?? toPublicUser(row);
+      return {
+        ...publicUser,
+        roleIds: rolesByUserId.get(row.id) ?? [],
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    })
+  );
+}
+
+export async function listPermissions(): Promise<PermissionSummary[]> {
+  const rows = await query<PermissionRow>(
+    `
+      SELECT id, key, name, description, category, enabled, system_permission
+      FROM permissions
+      ORDER BY category ASC, key ASC, id ASC
+    `
+  );
+
+  return rows.map(toPermissionSummary);
+}
+
+export async function createPermission(payload: Record<string, unknown>): Promise<PermissionSummary[]> {
+  const permissionKey = cleanKey(payload.key, permissionKeyPattern, 'server.permissions.permissionKeyInvalid');
+  const name = cleanText(payload.name, { required: true, max: 120 });
+  const description = cleanText(payload.description, { max: 500 });
+  const category = cleanText(payload.category, { required: true, max: 80 });
+
+  await withTransaction(async (client) => {
+    const permission = await clientQueryOne<PermissionRow>(
+      client,
+      `
+        INSERT INTO permissions (key, name, description, category, enabled)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, key, name, description, category, enabled, system_permission
+      `,
+      [permissionKey, name, description, category, cleanBoolean(payload.enabled)]
+    );
+
+    if (!permission) {
+      throw new Error('Failed to create permission');
+    }
+
+    await client.query(
+      `
+        INSERT INTO role_permissions (role_id, permission_id)
+        SELECT r.id, $1
+        FROM roles r
+        WHERE r.key = 'owner'
+        ON CONFLICT DO NOTHING
+      `,
+      [permission.id]
+    );
+  });
+
+  return listPermissions();
+}
+
+export async function updatePermission(id: number, payload: Record<string, unknown>): Promise<PermissionSummary[]> {
+  const name = cleanText(payload.name, { required: true, max: 120 });
+  const description = cleanText(payload.description, { max: 500 });
+  const category = cleanText(payload.category, { required: true, max: 80 });
+  const enabled = cleanBoolean(payload.enabled);
+
+  await withTransaction(async (client) => {
+    const permission = await clientQueryOne<PermissionRow>(
+      client,
+      'SELECT id, key, name, description, category, enabled, system_permission FROM permissions WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (!permission) {
+      throw statusError('server.permissions.permissionNotFound', 404);
+    }
+    if (!enabled && criticalPermissionKeys.includes(permission.key)) {
+      throw statusError('server.permissions.criticalPermissionRequired', 400);
+    }
+
+    await client.query(
+      `
+        UPDATE permissions
+        SET name = $1,
+            description = $2,
+            category = $3,
+            enabled = $4,
+            updated_at = now()
+        WHERE id = $5
+      `,
+      [name, description, category, enabled, id]
+    );
+    await assertAccessControlSafe(client);
+  });
+
+  return listPermissions();
+}
+
+export async function deletePermission(id: number): Promise<void> {
+  await withTransaction(async (client) => {
+    const permission = await clientQueryOne<PermissionRow>(
+      client,
+      'SELECT id, key, name, description, category, enabled, system_permission FROM permissions WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (!permission) {
+      throw statusError('server.permissions.permissionNotFound', 404);
+    }
+    if (criticalPermissionKeys.includes(permission.key)) {
+      throw statusError('server.permissions.criticalPermissionRequired', 400);
+    }
+
+    await client.query('DELETE FROM permissions WHERE id = $1', [id]);
+    await assertAccessControlSafe(client);
+  });
+}
+
+export async function listRoles(): Promise<RoleDetail[]> {
+  const rows = await query<RoleRow>(
+    `
+      SELECT id, key, name, description, level, enabled, system_role
+      FROM roles
+      ORDER BY level DESC, name ASC, id ASC
+    `
+  );
+  const permissionRows = await query<RolePermissionRow>(
+    `
+      SELECT role_id, permission_id
+      FROM role_permissions
+      ORDER BY role_id, permission_id
+    `
+  );
+  const permissionIdsByRoleId = new Map<number, number[]>();
+  for (const row of permissionRows) {
+    permissionIdsByRoleId.set(row.role_id, [...(permissionIdsByRoleId.get(row.role_id) ?? []), row.permission_id]);
+  }
+
+  return rows.map((row) => toRoleDetail(row, permissionIdsByRoleId.get(row.id) ?? []));
+}
+
+export async function createRole(payload: Record<string, unknown>): Promise<RoleDetail[]> {
+  const roleKey = cleanKey(payload.key, roleKeyPattern, 'server.permissions.roleKeyInvalid');
+  const name = cleanText(payload.name, { required: true, max: 80 });
+  const description = cleanText(payload.description, { max: 500 });
+  const level = cleanInteger(payload.level, 0);
+  const enabled = cleanBoolean(payload.enabled);
+
+  await pool.query(
+    `
+      INSERT INTO roles (key, name, description, level, enabled)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+    [roleKey, name, description, level, enabled]
+  );
+
+  return listRoles();
+}
+
+export async function updateRole(id: number, payload: Record<string, unknown>): Promise<RoleDetail[]> {
+  const name = cleanText(payload.name, { required: true, max: 80 });
+  const description = cleanText(payload.description, { max: 500 });
+  const level = cleanInteger(payload.level, 0);
+  const enabled = cleanBoolean(payload.enabled);
+
+  await withTransaction(async (client) => {
+    const role = await clientQueryOne<RoleRow>(
+      client,
+      'SELECT id, key, name, description, level, enabled, system_role FROM roles WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (!role) {
+      throw statusError('server.permissions.roleNotFound', 404);
+    }
+    if (role.key === 'owner' && !enabled) {
+      throw statusError('server.permissions.ownerRequired', 400);
+    }
+
+    await client.query(
+      `
+        UPDATE roles
+        SET name = $1,
+            description = $2,
+            level = $3,
+            enabled = $4,
+            updated_at = now()
+        WHERE id = $5
+      `,
+      [name, description, level, enabled, id]
+    );
+    await assertAccessControlSafe(client);
+  });
+
+  return listRoles();
+}
+
+export async function deleteRole(id: number): Promise<void> {
+  await withTransaction(async (client) => {
+    const role = await clientQueryOne<RoleRow>(
+      client,
+      'SELECT id, key, name, description, level, enabled, system_role FROM roles WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (!role) {
+      throw statusError('server.permissions.roleNotFound', 404);
+    }
+    if (role.key === 'owner') {
+      throw statusError('server.permissions.ownerRequired', 400);
+    }
+
+    await client.query('DELETE FROM roles WHERE id = $1', [id]);
+    await assertAccessControlSafe(client);
+  });
+}
+
+export async function updateRolePermissions(roleId: number, payload: Record<string, unknown>): Promise<RoleDetail[]> {
+  const permissionIds = cleanIdList(payload.permissionIds);
+
+  await withTransaction(async (client) => {
+    const role = await clientQueryOne<RoleRow>(
+      client,
+      'SELECT id, key, name, description, level, enabled, system_role FROM roles WHERE id = $1 FOR UPDATE',
+      [roleId]
+    );
+    if (!role) {
+      throw statusError('server.permissions.roleNotFound', 404);
+    }
+    if (role.key === 'owner') {
+      throw statusError('server.permissions.ownerRoleLocked', 400);
+    }
+
+    if (permissionIds.length) {
+      const countRow = await clientQueryOne<QueryResultRow & { count: string }>(
+        client,
+        'SELECT COUNT(*)::text AS count FROM permissions WHERE id = ANY($1::int[])',
+        [permissionIds]
+      );
+      if (Number(countRow?.count ?? 0) !== permissionIds.length) {
+        throw statusError('server.permissions.permissionNotFound', 404);
+      }
+    }
+
+    await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
+    if (permissionIds.length) {
+      await client.query(
+        `
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT $1, unnest($2::int[])
+          ON CONFLICT DO NOTHING
+        `,
+        [roleId, permissionIds]
+      );
+    }
+    await assertAccessControlSafe(client);
+  });
+
+  return listRoles();
+}
+
+export async function updateAdminUserRoles(
+  targetUserId: number,
+  payload: Record<string, unknown>,
+  assignedByUserId: number
+): Promise<AdminUser[]> {
+  const roleIds = cleanIdList(payload.roleIds);
+
+  await withTransaction(async (client) => {
+    const user = await clientQueryOne<UserRow>(client, 'SELECT id, email, display_name, email_verified_at FROM users WHERE id = $1 FOR UPDATE', [
+      targetUserId
+    ]);
+    if (!user) {
+      throw statusError('server.permissions.userNotFound', 404);
+    }
+
+    if (roleIds.length) {
+      const countRow = await clientQueryOne<QueryResultRow & { count: string }>(
+        client,
+        'SELECT COUNT(*)::text AS count FROM roles WHERE id = ANY($1::int[])',
+        [roleIds]
+      );
+      if (Number(countRow?.count ?? 0) !== roleIds.length) {
+        throw statusError('server.permissions.roleNotFound', 404);
+      }
+    }
+
+    await client.query('DELETE FROM user_roles WHERE user_id = $1', [targetUserId]);
+    if (roleIds.length) {
+      await client.query(
+        `
+          INSERT INTO user_roles (user_id, role_id, assigned_by_user_id)
+          SELECT $1, unnest($2::int[]), $3
+          ON CONFLICT DO NOTHING
+        `,
+        [targetUserId, roleIds, assignedByUserId]
+      );
+    }
+    await assertAccessControlSafe(client);
+  });
+
+  return listAdminUsers();
 }
 
 export async function logoutSession(token: string): Promise<void> {

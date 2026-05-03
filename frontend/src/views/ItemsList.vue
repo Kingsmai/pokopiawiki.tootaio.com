@@ -10,13 +10,14 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconItem } from '../icons';
-import { api, type Item, type Options } from '../services/api';
+import { api, getAuthToken, type AuthUser, type Item, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
 const options = ref<Options | null>(null);
 const route = useRoute();
 const { t } = useI18n();
 const items = ref<Item[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
 const search = ref('');
 const categoryId = ref('');
@@ -39,6 +40,7 @@ const itemQuery = computed(() => ({
   tagIds: tagIds.value.join(',')
 }));
 const showEditor = computed(() => route.name === 'item-new');
+const canCreateItem = computed(() => currentUser.value?.permissions.includes('items.create') === true);
 
 function itemCardImage(item: Item) {
   return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : undefined;
@@ -51,6 +53,13 @@ async function loadItems() {
 }
 
 onMounted(async () => {
+  if (getAuthToken()) {
+    try {
+      currentUser.value = (await api.me()).user;
+    } catch {
+      currentUser.value = null;
+    }
+  }
   options.value = await api.options();
   await loadItems();
 });
@@ -63,7 +72,7 @@ watch(itemQuery, loadItems);
     <PageHeader :title="t('pages.items.title')" :subtitle="t('pages.items.subtitle')">
       <template #kicker>Bag</template>
       <template #actions>
-        <RouterLink class="ui-button ui-button--primary ui-button--small" to="/items/new">
+        <RouterLink v-if="canCreateItem" class="ui-button ui-button--primary ui-button--small" to="/items/new">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.add') }}
         </RouterLink>

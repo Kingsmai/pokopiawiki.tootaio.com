@@ -4,7 +4,7 @@
 
 - Pokopia Wiki 是一个面向 Pokopia 游戏资料的社区 Wiki。
 - 所有人都可以浏览 Wiki 内容。
-- 已注册并完成邮箱验证的用户可以创建、编辑、删除 Wiki 内容。
+- 已注册并完成邮箱验证且拥有对应权限的用户可以创建、编辑、删除 Wiki 内容。
 - 前台以 Pokemon、栖息地、物品、材料单、每日 CheckList、Life、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
 - 管理入口用于维护全局配置、语言、系统文案、列表排序和每日 CheckList。
 
@@ -121,6 +121,50 @@
   - 更新显示名后，API 仍只返回当前用户必要字段，不返回 session、token/hash、内部审计或调试数据。
   - 显示名用于编辑署名、讨论和 Life 内容作者展示。
 
+## 用户角色与权限
+
+- Pokopia 使用 RBAC 权限模型：
+  - 用户通过 `user_roles` 关联到一个或多个角色。
+  - 角色通过 `role_permissions` 关联到一个或多个权限。
+  - 后端只按启用状态的权限 key 做访问控制；前端只用于展示或隐藏操作入口，不能作为权限边界。
+- 邮箱验证仍是所有写入能力的基础门槛；未验证用户即使拥有角色也不能执行受保护写操作。
+- 对外当前用户字段只包含必要信息：
+  - `id`
+  - `email`
+  - `displayName`
+  - `emailVerified`
+  - `roles`：只包含 `id`、`key`、`name`、`level`
+  - `permissions`：当前用户启用权限 key 列表
+- 编辑署名仍只展示用户 `id` 和 `displayName`，不展示角色、权限、邮箱、token/hash 或内部元数据。
+- 权限记录存储在 `permissions`：
+  - `key`：稳定权限 key，例如 `pokemon.create`
+  - `name`
+  - `description`
+  - `category`
+  - `enabled`
+  - `system_permission`：系统初始化权限标记，仅用于管理端识别默认权限
+- 角色记录存储在 `roles`：
+  - `key`
+  - `name`
+  - `description`
+  - `level`：用于表达管理层级，数值越大层级越高
+  - `enabled`
+  - `system_role`：系统初始化角色标记，仅用于管理端识别默认角色
+- 初始角色包含：
+  - `owner`：最高层级，拥有所有系统权限。
+  - `admin`：拥有内容、系统配置、用户、角色和权限管理能力。
+  - `editor`：拥有主要 Wiki 内容创建、更新、排序、上传和社区互动能力，不默认拥有删除、用户、角色或权限管理能力。
+  - `member`：拥有 Life、讨论发布和删除本人内容的社区能力。
+  - `viewer`：无写入权限，仅用于显式只读分组。
+- Bootstrap 规则：
+  - 启动时若已有已验证用户但没有任何 `owner` 用户，系统自动将最早完成验证的用户加入 `owner` 角色。
+  - 若系统还没有 `owner` 用户，首个完成邮箱验证的用户自动加入 `owner` 角色。
+  - 系统初始化只补齐默认角色、默认权限和 Owner 关联；不覆盖管理员对默认角色/权限元数据或角色权限分配的配置。
+  - 新建权限会自动关联到 `owner` 角色，确保 Owner 始终拥有可用权限全集；`owner` 角色的权限分配不能在管理端被手动删改。
+  - 系统必须始终至少保留一个拥有 `admin.permissions.update` 且可管理权限的有效用户；核心 RBAC 管理权限（`admin.access`、`admin.users.*`、`admin.roles.*`、`admin.permissions.*`）不能被禁用或删除；不能删除最后一个 Owner，不能移除最后一个 Owner 的关键权限能力。
+- 权限管理能力本身也通过权限控制；只有拥有相应管理权限的用户可以查看、新增、编辑、删除权限、角色和用户角色关系。
+- 管理 API 只返回权限管理所需字段，不返回密码、session token hash、verification/reset token hash、内部审计 payload 或调试字段。
+
 ## Referral
 
 - Referral 是账号功能，用于让已注册用户邀请新用户加入 Pokopia Wiki。
@@ -146,7 +190,7 @@
 
 ## Community 编辑与审计
 
-- 已验证用户可以通过前台或管理入口编辑 Wiki 内容。
+- 已验证且拥有对应权限的用户可以通过前台或管理入口编辑 Wiki 内容。
 - 新增、修改、删除 Wiki 内容时必须写入审计信息。
 - 可编辑实体包含：
   - Pokemon
@@ -173,7 +217,7 @@
 
 ## Wiki 图片上传
 
-- 已验证用户可以为以下 Wiki 实体上传图片：
+- 已验证且拥有对应上传权限的用户可以为以下 Wiki 实体上传图片：
   - Pokemon
   - 物品图标
   - 栖息地
@@ -203,9 +247,9 @@
 
 - Pokemon、物品、材料单、栖息地详情页支持讨论。
 - 所有人都可以浏览实体讨论。
-- 已注册并完成邮箱验证的用户可以发表评论，并回复顶层评论。
+- 已注册并完成邮箱验证且拥有 `discussions.comments.create` 权限的用户可以发表评论，并回复顶层评论。
 - 讨论回复只支持一层回复，不做无限嵌套。
-- 评论作者可以删除自己的评论；删除后正文不再展示，已有回复保留在原位置。
+- 评论作者拥有 `discussions.comments.delete` 权限时可以删除自己的评论；拥有 `discussions.comments.delete-any` 权限的用户可以删除其他用户评论；删除后正文不再展示，已有回复保留在原位置。
 - 被删除实体的讨论会随实体删除一并清理。
 - 讨论按创建时间正序展示。
 - 讨论内容是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
@@ -299,7 +343,7 @@ Pokemon 的展示 ID 在普通 Pokemon 和活动 Pokemon 之间可以重复，�
 Pokemon 编辑表单使用标签页组织字段：
 
 - 编辑表单提供 Fetch data 功能：
-  - 已验证用户可输入 data identifier 或 Pokemon ID，从同一个搜索输入查询基础资料或图片候选。
+  - 已验证且拥有 `pokemon.fetch` 权限的用户可输入 data identifier 或 Pokemon ID，从同一个搜索输入查询基础资料或图片候选。
   - Fetch data 从仓库 `data/` CSV 查询基础资料并填入当前表单。
   - Fetch 输入框提供 data 列表搜索，搜索范围包含 Pokemon ID、identifier、当前语言名称和默认语言名称；结果只展示 `#ID`、名称和 identifier。
   - Fetch 搜索结果默认关闭，只在用户主动点击输入框或输入内容时展开；Escape、失焦 / 点击外部、选择结果后关闭。
@@ -310,7 +354,7 @@ Pokemon 编辑表单使用标签页组织字段：
   - Fetch 会自动确保 canonical Pokemon Types 存在于 `pokemon_types`，Type ID 与 `data/localized_type_name.csv` 和 `frontend/public/types` 图标文件保持一致；用户不需要为 Fetch 手工创建 Type 配置。
   - Type 展示使用 `frontend/public/types/small/{typeId}.png` 图标并保留文字名称。
 - 编辑表单提供 Pokemon 图片选择功能：
-  - 已验证用户通过 Fetch data 的同一个 data identifier / Pokemon ID 输入框，从 `https://pokesprite.tootaio.com/sprites/` 静态图片树查询对应 Pokemon 的可用图片候选。
+  - 已验证且拥有 `pokemon.fetch` 权限的用户通过 Fetch data 的同一个 data identifier / Pokemon ID 输入框，从 `https://pokesprite.tootaio.com/sprites/` 静态图片树查询对应 Pokemon 的可用图片候选。
   - 图片候选只使用 `/sprites/pokemon/...` 相对路径，后端按固定资源族生成候选并用 `HEAD` 校验存在性；不保存任意外部 URL。
   - 图片选择不直接创建或更新 Pokemon；用户仍需通过 Save 保存，保存时沿用现有编辑审计。
   - 图片选择界面使用 Pokédex 风格：上方显示当前选择的大图，大图下方显示版本、状态和描述，再下方以缩略图网格展示同一 Pokemon 的不同风格 / 版本 / 状态。
@@ -511,8 +555,8 @@ Pokemon 出现配置：
 
 管理行为：
 
-- 已验证用户可新增、编辑、删除 Task。
-- 已验证用户可通过 Handle 拖拽排序。
+  - 已验证且拥有对应 CheckList 权限的用户可新增、编辑、删除 Task。
+  - 已验证且拥有 `checklist.order` 权限的用户可通过 Handle 拖拽排序。
 
 ## Life
 
@@ -531,14 +575,15 @@ Life Post 可配置：
 
 - 所有人都可以浏览 Life 信息流。
 - 信息流按创建时间倒序展示。
-- 已注册并完成邮箱验证的用户可以发布 Life Post。
-- 作者本人可以编辑、删除自己的 Life Post；删除 Life Post 使用软删除。
-- 已注册并完成邮箱验证的用户发布或编辑 Life Post 时可以选择一个或多个 Life 标签。
-- 已注册并完成邮箱验证的用户可以评论 Life Post，并回复顶层评论。
-- 评论作者可以删除自己的评论；删除评论后正文不再展示，已有回复保留在原位置。
+- 已注册并完成邮箱验证且拥有 `life.posts.create` 权限的用户可以发布 Life Post。
+- 作者本人拥有 `life.posts.update` / `life.posts.delete` 权限时可以编辑、删除自己的 Life Post；删除 Life Post 使用软删除。
+- 拥有 `life.posts.update-any` / `life.posts.delete-any` 权限的用户可以管理其他用户的 Life Post。
+- 已注册并完成邮箱验证且拥有 `life.posts.create` 或 `life.posts.update` 权限的用户发布或编辑 Life Post 时可以选择一个或多个 Life 标签。
+- 已注册并完成邮箱验证且拥有 `life.comments.create` 权限的用户可以评论 Life Post，并回复顶层评论。
+- 评论作者拥有 `life.comments.delete` 权限时可以删除自己的评论；拥有 `life.comments.delete-any` 权限的用户可以删除其他用户评论；删除评论后正文不再展示，已有回复保留在原位置。
 - 已软删除的 Life Post 不出现在信息流、搜索或标签筛选结果中，也不能继续编辑、评论或设置 Reaction。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
-- 已注册并完成邮箱验证的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
+- 已注册并完成邮箱验证且拥有 `life.reactions.set` 权限的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
 - Feed 使用 Tabs 展示 Life 标签筛选；包含 All 和后台配置的 Life 标签；点击标签后按该标签筛选，搜索和标签筛选可以同时生效。
@@ -555,8 +600,7 @@ API 暴露边界：
 - Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。
 - API 不返回邮箱、token/hash、内部调试字段或不必要的审计 payload。
 - API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
-- 非作者不能编辑或删除其他用户的 Life Post。
-- 非作者不能删除其他用户的 Life Comment。
+- 非作者只有拥有对应 `*-any` 管理权限时才能编辑或删除其他用户的 Life Post 或 Life Comment。
 
 ## 开发中入口
 
@@ -594,6 +638,7 @@ API 暴露边界：
 - Life 使用信息流顶部 New Post / 编辑按钮打开普通 Modal 发布与编辑，不使用路由驱动 Modal。
 - 进入或关闭编辑 Modal 时应保留底层页面上下文，不进行不必要的滚动跳转。
 - 用户界面不得展示内部字段名、调试数据、计划说明或“已修改某字段”一类实现说明。
+- 权限不足时前端可以隐藏或禁用对应操作；后端必须返回本地化 403，并且不得在 UI 暴露内部权限 key 作为普通用户提示。
 
 ## API 概览
 
@@ -626,35 +671,49 @@ API 暴露边界：
 - `GET /api/auth/referral`：读取当前用户 Referral 摘要；需要登录；返回 `referral`，其中只包含 `code`、`url`、`verifiedReferralCount`。
 - `POST /api/auth/logout`
 
-已验证用户编辑 API：
+权限管理 API：
 
-- Pokemon、栖息地、物品、材料单的创建、更新、删除。
-- `GET /api/pokemon/fetch-options`：按搜索词返回 Pokemon CSV data 搜索结果；需要已验证用户；只返回 `id`、`identifier`、`name`。
-- `POST /api/pokemon/fetch`：按 data identifier 或 Pokemon ID 查询 CSV 资料并填充 Pokemon 编辑表单；需要已验证用户；不直接保存 Pokemon。
-- `POST /api/pokemon/image-options`：按 data identifier 或 Pokemon ID 查询 pokesprite 可用图片候选；需要已验证用户；只返回 `id`、`identifier` 和图片候选列表。
-- `POST /api/uploads/:entityType`：上传 Wiki 图片；需要已验证用户；`entityType` 支持 `pokemon`、`items`、`habitats`；返回图片历史记录项和可展示 URL。
-- Life Post 的创建，以及作者本人对 Life Post 的更新、删除。
+- `GET /api/admin/users`：需要 `admin.users.read`
+- `PUT /api/admin/users/:id/roles`：需要 `admin.users.update`
+- `GET /api/admin/roles`：需要 `admin.roles.read`
+- `POST /api/admin/roles`：需要 `admin.roles.create`
+- `PUT /api/admin/roles/:id`：需要 `admin.roles.update`
+- `DELETE /api/admin/roles/:id`：需要 `admin.roles.delete`
+- `PUT /api/admin/roles/:id/permissions`：需要 `admin.roles.update`
+- `GET /api/admin/permissions`：需要 `admin.permissions.read`
+- `POST /api/admin/permissions`：需要 `admin.permissions.create`
+- `PUT /api/admin/permissions/:id`：需要 `admin.permissions.update`
+- `DELETE /api/admin/permissions/:id`：需要 `admin.permissions.delete`
+
+受权限保护的编辑 API：
+
+- Pokemon、栖息地、物品、材料单的创建、更新、删除分别需要对应实体的 `create`、`update`、`delete` 权限。
+- `GET /api/pokemon/fetch-options`：按搜索词返回 Pokemon CSV data 搜索结果；需要 `pokemon.fetch`；只返回 `id`、`identifier`、`name`。
+- `POST /api/pokemon/fetch`：按 data identifier 或 Pokemon ID 查询 CSV 资料并填充 Pokemon 编辑表单；需要 `pokemon.fetch`；不直接保存 Pokemon。
+- `POST /api/pokemon/image-options`：按 data identifier 或 Pokemon ID 查询 pokesprite 可用图片候选；需要 `pokemon.fetch`；只返回 `id`、`identifier` 和图片候选列表。
+- `POST /api/uploads/:entityType`：上传 Wiki 图片；需要对应实体上传权限；`entityType` 支持 `pokemon`、`items`、`habitats`；返回图片历史记录项和可展示 URL。
+- Life Post 的创建，以及作者本人对 Life Post 的更新、删除，需要对应 `life.posts.*` 权限；管理他人内容需要对应 `*-any` 权限。
   - `POST /api/life-posts`
   - `PUT /api/life-posts/:id`
   - `DELETE /api/life-posts/:id`
-- Life Comment 的创建，以及作者本人对 Life Comment 的删除。
+- Life Comment 的创建，以及作者本人对 Life Comment 的删除，需要对应 `life.comments.*` 权限；管理他人内容需要对应 `*-any` 权限。
   - `POST /api/life-posts/:postId/comments`
   - `POST /api/life-posts/:postId/comments/:commentId/replies`
   - `DELETE /api/life-comments/:id`
-- 实体讨论评论的创建、回复，以及作者本人对评论的删除。
+- 实体讨论评论的创建、回复，以及作者本人对评论的删除，需要对应 `discussions.comments.*` 权限；管理他人内容需要对应 `*-any` 权限。
   - `POST /api/discussions/:entityType/:entityId/comments`
   - `POST /api/discussions/:entityType/:entityId/comments/:commentId/replies`
   - `DELETE /api/discussions/comments/:id`
 - Life Reaction 的设置、替换和取消。
   - `PUT /api/life-posts/:id/reaction`
   - `DELETE /api/life-posts/:id/reaction`
-- 每日 CheckList 的创建、更新、删除、排序。
-- 全局配置项的创建、更新、删除、排序。
-- 语言的创建、更新、删除、排序。
-- 系统级文案的查看和更新。
+- 每日 CheckList 的创建、更新、删除、排序需要对应 `checklist.*` 权限。
+- 全局配置项的查看、创建、更新、删除、排序需要对应 `admin.config.*` 权限。
+- 语言的查看、创建、更新、删除、排序需要对应 `admin.languages.*` 权限。
+- 系统级文案的查看和更新需要对应 `admin.wordings.*` 权限。
   - `GET /api/admin/system-wordings`
   - `PUT /api/admin/system-wordings/:key`
-- Pokemon、物品、材料单、栖息地的列表排序。
+- Pokemon、物品、材料单、栖息地的列表排序需要对应实体的 `order` 权限。
 
 ## 开发与验证
 

@@ -13,6 +13,8 @@ import TranslationFields from '../components/TranslationFields.vue';
 import { iconAdd, iconCancel, iconDelete, iconPokemon, iconSave } from '../icons';
 import {
   api,
+  getAuthToken,
+  type AuthUser,
   type ConfigType,
   type EntityImage,
   type EntityImageUpload,
@@ -40,6 +42,7 @@ const options = ref<Options | null>(null);
 const itemRows = ref<Item[]>([]);
 const pokemonRows = ref<Pokemon[]>([]);
 const languages = ref<Language[]>([]);
+const currentUser = ref<AuthUser | null>(null);
 const currentImage = ref<EntityImage | null>(null);
 const imageHistory = ref<EntityImageUpload[]>([]);
 const loading = ref(true);
@@ -81,6 +84,8 @@ const pageTitle = computed(() =>
 );
 const cancelTo = computed(() => (isEditing.value ? `/habitats/${routeId.value}` : '/habitats'));
 const imageEntityName = computed(() => habitatNameForSave().trim());
+const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
+const canUploadImage = computed(() => currentUser.value?.permissions.includes('habitats.upload') === true);
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -146,12 +151,26 @@ function habitatNameForSave() {
   return habitatForm.value.translations[String(locale.value || '')]?.name ?? '';
 }
 
+async function loadCurrentUser() {
+  if (!getAuthToken()) {
+    currentUser.value = null;
+    return;
+  }
+
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
+  }
+}
+
 async function loadEditor() {
   loading.value = true;
   message.value = '';
 
   try {
-    const [loadedOptions, loadedItems, loadedPokemon, loadedLanguages] = await Promise.all([
+    const [, loadedOptions, loadedItems, loadedPokemon, loadedLanguages] = await Promise.all([
+      loadCurrentUser(),
       api.options(),
       api.items({}),
       api.pokemon({}),
@@ -188,7 +207,7 @@ async function loadOptions() {
 
 async function createMultiOption(selectKey: string, type: ConfigType, name: string, values: string[]) {
   const cleanName = name.trim();
-  if (!cleanName) return;
+  if (!cleanName || !canCreateConfig.value) return;
 
   creatingSelect.value = selectKey;
   message.value = '';
@@ -274,6 +293,7 @@ onMounted(() => {
         :current-image="currentImage"
         :history="imageHistory"
         :disabled="busy"
+        :allow-upload="canUploadImage"
         @selected="handleImageSelected"
         @uploaded="handleImageUploaded"
         @error="message = $event"
@@ -341,7 +361,7 @@ onMounted(() => {
               :id="`appearance-maps-${index}`"
               v-model="row.mapIds"
               :options="options.maps"
-              allow-create
+              :allow-create="canCreateConfig"
               :creating="creatingSelect === `appearance-maps-${index}`"
               :placeholder="t('pages.habitats.searchMaps')"
               @create="createMultiOption(`appearance-maps-${index}`, 'maps', $event, row.mapIds)"

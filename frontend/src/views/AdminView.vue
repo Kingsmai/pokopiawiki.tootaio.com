@@ -61,6 +61,9 @@ type AdminTab =
   | 'items'
   | 'recipes'
   | 'habitats';
+type AdminGroup = 'content' | 'configuration' | 'localization' | 'access';
+type AdminNavItem = { key: AdminTab; label: string; permission: string | string[] };
+type AdminNavGroup = { key: AdminGroup; label: string; items: AdminNavItem[] };
 type EditableConfig = (NamedEntity | Skill) & { hasItemDrop?: boolean };
 
 const adminTabIcons: Record<AdminTab, AppIcon> = {
@@ -79,21 +82,48 @@ const adminTabIcons: Record<AdminTab, AppIcon> = {
 
 const { locale, t } = useI18n();
 
-const tabs = computed<Array<{ key: AdminTab; label: string; permission: string | string[] }>>(() =>
-  [
-    { key: 'users' as const, label: t('pages.admin.users'), permission: 'admin.users.read' },
-    { key: 'roles' as const, label: t('pages.admin.roles'), permission: 'admin.roles.read' },
-    { key: 'permissions' as const, label: t('pages.admin.permissions'), permission: 'admin.permissions.read' },
-    { key: 'config' as const, label: t('pages.admin.config'), permission: 'admin.config.read' },
-    { key: 'languages' as const, label: t('pages.admin.languages'), permission: 'admin.languages.read' },
-    { key: 'wordings' as const, label: t('pages.admin.wordings'), permission: 'admin.wordings.read' },
-    { key: 'checklist' as const, label: t('pages.admin.checklist'), permission: ['checklist.create', 'checklist.update', 'checklist.delete', 'checklist.order'] },
-    { key: 'pokemon' as const, label: 'Pokemon', permission: ['pokemon.order', 'pokemon.delete'] },
-    { key: 'items' as const, label: t('pages.items.title'), permission: ['items.order', 'items.delete'] },
-    { key: 'recipes' as const, label: t('pages.recipes.title'), permission: ['recipes.order', 'recipes.delete'] },
-    { key: 'habitats' as const, label: t('pages.habitats.title'), permission: ['habitats.order', 'habitats.delete'] }
-  ].filter((tab) => canAny(tab.permission))
-);
+const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
+  const groups: AdminNavGroup[] = [
+    {
+      key: 'configuration',
+      label: t('pages.admin.configurationGroup'),
+      items: [{ key: 'config', label: t('pages.admin.config'), permission: 'admin.config.read' }]
+    },
+    {
+      key: 'content',
+      label: t('pages.admin.contentGroup'),
+      items: [
+        { key: 'checklist', label: t('pages.admin.checklist'), permission: ['checklist.create', 'checklist.update', 'checklist.delete', 'checklist.order'] },
+        { key: 'pokemon', label: t('pages.admin.pokemonList'), permission: ['pokemon.order', 'pokemon.delete'] },
+        { key: 'items', label: t('pages.admin.itemList'), permission: ['items.order', 'items.delete'] },
+        { key: 'recipes', label: t('pages.admin.recipeList'), permission: ['recipes.order', 'recipes.delete'] },
+        { key: 'habitats', label: t('pages.admin.habitatList'), permission: ['habitats.order', 'habitats.delete'] }
+      ]
+    },
+    {
+      key: 'localization',
+      label: t('pages.admin.localizationGroup'),
+      items: [
+        { key: 'languages', label: t('pages.admin.languages'), permission: 'admin.languages.read' },
+        { key: 'wordings', label: t('pages.admin.wordings'), permission: 'admin.wordings.read' }
+      ]
+    },
+    {
+      key: 'access',
+      label: t('pages.admin.accessGroup'),
+      items: [
+        { key: 'users', label: t('pages.admin.users'), permission: 'admin.users.read' },
+        { key: 'roles', label: t('pages.admin.roles'), permission: 'admin.roles.read' },
+        { key: 'permissions', label: t('pages.admin.permissions'), permission: 'admin.permissions.read' }
+      ]
+    }
+  ];
+
+  return groups
+    .map((group) => ({ ...group, items: group.items.filter((tab) => canAny(tab.permission)) }))
+    .filter((group) => group.items.length);
+});
+const tabs = computed<AdminNavItem[]>(() => adminNavigationGroups.value.flatMap((group) => group.items));
 
 const configTypes = computed<Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean }>>(() => [
   { key: 'pokemon-types', label: t('config.pokemonTypes') },
@@ -971,29 +1001,44 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <PageHeader :title="t('pages.admin.title')" :subtitle="t('pages.admin.subtitle')">
-      <template #kicker>Admin</template>
+      <template #kicker>{{ t('nav.admin') }}</template>
     </PageHeader>
-
-    <div v-if="canEdit" class="tabs" role="tablist" :aria-label="t('pages.admin.modules')">
-      <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" type="button" @click="setTab(tab.key)">
-        <Icon :icon="adminTabIcons[tab.key]" class="ui-icon" aria-hidden="true" />
-        {{ tab.label }}
-      </button>
-    </div>
 
     <StatusMessage v-if="message" variant="warning">{{ message }}</StatusMessage>
 
-    <section v-if="showAdminSkeleton" class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.admin.loading')">
-      <h2><Skeleton width="120px" height="24px" /></h2>
-      <ul class="row-list skeleton-row-list">
-        <li v-for="index in 6" :key="index">
-          <Skeleton :width="index % 2 === 0 ? '180px' : '132px'" />
-          <span class="row-actions">
-            <Skeleton variant="box" width="50px" height="34px" />
-          </span>
-        </li>
-      </ul>
-    </section>
+    <div v-if="canEdit || showAdminSkeleton" class="admin-layout" :class="{ 'admin-layout--loading': !canEdit }">
+      <nav v-if="canEdit" class="admin-secondary-nav" :aria-label="t('pages.admin.modules')">
+        <div v-for="group in adminNavigationGroups" :key="group.key" class="admin-secondary-nav__group">
+          <span class="admin-secondary-nav__title">{{ group.label }}</span>
+          <div class="admin-secondary-nav__items">
+            <button
+              v-for="tab in group.items"
+              :key="tab.key"
+              class="admin-secondary-nav__item"
+              :class="{ active: activeTab === tab.key }"
+              type="button"
+              :aria-current="activeTab === tab.key ? 'page' : undefined"
+              @click="setTab(tab.key)"
+            >
+              <Icon :icon="adminTabIcons[tab.key]" class="ui-icon admin-secondary-nav__icon" aria-hidden="true" />
+              <span>{{ tab.label }}</span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="admin-content">
+        <section v-if="showAdminSkeleton" class="detail-section skeleton-detail-section" aria-busy="true" :aria-label="t('pages.admin.loading')">
+          <h2><Skeleton width="120px" height="24px" /></h2>
+          <ul class="row-list skeleton-row-list">
+            <li v-for="index in 6" :key="index">
+              <Skeleton :width="index % 2 === 0 ? '180px' : '132px'" />
+              <span class="row-actions">
+                <Skeleton variant="box" width="50px" height="34px" />
+              </span>
+            </li>
+          </ul>
+        </section>
 
     <section v-else-if="canEdit && activeTab === 'users'" class="detail-section">
       <div class="detail-section__header">
@@ -1401,6 +1446,8 @@ onMounted(() => {
       </ReorderableList>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
+      </div>
+    </div>
 
     <Modal v-if="userRoleModalOpen" :title="userRoleModalTitle" :close-label="t('common.close')" size="wide" @close="closeUserRoleModal">
       <form id="admin-user-roles-form" class="modal-edit-form" @submit.prevent="saveUserRoles">

@@ -4459,9 +4459,100 @@ button:disabled,
 
 .admin-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+.admin-layout--loading {
+  grid-template-columns: 1fr;
+}
+
+.admin-secondary-nav {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.admin-secondary-nav__group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-secondary-nav__group + .admin-secondary-nav__group {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-secondary-nav__title {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-secondary-nav__items {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-secondary-nav__item {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.admin-secondary-nav__item:hover {
+  border-color: rgba(42, 117, 187, 0.24);
+  background: rgba(255, 203, 5, 0.2);
+  color: var(--pokemon-blue-deep);
+}
+
+.admin-secondary-nav__item.active {
+  border-color: var(--line-strong);
+  background: var(--pokemon-blue);
+  color: #ffffff;
+  box-shadow: 0 2px 0 var(--line-strong);
+}
+
+.admin-secondary-nav__item span {
+  min-width: 0;
+}
+
+.admin-secondary-nav__icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
+.admin-content {
+  min-width: 0;
 }
 
 .form-actions,
@@ -4800,6 +4891,26 @@ button:disabled,
     width: auto;
     flex: 0 0 auto;
     white-space: nowrap;
+  }
+
+  .admin-secondary-nav {
+    position: static;
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 10px;
+  }
+
+  .admin-secondary-nav__group {
+    flex: 0 0 auto;
+    min-width: min(260px, 76vw);
+  }
+
+  .admin-secondary-nav__group + .admin-secondary-nav__group {
+    padding-top: 0;
+    padding-left: 12px;
+    border-top: 0;
+    border-left: 1px solid var(--line);
   }
 
   .coming-soon-panel {

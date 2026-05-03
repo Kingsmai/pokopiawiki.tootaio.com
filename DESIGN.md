@@ -619,6 +619,11 @@ API 暴露边界：
 - UI 风格以 `DesignGuidelines.html` 为准。
 - 页面结构以 `AppShell`、`PageHeader`、列表、详情区和管理区为核心。
 - 全局主导航使用 `AppShell` 侧边栏；移动端通过导航按钮打开侧边栏抽屉。
+- 管理入口在全局侧边栏中保持单一 Admin 入口，`/admin` 内部使用页面内二级菜单分组组织管理模块：
+  - 配置：System config。
+  - 内容：Daily CheckList、Pokemon、物品、材料单和栖息地的维护、排序或删除入口。
+  - 本地化：Languages、System wordings。
+  - 访问权限：Users、Roles、Permissions。
 - 登录用户的侧边栏账号入口进入 `/profile`；User Profile 属于账号入口，不作为 Wiki 主内容导航项。
 - 页面级分类、筛选或辅助内容切换使用 Tabs，避免在内容页继续增加侧边栏。
 - 导航和主要操作使用图标增强识别。

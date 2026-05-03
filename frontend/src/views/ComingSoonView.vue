@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import {
   iconAction,
+  iconAutomation,
   iconClothes,
   iconDish,
   iconDreamIsland,
@@ -13,11 +14,11 @@ import {
   type AppIcon
 } from '../icons';
 
-type ComingSoonPage = 'dish' | 'events' | 'actions' | 'dreamIsland' | 'clothes';
+type ComingSoonPage = 'automation' | 'dish' | 'events' | 'actions' | 'dreamIsland' | 'clothes';
 
 type ComingSoonConfig = {
   icon: AppIcon;
-  accent: 'dish' | 'events' | 'actions' | 'dream' | 'clothes';
+  accent: 'automation' | 'dish' | 'events' | 'actions' | 'dream' | 'clothes';
   previewKeys: Array<'one' | 'two' | 'three'>;
 };
 
@@ -28,6 +29,7 @@ const props = defineProps<{
 const { t } = useI18n();
 
 const pageConfigByPage: Record<ComingSoonPage, ComingSoonConfig> = {
+  automation: { icon: iconAutomation, accent: 'automation', previewKeys: ['one', 'two', 'three'] },
   dish: { icon: iconDish, accent: 'dish', previewKeys: ['one', 'two', 'three'] },
   events: { icon: iconEvent, accent: 'events', previewKeys: ['one', 'two', 'three'] },
   actions: { icon: iconAction, accent: 'actions', previewKeys: ['one', 'two', 'three'] },

@@ -39,6 +39,7 @@ export const router = createRouter({
     { path: '/recipes/new', name: 'recipe-new', component: RecipeList, meta: { requiredPermission: 'recipes.create', editorModal: true } },
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeDetail, meta: { requiredPermission: 'recipes.update', editorModal: true } },
     { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetail },
+    { path: '/automation', name: 'automation', component: ComingSoonView, props: { page: 'automation' } },
     { path: '/dish', name: 'dish', component: ComingSoonView, props: { page: 'dish' } },
     { path: '/events', name: 'events', component: ComingSoonView, props: { page: 'events' } },
     { path: '/actions', name: 'actions', component: ComingSoonView, props: { page: 'actions' } },

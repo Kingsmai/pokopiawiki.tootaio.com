@@ -46,6 +46,7 @@ export const systemWordingMessages = {
       habitats: 'Habitats',
       items: 'Items',
       recipes: 'Recipes',
+      automation: 'Automation',
       dish: 'Dish',
       events: 'Events',
       actions: 'Actions',
@@ -301,6 +302,17 @@ export const systemWordingMessages = {
         heading: 'This wiki section is being prepared.',
         previewLabel: 'Section preview',
         sections: {
+          automation: {
+            kicker: 'Automation',
+            title: 'Automation',
+            subtitle: 'Factory and automation base guides will be shared here.',
+            body: 'Automation pages will help players compare production setups, material outputs, required Pokemon, production order, and shared favourites.',
+            preview: {
+              one: 'Factory guides will focus on the base layout and production goal.',
+              two: 'Material output, Pokemon needs, and production order will stay easy to scan.',
+              three: 'Shared favourite items can help players plan compatible teams and workflows.'
+            }
+          },
           dish: {
             kicker: 'Dish',
             title: 'Dish',
@@ -756,6 +768,7 @@ export const systemWordingMessages = {
       habitats: '栖息地',
       items: '物品',
       recipes: '材料单',
+      automation: '自动化',
       dish: '料理',
       events: '活动',
       actions: '动作',
@@ -1011,6 +1024,17 @@ export const systemWordingMessages = {
         heading: '这个 Wiki 分区正在准备中。',
         previewLabel: '分区预览',
         sections: {
+          automation: {
+            kicker: 'Automation',
+            title: '自动化',
+            subtitle: '自动化基地和工厂方案会在这里分享。',
+            body: '自动化分区会帮助玩家对比生产配置、材料产出、所需 Pokemon、生产顺序和共同喜好物品。',
+            preview: {
+              one: '工厂方案会围绕基地布局和生产目标整理。',
+              two: '材料产出、Pokemon 需求和生产顺序会保持易读。',
+              three: '共同喜好物品可用于规划更适合协作的队伍和流程。'
+            }
+          },
           dish: {
             kicker: 'Dish',
             title: '料理',

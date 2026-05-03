@@ -3,6 +3,7 @@ export type AppIcon = string;
 export const iconAdd: AppIcon = 'mdi:plus';
 export const iconAdmin: AppIcon = 'mdi:tune-variant';
 export const iconAction: AppIcon = 'mdi:gesture-tap-button';
+export const iconAutomation: AppIcon = 'mdi:factory';
 export const iconBack: AppIcon = 'mdi:arrow-left';
 export const iconCancel: AppIcon = 'mdi:close';
 export const iconCheck: AppIcon = 'mdi:check';

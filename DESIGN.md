@@ -5,7 +5,7 @@
 - Pokopia Wiki 是一个面向 Pokopia 游戏资料的社区 Wiki。
 - 所有人都可以浏览 Wiki 内容。
 - 已注册并完成邮箱验证且拥有对应权限的用户可以创建、编辑、删除 Wiki 内容。
-- 前台以 Pokemon、栖息地、物品、材料单、每日 CheckList、Life、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
+- 前台以 Pokemon、栖息地、物品、材料单、每日 CheckList、Life、Automation、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
 - 管理入口用于维护全局配置、语言、系统文案、列表排序和每日 CheckList。
 
 ## 技术栈
@@ -606,6 +606,7 @@ API 暴露边界：
 
 以下前台公开入口当前仅展示“正在开发中”占位页，不提供数据模型、后端 API、编辑表单、管理入口或排序能力：
 
+- Automation：未来用于分享自动化基地（亦称工厂）创建方案、材料产出、所需 Pokemon、生产顺序和共同喜好物品。
 - Dish
 - Events
 - Actions：游戏内快捷动作，例如挥手、跳舞等。

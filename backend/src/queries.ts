@@ -110,6 +110,8 @@ type PokemonImageOptionsResult = {
 };
 
 type PokemonPayload = {
+  dataId: number | null;
+  dataIdentifier: string;
   displayId: number;
   isEventItem: boolean;
   name: string;
@@ -897,28 +899,19 @@ async function nextSortOrder(client: DbClient, tableName: string): Promise<numbe
   return result.rows[0]?.sortOrder ?? 10;
 }
 
-async function nextPokemonInternalId(client: DbClient, displayId: number, isEventItem: boolean): Promise<number> {
-  if (isEventItem) {
-    const result = await client.query<{ id: number }>(
-      'SELECT COALESCE(MAX(id), 999999) + 1 AS id FROM pokemon WHERE id >= 1000000'
-    );
-    const nextId = result.rows[0]?.id ?? 1000000;
-    return nextId === displayId ? nextId + 1 : nextId;
-  }
-
-  if (!isEventItem) {
-    const preferredId = await client.query<{ id: number }>('SELECT id FROM pokemon WHERE id = $1', [displayId]);
-    if (preferredId.rowCount === 0) {
-      return displayId;
-    }
+async function nextPokemonInternalId(
+  client: DbClient,
+  dataId: number | null,
+  isEventItem: boolean
+): Promise<number> {
+  if (!isEventItem && dataId !== null) {
+    return dataId;
   }
 
   const result = await client.query<{ id: number }>(
-    'SELECT COALESCE(MAX(id), 0) + 1 AS id FROM pokemon WHERE id <> $1',
-    [displayId]
+    'SELECT COALESCE(MAX(id), 999999) + 1 AS id FROM pokemon WHERE id >= 1000000'
   );
-  const nextId = result.rows[0]?.id ?? 1;
-  return nextId === displayId ? nextId + 1 : nextId;
+  return result.rows[0]?.id ?? 1000000;
 }
 
 async function reorderTableRows(
@@ -2160,6 +2153,8 @@ function pokemonProjection(locale: string): string {
   return `
     SELECT
       p.id,
+      p.data_id AS "dataId",
+      p.data_identifier AS "dataIdentifier",
       p.display_id AS "displayId",
       ${pokemonName} AS name,
       p.name AS "baseName",
@@ -4684,6 +4679,8 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   const displayId = requirePositiveInteger(payload.displayId, 'server.validation.pokemonIdRequired');
 
   return {
+    dataId: optionalPositiveInteger(payload.dataId, 'server.validation.pokemonIdRequired'),
+    dataIdentifier: cleanOptionalText(payload.dataIdentifier),
     displayId,
     isEventItem: Boolean(payload.isEventItem),
     name: cleanName(payload.name, 'server.validation.pokemonNameRequired'),
@@ -4700,6 +4697,21 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
     skillItemDrops: [...skillItemDrops.values()],
     image: cleanPokemonImage(payload.imagePath, displayId)
   };
+}
+
+async function normalizePokemonDataIdentity(payload: PokemonPayload): Promise<void> {
+  if (payload.dataId === null) {
+    payload.dataIdentifier = '';
+    return;
+  }
+
+  const data = await loadPokemonCsvData();
+  const pokemonRow = data.pokemonByLookup.get(String(payload.dataId));
+  if (!pokemonRow) {
+    throw validationError('server.validation.pokemonDataNotFound');
+  }
+
+  payload.dataIdentifier = csvText(pokemonRow, 'identifier');
 }
 
 async function replacePokemonRelations(client: DbClient, pokemonId: number, payload: PokemonPayload): Promise<void> {
@@ -4749,14 +4761,17 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
 
 export async function createPokemon(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanPokemonPayload(payload);
+  await normalizePokemonDataIdentity(cleanPayload);
 
   const id = await withTransaction(async (client) => {
-    const pokemonId = await nextPokemonInternalId(client, cleanPayload.displayId, cleanPayload.isEventItem);
+    const pokemonId = await nextPokemonInternalId(client, cleanPayload.dataId, cleanPayload.isEventItem);
     const sortOrder = await nextSortOrder(client, 'pokemon');
     await client.query(
       `
         INSERT INTO pokemon (
           id,
+          data_id,
+          data_identifier,
           display_id,
           name,
           is_event_item,
@@ -4780,10 +4795,12 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $22)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $24)
       `,
       [
         pokemonId,
+        cleanPayload.dataId,
+        cleanPayload.dataIdentifier,
         cleanPayload.displayId,
         cleanPayload.name,
         cleanPayload.isEventItem,
@@ -4818,6 +4835,10 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
 
 export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const cleanPayload = cleanPokemonPayload(payload);
+  await normalizePokemonDataIdentity(cleanPayload);
+  if (!cleanPayload.isEventItem && cleanPayload.dataId !== null && cleanPayload.dataId !== id) {
+    throw validationError('server.validation.pokemonDataIdMismatch');
+  }
   const before = await getPokemon(id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
@@ -4825,30 +4846,34 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
       `
         UPDATE pokemon
         SET
-          display_id = $1,
-          name = $2,
-          is_event_item = $3,
-          genus = $4,
-          details = $5,
-          height_inches = $6,
-          weight_pounds = $7,
-          environment_id = $8,
-          hp = $9,
-          attack = $10,
-          defense = $11,
-          special_attack = $12,
-          special_defense = $13,
-          speed = $14,
-          image_path = $15,
-          image_style = $16,
-          image_version = $17,
-          image_variant = $18,
-          image_description = $19,
-          updated_by_user_id = $20,
+          data_id = $1,
+          data_identifier = $2,
+          display_id = $3,
+          name = $4,
+          is_event_item = $5,
+          genus = $6,
+          details = $7,
+          height_inches = $8,
+          weight_pounds = $9,
+          environment_id = $10,
+          hp = $11,
+          attack = $12,
+          defense = $13,
+          special_attack = $14,
+          special_defense = $15,
+          speed = $16,
+          image_path = $17,
+          image_style = $18,
+          image_version = $19,
+          image_variant = $20,
+          image_description = $21,
+          updated_by_user_id = $22,
           updated_at = now()
-        WHERE id = $21
+        WHERE id = $23
       `,
       [
+        cleanPayload.dataId,
+        cleanPayload.dataIdentifier,
         cleanPayload.displayId,
         cleanPayload.name,
         cleanPayload.isEventItem,

@@ -407,7 +407,8 @@
 
 Pokemon 可配置：
 
-- 内部 ID：`id`，系统唯一，用于路由、外键和实体关联；普通 Pokemon 新建时优先与展示 ID 一致，活动 Pokemon 由系统分配唯一内部 ID
+- 内部 ID：`id`，系统唯一，用于路由、外键和实体关联；从 CSV Fetch 创建的普通 Pokemon 使用官方 data Pokemon ID 作为内部 ID，活动 Pokemon 和未关联官方 data 的自定义 Pokemon 由系统分配唯一内部 ID
+- 官方 data 身份：`data_id` 和 `data_identifier`，可为空；用于记录该 Pokemon 对应的 CSV 官方 Pokemon ID 与 identifier，不作为用户可编辑展示 ID
 - 展示 ID：`display_id`，详情页、列表卡片和选择器中显示为 `#ID`
 - 是否为活动物品：`is_event_item`
 - 名称
@@ -432,7 +433,7 @@ Pokemon 可配置：
 - 翻译
 - 排序
 
-Pokemon 的展示 ID 在普通 Pokemon 和活动 Pokemon 之间可以重复，例如允许同时存在普通 `#1 妙蛙种子` 和活动 `#1 毽子草`。数据库只要求同一个 `display_id + is_event_item` 组合唯一；前端路由和实体关联必须继续使用内部 `id`，不能使用展示 ID 作为路由或外键。
+Pokemon 的展示 ID 在普通 Pokemon 和活动 Pokemon 之间可以重复，例如允许同时存在普通 `#1 妙蛙种子` 和活动 `#1 毽子草`。数据库只要求同一个 `display_id + is_event_item` 组合唯一；前端路由和实体关联必须继续使用内部 `id`，不能使用展示 ID 作为路由或外键。Fetch 得到的官方 data ID 必须与展示 ID 分开保存；例如 Zorua 的官方 data ID 为 `570` 时，用户把展示 ID 改成 `123` 后仍应通过 `/pokemon/570` 访问该 Pokemon，`/pokemon/123` 只代表内部 ID 为 `123` 的其他 Pokemon。
 
 Pokemon 编辑表单使用标签页组织字段：
 
@@ -442,8 +443,9 @@ Pokemon 编辑表单使用标签页组织字段：
   - Fetch 输入框提供 data 列表搜索，搜索范围包含 Pokemon ID、identifier、当前语言名称和默认语言名称；结果只展示 `#ID`、名称和 identifier。
   - Fetch 搜索结果默认关闭，只在用户主动点击输入框或输入内容时展开；Escape、失焦 / 点击外部、选择结果后关闭。
   - Fetch 搜索不使用防抖或节流；前端在每次新搜索时取消上一条搜索请求，并且只渲染最新请求结果。
-  - Fetch 只填入 CSV 可提供的字段：官方 data ID、名称、Genus、Height、Weight、Types、六维和名称/Genus 翻译；不填入 Details、喜欢的环境、特长、特长掉落物品或喜欢的东西。
+  - Fetch 只填入 CSV 可提供的字段：官方 data ID、官方 data identifier、名称、Genus、Height、Weight、Types、六维和名称/Genus 翻译；不填入 Details、喜欢的环境、特长、特长掉落物品或喜欢的东西。
   - Fetch data 不要求官方 data ID 与 Pokopia 展示 ID 相同；若表单 ID 已有用户输入则保留该展示 ID，只有新建且 ID 为空时才用官方 data ID 作为初始展示 ID。
+  - Fetch 后保存普通 Pokemon 时，官方 data ID 作为内部路由 ID；展示 ID 只保存到 `display_id`。
   - Fetch 不直接创建或更新 Pokemon；用户仍需通过 Save 保存，保存时沿用现有编辑审计。
   - Fetch 根据 `languages.code` 自动匹配 CSV 语言列：`en`、`ja`、`ko`、`fr`、`de`、`es`、`it` 使用同名列；`zh-CN` / `zh-SG` 等简体语言使用 `zh_hans`；`zh-TW` / `zh-HK` / `zh-MO` 使用 `zh_hant`。
   - Fetch 会自动确保 canonical Pokemon Types 存在于 `pokemon_types`，Type ID 与 `data/localized_type_name.csv` 和 `frontend/public/types` 图标文件保持一致；用户不需要为 Fetch 手工创建 Type 配置。

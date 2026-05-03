@@ -712,6 +712,8 @@ CREATE TABLE IF NOT EXISTS pokemon_types (
 
 CREATE TABLE IF NOT EXISTS pokemon (
   id integer PRIMARY KEY,
+  data_id integer CHECK (data_id > 0),
+  data_identifier text NOT NULL DEFAULT '',
   display_id integer NOT NULL CHECK (display_id > 0),
   name text NOT NULL UNIQUE,
   is_event_item boolean NOT NULL DEFAULT false,
@@ -737,6 +739,10 @@ CREATE TABLE IF NOT EXISTS pokemon (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE pokemon
+  ADD COLUMN IF NOT EXISTS data_id integer CHECK (data_id > 0),
+  ADD COLUMN IF NOT EXISTS data_identifier text NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS pokemon_pokemon_types (
   pokemon_id integer NOT NULL REFERENCES pokemon(id) ON DELETE CASCADE,

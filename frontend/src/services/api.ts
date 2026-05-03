@@ -151,6 +151,8 @@ export interface EditHistoryEntry {
 
 export interface Pokemon extends EditInfo {
   id: number;
+  dataId?: number | null;
+  dataIdentifier?: string;
   displayId: number;
   name: string;
   baseName?: string;
@@ -534,6 +536,8 @@ export type ConfigType =
   | 'game-versions';
 
 export interface PokemonPayload {
+  dataId?: number | null;
+  dataIdentifier?: string;
   displayId: number;
   isEventItem: boolean;
   name: string;

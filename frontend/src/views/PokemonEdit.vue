@@ -79,6 +79,8 @@ function defaultPokemonStats(): PokemonStats {
 }
 
 const pokemonForm = ref({
+  dataId: null as number | null,
+  dataIdentifier: '',
   id: '',
   isEventItem: false,
   name: '',
@@ -257,8 +259,22 @@ function mergeFetchedTranslations(fetchedTranslations: TranslationMap | undefine
 }
 
 function applyFetchedPokemon(fetchedPokemon: PokemonFetchResult): boolean {
+  const routePokemonId = Number(routeId.value);
+  if (
+    isEditing.value &&
+    !pokemonForm.value.isEventItem &&
+    Number.isInteger(routePokemonId) &&
+    routePokemonId > 0 &&
+    fetchedPokemon.id !== routePokemonId
+  ) {
+    message.value = t('pages.pokemon.fetchIdMismatch', { id: fetchedPokemon.id });
+    return false;
+  }
+
   pokemonForm.value = {
     ...pokemonForm.value,
+    dataId: fetchedPokemon.id,
+    dataIdentifier: fetchedPokemon.identifier,
     id: pokemonForm.value.id.trim() === '' ? String(fetchedPokemon.id) : pokemonForm.value.id,
     name: fetchedPokemon.name,
     genus: fetchedPokemon.genus,
@@ -295,6 +311,8 @@ async function loadEditor() {
     if (isEditing.value) {
       const pokemon = await api.pokemonDetail(routeId.value);
       pokemonForm.value = {
+        dataId: pokemon.dataId ?? null,
+        dataIdentifier: pokemon.dataIdentifier ?? '',
         id: String(pokemon.displayId),
         isEventItem: pokemon.isEventItem,
         name: pokemon.baseName ?? pokemon.name,
@@ -678,6 +696,8 @@ async function savePokemon() {
 
   try {
     const payload: PokemonPayload = {
+      dataId: pokemonForm.value.dataId,
+      dataIdentifier: pokemonForm.value.dataIdentifier,
       displayId: pokemonIdForSave(),
       isEventItem: pokemonForm.value.isEventItem,
       name: pokemonNameForSave(),

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import HomeView from '../views/HomeView.vue';
 import PokemonList from '../views/PokemonList.vue';
 import PokemonDetail from '../views/PokemonDetail.vue';
 import HabitatList from '../views/HabitatList.vue';
@@ -25,7 +26,7 @@ const seo = (config: RouteSeoConfig) => config;
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/pokemon' },
+    { path: '/', name: 'home', component: HomeView, meta: { seo: seo({ titleKey: 'pages.home.title', descriptionKey: 'pages.home.subtitle', canonicalPath: '/' }) } },
     { path: '/pokemon', name: 'pokemon-list', component: PokemonList, meta: { seo: seo({ titleKey: 'pages.pokemon.title', descriptionKey: 'pages.pokemon.subtitle' }) } },
     {
       path: '/pokemon/new',

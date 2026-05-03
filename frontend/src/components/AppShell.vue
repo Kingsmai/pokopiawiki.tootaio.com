@@ -110,7 +110,7 @@ onBeforeUnmount(() => {
         <Icon :icon="sidebarOpen ? iconClose : iconMenu" class="ui-icon" aria-hidden="true" />
       </button>
 
-      <RouterLink class="brand-lockup brand-lockup--mobile" to="/pokemon" aria-label="Pokopia Wiki" @click="closeSidebar">
+      <RouterLink class="brand-lockup brand-lockup--mobile" to="/" aria-label="Pokopia Wiki" @click="closeSidebar">
         <PokeBallMark size="34px" />
         <span>
           <span class="pokemon-word">Pokopia</span>
@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
 
     <aside id="app-sidebar" class="site-sidebar" :aria-label="t('nav.main')">
       <div class="site-sidebar__inner">
-        <RouterLink class="brand-lockup" to="/pokemon" aria-label="Pokopia Wiki" @click="closeSidebar">
+        <RouterLink class="brand-lockup" to="/" aria-label="Pokopia Wiki" @click="closeSidebar">
           <PokeBallMark size="42px" />
           <span>
             <span class="pokemon-word">Pokopia</span>

@@ -20,6 +20,7 @@ export const iconEdit: AppIcon = 'mdi:pencil-outline';
 export const iconError: AppIcon = 'mdi:close-circle-outline';
 export const iconEvent: AppIcon = 'mdi:calendar-star';
 export const iconHabitat: AppIcon = 'mdi:pine-tree';
+export const iconHome: AppIcon = 'mdi:home-variant-outline';
 export const iconImage: AppIcon = 'mdi:image-outline';
 export const iconInfo: AppIcon = 'mdi:information-outline';
 export const iconItem: AppIcon = 'mdi:bag-personal-outline';

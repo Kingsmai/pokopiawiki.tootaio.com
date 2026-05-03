@@ -13,6 +13,7 @@ import {
   iconDreamIsland,
   iconEvent,
   iconHabitat,
+  iconHome,
   iconItem,
   iconLife,
   iconPokemon,
@@ -42,6 +43,7 @@ function can(permissionKey: string) {
 
 const navItems = computed(() => {
   const items = [
+    { label: t('nav.home'), to: '/', icon: iconHome },
     { label: t('nav.pokemon'), to: '/pokemon', icon: iconPokemon },
     { label: t('nav.habitats'), to: '/habitats', icon: iconHabitat },
     { label: t('nav.items'), to: '/items', icon: iconItem },
@@ -87,7 +89,7 @@ async function logout() {
 
   currentUser.value = null;
   setAuthToken(null);
-  await router.push('/pokemon');
+  await router.push('/');
 }
 
 async function loadLanguages() {

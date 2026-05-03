@@ -2,7 +2,7 @@ import type { RouteLocationNormalizedLoaded, Router } from 'vue-router';
 import { getCurrentLocale, i18n, onLocaleChange } from './i18n';
 
 const siteName = 'Pokopia Wiki';
-const defaultCanonicalPath = '/pokemon';
+const defaultCanonicalPath = '/';
 const defaultImagePath = '/seo/pokopia-hero.jpg';
 const fallbackSiteUrl = 'https://pokopiawiki.tootaio.com';
 

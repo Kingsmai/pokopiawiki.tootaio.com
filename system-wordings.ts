@@ -42,6 +42,7 @@ export const systemWordingMessages = {
       required: 'Required'
     },
     nav: {
+      home: 'Home',
       pokemon: 'Pokemon',
       habitats: 'Habitats',
       items: 'Items',
@@ -128,6 +129,76 @@ export const systemWordingMessages = {
       permissionDenied: 'You do not have permission to use this action.'
     },
     pages: {
+      home: {
+        kicker: 'Community Wiki',
+        title: 'Pokopia Wiki',
+        subtitle: 'Browse Pokemon, habitats, items, recipes, daily tasks, and Life posts for Pokemon Pokopia.',
+        primaryActions: 'Primary home actions',
+        browsePokemon: 'Browse Pokemon',
+        openChecklist: 'Daily CheckList',
+        openLife: 'Open Life',
+        quickIndex: 'Quick wiki index',
+        featuredPanel: 'Featured wiki entry panel',
+        dexCode: 'POKOPIA-001',
+        dexTitle: 'Community-maintained game records',
+        dexBody: 'Start with the core Wiki libraries, then jump into daily tasks or community Life posts.',
+        wikiKicker: 'Wiki Libraries',
+        wikiTitle: 'Browse game records',
+        communityKicker: 'Daily & Community',
+        communityTitle: 'Follow daily tasks and community updates',
+        futureKicker: 'More Sections',
+        futureTitle: 'Planned wiki areas',
+        sections: {
+          pokemon: {
+            title: 'Pokemon',
+            description: 'Search Pokemon and filter by specialities, ideal habitat, and favourites.'
+          },
+          habitats: {
+            title: 'Habitats',
+            description: 'View recipes, maps, weather, time, and Pokemon that may appear.'
+          },
+          items: {
+            title: 'Items',
+            description: 'Browse categories, usage, acquisition methods, customization, and tags.'
+          },
+          recipes: {
+            title: 'Recipes',
+            description: 'Find result items, materials, and acquisition details.'
+          },
+          checklist: {
+            title: 'Daily CheckList',
+            description: 'Review tasks that can be completed each day.'
+          },
+          life: {
+            title: 'Life',
+            description: 'Read community posts, tips, discoveries, and comments.'
+          },
+          automation: {
+            title: 'Automation',
+            description: 'Factory and automation base guides are being prepared.'
+          },
+          dish: {
+            title: 'Dish',
+            description: 'Cooked dish and food discovery records are being prepared.'
+          },
+          events: {
+            title: 'Events',
+            description: 'Seasonal and limited-time activity records are being prepared.'
+          },
+          actions: {
+            title: 'Actions',
+            description: 'Game shortcut actions and social gestures are being prepared.'
+          },
+          dreamIsland: {
+            title: 'Dream Island',
+            description: 'Dream Island information is being organized.'
+          },
+          clothes: {
+            title: 'Clothes',
+            description: 'Outfit and clothing references are being prepared.'
+          }
+        }
+      },
       profile: {
         title: 'User profile',
         subtitle: 'Manage your account details, referral, and password.',
@@ -870,6 +941,7 @@ export const systemWordingMessages = {
       required: '必填'
     },
     nav: {
+      home: '首页',
       pokemon: 'Pokemon',
       habitats: '栖息地',
       items: '物品',
@@ -951,6 +1023,76 @@ export const systemWordingMessages = {
       permissionDenied: '你没有权限执行这个操作'
     },
     pages: {
+      home: {
+        kicker: '社区 Wiki',
+        title: 'Pokopia Wiki',
+        subtitle: '浏览 Pokemon、栖息地、物品、材料单、每日任务和 Pokemon Pokopia 的 Life 动态。',
+        primaryActions: '首页主要操作',
+        browsePokemon: '浏览 Pokemon',
+        openChecklist: '每日 CheckList',
+        openLife: '打开 Life',
+        quickIndex: 'Wiki 快速入口',
+        featuredPanel: '精选 Wiki 入口面板',
+        dexCode: 'POKOPIA-001',
+        dexTitle: '社区维护的游戏资料',
+        dexBody: '从核心 Wiki 资料开始，也可以直接进入每日任务和社区 Life 动态。',
+        wikiKicker: 'Wiki 资料',
+        wikiTitle: '浏览游戏资料',
+        communityKicker: '每日与社区',
+        communityTitle: '查看每日任务和社区更新',
+        futureKicker: '更多分区',
+        futureTitle: '规划中的 Wiki 区域',
+        sections: {
+          pokemon: {
+            title: 'Pokemon',
+            description: '搜索 Pokemon，并按特长、喜欢的环境和喜欢的东西筛选。'
+          },
+          habitats: {
+            title: '栖息地',
+            description: '查看配方、地图、天气、时间和可能出现的 Pokemon。'
+          },
+          items: {
+            title: '物品',
+            description: '按分类、用途、入手方式、自定义和标签浏览物品。'
+          },
+          recipes: {
+            title: '材料单',
+            description: '查找结果物品、需要材料和入手方式。'
+          },
+          checklist: {
+            title: '每日 CheckList',
+            description: '查看每天可以完成的任务。'
+          },
+          life: {
+            title: 'Life',
+            description: '阅读社区动态、心得、发现和评论。'
+          },
+          automation: {
+            title: 'Automation',
+            description: '工厂和自动化基地指南正在准备中。'
+          },
+          dish: {
+            title: 'Dish',
+            description: '料理和食物发现记录正在准备中。'
+          },
+          events: {
+            title: 'Events',
+            description: '季节活动和限时活动记录正在准备中。'
+          },
+          actions: {
+            title: 'Actions',
+            description: '游戏快捷动作和社交动作正在准备中。'
+          },
+          dreamIsland: {
+            title: 'Dream Island',
+            description: 'Dream Island 信息正在整理中。'
+          },
+          clothes: {
+            title: 'Clothes',
+            description: '服装和外观资料正在准备中。'
+          }
+        }
+      },
       profile: {
         title: '个人资料',
         subtitle: '管理账号资料、邀请信息和密码。',

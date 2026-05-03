@@ -101,7 +101,8 @@ type PokemonImageOptionsResult = {
 };
 
 type PokemonPayload = {
-  id: number;
+  displayId: number;
+  isEventItem: boolean;
   name: string;
   genus: string;
   details: string;
@@ -154,6 +155,7 @@ type ItemPayload = {
   dualDyeable: boolean;
   patternEditable: boolean;
   noRecipe: boolean;
+  isEventItem: boolean;
   acquisitionMethodIds: number[];
   tagIds: number[];
   imagePath: string;
@@ -250,6 +252,7 @@ type LifePostsPage = {
 type HabitatPayload = {
   name: string;
   translations: TranslationInput;
+  isEventItem: boolean;
   imagePath: string;
   recipeItems: IdQuantity[];
   pokemonAppearances: Array<{
@@ -283,6 +286,8 @@ type EditHistoryEntry = {
   user: { id: number; displayName: string } | null;
 };
 type PokemonChangeSource = {
+  displayId: number;
+  isEventItem: boolean;
   name: string;
   genus: string;
   details: string;
@@ -297,6 +302,7 @@ type PokemonChangeSource = {
 };
 type ItemChangeSource = {
   name: string;
+  isEventItem: boolean;
   image: EntityImageValue | null;
   category: { name: string };
   usage: { name: string } | null;
@@ -307,6 +313,7 @@ type ItemChangeSource = {
 };
 type HabitatChangeSource = {
   name: string;
+  isEventItem: boolean;
   image: EntityImageValue | null;
   recipe: Array<{ name: string; quantity: number }>;
   pokemon: Array<{ name: string; time_of_day: string; weather: string; rarity: number; map: { name: string } }>;
@@ -710,6 +717,30 @@ async function nextSortOrder(client: DbClient, tableName: string): Promise<numbe
     `SELECT COALESCE(MAX(sort_order), 0) + 10 AS "sortOrder" FROM ${tableName}`
   );
   return result.rows[0]?.sortOrder ?? 10;
+}
+
+async function nextPokemonInternalId(client: DbClient, displayId: number, isEventItem: boolean): Promise<number> {
+  if (isEventItem) {
+    const result = await client.query<{ id: number }>(
+      'SELECT COALESCE(MAX(id), 999999) + 1 AS id FROM pokemon WHERE id >= 1000000'
+    );
+    const nextId = result.rows[0]?.id ?? 1000000;
+    return nextId === displayId ? nextId + 1 : nextId;
+  }
+
+  if (!isEventItem) {
+    const preferredId = await client.query<{ id: number }>('SELECT id FROM pokemon WHERE id = $1', [displayId]);
+    if (preferredId.rowCount === 0) {
+      return displayId;
+    }
+  }
+
+  const result = await client.query<{ id: number }>(
+    'SELECT COALESCE(MAX(id), 0) + 1 AS id FROM pokemon WHERE id <> $1',
+    [displayId]
+  );
+  const nextId = result.rows[0]?.id ?? 1;
+  return nextId === displayId ? nextId + 1 : nextId;
 }
 
 async function reorderTableRows(
@@ -1717,6 +1748,8 @@ async function pokemonEditChanges(
     .join(' / ');
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Pokemon ID', String(before.displayId), String(after.displayId));
+  pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Genus', before.genus, after.genus);
   pushChange(changes, 'Details', before.details, after.details);
   pushChange(changes, 'Height', pokemonHeightValue(before.heightInches), pokemonHeightValue(after.heightInches));
@@ -1744,6 +1777,7 @@ async function itemEditChanges(
   const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Category', before.category.name, categoryNames.get(after.categoryId));
   pushChange(changes, 'Usage', before.usage?.name, after.usageId ? usageNames.get(after.usageId) : null);
@@ -1776,6 +1810,7 @@ async function habitatEditChanges(
     .join(' / ');
 
   pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Recipe', quantityListValue(before.recipe), await quantityPayloadValue(client, after.recipeItems));
   pushChange(changes, 'Possible Pokemon', appearanceListValue(before.pokemon), afterAppearances);
@@ -1832,8 +1867,10 @@ function pokemonProjection(locale: string): string {
   return `
     SELECT
       p.id,
+      p.display_id AS "displayId",
       ${pokemonName} AS name,
       p.name AS "baseName",
+      p.is_event_item AS "isEventItem",
       ${pokemonGenus} AS genus,
       p.genus AS "baseGenus",
       ${pokemonDetails} AS details,
@@ -3117,7 +3154,9 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         )
         SELECT
           related_pokemon.id,
+          related_pokemon.display_id AS "displayId",
           ${relatedPokemonName} AS name,
+          related_pokemon.is_event_item AS "isEventItem",
           ${pokemonImageJson('related_pokemon')} AS image,
           json_build_object('id', related_environment.id, 'name', ${relatedEnvironmentName}) AS environment,
           COALESCE((
@@ -3215,10 +3254,11 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
     }
   }
 
-  const id = requirePositiveInteger(payload.id, 'Pokemon ID is required');
+  const displayId = requirePositiveInteger(payload.displayId ?? payload.id, 'Pokemon ID is required');
 
   return {
-    id,
+    displayId,
+    isEventItem: Boolean(payload.isEventItem),
     name: cleanName(payload.name, 'Pokemon name is required'),
     genus: cleanOptionalText(payload.genus),
     details: cleanOptionalText(payload.details),
@@ -3231,7 +3271,7 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
     skillIds,
     favoriteThingIds,
     skillItemDrops: [...skillItemDrops.values()],
-    image: cleanPokemonImage(payload.imagePath, id)
+    image: cleanPokemonImage(payload.imagePath, displayId)
   };
 }
 
@@ -3284,12 +3324,15 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
   const cleanPayload = cleanPokemonPayload(payload);
 
   const id = await withTransaction(async (client) => {
+    const pokemonId = await nextPokemonInternalId(client, cleanPayload.displayId, cleanPayload.isEventItem);
     const sortOrder = await nextSortOrder(client, 'pokemon');
     await client.query(
       `
         INSERT INTO pokemon (
           id,
+          display_id,
           name,
+          is_event_item,
           genus,
           details,
           height_inches,
@@ -3310,11 +3353,13 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $20)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $22)
       `,
       [
-        cleanPayload.id,
+        pokemonId,
+        cleanPayload.displayId,
         cleanPayload.name,
+        cleanPayload.isEventItem,
         cleanPayload.genus,
         cleanPayload.details,
         cleanPayload.heightInches,
@@ -3335,17 +3380,17 @@ export async function createPokemon(payload: Record<string, unknown>, userId: nu
         userId
       ]
     );
-    await linkEntityImageUpload(client, 'pokemon', cleanPayload.id, cleanPayload.image?.path, cleanPayload.name);
-    await replacePokemonRelations(client, cleanPayload.id, cleanPayload);
-    await replaceEntityTranslations(client, 'pokemon', cleanPayload.id, cleanPayload.translations, ['name', 'details', 'genus']);
-    await recordEditLog(client, 'pokemon', cleanPayload.id, 'create', userId);
-    return cleanPayload.id;
+    await linkEntityImageUpload(client, 'pokemon', pokemonId, cleanPayload.image?.path, cleanPayload.name);
+    await replacePokemonRelations(client, pokemonId, cleanPayload);
+    await replaceEntityTranslations(client, 'pokemon', pokemonId, cleanPayload.translations, ['name', 'details', 'genus']);
+    await recordEditLog(client, 'pokemon', pokemonId, 'create', userId);
+    return pokemonId;
   });
   return getPokemon(id, locale);
 }
 
 export async function updatePokemon(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
-  const cleanPayload = cleanPokemonPayload({ ...payload, id });
+  const cleanPayload = cleanPokemonPayload(payload);
   const before = await getPokemon(id, defaultLocale);
 
   const updated = await withTransaction(async (client) => {
@@ -3353,29 +3398,33 @@ export async function updatePokemon(id: number, payload: Record<string, unknown>
       `
         UPDATE pokemon
         SET
-          name = $1,
-          genus = $2,
-          details = $3,
-          height_inches = $4,
-          weight_pounds = $5,
-          environment_id = $6,
-          hp = $7,
-          attack = $8,
-          defense = $9,
-          special_attack = $10,
-          special_defense = $11,
-          speed = $12,
-          image_path = $13,
-          image_style = $14,
-          image_version = $15,
-          image_variant = $16,
-          image_description = $17,
-          updated_by_user_id = $18,
+          display_id = $1,
+          name = $2,
+          is_event_item = $3,
+          genus = $4,
+          details = $5,
+          height_inches = $6,
+          weight_pounds = $7,
+          environment_id = $8,
+          hp = $9,
+          attack = $10,
+          defense = $11,
+          special_attack = $12,
+          special_defense = $13,
+          speed = $14,
+          image_path = $15,
+          image_style = $16,
+          image_version = $17,
+          image_variant = $18,
+          image_description = $19,
+          updated_by_user_id = $20,
           updated_at = now()
-        WHERE id = $19
+        WHERE id = $21
       `,
       [
+        cleanPayload.displayId,
         cleanPayload.name,
+        cleanPayload.isEventItem,
         cleanPayload.genus,
         cleanPayload.details,
         cleanPayload.heightInches,
@@ -3433,6 +3482,7 @@ export async function listHabitats(locale = defaultLocale) {
       h.id,
       ${habitatName} AS name,
       h.name AS "baseName",
+      h.is_event_item AS "isEventItem",
       ${translationsSelect('habitats', 'h.id')} AS translations,
       ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
       ${uploadedImageJson('h.image_path')} AS image,
@@ -3443,9 +3493,17 @@ export async function listHabitats(locale = defaultLocale) {
         WHERE hri.habitat_id = h.id
       ), '[]'::json) AS recipe,
       COALESCE((
-        SELECT json_agg(json_build_object('id', pokemon_rows.id, 'name', pokemon_rows.name) ORDER BY pokemon_rows.sort_order, pokemon_rows.id)
+        SELECT json_agg(
+          json_build_object(
+            'id', pokemon_rows.id,
+            'displayId', pokemon_rows.display_id,
+            'name', pokemon_rows.name,
+            'isEventItem', pokemon_rows.is_event_item
+          )
+          ORDER BY pokemon_rows.sort_order, pokemon_rows.id
+        )
         FROM (
-          SELECT DISTINCT p.id, ${pokemonName} AS name, p.sort_order
+          SELECT DISTINCT p.id, p.display_id, ${pokemonName} AS name, p.is_event_item, p.sort_order
           FROM habitat_pokemon hp
           JOIN pokemon p ON p.id = hp.pokemon_id
           WHERE hp.habitat_id = h.id
@@ -3469,6 +3527,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
         h.id,
         ${habitatName} AS name,
         h.name AS "baseName",
+        h.is_event_item AS "isEventItem",
         ${translationsSelect('habitats', 'h.id')} AS translations,
         ${auditSelect('h', 'habitat_created_user', 'habitat_updated_user')},
         ${uploadedImageJson('h.image_path')} AS image,
@@ -3502,7 +3561,9 @@ export async function getHabitat(id: number, locale = defaultLocale) {
       `
         SELECT
           p.id,
+          p.display_id AS "displayId",
           ${pokemonName} AS name,
+          p.is_event_item AS "isEventItem",
           ${pokemonImageJson('p')} AS image,
           hp.time_of_day,
           hp.weather,
@@ -3557,6 +3618,7 @@ function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
   return {
     name: cleanName(payload.name, 'Habitat name is required'),
     translations: cleanTranslations(payload.translations, ['name']),
+    isEventItem: Boolean(payload.isEventItem),
     imagePath: cleanUploadImagePath(payload.imagePath, 'habitats'),
     recipeItems: cleanQuantities(payload.recipeItems),
     pokemonAppearances: [...pokemonAppearances.values()]
@@ -3593,11 +3655,11 @@ export async function createHabitat(payload: Record<string, unknown>, userId: nu
     const sortOrder = await nextSortOrder(client, 'habitats');
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO habitats (name, image_path, sort_order, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $3, $4, $4)
+        INSERT INTO habitats (name, is_event_item, image_path, sort_order, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $4, $5, $5)
         RETURNING id
       `,
-      [cleanPayload.name, cleanPayload.imagePath, sortOrder, userId]
+      [cleanPayload.name, cleanPayload.isEventItem, cleanPayload.imagePath, sortOrder, userId]
     );
     const habitatId = result.rows[0].id;
     await linkEntityImageUpload(client, 'habitats', habitatId, cleanPayload.imagePath, cleanPayload.name);
@@ -3615,8 +3677,8 @@ export async function updateHabitat(id: number, payload: Record<string, unknown>
 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
-      'UPDATE habitats SET name = $1, image_path = $2, updated_by_user_id = $3, updated_at = now() WHERE id = $4',
-      [cleanPayload.name, cleanPayload.imagePath, userId, id]
+      'UPDATE habitats SET name = $1, is_event_item = $2, image_path = $3, updated_by_user_id = $4, updated_at = now() WHERE id = $5',
+      [cleanPayload.name, cleanPayload.isEventItem, cleanPayload.imagePath, userId, id]
     );
     if (result.rowCount === 0) {
       return false;
@@ -3656,6 +3718,7 @@ function itemProjection(locale: string): string {
       i.id,
       ${itemName} AS name,
       i.name AS "baseName",
+      i.is_event_item AS "isEventItem",
       ${translationsSelect('items', 'i.id')} AS translations,
       ${auditSelect('i', 'item_created_user', 'item_updated_user')},
       ${uploadedImageJson('i.image_path')} AS image,
@@ -3873,7 +3936,13 @@ export async function getItem(id: number, locale = defaultLocale) {
     query(
       `
         SELECT
-          json_build_object('id', p.id, 'name', ${pokemonName}, 'image', ${pokemonImageJson('p')}) AS pokemon,
+          json_build_object(
+            'id', p.id,
+            'displayId', p.display_id,
+            'name', ${pokemonName},
+            'isEventItem', p.is_event_item,
+            'image', ${pokemonImageJson('p')}
+          ) AS pokemon,
           json_build_object('id', s.id, 'name', ${skillName}) AS skill
         FROM pokemon_skill_item_drops psid
         JOIN pokemon p ON p.id = psid.pokemon_id
@@ -3905,6 +3974,7 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     dualDyeable: Boolean(payload.dualDyeable),
     patternEditable: Boolean(payload.patternEditable),
     noRecipe: Boolean(payload.noRecipe),
+    isEventItem: Boolean(payload.isEventItem),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     tagIds: cleanIds(payload.tagIds),
     imagePath: cleanUploadImagePath(payload.imagePath, 'items')
@@ -3956,12 +4026,13 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           dual_dyeable,
           pattern_editable,
           no_recipe,
+          is_event_item,
           image_path,
           sort_order,
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
         RETURNING id
       `,
       [
@@ -3972,6 +4043,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
         cleanPayload.noRecipe,
+        cleanPayload.isEventItem,
         cleanPayload.imagePath,
         sortOrder,
         userId
@@ -4003,10 +4075,11 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
             dual_dyeable = $5,
             pattern_editable = $6,
             no_recipe = $7,
-            image_path = $8,
-            updated_by_user_id = $9,
+            is_event_item = $8,
+            image_path = $9,
+            updated_by_user_id = $10,
             updated_at = now()
-        WHERE id = $10
+        WHERE id = $11
       `,
       [
         cleanPayload.name,
@@ -4016,6 +4089,7 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
         cleanPayload.noRecipe,
+        cleanPayload.isEventItem,
         cleanPayload.imagePath,
         userId,
         id

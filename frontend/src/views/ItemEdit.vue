@@ -32,6 +32,7 @@ const itemForm = ref({
   dualDyeable: false,
   patternEditable: false,
   noRecipe: false,
+  isEventItem: false,
   acquisitionMethodIds: [] as string[],
   tagIds: [] as string[],
   imagePath: ''
@@ -92,6 +93,7 @@ async function loadEditor() {
         dualDyeable: item.customization.dualDyeable,
         patternEditable: item.customization.patternEditable,
         noRecipe: item.noRecipe,
+        isEventItem: item.isEventItem,
         acquisitionMethodIds: item.acquisitionMethods.map((method) => String(method.id)),
         tagIds: item.tags.map((tag) => String(tag.id)),
         imagePath: item.image?.path ?? ''
@@ -158,6 +160,7 @@ async function saveItem() {
       dualDyeable: itemForm.value.dualDyeable,
       patternEditable: itemForm.value.patternEditable,
       noRecipe: itemForm.value.noRecipe,
+      isEventItem: itemForm.value.isEventItem,
       acquisitionMethodIds: toIds(itemForm.value.acquisitionMethodIds),
       tagIds: toIds(itemForm.value.tagIds),
       imagePath: itemForm.value.imagePath
@@ -249,6 +252,7 @@ onMounted(() => {
         <label><input v-model="itemForm.dualDyeable" type="checkbox" /> {{ t('pages.items.dualDyeable') }}</label>
         <label><input v-model="itemForm.patternEditable" type="checkbox" /> {{ t('pages.items.patternEditable') }}</label>
         <label><input v-model="itemForm.noRecipe" type="checkbox" :disabled="hasRecipe" /> {{ t('pages.items.noRecipe') }}</label>
+        <label><input v-model="itemForm.isEventItem" type="checkbox" /> {{ t('pages.items.eventItem') }}</label>
       </div>
 
       <div class="field">

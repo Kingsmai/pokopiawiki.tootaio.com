@@ -188,7 +188,7 @@ const languageLabel = (item: Language) => item.name;
 const configKey = (item: EditableConfig) => item.id;
 const configLabel = (item: EditableConfig) => item.name;
 const pokemonKey = (item: Pokemon) => item.id;
-const pokemonLabel = (item: Pokemon) => `#${item.id} ${item.name}`;
+const pokemonLabel = (item: Pokemon) => `#${item.displayId} ${item.name}`;
 const itemKey = (item: Item) => item.id;
 const itemLabel = (item: Item) => item.name;
 const recipeKey = (item: Recipe) => item.id;
@@ -921,7 +921,7 @@ onMounted(() => {
         @reorder="persistPokemonOrder"
       >
         <template #default="{ item }">
-          <RouterLink :to="`/pokemon/${item.id}`">#{{ item.id }} {{ item.name }}</RouterLink>
+          <RouterLink :to="`/pokemon/${item.id}`">#{{ item.displayId }} {{ item.name }}</RouterLink>
           <span class="row-actions">
             <button type="button" :disabled="busy" @click="removePokemon(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />

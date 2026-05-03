@@ -49,6 +49,7 @@ const creatingSelect = ref('');
 const habitatForm = ref({
   name: '',
   translations: {} as TranslationMap,
+  isEventItem: false,
   imagePath: '',
   recipeItems: [] as Array<{ itemId: string; quantity: number }>,
   pokemonAppearances: [] as HabitatAppearanceForm[]
@@ -71,7 +72,7 @@ const routeId = computed(() => (typeof route.params.id === 'string' ? route.para
 const isEditing = computed(() => routeId.value !== '');
 const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
 const pokemonSelectOptions = computed(() =>
-  pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.id} ${pokemon.name}` }))
+  pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.displayId} ${pokemon.name}` }))
 );
 const pageTitle = computed(() =>
   isEditing.value
@@ -166,6 +167,7 @@ async function loadEditor() {
       habitatForm.value = {
         name: habitat.baseName ?? habitat.name,
         translations: habitat.translations ?? {},
+        isEventItem: habitat.isEventItem,
         imagePath: habitat.image?.path ?? '',
         recipeItems: habitat.recipe.map((recipeItem) => ({ itemId: String(recipeItem.id), quantity: recipeItem.quantity })),
         pokemonAppearances: groupPokemonAppearances(habitat)
@@ -212,6 +214,7 @@ async function saveHabitat() {
     const payload: HabitatPayload = {
       name: habitatNameForSave(),
       translations: habitatForm.value.translations,
+      isEventItem: habitatForm.value.isEventItem,
       imagePath: habitatForm.value.imagePath,
       recipeItems: toQuantityRows(habitatForm.value.recipeItems),
       pokemonAppearances: habitatForm.value.pokemonAppearances
@@ -275,6 +278,10 @@ onMounted(() => {
         @uploaded="handleImageUploaded"
         @error="message = $event"
       />
+
+      <div class="check-row">
+        <label><input v-model="habitatForm.isEventItem" type="checkbox" /> {{ t('pages.habitats.eventItem') }}</label>
+      </div>
 
       <div class="field">
         <label>{{ t('pages.habitats.recipe') }}</label>

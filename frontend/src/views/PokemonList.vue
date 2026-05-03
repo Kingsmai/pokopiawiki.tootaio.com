@@ -134,7 +134,7 @@ watch(query, loadPokemon);
       <EntityCard
         v-for="item in pokemon"
         :key="item.id"
-        :title="`#${item.id} ${item.name}`"
+        :title="`#${item.displayId} ${item.name}`"
         :to="`/pokemon/${item.id}`"
         :image="pokemonCardImage(item)"
       />

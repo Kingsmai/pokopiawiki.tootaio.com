@@ -12,6 +12,8 @@ const changeLabelKeys: Record<string, string> = {
   Name: 'common.name',
   名字: 'common.name',
   名称: 'common.name',
+  'Pokemon ID': 'pages.pokemon.id',
+  'Event item': 'common.eventItem',
   Genus: 'pages.pokemon.genus',
   Details: 'pages.pokemon.details',
   介绍: 'pages.pokemon.details',

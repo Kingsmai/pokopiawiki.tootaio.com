@@ -70,6 +70,7 @@ function defaultPokemonStats(): PokemonStats {
 
 const pokemonForm = ref({
   id: '',
+  isEventItem: false,
   name: '',
   genus: '',
   details: '',
@@ -206,7 +207,7 @@ function pokemonNameForSave() {
 }
 
 function pokemonIdForSave() {
-  return Number(isEditing.value ? routeId.value : pokemonForm.value.id);
+  return Number(pokemonForm.value.id);
 }
 
 function mergeFetchedTranslations(fetchedTranslations: TranslationMap | undefined): TranslationMap {
@@ -273,7 +274,8 @@ async function loadEditor() {
     if (isEditing.value) {
       const pokemon = await api.pokemonDetail(routeId.value);
       pokemonForm.value = {
-        id: String(pokemon.id),
+        id: String(pokemon.displayId),
+        isEventItem: pokemon.isEventItem,
         name: pokemon.baseName ?? pokemon.name,
         genus: pokemon.baseGenus ?? pokemon.genus,
         details: pokemon.baseDetails ?? pokemon.details,
@@ -535,7 +537,8 @@ async function savePokemon() {
 
   try {
     const payload: PokemonPayload = {
-      id: pokemonIdForSave(),
+      displayId: pokemonIdForSave(),
+      isEventItem: pokemonForm.value.isEventItem,
       name: pokemonNameForSave(),
       genus: pokemonForm.value.genus,
       details: pokemonForm.value.details,
@@ -630,8 +633,8 @@ watch(fetchIdentifier, refreshFetchOptions);
       <section v-if="activeEditTab === 'basic'" class="pokemon-edit-panel" role="tabpanel" :aria-label="t('pages.pokemon.editTabBasic')">
         <div class="pokemon-edit-grid">
           <div class="field">
-            <label for="pokemon-id">ID</label>
-            <input id="pokemon-id" v-model="pokemonForm.id" :disabled="isEditing" min="1" required type="number" />
+            <label for="pokemon-id">{{ t('pages.pokemon.id') }}</label>
+            <input id="pokemon-id" v-model="pokemonForm.id" min="1" required type="number" />
           </div>
 
           <TranslationFields
@@ -643,6 +646,10 @@ watch(fetchIdentifier, refreshFetchOptions);
             :languages="languages"
             required
           />
+        </div>
+
+        <div class="check-row">
+          <label><input v-model="pokemonForm.isEventItem" type="checkbox" /> {{ t('pages.pokemon.eventItem') }}</label>
         </div>
 
         <div class="pokemon-edit-grid">

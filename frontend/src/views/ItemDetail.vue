@@ -258,7 +258,7 @@ watch(
                     <img v-if="entry.pokemon.image" :src="entry.pokemon.image.url" alt="" loading="lazy" />
                     <PokeBallMark v-else size="22px" />
                   </span>
-                  <span>#{{ entry.pokemon.id }} {{ entry.pokemon.name }}</span>
+                  <span>#{{ entry.pokemon.displayId }} {{ entry.pokemon.name }}</span>
                 </RouterLink>
                 <span>{{ t('pages.pokemon.skillDrop', { name: entry.skill.name }) }}</span>
               </li>

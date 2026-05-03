@@ -106,8 +106,10 @@ export interface EditHistoryEntry {
 
 export interface Pokemon extends EditInfo {
   id: number;
+  displayId: number;
   name: string;
   baseName?: string;
+  isEventItem: boolean;
   genus: string;
   baseGenus?: string;
   details: string;
@@ -127,7 +129,9 @@ export interface Pokemon extends EditInfo {
 
 export interface RelatedPokemon {
   id: number;
+  displayId: number;
   name: string;
+  isEventItem: boolean;
   image?: PokemonImage | null;
   environment: NamedEntity;
   skills: Skill[];
@@ -155,6 +159,7 @@ export interface Habitat extends EditInfo {
   id: number;
   name: string;
   baseName?: string;
+  isEventItem: boolean;
   translations?: TranslationMap;
   image: EntityImage | null;
   recipe: Array<NamedEntity & { image?: EntityImage | null; quantity: number }>;
@@ -165,6 +170,8 @@ export interface HabitatDetail extends Habitat {
   editHistory: EditHistoryEntry[];
   imageHistory: EntityImageUpload[];
   pokemon: Array<NamedEntity & {
+    displayId: number;
+    isEventItem: boolean;
     image?: PokemonImage | null;
     time_of_day: string;
     weather: string;
@@ -201,6 +208,7 @@ export interface Item extends EditInfo {
   id: number;
   name: string;
   baseName?: string;
+  isEventItem: boolean;
   translations?: TranslationMap;
   image: EntityImage | null;
   category: NamedEntity;
@@ -223,7 +231,7 @@ export interface ItemDetail extends Item {
   editHistory: EditHistoryEntry[];
   imageHistory: EntityImageUpload[];
   droppedByPokemon: Array<{
-    pokemon: NamedEntity & { image?: PokemonImage | null };
+    pokemon: NamedEntity & { displayId: number; isEventItem: boolean; image?: PokemonImage | null };
     skill: NamedEntity;
   }>;
 }
@@ -339,7 +347,8 @@ export type ConfigType =
   | 'life-tags';
 
 export interface PokemonPayload {
-  id: number;
+  displayId: number;
+  isEventItem: boolean;
   name: string;
   genus: string;
   details: string;
@@ -388,6 +397,7 @@ export interface ItemPayload {
   dualDyeable: boolean;
   patternEditable: boolean;
   noRecipe: boolean;
+  isEventItem: boolean;
   acquisitionMethodIds: number[];
   tagIds: number[];
   imagePath: string;
@@ -402,6 +412,7 @@ export interface RecipePayload {
 export interface HabitatPayload {
   name: string;
   translations?: TranslationMap;
+  isEventItem: boolean;
   imagePath: string;
   recipeItems: Array<{ itemId: number; quantity: number }>;
   pokemonAppearances: Array<{

@@ -304,7 +304,7 @@ watch(
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="`#${pokemon.id} ${pokemon.name}`" :subtitle="t('pages.pokemon.environmentPrefix', { name: pokemon.environment.name })">
+    <PageHeader :title="`#${pokemon.displayId} ${pokemon.name}`" :subtitle="t('pages.pokemon.environmentPrefix', { name: pokemon.environment.name })">
       <template #kicker>Pokédex Detail</template>
       <template #actions>
         <RouterLink class="ui-button ui-button--primary ui-button--small" :to="`/pokemon/${pokemon.id}/edit`">
@@ -421,7 +421,7 @@ watch(
                     </span>
                     <div class="related-pokemon-row">
                       <div class="related-pokemon-row__summary">
-                        <RouterLink class="related-pokemon-row__name" :to="`/pokemon/${related.id}`">#{{ related.id }} {{ related.name }}</RouterLink>
+                        <RouterLink class="related-pokemon-row__name" :to="`/pokemon/${related.id}`">#{{ related.displayId }} {{ related.name }}</RouterLink>
                         <div class="related-pokemon-row__traits">
                           <EntityChips
                             v-if="related.skills.length"

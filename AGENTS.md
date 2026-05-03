@@ -128,6 +128,15 @@ If a task grows beyond scope, STOP and ask.
 
 ---
 
+## Git Diff Hygiene
+
+* Do not inspect, summarize, or report diffs for `data/**/*.csv` by default.
+* In WSL, CSV files under `data` may appear changed even when their content has not meaningfully changed.
+* Ignore `data/**/*.csv` entries in `git status` / `git diff` unless the task explicitly involves CSV data, import/seed data, or the user asks to check them.
+* Only mention CSV files in final change summaries if you intentionally changed them or verified they are relevant to the current task.
+
+---
+
 ## UI Safety Rules (CRITICAL)
 
 User-facing UI must NEVER contain:

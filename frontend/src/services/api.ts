@@ -636,6 +636,7 @@ export interface EntityDiscussionCommentPayload {
 
 export type AiModerationApiFormat = 'gemini-generate-content' | 'openai-chat-completions';
 export type AiModerationAuthMode = 'query-key' | 'bearer-token';
+export type RateLimitPolicyKey = 'accountWrite' | 'adminWrite' | 'communityReaction' | 'communityWrite' | 'fetch' | 'upload' | 'wikiWrite';
 
 export interface AiModerationSettings {
   enabled: boolean;
@@ -658,6 +659,22 @@ export interface AiModerationSettingsPayload {
   requestsPerMinute: number;
   apiKey?: string;
   clearApiKey?: boolean;
+}
+
+export interface RateLimitPolicySettings {
+  maxRequests: number;
+  timeWindowSeconds: number;
+  cooldownSeconds: number;
+}
+
+export interface RateLimitSettings {
+  policies: Record<RateLimitPolicyKey, RateLimitPolicySettings>;
+  updatedAt: string | null;
+  updatedBy: UserSummary | null;
+}
+
+export interface RateLimitSettingsPayload {
+  policies: Record<RateLimitPolicyKey, RateLimitPolicySettings>;
 }
 
 export function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
@@ -833,6 +850,9 @@ export const api = {
   aiModerationSettings: () => getJson<AiModerationSettings>('/api/admin/ai-moderation'),
   updateAiModerationSettings: (payload: AiModerationSettingsPayload) =>
     sendJson<AiModerationSettings>('/api/admin/ai-moderation', 'PUT', payload),
+  rateLimitSettings: () => getJson<RateLimitSettings>('/api/admin/rate-limits'),
+  updateRateLimitSettings: (payload: RateLimitSettingsPayload) =>
+    sendJson<RateLimitSettings>('/api/admin/rate-limits', 'PUT', payload),
   register: (payload: RegisterPayload) => sendJson<{ message: string }>('/api/auth/register', 'POST', payload),
   verifyEmail: (token: string) =>
     sendJson<{ message: string; user: AuthUser }>('/api/auth/verify-email', 'POST', { token }),

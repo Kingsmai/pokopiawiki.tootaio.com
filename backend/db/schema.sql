@@ -177,6 +177,18 @@ CREATE TABLE IF NOT EXISTS ai_moderation_cache (
   CHECK (length(model) BETWEEN 1 AND 120)
 );
 
+CREATE TABLE IF NOT EXISTS rate_limit_settings (
+  id boolean PRIMARY KEY DEFAULT true CHECK (id = true),
+  settings jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(settings) = 'object'),
+  updated_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO rate_limit_settings (id)
+VALUES (true)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO permissions (key, name, description, category, system_permission)
 VALUES
   ('admin.access', 'Access admin', 'Open the management area.', 'Admin', true),
@@ -200,6 +212,8 @@ VALUES
   ('admin.wordings.update', 'Update system wordings', 'Edit system wording values.', 'System wordings', true),
   ('admin.ai-moderation.read', 'View AI moderation settings', 'View AI moderation configuration.', 'AI moderation', true),
   ('admin.ai-moderation.update', 'Update AI moderation settings', 'Edit AI moderation configuration.', 'AI moderation', true),
+  ('admin.rate-limits.read', 'View rate limits', 'View user rate limit settings.', 'Rate limits', true),
+  ('admin.rate-limits.update', 'Update rate limits', 'Edit user rate limit settings.', 'Rate limits', true),
   ('admin.config.read', 'View system config', 'View management configuration records.', 'System config', true),
   ('admin.config.create', 'Create system config', 'Create management configuration records.', 'System config', true),
   ('admin.config.update', 'Update system config', 'Edit management configuration records.', 'System config', true),
@@ -284,6 +298,8 @@ JOIN permissions p ON p.key = ANY (ARRAY[
   'admin.wordings.update',
   'admin.ai-moderation.read',
   'admin.ai-moderation.update',
+  'admin.rate-limits.read',
+  'admin.rate-limits.update',
   'admin.config.read',
   'admin.config.create',
   'admin.config.update',
@@ -341,6 +357,16 @@ FROM roles r
 JOIN permissions p ON p.key = ANY (ARRAY[
   'admin.ai-moderation.read',
   'admin.ai-moderation.update'
+])
+WHERE r.key = 'admin'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.key = ANY (ARRAY[
+  'admin.rate-limits.read',
+  'admin.rate-limits.update'
 ])
 WHERE r.key = 'admin'
 ON CONFLICT DO NOTHING;

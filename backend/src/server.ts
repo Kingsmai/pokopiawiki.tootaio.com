@@ -229,10 +229,27 @@ function serverMessage(
 }
 
 type RateLimitCheck = ReturnType<typeof app.createRateLimit>;
-type RateLimitResult = Awaited<ReturnType<RateLimitCheck>>;
 type RateLimitPolicy = 'accountWrite' | 'adminWrite' | 'communityReaction' | 'communityWrite' | 'fetch' | 'upload' | 'wikiWrite';
-type RateLimitedRequest = FastifyRequest & {
-  rateLimitUserId?: number;
+type RateLimitPolicySettings = {
+  maxRequests: number;
+  timeWindowSeconds: number;
+  cooldownSeconds: number;
+};
+type RateLimitPolicySettingsMap = Record<RateLimitPolicy, RateLimitPolicySettings>;
+type RateLimitFailure = {
+  max: number;
+  ttlInSeconds: number;
+  isBanned?: boolean;
+};
+type RateLimitSettingsRow = {
+  settings: unknown;
+  updatedAt: Date | string;
+  updatedBy: { id: number; displayName: string } | null;
+};
+type PublicRateLimitSettings = {
+  policies: RateLimitPolicySettingsMap;
+  updatedAt: Date | string | null;
+  updatedBy: { id: number; displayName: string } | null;
 };
 
 function hashRateLimitPart(value: string): string {
@@ -247,14 +264,6 @@ function emailRateLimitPart(request: FastifyRequest): string {
   const body = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   return hashRateLimitPart(email || 'missing-email');
-}
-
-function userRateLimitPart(request: FastifyRequest): string {
-  return String((request as RateLimitedRequest).rateLimitUserId ?? 'anonymous');
-}
-
-function userRouteRateLimitKey(scope: string, request: FastifyRequest): string {
-  return `${scope}:user:${userRateLimitPart(request)}:route:${routeRateLimitPart(request)}`;
 }
 
 function ipRouteRateLimitKey(scope: string, request: FastifyRequest): string {
@@ -291,139 +300,198 @@ const protectedRouteIpRateLimit = app.createRateLimit({
   timeWindow: '10 minutes',
   keyGenerator: (request) => ipRouteRateLimitKey('protected', request)
 });
-const writeRouteIpRateLimit = app.createRateLimit({
-  max: 90,
-  timeWindow: '10 minutes',
-  keyGenerator: (request) => ipRouteRateLimitKey('write', request)
-});
-const userRouteWriteRateLimit = app.createRateLimit({
-  max: 30,
-  timeWindow: '10 minutes',
-  keyGenerator: (request) => userRouteRateLimitKey('write', request)
-});
-const fetchRouteIpRateLimit = app.createRateLimit({
-  max: 60,
-  timeWindow: '10 minutes',
-  keyGenerator: (request) => ipRouteRateLimitKey('fetch', request)
-});
-const userRouteFetchRateLimit = app.createRateLimit({
-  max: 30,
-  timeWindow: '10 minutes',
-  keyGenerator: (request) => userRouteRateLimitKey('fetch', request)
-});
 
-const userRateLimitPolicies: Record<RateLimitPolicy, RateLimitCheck[]> = {
-  accountWrite: [
-    writeRouteIpRateLimit,
-    app.createRateLimit({
-      max: 20,
-      timeWindow: '1 hour',
-      keyGenerator: (request) => `account-write:user:${userRateLimitPart(request)}`
-    }),
-    app.createRateLimit({
-      max: 1,
-      timeWindow: '5 seconds',
-      keyGenerator: (request) => `account-write-cooldown:user:${userRateLimitPart(request)}`
-    }),
-    userRouteWriteRateLimit
-  ],
-  adminWrite: [
-    writeRouteIpRateLimit,
-    app.createRateLimit({
-      max: 120,
-      timeWindow: '1 hour',
-      keyGenerator: (request) => `admin-write:user:${userRateLimitPart(request)}`
-    }),
-    app.createRateLimit({
-      max: 1,
-      timeWindow: '2 seconds',
-      keyGenerator: (request) => `admin-write-cooldown:user:${userRateLimitPart(request)}`
-    }),
-    userRouteWriteRateLimit
-  ],
-  communityReaction: [
-    writeRouteIpRateLimit,
-    app.createRateLimit({
-      max: 120,
-      timeWindow: '1 hour',
-      keyGenerator: (request) => `community-reaction:user:${userRateLimitPart(request)}`
-    }),
-    app.createRateLimit({
-      max: 1,
-      timeWindow: '1 second',
-      keyGenerator: (request) => `community-reaction-cooldown:user:${userRateLimitPart(request)}`
-    }),
-    userRouteWriteRateLimit
-  ],
-  communityWrite: [
-    writeRouteIpRateLimit,
-    app.createRateLimit({
-      max: 60,
-      timeWindow: '1 hour',
-      keyGenerator: (request) => `community-write:user:${userRateLimitPart(request)}`
-    }),
-    app.createRateLimit({
-      max: 1,
-      timeWindow: '5 seconds',
-      keyGenerator: (request) => `community-write-cooldown:user:${userRateLimitPart(request)}`
-    }),
-    userRouteWriteRateLimit
-  ],
-  fetch: [
-    fetchRouteIpRateLimit,
-    app.createRateLimit({
-      max: 60,
-      timeWindow: '10 minutes',
-      keyGenerator: (request) => `fetch:user:${userRateLimitPart(request)}`
-    }),
-    app.createRateLimit({
-      max: 1,
-      timeWindow: '1 second',
-      keyGenerator: (request) => `fetch-cooldown:user:${userRateLimitPart(request)}`
-    }),
-    userRouteFetchRateLimit
-  ],
-  upload: [
-    writeRouteIpRateLimit,
-    app.createRateLimit({
-      max: 20,
-      timeWindow: '1 hour',
-      keyGenerator: (request) => `upload:user:${userRateLimitPart(request)}`
-    }),
-    app.createRateLimit({
-      max: 1,
-      timeWindow: '30 seconds',
-      keyGenerator: (request) => `upload-cooldown:user:${userRateLimitPart(request)}`
-    }),
-    userRouteWriteRateLimit
-  ],
-  wikiWrite: [
-    writeRouteIpRateLimit,
-    app.createRateLimit({
-      max: 120,
-      timeWindow: '1 hour',
-      keyGenerator: (request) => `wiki-write:user:${userRateLimitPart(request)}`
-    }),
-    app.createRateLimit({
-      max: 1,
-      timeWindow: '2 seconds',
-      keyGenerator: (request) => `wiki-write-cooldown:user:${userRateLimitPart(request)}`
-    }),
-    userRouteWriteRateLimit
-  ]
+const rateLimitPolicyKeys: RateLimitPolicy[] = [
+  'accountWrite',
+  'adminWrite',
+  'communityReaction',
+  'communityWrite',
+  'fetch',
+  'upload',
+  'wikiWrite'
+];
+const defaultUserRateLimitSettings: RateLimitPolicySettingsMap = {
+  accountWrite: { maxRequests: 20, timeWindowSeconds: 60 * 60, cooldownSeconds: 5 },
+  adminWrite: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 2 },
+  communityReaction: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 1 },
+  communityWrite: { maxRequests: 60, timeWindowSeconds: 60 * 60, cooldownSeconds: 5 },
+  fetch: { maxRequests: 60, timeWindowSeconds: 10 * 60, cooldownSeconds: 1 },
+  upload: { maxRequests: 20, timeWindowSeconds: 60 * 60, cooldownSeconds: 30 },
+  wikiWrite: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 2 }
 };
+const rateLimitSettingsCacheTtlMs = 30_000;
+const minRateLimitWindowSeconds = 60;
+const maxRateLimitWindowSeconds = 24 * 60 * 60;
+const maxRateLimitRequests = 5_000;
+const maxRateLimitCooldownSeconds = 60 * 60;
+let rateLimitSettingsCache: { settings: RateLimitPolicySettingsMap; expiresAt: number } | null = null;
+let lastRateLimitSweepAt = 0;
+const userRateLimitWindows = new Map<string, { count: number; resetAt: number }>();
+const userRateLimitCooldowns = new Map<string, number>();
+
+function cloneRateLimitSettings(settings: RateLimitPolicySettingsMap): RateLimitPolicySettingsMap {
+  return Object.fromEntries(
+    rateLimitPolicyKeys.map((policy) => [policy, { ...settings[policy] }])
+  ) as RateLimitPolicySettingsMap;
+}
+
+function cleanRateLimitInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(numeric) || numeric < min || numeric > max) {
+    return fallback;
+  }
+
+  return numeric;
+}
+
+function cleanRateLimitPolicySettings(value: unknown, fallback: RateLimitPolicySettings): RateLimitPolicySettings {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    maxRequests: cleanRateLimitInteger(raw.maxRequests, fallback.maxRequests, 1, maxRateLimitRequests),
+    timeWindowSeconds: cleanRateLimitInteger(
+      raw.timeWindowSeconds,
+      fallback.timeWindowSeconds,
+      minRateLimitWindowSeconds,
+      maxRateLimitWindowSeconds
+    ),
+    cooldownSeconds: cleanRateLimitInteger(raw.cooldownSeconds, fallback.cooldownSeconds, 0, maxRateLimitCooldownSeconds)
+  };
+}
+
+function normalizeRateLimitSettings(value: unknown): RateLimitPolicySettingsMap {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return Object.fromEntries(
+    rateLimitPolicyKeys.map((policy) => [
+      policy,
+      cleanRateLimitPolicySettings(raw[policy], defaultUserRateLimitSettings[policy])
+    ])
+  ) as RateLimitPolicySettingsMap;
+}
+
+function publicRateLimitSettings(row: RateLimitSettingsRow | null, settings: RateLimitPolicySettingsMap): PublicRateLimitSettings {
+  return {
+    policies: cloneRateLimitSettings(settings),
+    updatedAt: row?.updatedAt ?? null,
+    updatedBy: row?.updatedBy ?? null
+  };
+}
+
+async function rateLimitSettingsRow(): Promise<RateLimitSettingsRow | null> {
+  const result = await pool.query<RateLimitSettingsRow>(
+    `
+      SELECT
+        s.settings,
+        s.updated_at AS "updatedAt",
+        CASE
+          WHEN updated_user.id IS NULL THEN NULL
+          ELSE json_build_object('id', updated_user.id, 'displayName', updated_user.display_name)
+        END AS "updatedBy"
+      FROM rate_limit_settings s
+      LEFT JOIN users updated_user ON updated_user.id = s.updated_by_user_id
+      WHERE s.id = true
+    `
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function runtimeRateLimitSettings(): Promise<RateLimitPolicySettingsMap> {
+  const now = Date.now();
+  if (rateLimitSettingsCache && rateLimitSettingsCache.expiresAt > now) {
+    return rateLimitSettingsCache.settings;
+  }
+
+  const row = await rateLimitSettingsRow();
+  const settings = normalizeRateLimitSettings(row?.settings);
+  rateLimitSettingsCache = { settings, expiresAt: now + rateLimitSettingsCacheTtlMs };
+  return settings;
+}
+
+async function getRateLimitSettings(): Promise<PublicRateLimitSettings> {
+  const row = await rateLimitSettingsRow();
+  return publicRateLimitSettings(row, normalizeRateLimitSettings(row?.settings));
+}
+
+async function updateRateLimitSettings(payload: Record<string, unknown>, userId: number): Promise<PublicRateLimitSettings> {
+  const policies = payload.policies && typeof payload.policies === 'object' ? payload.policies : payload;
+  const settings = normalizeRateLimitSettings(policies);
+  await pool.query(
+    `
+      INSERT INTO rate_limit_settings (id, settings, updated_by_user_id, updated_at)
+      VALUES (true, $1::jsonb, $2, now())
+      ON CONFLICT (id)
+      DO UPDATE SET settings = EXCLUDED.settings,
+                    updated_by_user_id = EXCLUDED.updated_by_user_id,
+                    updated_at = now()
+    `,
+    [JSON.stringify(settings), userId]
+  );
+  rateLimitSettingsCache = { settings, expiresAt: Date.now() + rateLimitSettingsCacheTtlMs };
+  return getRateLimitSettings();
+}
+
+function sweepUserRateLimitEntries(now: number): void {
+  if (now - lastRateLimitSweepAt < 60_000) {
+    return;
+  }
+
+  lastRateLimitSweepAt = now;
+  for (const [key, bucket] of userRateLimitWindows.entries()) {
+    if (bucket.resetAt <= now) {
+      userRateLimitWindows.delete(key);
+    }
+  }
+  for (const [key, resetAt] of userRateLimitCooldowns.entries()) {
+    if (resetAt <= now) {
+      userRateLimitCooldowns.delete(key);
+    }
+  }
+}
+
+function checkUserPolicyRateLimit(userId: number, policy: RateLimitPolicy, settings: RateLimitPolicySettings): RateLimitFailure | null {
+  const now = Date.now();
+  sweepUserRateLimitEntries(now);
+
+  const cooldownKey = `${policy}:user:${userId}:cooldown`;
+  const cooldownResetAt = userRateLimitCooldowns.get(cooldownKey) ?? 0;
+  if (cooldownResetAt > now) {
+    return { max: 1, ttlInSeconds: Math.ceil((cooldownResetAt - now) / 1000) };
+  }
+
+  const windowKey = `${policy}:user:${userId}:window`;
+  const windowResetMs = settings.timeWindowSeconds * 1000;
+  const existingBucket = userRateLimitWindows.get(windowKey);
+  const bucket =
+    existingBucket && existingBucket.resetAt > now
+      ? existingBucket
+      : { count: 0, resetAt: now + windowResetMs };
+
+  if (bucket.count >= settings.maxRequests) {
+    userRateLimitWindows.set(windowKey, bucket);
+    return { max: settings.maxRequests, ttlInSeconds: Math.ceil((bucket.resetAt - now) / 1000) };
+  }
+
+  bucket.count += 1;
+  userRateLimitWindows.set(windowKey, bucket);
+
+  if (settings.cooldownSeconds > 0) {
+    userRateLimitCooldowns.set(cooldownKey, now + settings.cooldownSeconds * 1000);
+  }
+
+  return null;
+}
 
 async function sendRateLimited(
   request: FastifyRequest,
   reply: FastifyReply,
-  result: Extract<RateLimitResult, { isAllowed: false }>
+  result: RateLimitFailure
 ): Promise<false> {
   const retryAfter = Math.max(1, result.ttlInSeconds);
   reply.header('retry-after', retryAfter);
   reply.header('x-ratelimit-limit', result.max);
   reply.header('x-ratelimit-remaining', 0);
   reply.header('x-ratelimit-reset', retryAfter);
-  reply.code(result.isBanned ? 403 : 429).send({ message: await serverMessage(requestLocale(request), 'rateLimited') });
+  reply.code(result.isBanned === true ? 403 : 429).send({ message: await serverMessage(requestLocale(request), 'rateLimited') });
   return false;
 }
 
@@ -456,8 +524,9 @@ async function enforceUserRateLimits(
   user: AuthUser,
   policy: RateLimitPolicy
 ): Promise<boolean> {
-  (request as RateLimitedRequest).rateLimitUserId = user.id;
-  return enforceRateLimits(request, reply, userRateLimitPolicies[policy]);
+  const settings = (await runtimeRateLimitSettings())[policy];
+  const result = checkUserPolicyRateLimit(user.id, policy, settings);
+  return result ? sendRateLimited(request, reply, result) : true;
 }
 
 function badRequest(message: string): Error & { statusCode: number } {
@@ -1450,6 +1519,19 @@ app.put('/api/admin/ai-moderation', async (request, reply) => {
   return updateAiModerationSettings(request.body as Record<string, unknown>, user.id);
 });
 
+app.get('/api/admin/rate-limits', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.rate-limits.read');
+  return user ? getRateLimitSettings() : undefined;
+});
+
+app.put('/api/admin/rate-limits', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.rate-limits.update', 'adminWrite');
+  if (!user) {
+    return;
+  }
+  return updateRateLimitSettings(request.body as Record<string, unknown>, user.id);
+});
+
 app.get('/api/admin/config/:type', async (request, reply) => {
   const user = await requirePermission(request, reply, 'admin.config.read');
   if (!user) {
@@ -1463,7 +1545,7 @@ app.get('/api/admin/config/:type', async (request, reply) => {
 });
 
 app.post('/api/admin/config/:type', async (request, reply) => {
-  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.create', 'wikiWrite');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.create', 'adminWrite');
   if (!user) {
     return;
   }
@@ -1477,7 +1559,7 @@ app.post('/api/admin/config/:type', async (request, reply) => {
 });
 
 app.put('/api/admin/config/:type/order', async (request, reply) => {
-  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.order', 'wikiWrite');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.order', 'adminWrite');
   if (!user) {
     return;
   }
@@ -1489,7 +1571,7 @@ app.put('/api/admin/config/:type/order', async (request, reply) => {
 });
 
 app.put('/api/admin/config/:type/:id', async (request, reply) => {
-  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.update', 'wikiWrite');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.update', 'adminWrite');
   if (!user) {
     return;
   }
@@ -1502,7 +1584,7 @@ app.put('/api/admin/config/:type/:id', async (request, reply) => {
 });
 
 app.delete('/api/admin/config/:type/:id', async (request, reply) => {
-  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.delete', 'wikiWrite');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.delete', 'adminWrite');
   if (!user) {
     return;
   }

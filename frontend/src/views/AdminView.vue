@@ -46,6 +46,10 @@ import {
   type Permission,
   type PermissionPayload,
   type Pokemon,
+  type RateLimitPolicyKey,
+  type RateLimitPolicySettings,
+  type RateLimitSettings,
+  type RateLimitSettingsPayload,
   type Recipe,
   type RoleDetail,
   type RolePayload,
@@ -59,6 +63,7 @@ type AdminTab =
   | 'users'
   | 'roles'
   | 'permissions'
+  | 'rateLimits'
   | 'aiModeration'
   | 'config'
   | 'languages'
@@ -77,11 +82,36 @@ type EditableConfig = (NamedEntity | Skill | LifeCategory | GameVersion) & {
   isRateable?: boolean;
   changeLog?: string;
 };
+type RateLimitPolicyForm = {
+  maxRequests: number;
+  timeWindowMinutes: number;
+  cooldownSeconds: number;
+};
+
+const rateLimitPolicyKeys: RateLimitPolicyKey[] = [
+  'accountWrite',
+  'adminWrite',
+  'wikiWrite',
+  'communityWrite',
+  'communityReaction',
+  'upload',
+  'fetch'
+];
+const defaultRateLimitPolicies: Record<RateLimitPolicyKey, RateLimitPolicySettings> = {
+  accountWrite: { maxRequests: 20, timeWindowSeconds: 60 * 60, cooldownSeconds: 5 },
+  adminWrite: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 2 },
+  communityReaction: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 1 },
+  communityWrite: { maxRequests: 60, timeWindowSeconds: 60 * 60, cooldownSeconds: 5 },
+  fetch: { maxRequests: 60, timeWindowSeconds: 10 * 60, cooldownSeconds: 1 },
+  upload: { maxRequests: 20, timeWindowSeconds: 60 * 60, cooldownSeconds: 30 },
+  wikiWrite: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 2 }
+};
 
 const adminTabIcons: Record<AdminTab, AppIcon> = {
   users: iconProfile,
   roles: iconKey,
   permissions: iconKey,
+  rateLimits: iconAdmin,
   aiModeration: iconAdmin,
   config: iconAdmin,
   languages: iconTranslate,
@@ -128,7 +158,8 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
       items: [
         { key: 'users', label: t('pages.admin.users'), permission: 'admin.users.read' },
         { key: 'roles', label: t('pages.admin.roles'), permission: 'admin.roles.read' },
-        { key: 'permissions', label: t('pages.admin.permissions'), permission: 'admin.permissions.read' }
+        { key: 'permissions', label: t('pages.admin.permissions'), permission: 'admin.permissions.read' },
+        { key: 'rateLimits', label: t('pages.admin.rateLimits'), permission: 'admin.rate-limits.read' }
       ]
     }
   ];
@@ -168,6 +199,7 @@ const recipeRows = ref<Recipe[]>([]);
 const habitatRows = ref<Habitat[]>([]);
 const wordingRows = ref<SystemWording[]>([]);
 const aiModerationSettings = ref<AiModerationSettings | null>(null);
+const rateLimitSettings = ref<RateLimitSettings | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
@@ -194,6 +226,18 @@ const aiModerationForm = ref({
   apiKey: '',
   clearApiKey: false
 });
+const rateLimitForm = ref<Record<RateLimitPolicyKey, RateLimitPolicyForm>>(
+  Object.fromEntries(
+    rateLimitPolicyKeys.map((policy) => [
+      policy,
+      {
+        maxRequests: defaultRateLimitPolicies[policy].maxRequests,
+        timeWindowMinutes: defaultRateLimitPolicies[policy].timeWindowSeconds / 60,
+        cooldownSeconds: defaultRateLimitPolicies[policy].cooldownSeconds
+      }
+    ])
+  ) as Record<RateLimitPolicyKey, RateLimitPolicyForm>
+);
 const userRoleForm = ref({ userId: 0, roleIds: [] as number[] });
 const roleForm = ref({ id: 0, key: '', name: '', description: '', level: 100, enabled: true });
 const rolePermissionForm = ref({ roleId: 0, permissionIds: [] as number[] });
@@ -298,6 +342,15 @@ const aiModerationApiFormatOptions = computed<Array<{ value: AiModerationApiForm
 const aiModerationAuthModeOptions = computed<Array<{ value: AiModerationAuthMode; label: string }>>(() => [
   { value: 'bearer-token', label: t('pages.admin.aiModerationAuthBearer') },
   { value: 'query-key', label: t('pages.admin.aiModerationAuthQueryKey') }
+]);
+const rateLimitPolicyOptions = computed<Array<{ value: RateLimitPolicyKey; label: string }>>(() => [
+  { value: 'accountWrite', label: t('pages.admin.rateLimitAccountWrite') },
+  { value: 'adminWrite', label: t('pages.admin.rateLimitAdminWrite') },
+  { value: 'wikiWrite', label: t('pages.admin.rateLimitWikiWrite') },
+  { value: 'communityWrite', label: t('pages.admin.rateLimitCommunityWrite') },
+  { value: 'communityReaction', label: t('pages.admin.rateLimitCommunityReaction') },
+  { value: 'upload', label: t('pages.admin.rateLimitUpload') },
+  { value: 'fetch', label: t('pages.admin.rateLimitFetch') }
 ]);
 const filteredWordingRows = computed(() =>
   wordingRows.value.filter((item) => {
@@ -420,6 +473,22 @@ function resetAiModerationForm(settings: AiModerationSettings | null = aiModerat
     apiKey: '',
     clearApiKey: false
   };
+}
+
+function resetRateLimitForm(settings: RateLimitSettings | null = rateLimitSettings.value) {
+  rateLimitForm.value = Object.fromEntries(
+    rateLimitPolicyKeys.map((policy) => {
+      const policySettings = settings?.policies[policy] ?? defaultRateLimitPolicies[policy];
+      return [
+        policy,
+        {
+          maxRequests: policySettings.maxRequests,
+          timeWindowMinutes: Math.max(1, Math.round(policySettings.timeWindowSeconds / 60)),
+          cooldownSeconds: policySettings.cooldownSeconds
+        }
+      ];
+    })
+  ) as Record<RateLimitPolicyKey, RateLimitPolicyForm>;
 }
 
 function resetUserRoleForm() {
@@ -854,6 +923,11 @@ async function loadAiModerationSettings() {
   resetAiModerationForm(aiModerationSettings.value);
 }
 
+async function loadRateLimitSettings() {
+  rateLimitSettings.value = await api.rateLimitSettings();
+  resetRateLimitForm(rateLimitSettings.value);
+}
+
 async function reloadWordings() {
   await run(loadWordings);
 }
@@ -890,6 +964,24 @@ async function saveAiModerationSettings() {
 
     aiModerationSettings.value = await api.updateAiModerationSettings(payload);
     resetAiModerationForm(aiModerationSettings.value);
+  });
+}
+
+async function saveRateLimitSettings() {
+  await run(async () => {
+    const policies = Object.fromEntries(
+      rateLimitPolicyKeys.map((policy) => [
+        policy,
+        {
+          maxRequests: rateLimitForm.value[policy].maxRequests,
+          timeWindowSeconds: rateLimitForm.value[policy].timeWindowMinutes * 60,
+          cooldownSeconds: rateLimitForm.value[policy].cooldownSeconds
+        }
+      ])
+    ) as RateLimitSettingsPayload['policies'];
+
+    rateLimitSettings.value = await api.updateRateLimitSettings({ policies });
+    resetRateLimitForm(rateLimitSettings.value);
   });
 }
 
@@ -955,6 +1047,7 @@ async function loadCurrentTab(showSkeleton = false) {
     if (activeTab.value === 'users') await loadUsers();
     if (activeTab.value === 'roles') await loadRoles();
     if (activeTab.value === 'permissions') await loadPermissions();
+    if (activeTab.value === 'rateLimits') await loadRateLimitSettings();
     if (activeTab.value === 'languages') await loadLanguages();
     if (activeTab.value === 'wordings') await loadWordings();
     if (activeTab.value === 'aiModeration') await loadAiModerationSettings();
@@ -1233,6 +1326,64 @@ onMounted(() => {
         </li>
       </ul>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'rateLimits'" class="detail-section">
+      <form class="modal-edit-form" @submit.prevent="saveRateLimitSettings">
+        <div class="detail-section__header">
+          <h2>{{ t('pages.admin.rateLimits') }}</h2>
+          <button v-if="can('admin.rate-limits.update')" class="ui-button ui-button--primary ui-button--small" type="submit" :disabled="busy">
+            <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+            {{ busy ? t('common.saving') : t('common.save') }}
+          </button>
+        </div>
+        <div class="rate-limit-list">
+          <div v-for="policy in rateLimitPolicyOptions" :key="policy.value" class="rate-limit-row">
+            <h3>{{ policy.label }}</h3>
+            <div class="rate-limit-fields">
+              <div class="field">
+                <label :for="`rate-limit-${policy.value}-max`">{{ t('pages.admin.rateLimitMaxRequests') }}</label>
+                <input
+                  :id="`rate-limit-${policy.value}-max`"
+                  v-model.number="rateLimitForm[policy.value].maxRequests"
+                  type="number"
+                  min="1"
+                  max="5000"
+                  step="1"
+                  :disabled="busy || !can('admin.rate-limits.update')"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label :for="`rate-limit-${policy.value}-window`">{{ t('pages.admin.rateLimitWindowMinutes') }}</label>
+                <input
+                  :id="`rate-limit-${policy.value}-window`"
+                  v-model.number="rateLimitForm[policy.value].timeWindowMinutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  step="1"
+                  :disabled="busy || !can('admin.rate-limits.update')"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label :for="`rate-limit-${policy.value}-cooldown`">{{ t('pages.admin.rateLimitCooldownSeconds') }}</label>
+                <input
+                  :id="`rate-limit-${policy.value}-cooldown`"
+                  v-model.number="rateLimitForm[policy.value].cooldownSeconds"
+                  type="number"
+                  min="0"
+                  max="3600"
+                  step="1"
+                  :disabled="busy || !can('admin.rate-limits.update')"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'checklist'" class="detail-section">

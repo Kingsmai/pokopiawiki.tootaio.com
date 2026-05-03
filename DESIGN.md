@@ -209,10 +209,17 @@
 
 ## 滥用防护与限流
 
-- 后端使用 `@fastify/rate-limit` 在应用层执行限流；默认内存存储适用于当前单实例运行，后续多实例部署需要切换到共享存储或反向代理层限流。
+- 后端使用 `@fastify/rate-limit` 和应用内用户级计数在应用层执行限流；默认内存存储适用于当前单实例运行，后续多实例部署需要切换到共享存储或反向代理层限流。
 - Fastify 默认不信任代理转发 IP；部署在可信反向代理后方时，可设置 `TRUST_PROXY=true`，让 IP 限流使用代理解析后的客户端 IP。
-- 限流 key 不对外暴露；邮箱限流使用规范化小写邮箱生成内部 key，用户限流使用当前登录用户 ID，路由限流使用 HTTP method + route pattern。
+- 限流 key 不对外暴露；邮箱限流使用规范化小写邮箱生成内部 key，已登录用户限流使用当前登录用户 ID，路由限流使用 HTTP method + route pattern。
 - 触发限流时 API 返回 429 和本地化通用错误文案，并带 `Retry-After` 与 rate limit headers；响应不得返回邮箱、用户 ID、内部 key、token/hash 或调试信息。
+- 可配置的已登录用户限流存储在 `rate_limit_settings`：
+  - `settings`：JSON object，保存各用户级限流策略的 `maxRequests`、`timeWindowSeconds` 和 `cooldownSeconds`
+  - `updated_by_user_id`
+  - `created_at`
+  - `updated_at`
+- 管理端 Access 分组提供 Rate limits 设置区；查看需要 `admin.rate-limits.read`，更新需要 `admin.rate-limits.update`。
+- 已登录用户级限流策略仅按用户 ID 计数，不再叠加写入路由 IP 限流或用户 + 路由写入限流；认证入口和受保护路由的 IP 防护仍保留。
 - 认证入口限流：
   - 注册、登录、验证邮箱、请求重置密码、提交重置密码均按 IP + 路由限制为 20 次 / 10 分钟。
   - 登录额外按邮箱限制为 5 次 / 15 分钟。
@@ -220,17 +227,14 @@
   - 请求重置密码额外按邮箱限制为 3 次 / 1 小时，并按 IP + 路由限制为 10 次 / 15 分钟。
   - 提交重置密码额外按 IP + 路由限制为 10 次 / 15 分钟。
 - 已登录保护路由按 IP + 路由限制为 120 次 / 10 分钟，避免单一来源反复触发鉴权查询。
-- 写入路由通用限流：
-  - 写入路由按 IP + 路由限制为 90 次 / 10 分钟。
-  - 写入路由按用户 ID + 路由限制为 30 次 / 10 分钟。
-- 用户账号资料写入按用户 ID 限制为 20 次 / 1 小时，并有 5 秒冷却时间。
-- Wiki 内容写入（Pokemon、物品、材料单、栖息地、每日 CheckList、配置项和排序）按用户 ID 限制为 120 次 / 1 小时，并有 2 秒冷却时间。
-- 管理写入（用户角色、角色、权限、语言和系统文案）按用户 ID 限制为 120 次 / 1 小时，并有 2 秒冷却时间。
-- 上传按用户 ID 限制为 20 次 / 1 小时，并有 30 秒冷却时间。
+- 用户账号资料写入默认按用户 ID 限制为 20 次 / 1 小时，并有 5 秒冷却时间。
+- 管理写入（System config 配置项、用户角色、角色、权限、语言、系统文案、AI 审核设置和限流设置）默认按用户 ID 限制为 120 次 / 1 小时，并有 2 秒冷却时间。
+- Wiki 内容写入（Pokemon、物品、材料单、栖息地、每日 CheckList 和排序）默认按用户 ID 限制为 120 次 / 1 小时，并有 2 秒冷却时间。
+- 上传默认按用户 ID 限制为 20 次 / 1 小时，并有 30 秒冷却时间。
 - Community 写入：
-  - Life Post、Life 评论、Wiki 讨论评论和对应删除 / 更新操作按用户 ID 限制为 60 次 / 1 小时，并有 5 秒冷却时间。
-  - Life reaction 写入按用户 ID 限制为 120 次 / 1 小时，并有 1 秒冷却时间。
-- Pokemon Fetch 数据和图片候选查询按 IP + 路由限制为 60 次 / 10 分钟，按用户 ID 限制为 60 次 / 10 分钟，按用户 ID + 路由限制为 30 次 / 10 分钟，并有 1 秒冷却时间。
+  - Life Post、Life 评论、Wiki 讨论评论和对应删除 / 更新操作默认按用户 ID 限制为 60 次 / 1 小时，并有 5 秒冷却时间。
+  - Life reaction 写入默认按用户 ID 限制为 120 次 / 1 小时，并有 1 秒冷却时间。
+- Pokemon Fetch 数据和图片候选查询默认按用户 ID 限制为 60 次 / 10 分钟，并有 1 秒冷却时间。
 
 ## Community 编辑与审计
 
@@ -749,7 +753,7 @@ API 暴露边界：
   - 配置：System config。
   - 内容：Daily CheckList、Pokemon、物品、材料单和栖息地的维护、排序或删除入口。
   - 本地化：Languages、System wordings。
-  - 访问权限：Users、Roles、Permissions。
+  - 访问权限：Users、Roles、Permissions、Rate limits。
 - 登录用户的侧边栏账号入口进入 `/profile`；User Profile 属于账号入口，不作为 Wiki 主内容导航项。
 - 页面级分类、筛选或辅助内容切换使用 Tabs，避免在内容页继续增加侧边栏。
 - 导航和主要操作使用图标增强识别。
@@ -873,6 +877,9 @@ API 暴露边界：
   - `DELETE /api/life-posts/:id/rating`
 - 每日 CheckList 的创建、更新、删除、排序需要对应 `checklist.*` 权限。
 - 全局配置项的查看、创建、更新、删除、排序需要对应 `admin.config.*` 权限。
+- 限流设置的查看和更新通过 Access 权限控制：
+  - `GET /api/admin/rate-limits`：需要 `admin.rate-limits.read`
+  - `PUT /api/admin/rate-limits`：需要 `admin.rate-limits.update`
 - 语言的查看、创建、更新、删除、排序需要对应 `admin.languages.*` 权限。
 - 系统级文案的查看和更新需要对应 `admin.wordings.*` 权限。
 - `GET /api/admin/system-wordings`

@@ -5,8 +5,6 @@ services:
       POSTGRES_DB: pokopia
       POSTGRES_USER: pokopia
       POSTGRES_PASSWORD: pokopia
-    ports:
-      - "5432:5432"
     volumes:
       - postgres18_data:/var/lib/postgresql
     healthcheck:
@@ -26,11 +24,11 @@ services:
       FRONTEND_ORIGIN: http://localhost:20015
       APP_ORIGIN: http://localhost:20015
       UPLOAD_DIR: /app/uploads
-      BACKEND_PUBLIC_ORIGIN: http://localhost:3001
+      BACKEND_PUBLIC_ORIGIN: http://localhost:20016
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: "${EMAIL_FROM:-Pokopia Wiki <onboarding@resend.dev>}"
     ports:
-      - "3001:3001"
+      - "20016:3001"
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
@@ -42,7 +40,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:20016}
         VITE_SITE_URL: ${VITE_SITE_URL:-https://pokopiawiki.tootaio.com}
     environment:
       PORT: 20015

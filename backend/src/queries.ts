@@ -1520,13 +1520,28 @@ function pokemonImageLabel(image: PokemonImage | null | undefined): string {
   return image.source === 'upload' || isUploadImagePath(image.path) ? imagePathLabel(image.path) : `${image.style} - ${image.version} - ${image.variant}`;
 }
 
-function pokemonImageCandidateForPath(id: number, path: string): PokemonImage | null {
+function pokemonImageDataIdFromPath(path: string): number | null {
+  const match = path.match(/^\/sprites\/pokemon\/(?:.+\/)?([1-9]\d*)\.(?:png|gif|svg)$/);
+  if (!match) {
+    return null;
+  }
+
+  const id = Number(match[1]);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
+function pokemonImageCandidateForPath(path: string): PokemonImage | null {
   const cleanPath = path.trim();
+  const id = pokemonImageDataIdFromPath(cleanPath);
+  if (!id) {
+    return null;
+  }
+
   const candidate = pokemonImageCandidates(id).find((item) => item.path === cleanPath);
   return candidate ? pokemonImageWithUrl(candidate) : null;
 }
 
-function cleanPokemonImage(value: unknown, pokemonId: number): PokemonImage | null {
+function cleanPokemonImage(value: unknown, displayId: number): PokemonImage | null {
   const path = typeof value === 'string' ? value.trim() : '';
   if (path === '') {
     return null;
@@ -1541,13 +1556,13 @@ function cleanPokemonImage(value: unknown, pokemonId: number): PokemonImage | nu
       url: uploadImageUrl(path),
       style: 'Upload',
       version: 'Community upload',
-      variant: `#${pokemonId}`,
+      variant: `#${displayId}`,
       description: '',
       source: 'upload'
     };
   }
 
-  const image = pokemonImageCandidateForPath(pokemonId, path);
+  const image = pokemonImageCandidateForPath(path);
   if (!image) {
     throw validationError('server.validation.pokemonImagePathInvalid');
   }

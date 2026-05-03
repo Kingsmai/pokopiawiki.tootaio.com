@@ -253,14 +253,9 @@ function mergeFetchedTranslations(fetchedTranslations: TranslationMap | undefine
 }
 
 function applyFetchedPokemon(fetchedPokemon: PokemonFetchResult): boolean {
-  if (isEditing.value && fetchedPokemon.id !== pokemonIdForSave()) {
-    message.value = t('pages.pokemon.fetchIdMismatch', { id: fetchedPokemon.id });
-    return false;
-  }
-
   pokemonForm.value = {
     ...pokemonForm.value,
-    id: isEditing.value ? pokemonForm.value.id : String(fetchedPokemon.id),
+    id: pokemonForm.value.id.trim() === '' ? String(fetchedPokemon.id) : pokemonForm.value.id,
     name: fetchedPokemon.name,
     genus: fetchedPokemon.genus,
     heightInches: fetchedPokemon.heightInches,
@@ -477,7 +472,7 @@ async function fetchPokemonByIdentifier(identifierValue?: string) {
     return;
   }
 
-  const identifier = (identifierValue ?? fetchIdentifier.value).trim() || pokemonForm.value.id.trim();
+  const identifier = (identifierValue ?? fetchIdentifier.value).trim();
   if (!identifier) {
     message.value = t('pages.pokemon.fetchIdentifierRequired');
     return;
@@ -552,7 +547,7 @@ async function fetchPokemonImages() {
     return;
   }
 
-  const identifier = fetchIdentifier.value.trim() || pokemonForm.value.id.trim();
+  const identifier = fetchIdentifier.value.trim();
   if (!identifier) {
     message.value = t('pages.pokemon.fetchIdentifierRequired');
     return;
@@ -563,12 +558,6 @@ async function fetchPokemonImages() {
 
   try {
     const result = await api.fetchPokemonImageOptions(identifier);
-    const currentId = pokemonIdForSave();
-    if (Number.isInteger(currentId) && currentId > 0 && result.id !== currentId) {
-      message.value = t('pages.pokemon.fetchIdMismatch', { id: result.id });
-      return;
-    }
-
     fetchIdentifier.value = result.identifier;
     imageOptions.value = result.images;
 

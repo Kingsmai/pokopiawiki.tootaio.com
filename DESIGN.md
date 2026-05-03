@@ -437,19 +437,21 @@ Pokemon 的展示 ID 在普通 Pokemon 和活动 Pokemon 之间可以重复，�
 Pokemon 编辑表单使用标签页组织字段：
 
 - 编辑表单提供 Fetch data 功能：
-  - 已验证且拥有 `pokemon.fetch` 权限的用户可输入 data identifier 或 Pokemon ID，从同一个搜索输入查询基础资料或图片候选。
+  - 已验证且拥有 `pokemon.fetch` 权限的用户可在 Fetch 输入框输入 data identifier 或官方 data Pokemon ID，从同一个搜索输入查询基础资料或图片候选。
   - Fetch data 从仓库 `data/` CSV 查询基础资料并填入当前表单。
   - Fetch 输入框提供 data 列表搜索，搜索范围包含 Pokemon ID、identifier、当前语言名称和默认语言名称；结果只展示 `#ID`、名称和 identifier。
   - Fetch 搜索结果默认关闭，只在用户主动点击输入框或输入内容时展开；Escape、失焦 / 点击外部、选择结果后关闭。
   - Fetch 搜索不使用防抖或节流；前端在每次新搜索时取消上一条搜索请求，并且只渲染最新请求结果。
-  - Fetch 只填入 CSV 可提供的字段：ID、名称、Genus、Height、Weight、Types、六维和名称/Genus 翻译；不填入 Details、喜欢的环境、特长、特长掉落物品或喜欢的东西。
+  - Fetch 只填入 CSV 可提供的字段：官方 data ID、名称、Genus、Height、Weight、Types、六维和名称/Genus 翻译；不填入 Details、喜欢的环境、特长、特长掉落物品或喜欢的东西。
+  - Fetch data 不要求官方 data ID 与 Pokopia 展示 ID 相同；若表单 ID 已有用户输入则保留该展示 ID，只有新建且 ID 为空时才用官方 data ID 作为初始展示 ID。
   - Fetch 不直接创建或更新 Pokemon；用户仍需通过 Save 保存，保存时沿用现有编辑审计。
   - Fetch 根据 `languages.code` 自动匹配 CSV 语言列：`en`、`ja`、`ko`、`fr`、`de`、`es`、`it` 使用同名列；`zh-CN` / `zh-SG` 等简体语言使用 `zh_hans`；`zh-TW` / `zh-HK` / `zh-MO` 使用 `zh_hant`。
   - Fetch 会自动确保 canonical Pokemon Types 存在于 `pokemon_types`，Type ID 与 `data/localized_type_name.csv` 和 `frontend/public/types` 图标文件保持一致；用户不需要为 Fetch 手工创建 Type 配置。
   - Type 展示使用 `frontend/public/types/small/{typeId}.png` 图标并保留文字名称。
 - 编辑表单提供 Pokemon 图片选择功能：
-  - 已验证且拥有 `pokemon.fetch` 权限的用户通过 Fetch data 的同一个 data identifier / Pokemon ID 输入框，从 `https://pokesprite.tootaio.com/sprites/` 静态图片树查询对应 Pokemon 的可用图片候选。
+  - 已验证且拥有 `pokemon.fetch` 权限的用户通过 Fetch data 的同一个 data identifier / 官方 data Pokemon ID 输入框，从 `https://pokesprite.tootaio.com/sprites/` 静态图片树查询对应 Pokemon 的可用图片候选。
   - 图片候选只使用 `/sprites/pokemon/...` 相对路径，后端按固定资源族生成候选并用 `HEAD` 校验存在性；不保存任意外部 URL。
+  - 静态图片与官方 data identifier / 官方 data Pokemon ID 关联，不与 Pokopia 可编辑展示 ID 关联；用户修改 Pokopia 展示 ID 后，已选静态图片仍可保存。
   - 图片选择不直接创建或更新 Pokemon；用户仍需通过 Save 保存，保存时沿用现有编辑审计。
   - 图片选择界面使用 Pokédex 风格：上方显示当前选择的大图，大图下方显示版本、状态和描述，再下方以缩略图网格展示同一 Pokemon 的不同风格 / 版本 / 状态。
   - Pokemon 保存显示图片的相对路径、风格、版本、状态和描述；API 对外返回可直接展示的图片 URL，但不暴露内部校验状态。

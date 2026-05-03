@@ -14,6 +14,10 @@ const defaultLocale = 'en';
 const referralCodeLength = 8;
 const referralAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const referralCodePattern = /^[A-Z0-9]{8,16}$/;
+const resendDailyQuotaLimit = positiveIntegerEnv('RESEND_DAILY_QUOTA_LIMIT', 100);
+const resendMonthlyQuotaLimit = positiveIntegerEnv('RESEND_MONTHLY_QUOTA_LIMIT', 3000);
+const resendQuotaReserve = nonNegativeIntegerEnv('RESEND_QUOTA_RESERVE', 5);
+const resendQuotaSnapshotTtlMs = positiveIntegerEnv('RESEND_QUOTA_SNAPSHOT_TTL_MINUTES', 10) * 60 * 1000;
 
 type DbClient = PoolClient;
 
@@ -65,6 +69,7 @@ type AuthMessageKey =
   | 'emailKicker'
   | 'emailLinkFallback'
   | 'emailFooter'
+  | 'emailDeliveryUnavailable'
   | 'verificationActionLabel'
   | 'passwordResetSubject'
   | 'passwordResetHtml'
@@ -162,6 +167,30 @@ const criticalPermissionKeys = [
   'admin.permissions.delete'
 ];
 
+type ResendBlockReason = 'quota' | 'rateLimit';
+
+type ResendQuotaSnapshot = {
+  dailyUsed?: number;
+  monthlyUsed?: number;
+  rateLimitRemaining?: number;
+  rateLimitResetAt?: number;
+  blockedUntil?: number;
+  blockedReason?: ResendBlockReason;
+  updatedAt?: number;
+};
+
+const resendQuotaSnapshot: ResendQuotaSnapshot = {};
+
+function positiveIntegerEnv(key: string, fallback: number): number {
+  const value = Number(process.env[key]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function nonNegativeIntegerEnv(key: string, fallback: number): number {
+  const value = Number(process.env[key]);
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
 function statusError(message: string, statusCode: number): StatusError {
   const error = new Error(message) as StatusError;
   error.statusCode = statusCode;
@@ -193,6 +222,7 @@ function authMessage(locale: string, key: AuthMessageKey, params: Record<string,
     emailKicker: 'email.auth.kicker',
     emailLinkFallback: 'email.auth.linkFallback',
     emailFooter: 'email.auth.footer',
+    emailDeliveryUnavailable: 'server.auth.emailDeliveryUnavailable',
     verificationActionLabel: 'email.auth.verificationActionLabel',
     passwordResetSubject: 'email.auth.passwordResetSubject',
     passwordResetHtml: 'email.auth.passwordResetHtml',
@@ -708,6 +738,158 @@ function buildPasswordResetUrl(token: string): string {
   return buildTokenUrl('/reset-password', token);
 }
 
+function quotaThreshold(limit: number): number {
+  const reserve = Math.min(resendQuotaReserve, Math.max(0, limit - 1));
+  return limit - reserve;
+}
+
+function parseHeaderInteger(headers: Headers, name: string): number | undefined {
+  const value = headers.get(name);
+  const match = value?.match(/\d+/);
+  if (!match) {
+    return undefined;
+  }
+
+  const parsedValue = Number(match[0]);
+  return Number.isSafeInteger(parsedValue) && parsedValue >= 0 ? parsedValue : undefined;
+}
+
+function parseRetryAfterMs(headers: Headers, now = Date.now()): number | undefined {
+  const value = headers.get('retry-after');
+  if (!value) {
+    return undefined;
+  }
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  const retryAt = Date.parse(value);
+  return Number.isFinite(retryAt) && retryAt > now ? retryAt - now : undefined;
+}
+
+function updateResendQuotaSnapshot(headers: Headers): void {
+  const now = Date.now();
+  const dailyUsed = parseHeaderInteger(headers, 'x-resend-daily-quota');
+  const monthlyUsed = parseHeaderInteger(headers, 'x-resend-monthly-quota');
+  const rateLimitRemaining = parseHeaderInteger(headers, 'ratelimit-remaining');
+  const rateLimitReset = parseHeaderInteger(headers, 'ratelimit-reset');
+
+  if (dailyUsed !== undefined) {
+    resendQuotaSnapshot.dailyUsed = dailyUsed;
+  } else {
+    delete resendQuotaSnapshot.dailyUsed;
+  }
+  if (monthlyUsed !== undefined) {
+    resendQuotaSnapshot.monthlyUsed = monthlyUsed;
+  } else {
+    delete resendQuotaSnapshot.monthlyUsed;
+  }
+  if (rateLimitRemaining !== undefined) {
+    resendQuotaSnapshot.rateLimitRemaining = rateLimitRemaining;
+  } else {
+    delete resendQuotaSnapshot.rateLimitRemaining;
+  }
+  if (rateLimitReset !== undefined) {
+    resendQuotaSnapshot.rateLimitResetAt = now + rateLimitReset * 1000;
+  } else {
+    delete resendQuotaSnapshot.rateLimitResetAt;
+  }
+
+  resendQuotaSnapshot.updatedAt = now;
+}
+
+function blockResendEmail(reason: ResendBlockReason, headers: Headers): void {
+  const now = Date.now();
+  const retryAfterMs = parseRetryAfterMs(headers, now);
+  resendQuotaSnapshot.blockedReason = reason;
+  resendQuotaSnapshot.blockedUntil = now + (retryAfterMs ?? resendQuotaSnapshotTtlMs);
+  resendQuotaSnapshot.updatedAt = now;
+}
+
+function currentResendBlockReason(now = Date.now()): ResendBlockReason | null {
+  if (resendQuotaSnapshot.blockedUntil && resendQuotaSnapshot.blockedUntil > now) {
+    return resendQuotaSnapshot.blockedReason ?? 'quota';
+  }
+
+  if (!resendQuotaSnapshot.updatedAt || now - resendQuotaSnapshot.updatedAt > resendQuotaSnapshotTtlMs) {
+    return null;
+  }
+
+  if (
+    resendQuotaSnapshot.dailyUsed !== undefined &&
+    resendQuotaSnapshot.dailyUsed >= quotaThreshold(resendDailyQuotaLimit)
+  ) {
+    return 'quota';
+  }
+
+  if (
+    resendQuotaSnapshot.monthlyUsed !== undefined &&
+    resendQuotaSnapshot.monthlyUsed >= quotaThreshold(resendMonthlyQuotaLimit)
+  ) {
+    return 'quota';
+  }
+
+  if (
+    resendQuotaSnapshot.rateLimitRemaining !== undefined &&
+    resendQuotaSnapshot.rateLimitRemaining <= 0 &&
+    resendQuotaSnapshot.rateLimitResetAt !== undefined &&
+    resendQuotaSnapshot.rateLimitResetAt > now
+  ) {
+    return 'rateLimit';
+  }
+
+  return null;
+}
+
+async function assertResendEmailAvailable(locale: string): Promise<void> {
+  if (currentResendBlockReason()) {
+    throw statusError(await authMessage(locale, 'emailDeliveryUnavailable'), 503);
+  }
+}
+
+function resendFailureReason(status: number, responseText: string): ResendBlockReason | null {
+  if (status !== 429) {
+    return null;
+  }
+
+  return /daily_quota_exceeded|monthly_quota_exceeded/i.test(responseText) ? 'quota' : 'rateLimit';
+}
+
+async function sendResendEmail(
+  locale: string,
+  payload: { apiKey: string; from: string; to: string; subject: string; html: string; text: string }
+): Promise<void> {
+  await assertResendEmailAvailable(locale);
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${payload.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: payload.from,
+      to: [payload.to],
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text
+    })
+  });
+  updateResendQuotaSnapshot(response.headers);
+
+  if (!response.ok) {
+    const responseText = await response.text();
+    const blockReason = resendFailureReason(response.status, responseText);
+    if (blockReason) {
+      blockResendEmail(blockReason, response.headers);
+      throw statusError(await authMessage(locale, 'emailDeliveryUnavailable'), 503);
+    }
+    throw new Error(`Resend email failed with ${response.status}: ${responseText.slice(0, 500)}`);
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -834,25 +1016,7 @@ async function sendVerificationEmail(email: string, token: string, locale: strin
     linkFallback,
     footer
   });
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from,
-      to: [email],
-      subject,
-      html,
-      text
-    })
-  });
-
-  if (!response.ok) {
-    const responseText = await response.text();
-    throw new Error(`Resend email failed with ${response.status}: ${responseText.slice(0, 500)}`);
-  }
+  await sendResendEmail(locale, { apiKey, from, to: email, subject, html, text });
 }
 
 async function sendPasswordResetEmail(email: string, token: string, locale: string): Promise<void> {
@@ -876,25 +1040,7 @@ async function sendPasswordResetEmail(email: string, token: string, locale: stri
     linkFallback,
     footer
   });
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from,
-      to: [email],
-      subject,
-      html,
-      text
-    })
-  });
-
-  if (!response.ok) {
-    const responseText = await response.text();
-    throw new Error(`Resend email failed with ${response.status}: ${responseText.slice(0, 500)}`);
-  }
+  await sendResendEmail(locale, { apiKey, from, to: email, subject, html, text });
 }
 
 export async function registerUser(payload: Record<string, unknown>, locale = defaultLocale) {
@@ -902,6 +1048,7 @@ export async function registerUser(payload: Record<string, unknown>, locale = de
   const displayName = await cleanDisplayName(payload.displayName, locale);
   const password = await cleanPassword(payload.password, locale);
   const referralCode = await cleanReferralCode(payload.referralCode, locale);
+  await assertResendEmailAvailable(locale);
   const passwordHash = await hashPassword(password);
   const verificationToken = createPlainToken();
   const verificationTokenHash = hashToken(verificationToken);
@@ -1015,6 +1162,7 @@ export async function verifyEmail(payload: Record<string, unknown>, locale = def
 
 export async function requestPasswordReset(payload: Record<string, unknown>, locale = defaultLocale) {
   const email = await cleanEmail(payload.email, locale);
+  await assertResendEmailAvailable(locale);
   const user = await queryOne<UserRow>(
     'SELECT id, email, display_name, email_verified_at FROM users WHERE email = $1',
     [email]

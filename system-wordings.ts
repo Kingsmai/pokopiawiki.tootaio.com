@@ -998,7 +998,8 @@ export const systemWordingMessages = {
       verifyEmailFirst: 'Please complete email verification first',
       invalidResetToken: 'The password reset link is invalid or expired',
       currentPasswordInvalid: 'Current password is incorrect',
-      invalidReferralCode: 'Referral code is invalid'
+      invalidReferralCode: 'Referral code is invalid',
+      emailDeliveryUnavailable: 'Email delivery is temporarily unavailable. Please try again later.'
     },
     validation: {
       nameRequired: 'Name is required',
@@ -2072,7 +2073,8 @@ export const systemWordingMessages = {
         verifyEmailFirst: '请先完成邮箱验证',
         invalidResetToken: '密码重置链接无效或已过期',
         currentPasswordInvalid: '当前密码不正确',
-        invalidReferralCode: '邀请码无效'
+        invalidReferralCode: '邀请码无效',
+        emailDeliveryUnavailable: '邮件发送暂时不可用，请稍后再试。'
       },
       validation: {
         nameRequired: '请输入名称',

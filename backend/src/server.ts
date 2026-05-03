@@ -186,6 +186,10 @@ app.setErrorHandler(async (error, _request, reply) => {
     return reply.code(429).send({ message: await serverMessage(locale, 'rateLimited') });
   }
 
+  if (pgError.statusCode === 503) {
+    return reply.code(503).send({ message: await localizedStatusMessage(locale, pgError.message) });
+  }
+
   if (pgError.statusCode && pgError.statusCode < 500) {
     return reply.code(pgError.statusCode).send({ message: await localizedStatusMessage(locale, pgError.message) });
   }

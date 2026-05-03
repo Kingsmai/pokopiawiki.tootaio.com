@@ -102,6 +102,8 @@
   - `EMAIL_FROM`
   - `APP_ORIGIN` 或 `FRONTEND_ORIGIN`
 - 认证邮件和密码重置邮件使用标准化 Pokopia Wiki 品牌 HTML 外壳；正文、按钮文案、兜底链接提示和纯文本版本仍通过 `surface=email` 的系统级文案维护。
+- 后端从 Resend 邮件发送响应 headers 读取日/月发送额度和 rate limit 状态，并维护短期内存 snapshot；当 Resend 已报告额度接近用尽、额度耗尽或 API 限流时，认证邮件发送会暂时停止并返回本地化用户提示。
+- Resend 额度保护不使用本项目自增发送计数；默认按 Free 计划 `100/day`、`3000/month` 和 5 封保留量判断，可通过 `RESEND_DAILY_QUOTA_LIMIT`、`RESEND_MONTHLY_QUOTA_LIMIT`、`RESEND_QUOTA_RESERVE`、`RESEND_QUOTA_SNAPSHOT_TTL_MINUTES` 调整。
 - 验证邮件包含一次性验证链接。
 - 验证 token 只保存 hash，并带过期时间和使用状态。
 - 只有邮箱已验证的用户可以登录。

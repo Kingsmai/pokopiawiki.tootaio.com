@@ -21,56 +21,6 @@ const wordingKeyPattern = /^[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)+$/;
 const placeholderPattern = /\{([A-Za-z0-9_]+)\}/g;
 const surfaces = new Set<SystemWordingSurface>(['frontend', 'backend', 'email']);
 
-const legacyMessageKeys = new Map<string, string>([
-  ['Record does not exist', 'server.validation.recordMissing'],
-  ['Language code is invalid', 'server.validation.languageCodeInvalid'],
-  ['Language name is required', 'server.validation.languageNameRequired'],
-  ['Default language must be English', 'server.validation.defaultLanguageMustBeEnglish'],
-  ['Default language must be enabled', 'server.validation.defaultLanguageMustBeEnabled'],
-  ['Language not found', 'server.validation.languageNotFound'],
-  ['A default language is required', 'server.validation.defaultLanguageRequired'],
-  ['Default language cannot be deleted', 'server.validation.defaultLanguageCannotBeDeleted'],
-  ['Please select a language', 'server.validation.selectLanguage'],
-  ['Language does not exist', 'server.validation.languageDoesNotExist'],
-  ['Pokemon identifier is required', 'server.validation.pokemonIdentifierRequired'],
-  ['Pokemon type data is unavailable', 'server.validation.pokemonTypeDataUnavailable'],
-  ['Pokemon data was not found', 'server.validation.pokemonDataNotFound'],
-  ['Pokemon image path is invalid', 'server.validation.pokemonImagePathInvalid'],
-  ['Please enter a task', 'server.validation.taskRequired'],
-  ['Please select a task', 'server.validation.selectTask'],
-  ['Task does not exist', 'server.validation.taskDoesNotExist'],
-  ['Please enter a post', 'server.validation.postRequired'],
-  ['Post is too long', 'server.validation.postTooLong'],
-  ['Please enter a comment', 'server.validation.commentRequired'],
-  ['Comment is too long', 'server.validation.commentTooLong'],
-  ['Reaction is invalid', 'server.validation.reactionInvalid'],
-  ['Cursor is invalid', 'server.validation.cursorInvalid'],
-  ['Tag is invalid', 'server.validation.tagInvalid'],
-  ['Entity type is invalid', 'server.validation.entityTypeInvalid'],
-  ['Record is invalid', 'server.validation.recordInvalid'],
-  ['Comment is invalid', 'server.validation.commentInvalid'],
-  ['Please select a record', 'server.validation.selectRecord'],
-  ['Choose at least 1 type', 'server.validation.typeMin'],
-  ['Choose at most 2 types', 'server.validation.typeMax'],
-  ['Choose at most 2 specialities', 'server.validation.skillMax'],
-  ['Choose at most 6 favourites', 'server.validation.favoriteMax'],
-  ['Drop items must be linked to selected specialities', 'server.validation.dropItemSelectedSkill'],
-  ['Pokemon ID is required', 'server.validation.pokemonIdRequired'],
-  ['Pokemon name is required', 'server.validation.pokemonNameRequired'],
-  ['Height must be a non-negative number', 'server.validation.heightNonNegative'],
-  ['Weight must be a non-negative number', 'server.validation.weightNonNegative'],
-  ['Ideal Habitat is required', 'server.validation.environmentRequired'],
-  ['This speciality cannot have a drop item', 'server.validation.skillNoDrop'],
-  ['Habitat name is required', 'server.validation.habitatNameRequired'],
-  ['Usage is required', 'server.validation.usageRequired'],
-  ['Item name is required', 'server.validation.itemNameRequired'],
-  ['Category is required', 'server.validation.categoryRequired'],
-  ['An item with a recipe cannot be marked as recipe-free', 'server.validation.recipeFreeWithRecipe'],
-  ['Item is required', 'server.validation.itemRequired'],
-  ['This item is marked as recipe-free', 'server.validation.recipeFreeItem'],
-  ['Name is required', 'server.validation.nameRequired']
-]);
-
 function validationError(message: string): ValidationError {
   const error = new Error(message) as ValidationError;
   error.statusCode = 400;
@@ -145,22 +95,6 @@ function normalizePlaceholders(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)).sort() : [];
 }
 
-function legacyMessageKey(message: string): string | null {
-  if (message.startsWith('server.') || message.startsWith('email.')) {
-    return message;
-  }
-  if (message.endsWith(' must be a non-negative integer')) {
-    return 'server.validation.statNonNegative';
-  }
-  if (message.endsWith(' is empty')) {
-    return 'server.validation.pokemonDataFileEmpty';
-  }
-  if (message.startsWith('Pokemon data file ') && message.endsWith(' is unavailable')) {
-    return 'server.validation.pokemonDataFileUnavailable';
-  }
-  return legacyMessageKeys.get(message) ?? null;
-}
-
 export async function syncSystemWordingCatalog(): Promise<void> {
   const entries = systemWordingCatalogEntries();
   const client = await pool.connect();
@@ -232,8 +166,7 @@ export async function systemMessage(
 }
 
 export async function localizedStatusMessage(locale: string, message: string): Promise<string> {
-  const key = legacyMessageKey(message);
-  return key ? systemMessage(locale, key) : message;
+  return message.startsWith('server.') || message.startsWith('email.') ? systemMessage(locale, message) : message;
 }
 
 export async function getSystemWordings(locale: string) {

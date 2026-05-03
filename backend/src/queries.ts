@@ -617,7 +617,7 @@ function requirePositiveInteger(value: unknown, message: string): number {
   return numberValue;
 }
 
-function cleanName(value: unknown, message = 'Name is required'): string {
+function cleanName(value: unknown, message = 'server.validation.nameRequired'): string {
   if (typeof value !== 'string' || value.trim() === '') {
     throw validationError(message);
   }
@@ -656,7 +656,7 @@ function cleanPokemonStats(value: unknown): PokemonStats {
   return pokemonStatLabels.reduce((stats, stat) => {
     const numberValue = Number(row[stat.key] ?? 0);
     if (!Number.isInteger(numberValue) || numberValue < 0) {
-      throw validationError(`${stat.label} must be a non-negative integer`);
+      throw validationError('server.validation.statNonNegative');
     }
 
     return { ...stats, [stat.key]: numberValue };
@@ -756,7 +756,7 @@ async function reorderTableRows(
   );
 
   if (existing.rowCount !== ids.length) {
-    throw validationError('Record does not exist');
+    throw validationError('server.validation.recordMissing');
   }
 
   for (const [index, id] of ids.entries()) {
@@ -792,14 +792,14 @@ async function recordEditLog(
 function cleanLanguagePayload(payload: Record<string, unknown>, requireCode: boolean): LanguagePayload {
   const code = typeof payload.code === 'string' ? payload.code.trim() : '';
   if (requireCode && !localePattern.test(code)) {
-    throw validationError('Language code is invalid');
+    throw validationError('server.validation.languageCodeInvalid');
   }
 
   const sortOrder = Number(payload.sortOrder ?? 0);
 
   return {
     code,
-    name: cleanName(payload.name, 'Language name is required'),
+    name: cleanName(payload.name, 'server.validation.languageNameRequired'),
     enabled: payload.enabled !== false,
     isDefault: Boolean(payload.isDefault),
     sortOrder: Number.isInteger(sortOrder) && sortOrder >= 0 ? sortOrder : 0
@@ -809,7 +809,7 @@ function cleanLanguagePayload(payload: Record<string, unknown>, requireCode: boo
 function requireLanguageCode(value: unknown): string {
   const code = typeof value === 'string' ? value.trim() : '';
   if (!localePattern.test(code)) {
-    throw validationError('Language code is invalid');
+    throw validationError('server.validation.languageCodeInvalid');
   }
   return code;
 }
@@ -828,10 +828,10 @@ export async function listLanguages(includeDisabled = false) {
 export async function createLanguage(payload: Record<string, unknown>) {
   const cleanPayload = cleanLanguagePayload(payload, true);
   if (cleanPayload.isDefault && cleanPayload.code !== defaultLocale) {
-    throw validationError('Default language must be English');
+    throw validationError('server.validation.defaultLanguageMustBeEnglish');
   }
   if (!cleanPayload.enabled && cleanPayload.isDefault) {
-    throw validationError('Default language must be enabled');
+    throw validationError('server.validation.defaultLanguageMustBeEnabled');
   }
 
   await withTransaction(async (client) => {
@@ -855,10 +855,10 @@ export async function updateLanguage(code: string, payload: Record<string, unkno
   const locale = requireLanguageCode(code);
   const cleanPayload = cleanLanguagePayload({ ...payload, code: locale }, false);
   if (cleanPayload.isDefault && locale !== defaultLocale) {
-    throw validationError('Default language must be English');
+    throw validationError('server.validation.defaultLanguageMustBeEnglish');
   }
   if (!cleanPayload.enabled && cleanPayload.isDefault) {
-    throw validationError('Default language must be enabled');
+    throw validationError('server.validation.defaultLanguageMustBeEnabled');
   }
 
   await withTransaction(async (client) => {
@@ -868,15 +868,15 @@ export async function updateLanguage(code: string, payload: Record<string, unkno
     );
 
     if (current.rowCount === 0) {
-      throw validationError('Language not found');
+      throw validationError('server.validation.languageNotFound');
     }
 
     if (!cleanPayload.enabled && current.rows[0].isDefault) {
-      throw validationError('Default language must be enabled');
+      throw validationError('server.validation.defaultLanguageMustBeEnabled');
     }
 
     if (current.rows[0].isDefault && !cleanPayload.isDefault) {
-      throw validationError('A default language is required');
+      throw validationError('server.validation.defaultLanguageRequired');
     }
 
     if (cleanPayload.isDefault) {
@@ -902,7 +902,7 @@ export async function updateLanguage(code: string, payload: Record<string, unkno
 export async function deleteLanguage(code: string) {
   const locale = requireLanguageCode(code);
   if (locale === defaultLocale) {
-    throw validationError('Default language cannot be deleted');
+    throw validationError('server.validation.defaultLanguageCannotBeDeleted');
   }
 
   return withTransaction(async (client) => {
@@ -917,7 +917,7 @@ export async function deleteLanguage(code: string) {
 export async function reorderLanguages(payload: Record<string, unknown>) {
   const codes = Array.isArray(payload.codes) ? payload.codes.map(requireLanguageCode) : [];
   if (codes.length === 0) {
-    throw validationError('Please select a language');
+    throw validationError('server.validation.selectLanguage');
   }
 
   await withTransaction(async (client) => {
@@ -927,7 +927,7 @@ export async function reorderLanguages(payload: Record<string, unknown>) {
     );
 
     if (existing.rowCount !== codes.length) {
-      throw validationError('Language does not exist');
+      throw validationError('server.validation.languageDoesNotExist');
     }
 
     for (const [index, code] of codes.entries()) {
@@ -992,7 +992,7 @@ function parseCsv(content: string, fileName: string): CsvRow[] {
 
   const headers = rows[0]?.map((header) => header.replace(/^\uFEFF/, ''));
   if (!headers?.length) {
-    throw validationError(`${fileName} is empty`);
+    throw validationError('server.validation.pokemonDataFileEmpty');
   }
 
   return rows.slice(1).map((values) =>
@@ -1024,7 +1024,7 @@ async function readPokemonDataFile(fileName: string): Promise<string> {
     }
   }
 
-  throw validationError(`Pokemon data file ${fileName} is unavailable`);
+  throw validationError('server.validation.pokemonDataFileUnavailable');
 }
 
 function csvInteger(row: CsvRow, fieldName: string): number {
@@ -1092,7 +1092,7 @@ async function loadPokemonCsvData(): Promise<PokemonCsvData> {
 function pokemonDataLookupKey(value: unknown): string {
   const rawValue = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
   if (rawValue === '') {
-    throw validationError('Pokemon identifier is required');
+    throw validationError('server.validation.pokemonIdentifierRequired');
   }
 
   const numericValue = Number(rawValue);
@@ -1362,7 +1362,7 @@ function cleanPokemonImage(value: unknown, pokemonId: number): PokemonImage | nu
 
   const image = pokemonImageCandidateForPath(pokemonId, path);
   if (!image) {
-    throw validationError('Pokemon image path is invalid');
+    throw validationError('server.validation.pokemonImagePathInvalid');
   }
   return image;
 }
@@ -1427,7 +1427,7 @@ function fetchedPokemonTypeIds(row: CsvRow, data: PokemonCsvData): number[] {
   const typeIds = [csvInteger(row, 'type_1_id'), csvInteger(row, 'type_2_id')].filter((typeId) => typeId > 0);
 
   if (typeIds.length === 0 || typeIds.some((typeId) => !data.typesById.has(typeId) || !pokemonTypeIconIds.has(typeId))) {
-    throw validationError('Pokemon type data is unavailable');
+    throw validationError('server.validation.pokemonTypeDataUnavailable');
   }
 
   return typeIds;
@@ -1496,7 +1496,7 @@ export async function fetchPokemonData(payload: Record<string, unknown>, userId:
   const pokemonRow = data.pokemonByLookup.get(lookupKey);
 
   if (!pokemonRow) {
-    throw validationError('Pokemon data was not found');
+    throw validationError('server.validation.pokemonDataNotFound');
   }
 
   const id = csvInteger(pokemonRow, 'id');
@@ -1532,7 +1532,7 @@ export async function fetchPokemonImageOptions(payload: Record<string, unknown>)
   const pokemonRow = data.pokemonByLookup.get(lookupKey);
 
   if (!pokemonRow) {
-    throw validationError('Pokemon data was not found');
+    throw validationError('server.validation.pokemonDataNotFound');
   }
 
   const id = csvInteger(pokemonRow, 'id');
@@ -1954,7 +1954,7 @@ export async function getOptions(locale = defaultLocale) {
 
 function cleanDailyChecklistPayload(payload: Record<string, unknown>): DailyChecklistPayload {
   return {
-    title: cleanName(payload.title, 'Please enter a task'),
+    title: cleanName(payload.title, 'server.validation.taskRequired'),
     translations: cleanTranslations(payload.translations, ['title'])
   };
 }
@@ -2042,7 +2042,7 @@ export async function updateDailyChecklistItem(
 export async function reorderDailyChecklistItems(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   const ids = cleanIds(payload.ids);
   if (ids.length === 0) {
-    throw validationError('Please select a task');
+    throw validationError('server.validation.selectTask');
   }
 
   await withTransaction(async (client) => {
@@ -2052,7 +2052,7 @@ export async function reorderDailyChecklistItems(payload: Record<string, unknown
     );
 
     if (existing.rowCount !== ids.length) {
-      throw validationError('Task does not exist');
+      throw validationError('server.validation.taskDoesNotExist');
     }
 
     for (const [index, id] of ids.entries()) {
@@ -2085,9 +2085,9 @@ export async function deleteDailyChecklistItem(id: number, userId: number) {
 }
 
 function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload {
-  const body = cleanName(payload.body, 'Please enter a post');
+  const body = cleanName(payload.body, 'server.validation.postRequired');
   if (body.length > 2000) {
-    throw validationError('Post is too long');
+    throw validationError('server.validation.postTooLong');
   }
   const tagIds = cleanIds(payload.tagIds);
   if (tagIds.length === 0) {
@@ -2101,9 +2101,9 @@ function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload
 }
 
 function cleanLifeCommentPayload(payload: Record<string, unknown>): LifeCommentPayload {
-  const body = cleanName(payload.body, 'Please enter a comment');
+  const body = cleanName(payload.body, 'server.validation.commentRequired');
   if (body.length > 1000) {
-    throw validationError('Comment is too long');
+    throw validationError('server.validation.commentTooLong');
   }
 
   return { body };
@@ -2124,7 +2124,7 @@ function isLifeReactionType(value: unknown): value is LifeReactionType {
 
 function cleanLifeReactionType(value: unknown): LifeReactionType {
   if (!isLifeReactionType(value)) {
-    throw validationError('Reaction is invalid');
+    throw validationError('server.validation.reactionInvalid');
   }
 
   return value;
@@ -2182,7 +2182,7 @@ function decodeLifePostCursor(value: QueryValue): LifePostCursor | null {
     const id = Number(cursor.id);
 
     if (!createdAt || Number.isNaN(new Date(createdAt).getTime()) || !Number.isInteger(id) || id <= 0) {
-      throw validationError('Cursor is invalid');
+      throw validationError('server.validation.cursorInvalid');
     }
 
     return { createdAt, id };
@@ -2190,7 +2190,7 @@ function decodeLifePostCursor(value: QueryValue): LifePostCursor | null {
     if (error instanceof Error && 'statusCode' in error) {
       throw error;
     }
-    throw validationError('Cursor is invalid');
+    throw validationError('server.validation.cursorInvalid');
   }
 }
 
@@ -2372,7 +2372,7 @@ export async function listLifePosts(
   }
 
   if (tagIdValue) {
-    const tagId = requirePositiveInteger(tagIdValue, 'Tag is invalid');
+    const tagId = requirePositiveInteger(tagIdValue, 'server.validation.tagInvalid');
     params.push(tagId);
     conditions.push(`EXISTS (
       SELECT 1
@@ -2633,16 +2633,16 @@ export async function deleteLifeComment(id: number, userId: number, allowAny = f
 
 function cleanDiscussionEntityType(value: unknown): DiscussionEntityType {
   if (typeof value !== 'string' || !Object.hasOwn(discussionEntityDefinitions, value)) {
-    throw validationError('Entity type is invalid');
+    throw validationError('server.validation.entityTypeInvalid');
   }
 
   return value as DiscussionEntityType;
 }
 
 function cleanEntityDiscussionCommentPayload(payload: Record<string, unknown>): EntityDiscussionCommentPayload {
-  const body = cleanName(payload.body, 'Please enter a comment');
+  const body = cleanName(payload.body, 'server.validation.commentRequired');
   if (body.length > 1000) {
-    throw validationError('Comment is too long');
+    throw validationError('server.validation.commentTooLong');
   }
 
   return { body };
@@ -2724,7 +2724,7 @@ export async function listEntityDiscussionComments(
   entityIdValue: number
 ): Promise<EntityDiscussionComment[] | null> {
   const entityType = cleanDiscussionEntityType(entityTypeValue);
-  const entityId = requirePositiveInteger(entityIdValue, 'Record is invalid');
+  const entityId = requirePositiveInteger(entityIdValue, 'server.validation.recordInvalid');
 
   if (!(await entityDiscussionExists(pool, entityType, entityId))) {
     return null;
@@ -2748,7 +2748,7 @@ export async function createEntityDiscussionComment(
   userId: number
 ): Promise<EntityDiscussionComment | null> {
   const entityType = cleanDiscussionEntityType(entityTypeValue);
-  const entityId = requirePositiveInteger(entityIdValue, 'Record is invalid');
+  const entityId = requirePositiveInteger(entityIdValue, 'server.validation.recordInvalid');
   const cleanPayload = cleanEntityDiscussionCommentPayload(payload);
 
   const id = await withTransaction(async (client) => {
@@ -2779,8 +2779,8 @@ export async function createEntityDiscussionReply(
   userId: number
 ): Promise<EntityDiscussionComment | null> {
   const entityType = cleanDiscussionEntityType(entityTypeValue);
-  const entityId = requirePositiveInteger(entityIdValue, 'Record is invalid');
-  const commentId = requirePositiveInteger(commentIdValue, 'Comment is invalid');
+  const entityId = requirePositiveInteger(entityIdValue, 'server.validation.recordInvalid');
+  const commentId = requirePositiveInteger(commentIdValue, 'server.validation.commentInvalid');
   const cleanPayload = cleanEntityDiscussionCommentPayload(payload);
 
   const id = await withTransaction(async (client) => {
@@ -2816,7 +2816,7 @@ export async function createEntityDiscussionReply(
 }
 
 export async function deleteEntityDiscussionComment(id: number, userId: number, allowAny = false): Promise<boolean> {
-  const commentId = requirePositiveInteger(id, 'Comment is invalid');
+  const commentId = requirePositiveInteger(id, 'server.validation.commentInvalid');
   const result = await queryOne<{ id: number }>(
     `
       UPDATE entity_discussion_comments
@@ -2917,7 +2917,7 @@ export async function reorderConfig(type: ConfigType, payload: Record<string, un
   const definition = configDefinitions[type];
   const ids = cleanIds(payload.ids);
   if (ids.length === 0) {
-    throw validationError('Please select a record');
+    throw validationError('server.validation.selectRecord');
   }
 
   await withTransaction(async (client) => {
@@ -2992,7 +2992,7 @@ async function reorderContent(type: SortableContentType, payload: Record<string,
   const definition = sortableContentDefinitions[type];
   const ids = cleanIds(payload.ids);
   if (ids.length === 0) {
-    throw validationError('Please select a record');
+    throw validationError('server.validation.selectRecord');
   }
 
   await withTransaction(async (client) => {
@@ -3234,16 +3234,16 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   const skillItemDrops = new Map<string, SkillItemDrop>();
 
   if (typeIds.length === 0) {
-    throw validationError('Choose at least 1 type');
+    throw validationError('server.validation.typeMin');
   }
   if (cleanTypeIds.length > 2) {
-    throw validationError('Choose at most 2 types');
+    throw validationError('server.validation.typeMax');
   }
   if (skillIds.length > 2) {
-    throw validationError('Choose at most 2 specialities');
+    throw validationError('server.validation.skillMax');
   }
   if (favoriteThingIds.length > 6) {
-    throw validationError('Choose at most 6 favourites');
+    throw validationError('server.validation.favoriteMax');
   }
 
   if (Array.isArray(payload.skillItemDrops)) {
@@ -3257,27 +3257,27 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
       }
 
       if (!Number.isInteger(skillId) || skillId <= 0 || !selectedSkillIds.has(skillId)) {
-        throw validationError('Drop items must be linked to selected specialities');
+        throw validationError('server.validation.dropItemSelectedSkill');
       }
 
       skillItemDrops.set(String(skillId), { skillId, itemId });
     }
   }
 
-  const displayId = requirePositiveInteger(payload.displayId ?? payload.id, 'Pokemon ID is required');
+  const displayId = requirePositiveInteger(payload.displayId, 'server.validation.pokemonIdRequired');
 
   return {
     displayId,
     isEventItem: Boolean(payload.isEventItem),
-    name: cleanName(payload.name, 'Pokemon name is required'),
+    name: cleanName(payload.name, 'server.validation.pokemonNameRequired'),
     genus: cleanOptionalText(payload.genus),
     details: cleanOptionalText(payload.details),
-    heightInches: cleanNonNegativeNumber(payload.heightInches, 'Height must be a non-negative number'),
-    weightPounds: cleanNonNegativeNumber(payload.weightPounds, 'Weight must be a non-negative number'),
+    heightInches: cleanNonNegativeNumber(payload.heightInches, 'server.validation.heightNonNegative'),
+    weightPounds: cleanNonNegativeNumber(payload.weightPounds, 'server.validation.weightNonNegative'),
     translations: cleanTranslations(payload.translations, ['name', 'details', 'genus']),
     typeIds,
     stats: cleanPokemonStats(payload.stats),
-    environmentId: requirePositiveInteger(payload.environmentId, 'Ideal Habitat is required'),
+    environmentId: requirePositiveInteger(payload.environmentId, 'server.validation.environmentRequired'),
     skillIds,
     favoriteThingIds,
     skillItemDrops: [...skillItemDrops.values()],
@@ -3318,7 +3318,7 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
     const allowedDropSkillIds = new Set(allowedDrops.rows.map((row) => row.id));
 
     if (payload.skillItemDrops.some((drop) => !allowedDropSkillIds.has(drop.skillId))) {
-      throw validationError('This speciality cannot have a drop item');
+      throw validationError('server.validation.skillNoDrop');
     }
   }
 
@@ -3601,9 +3601,9 @@ function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
   for (const item of appearances) {
     const row = item as Record<string, unknown>;
     const pokemonId = Number(row.pokemonId);
-    const mapIds = cleanIdValues(row.mapIds ?? row.mapId);
-    const selectedTimeOfDays = cleanOptions(row.timeOfDays ?? row.timeOfDay, timeOfDays);
-    const selectedWeathers = cleanOptions(row.weathers ?? row.weather, weathers);
+    const mapIds = cleanIdValues(row.mapIds);
+    const selectedTimeOfDays = cleanOptions(row.timeOfDays, timeOfDays);
+    const selectedWeathers = cleanOptions(row.weathers, weathers);
     const rarity = Number(row.rarity);
 
     if (!Number.isInteger(pokemonId) || pokemonId <= 0 || !Number.isInteger(rarity) || rarity < 1 || rarity > 3) {
@@ -3626,7 +3626,7 @@ function cleanHabitatPayload(payload: Record<string, unknown>): HabitatPayload {
   }
 
   return {
-    name: cleanName(payload.name, 'Habitat name is required'),
+    name: cleanName(payload.name, 'server.validation.habitatNameRequired'),
     translations: cleanTranslations(payload.translations, ['name']),
     isEventItem: Boolean(payload.isEventItem),
     imagePath: cleanUploadImagePath(payload.imagePath, 'habitats'),
@@ -3973,12 +3973,12 @@ export async function getItem(id: number, locale = defaultLocale) {
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
   const usageId = payload.usageId === null || payload.usageId === '' || payload.usageId === undefined
     ? null
-    : requirePositiveInteger(payload.usageId, 'Usage is required');
+    : requirePositiveInteger(payload.usageId, 'server.validation.usageRequired');
 
   return {
-    name: cleanName(payload.name, 'Item name is required'),
+    name: cleanName(payload.name, 'server.validation.itemNameRequired'),
     translations: cleanTranslations(payload.translations, ['name']),
-    categoryId: requirePositiveInteger(payload.categoryId, 'Category is required'),
+    categoryId: requirePositiveInteger(payload.categoryId, 'server.validation.categoryRequired'),
     usageId,
     dyeable: Boolean(payload.dyeable),
     dualDyeable: Boolean(payload.dualDyeable),
@@ -3998,7 +3998,7 @@ async function ensureItemCanDisableRecipe(client: DbClient, itemId: number, noRe
 
   const result = await client.query('SELECT 1 FROM recipes WHERE item_id = $1', [itemId]);
   if (result.rowCount && result.rowCount > 0) {
-    throw validationError('An item with a recipe cannot be marked as recipe-free');
+    throw validationError('server.validation.recipeFreeWithRecipe');
   }
 }
 
@@ -4227,7 +4227,7 @@ export async function getRecipe(id: number, locale = defaultLocale) {
 
 function cleanRecipePayload(payload: Record<string, unknown>): RecipePayload {
   return {
-    itemId: requirePositiveInteger(payload.itemId, 'Item is required'),
+    itemId: requirePositiveInteger(payload.itemId, 'server.validation.itemRequired'),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     materials: cleanQuantities(payload.materials)
   };
@@ -4256,11 +4256,11 @@ async function replaceRecipeRelations(client: DbClient, recipeId: number, payloa
 async function ensureItemCanHaveRecipe(client: DbClient, itemId: number): Promise<void> {
   const result = await client.query<{ no_recipe: boolean }>('SELECT no_recipe FROM items WHERE id = $1', [itemId]);
   if (result.rowCount === 0) {
-    throw validationError('Item is required');
+    throw validationError('server.validation.itemRequired');
   }
 
   if (result.rows[0].no_recipe) {
-    throw validationError('This item is marked as recipe-free');
+    throw validationError('server.validation.recipeFreeItem');
   }
 }
 

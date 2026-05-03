@@ -41,9 +41,11 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
+        VITE_SITE_URL: ${VITE_SITE_URL:-https://pokopiawiki.tootaio.com}
     environment:
-      VITE_API_BASE_URL: http://localhost:3001
-      VITE_SITE_URL: https://pokopiawiki.tootaio.com
+      PORT: 20015
     ports:
       - "20015:20015"
     depends_on:

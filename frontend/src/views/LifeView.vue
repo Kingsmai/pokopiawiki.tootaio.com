@@ -6,6 +6,7 @@ import FilterPanel from '../components/FilterPanel.vue';
 import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
+import StatusBadge from '../components/StatusBadge.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
@@ -31,7 +32,9 @@ import {
   getAuthToken,
   onAuthTokenChange,
   setAuthToken,
+  type AiModerationStatus,
   type AuthUser,
+  type Language,
   type LifeComment,
   type LifePost,
   type LifeReactionType,
@@ -52,6 +55,7 @@ type LifeCommentPageState = {
 const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
 const lifeTags = ref<NamedEntity[]>([]);
+const languages = ref<Language[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
 const loadingMore = ref(false);
@@ -60,6 +64,7 @@ const busy = ref(false);
 const searchDraft = ref('');
 const submittedSearch = ref('');
 const activeTagId = ref('all');
+const activeLanguageCode = ref('all');
 const body = ref('');
 const selectedTagIds = ref<string[]>([]);
 const editingPostId = ref<number | null>(null);
@@ -76,6 +81,8 @@ const commentErrors = ref<Record<string, string>>({});
 const reactionPickerPostId = ref<number | null>(null);
 const reactionBusyPostId = ref<number | null>(null);
 const reactionErrors = ref<Record<number, string>>({});
+const moderationBusyPostId = ref<number | null>(null);
+const moderationErrors = ref<Record<number, string>>({});
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
 const loadMoreSentinel = ref<HTMLElement | null>(null);
 const lifePostPageSize = 20;
@@ -91,6 +98,7 @@ const nextCursor = ref<string | null>(null);
 const hasMorePosts = ref(false);
 const loadMorePaused = ref(false);
 const allTagValue = 'all';
+const allLanguageValue = 'all';
 
 const reactionOptions = [
   { type: 'like', icon: iconReactionLike, labelKey: 'pages.life.reactionLike' },
@@ -113,9 +121,16 @@ const selectedFeedTagId = computed(() => {
   const tagId = Number(activeTagId.value);
   return activeTagId.value === allTagValue || !Number.isInteger(tagId) || tagId <= 0 ? undefined : tagId;
 });
+const selectedFeedLanguageCode = computed(() =>
+  activeLanguageCode.value === allLanguageValue ? undefined : activeLanguageCode.value
+);
 const tagFilterOptions = computed<TabOption[]>(() => [
   { value: allTagValue, label: t('pages.life.allTags') },
   ...lifeTags.value.map((tag) => ({ value: String(tag.id), label: tag.name }))
+]);
+const languageFilterOptions = computed<TabOption[]>(() => [
+  { value: allLanguageValue, label: t('pages.life.allLanguages') },
+  ...languages.value.map((language) => ({ value: language.code, label: language.name }))
 ]);
 const postModalTitle = computed(() => (isEditing.value ? t('pages.life.editPost') : t('pages.life.newPost')));
 const submitLabel = computed(() => {
@@ -156,6 +171,21 @@ async function loadLifeTags() {
   }
 }
 
+async function loadLanguages() {
+  try {
+    languages.value = (await api.languages()).filter((language) => language.enabled);
+
+    if (
+      activeLanguageCode.value !== allLanguageValue &&
+      !languages.value.some((language) => language.code === activeLanguageCode.value)
+    ) {
+      activeLanguageCode.value = allLanguageValue;
+    }
+  } catch (error) {
+    loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+  }
+}
+
 async function loadPosts() {
   const requestId = ++postsRequestId;
   loading.value = true;
@@ -166,7 +196,12 @@ async function loadPosts() {
   loadMorePaused.value = false;
 
   try {
-    const page = await api.lifePosts({ limit: lifePostPageSize, search: searchQuery.value, tagId: selectedFeedTagId.value });
+    const page = await api.lifePosts({
+      limit: lifePostPageSize,
+      search: searchQuery.value,
+      tagId: selectedFeedTagId.value,
+      language: selectedFeedLanguageCode.value
+    });
     if (requestId !== postsRequestId) {
       return;
     }
@@ -202,7 +237,13 @@ async function loadMorePosts() {
   loadError.value = '';
 
   try {
-    const page = await api.lifePosts({ cursor, limit: lifePostPageSize, search: searchQuery.value, tagId: selectedFeedTagId.value });
+    const page = await api.lifePosts({
+      cursor,
+      limit: lifePostPageSize,
+      search: searchQuery.value,
+      tagId: selectedFeedTagId.value,
+      language: selectedFeedLanguageCode.value
+    });
     if (requestId !== postsRequestId) {
       return;
     }
@@ -233,7 +274,8 @@ function resetForm() {
 function payload() {
   return {
     body: body.value.trim(),
-    tagIds: selectedLifeTagIds()
+    tagIds: selectedLifeTagIds(),
+    languageCode: selectedFeedLanguageCode.value ?? null
   };
 }
 
@@ -275,7 +317,9 @@ function matchesCurrentFilters(post: LifePost) {
   const tagId = selectedFeedTagId.value;
   const matchesSearch = keyword === '' || post.body.toLowerCase().includes(keyword);
   const matchesTag = tagId === undefined || post.tags.some((tag) => tag.id === tagId);
-  return matchesSearch && matchesTag;
+  const matchesLanguage =
+    selectedFeedLanguageCode.value === undefined || post.moderationLanguageCode === selectedFeedLanguageCode.value;
+  return matchesSearch && matchesTag && matchesLanguage;
 }
 
 function openCreatePostModal() {
@@ -412,6 +456,50 @@ function reactionCountLabel(post: LifePost, type: LifeReactionType) {
   });
 }
 
+function moderationLabel(status: AiModerationStatus) {
+  const labels: Record<AiModerationStatus, string> = {
+    unreviewed: t('pages.life.moderationUnreviewed'),
+    reviewing: t('pages.life.moderationReviewing'),
+    approved: t('pages.life.moderationApproved'),
+    rejected: t('pages.life.moderationRejected'),
+    failed: t('pages.life.moderationFailed')
+  };
+  return labels[status];
+}
+
+function moderationTone(status: AiModerationStatus) {
+  const tones: Record<AiModerationStatus, 'info' | 'success' | 'warning' | 'danger' | 'neutral'> = {
+    unreviewed: 'neutral',
+    reviewing: 'info',
+    approved: 'success',
+    rejected: 'danger',
+    failed: 'warning'
+  };
+  return tones[status];
+}
+
+function canRetryModeration(post: LifePost) {
+  return post.moderationStatus !== 'approved' && canManage(post);
+}
+
+async function retryPostModeration(post: LifePost) {
+  moderationBusyPostId.value = post.id;
+  const nextErrors = { ...moderationErrors.value };
+  delete nextErrors[post.id];
+  moderationErrors.value = nextErrors;
+
+  try {
+    replacePost(await api.retryLifePostModeration(post.id));
+  } catch (error) {
+    moderationErrors.value = {
+      ...moderationErrors.value,
+      [post.id]: error instanceof Error && error.message ? error.message : t('pages.life.moderationRetryFailed')
+    };
+  } finally {
+    moderationBusyPostId.value = null;
+  }
+}
+
 function replacePost(updatedPost: LifePost) {
   if (!matchesCurrentFilters(updatedPost)) {
     posts.value = posts.value.filter((post) => post.id !== updatedPost.id);
@@ -460,7 +548,7 @@ async function loadComments(post: LifePost, reset = false) {
   });
 
   try {
-    const page = await api.lifeComments(post.id, { limit: lifeCommentPageSize, cursor });
+    const page = await api.lifeComments(post.id, { limit: lifeCommentPageSize, cursor, language: selectedFeedLanguageCode.value });
     const nextItems = reset || !existing.loaded ? page.items : mergeComments(existing.items, page.items);
     setCommentPage(post.id, {
       items: nextItems,
@@ -584,7 +672,7 @@ async function toggleDefaultReaction(post: LifePost) {
 }
 
 async function toggleReaction(post: LifePost, reactionType: LifeReactionType) {
-  if (!canUseReactions()) {
+  if (!canUseReactions() || post.moderationStatus !== 'approved') {
     return;
   }
 
@@ -656,7 +744,10 @@ async function submitComment(post: LifePost) {
   clearCommentError(key);
 
   try {
-    const comment = await api.createLifeComment(post.id, { body: nextBody });
+    const comment = await api.createLifeComment(post.id, {
+      body: nextBody,
+      languageCode: selectedFeedLanguageCode.value ?? post.moderationLanguageCode
+    });
     const nextTotal = commentCount(post) + 1;
     post.commentCount = nextTotal;
     updateCommentPage(post, (page) => ({
@@ -686,7 +777,10 @@ async function submitReply(post: LifePost, comment: LifeComment) {
   clearCommentError(key);
 
   try {
-    const reply = await api.createLifeCommentReply(post.id, comment.id, { body: nextBody });
+    const reply = await api.createLifeCommentReply(post.id, comment.id, {
+      body: nextBody,
+      languageCode: selectedFeedLanguageCode.value ?? comment.moderationLanguageCode ?? post.moderationLanguageCode
+    });
     const nextTotal = commentCount(post) + 1;
     post.commentCount = nextTotal;
     comment.replies.push(reply);
@@ -788,7 +882,13 @@ watch([loadMoreSentinel, hasMorePosts, loading, loadingMore, loadMorePaused], ob
 watch(activeTagId, () => {
   void loadPosts();
 });
+watch(activeLanguageCode, () => {
+  expandedComments.value = {};
+  commentPages.value = {};
+  void loadPosts();
+});
 watch(locale, () => {
+  void loadLanguages();
   void loadLifeTags();
   void loadPosts();
 });
@@ -797,6 +897,7 @@ onMounted(() => {
   document.addEventListener('click', closeReactionPickerFromDocument);
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
   void loadCurrentUser();
+  void loadLanguages();
   void loadLifeTags();
   void loadPosts();
   removeAuthListener = onAuthTokenChange(() => {
@@ -913,6 +1014,7 @@ onUnmounted(() => {
       </div>
     </Modal>
 
+    <Tabs id="life-language-filter" v-model="activeLanguageCode" :tabs="languageFilterOptions" :label="t('pages.life.languages')" />
     <Tabs id="life-tag-filter" v-model="activeTagId" :tabs="tagFilterOptions" :label="t('pages.life.tags')" />
 
     <section class="life-feed" :aria-busy="loading || loadingMore" :aria-label="t('pages.life.kicker')">
@@ -964,6 +1066,21 @@ onUnmounted(() => {
               </div>
             </header>
 
+            <div class="life-post__moderation">
+              <StatusBadge :label="moderationLabel(post.moderationStatus)" :tone="moderationTone(post.moderationStatus)" compact />
+              <button
+                v-if="canRetryModeration(post)"
+                class="ui-button ui-button--ghost ui-button--small"
+                type="button"
+                :disabled="moderationBusyPostId === post.id"
+                @click="retryPostModeration(post)"
+              >
+                <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
+                {{ moderationBusyPostId === post.id ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry') }}
+              </button>
+            </div>
+            <p v-if="moderationErrors[post.id]" class="life-form__error" role="alert">{{ moderationErrors[post.id] }}</p>
+
             <p class="life-post__body">{{ post.body }}</p>
 
             <div v-if="post.tags.length" class="life-post__tags" :aria-label="t('pages.life.tags')">
@@ -981,7 +1098,7 @@ onUnmounted(() => {
                       :aria-controls="`life-reactions-${post.id}`"
                       :aria-expanded="reactionPickerPostId === post.id"
                       :aria-label="reactionButtonLabel(post)"
-                      :disabled="!canReact || reactionBusyPostId !== null"
+                      :disabled="!canReact || post.moderationStatus !== 'approved' || reactionBusyPostId !== null"
                       @click="toggleDefaultReaction(post)"
                       @contextmenu="handleReactionContextMenu($event, post.id)"
                       @keydown="handleReactionKeydown($event, post.id)"
@@ -996,7 +1113,7 @@ onUnmounted(() => {
                       :aria-controls="`life-reactions-${post.id}`"
                       :aria-expanded="reactionPickerPostId === post.id"
                       :aria-label="t('pages.life.chooseReaction')"
-                      :disabled="!canReact || reactionBusyPostId !== null"
+                      :disabled="!canReact || post.moderationStatus !== 'approved' || reactionBusyPostId !== null"
                       @click="toggleReactionPicker(post.id)"
                       @contextmenu="handleReactionContextMenu($event, post.id)"
                       @keydown="handleReactionKeydown($event, post.id)"
@@ -1021,7 +1138,7 @@ onUnmounted(() => {
                       type="button"
                       :aria-pressed="post.myReaction === option.type"
                       :aria-label="reactionOptionLabel(post, option.type)"
-                      :disabled="isReactionBusy(post.id)"
+                      :disabled="post.moderationStatus !== 'approved' || isReactionBusy(post.id)"
                       @click="toggleReaction(post, option.type)"
                     >
                       <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
@@ -1036,6 +1153,7 @@ onUnmounted(() => {
                   :aria-controls="`life-comments-${post.id}`"
                   :aria-expanded="areCommentsExpanded(post.id)"
                   :aria-label="areCommentsExpanded(post.id) ? t('pages.life.hideComments') : t('pages.life.comment')"
+                  :disabled="post.moderationStatus !== 'approved'"
                   @click="toggleComments(post)"
                 >
                   <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
@@ -1070,6 +1188,7 @@ onUnmounted(() => {
                   :aria-controls="`life-comments-${post.id}`"
                   :aria-expanded="areCommentsExpanded(post.id)"
                   :aria-label="t('pages.life.commentsCount', { count: commentCount(post) })"
+                  :disabled="post.moderationStatus !== 'approved'"
                   @click="toggleComments(post)"
                 >
                   <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />

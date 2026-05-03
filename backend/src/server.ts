@@ -88,6 +88,9 @@ import {
   reorderLanguages,
   reorderPokemon,
   reorderRecipes,
+  retryEntityDiscussionCommentModeration,
+  retryLifeCommentModeration,
+  retryLifePostModeration,
   setLifePostReaction,
   updateConfig,
   updateDailyChecklistItem,
@@ -98,6 +101,11 @@ import {
   updatePokemon,
   updateRecipe
 } from './queries.ts';
+import {
+  getAiModerationSettings,
+  startAiModerationWorker,
+  updateAiModerationSettings
+} from './aiModeration.ts';
 import {
   getSystemWordings,
   listSystemWordingRows,
@@ -758,11 +766,15 @@ app.get('/api/users/:id/profile', async (request, reply) => {
 app.get('/api/users/:id/life-posts', async (request, reply) => {
   const { id } = request.params as { id: string };
   const user = await optionalUser(request);
+  const canViewAll = user
+    ? userHasPermission(user, 'life.posts.update-any') || userHasPermission(user, 'life.posts.delete-any')
+    : false;
   const posts = await listUserLifePosts(
     Number(id),
     request.query as Record<string, string | string[] | undefined>,
     user?.id ?? null,
-    requestLocale(request)
+    requestLocale(request),
+    canViewAll
   );
   return posts ? posts : notFound(reply, request);
 });
@@ -791,12 +803,27 @@ app.get('/api/users/:id/comments', async (request, reply) => {
 
 app.get('/api/life-posts', async (request) => {
   const user = await optionalUser(request);
-  return listLifePosts(request.query as Record<string, string | string[] | undefined>, user?.id ?? null, requestLocale(request));
+  const canViewAll = user
+    ? userHasPermission(user, 'life.posts.update-any') || userHasPermission(user, 'life.posts.delete-any')
+    : false;
+  return listLifePosts(
+    request.query as Record<string, string | string[] | undefined>,
+    user?.id ?? null,
+    requestLocale(request),
+    canViewAll
+  );
 });
 
 app.get('/api/life-posts/:postId/comments', async (request, reply) => {
   const { postId } = request.params as { postId: string };
-  const comments = await listLifeComments(Number(postId), request.query as Record<string, string | string[] | undefined>);
+  const user = await optionalUser(request);
+  const canViewAll = user ? userHasPermission(user, 'life.comments.delete-any') : false;
+  const comments = await listLifeComments(
+    Number(postId),
+    request.query as Record<string, string | string[] | undefined>,
+    user?.id ?? null,
+    canViewAll
+  );
   return comments ? comments : notFound(reply, request);
 });
 
@@ -846,6 +873,26 @@ app.put('/api/life-posts/:id', async (request, reply) => {
   const post = await updateLifePost(
     Number(id),
     request.body as Record<string, unknown>,
+    user.id,
+    requestLocale(request),
+    userHasPermission(user, 'life.posts.update-any')
+  );
+  return post ? post : notFound(reply, request);
+});
+
+app.post('/api/life-posts/:id/moderation/retry', async (request, reply) => {
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['life.posts.update', 'life.posts.update-any'],
+    'communityWrite'
+  );
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const post = await retryLifePostModeration(
+    Number(id),
     user.id,
     requestLocale(request),
     userHasPermission(user, 'life.posts.update-any')
@@ -903,12 +950,35 @@ app.delete('/api/life-comments/:id', async (request, reply) => {
   return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
+app.post('/api/life-comments/:id/moderation/retry', async (request, reply) => {
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['life.comments.create', 'life.comments.delete-any'],
+    'communityWrite'
+  );
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const comment = await retryLifeCommentModeration(
+    Number(id),
+    user.id,
+    userHasPermission(user, 'life.comments.delete-any')
+  );
+  return comment ? comment : notFound(reply, request);
+});
+
 app.get('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
   const { entityType, entityId } = request.params as { entityType: string; entityId: string };
+  const user = await optionalUser(request);
+  const canViewAll = user ? userHasPermission(user, 'discussions.comments.delete-any') : false;
   const comments = await listEntityDiscussionComments(
     entityType,
     Number(entityId),
-    request.query as Record<string, string | string[] | undefined>
+    request.query as Record<string, string | string[] | undefined>,
+    user?.id ?? null,
+    canViewAll
   );
   return comments ? comments : notFound(reply, request);
 });
@@ -968,6 +1038,26 @@ app.delete('/api/discussions/comments/:id', async (request, reply) => {
     userHasPermission(user, 'discussions.comments.delete-any')
   );
   return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
+app.post('/api/discussions/comments/:id/moderation/retry', async (request, reply) => {
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['discussions.comments.create', 'discussions.comments.delete-any'],
+    'communityWrite'
+  );
+  if (!user) {
+    return;
+  }
+
+  const { id } = request.params as { id: string };
+  const comment = await retryEntityDiscussionCommentModeration(
+    Number(id),
+    user.id,
+    userHasPermission(user, 'discussions.comments.delete-any')
+  );
+  return comment ? comment : notFound(reply, request);
 });
 
 app.get('/api/pokemon', async (request) =>
@@ -1307,6 +1397,19 @@ app.put('/api/admin/system-wordings/:key', async (request, reply) => {
   return updateSystemWordingValue(key, request.body as Record<string, unknown>, user.id);
 });
 
+app.get('/api/admin/ai-moderation', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.ai-moderation.read');
+  return user ? getAiModerationSettings() : undefined;
+});
+
+app.put('/api/admin/ai-moderation', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.ai-moderation.update', 'adminWrite');
+  if (!user) {
+    return;
+  }
+  return updateAiModerationSettings(request.body as Record<string, unknown>, user.id);
+});
+
 app.get('/api/admin/config/:type', async (request, reply) => {
   const user = await requirePermission(request, reply, 'admin.config.read');
   if (!user) {
@@ -1376,6 +1479,7 @@ const port = Number(process.env.BACKEND_PORT ?? 3001);
 try {
   await initializeDatabase();
   await syncSystemWordingCatalog();
+  await startAiModerationWorker(app.log);
   await app.listen({ host: '0.0.0.0', port });
 } catch (error) {
   app.log.error(error);

@@ -245,10 +245,13 @@ export interface DailyChecklistItem {
 
 export type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
 export type LifeReactionCounts = Record<LifeReactionType, number>;
+export type AiModerationStatus = 'unreviewed' | 'reviewing' | 'approved' | 'rejected' | 'failed';
 
 export interface LifePost {
   id: number;
   body: string;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;
@@ -271,11 +274,13 @@ export interface LifePostsParams {
   limit?: number;
   search?: string;
   tagId?: string | number;
+  language?: string;
 }
 
 export interface CommentPageParams {
   cursor?: string | null;
   limit?: number;
+  language?: string;
 }
 
 export interface LifeComment {
@@ -284,6 +289,8 @@ export interface LifeComment {
   parentCommentId: number | null;
   body: string;
   deleted: boolean;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;
@@ -552,10 +559,12 @@ export interface DailyChecklistPayload {
 export interface LifePostPayload {
   body: string;
   tagIds: number[];
+  languageCode?: string | null;
 }
 
 export interface LifeCommentPayload {
   body: string;
+  languageCode?: string | null;
 }
 
 export type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats';
@@ -567,6 +576,8 @@ export interface EntityDiscussionComment {
   parentCommentId: number | null;
   body: string;
   deleted: boolean;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;
@@ -601,6 +612,33 @@ export interface UserCommentActivityPage {
 
 export interface EntityDiscussionCommentPayload {
   body: string;
+  languageCode?: string | null;
+}
+
+export type AiModerationApiFormat = 'gemini-generate-content' | 'openai-chat-completions';
+export type AiModerationAuthMode = 'query-key' | 'bearer-token';
+
+export interface AiModerationSettings {
+  enabled: boolean;
+  apiFormat: AiModerationApiFormat;
+  authMode: AiModerationAuthMode;
+  endpoint: string;
+  model: string;
+  requestsPerMinute: number;
+  apiKeyConfigured: boolean;
+  updatedAt: string;
+  updatedBy: UserSummary | null;
+}
+
+export interface AiModerationSettingsPayload {
+  enabled: boolean;
+  apiFormat: AiModerationApiFormat;
+  authMode: AiModerationAuthMode;
+  endpoint: string;
+  model: string;
+  requestsPerMinute: number;
+  apiKey?: string;
+  clearApiKey?: boolean;
 }
 
 export function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -773,6 +811,9 @@ export const api = {
     getJson<SystemWording[]>(`/api/admin/system-wordings${buildQuery(params)}`),
   updateSystemWording: (key: string, payload: { locale: string; value: string }) =>
     sendJson<SystemWording[]>(`/api/admin/system-wordings/${encodeURIComponent(key)}`, 'PUT', payload),
+  aiModerationSettings: () => getJson<AiModerationSettings>('/api/admin/ai-moderation'),
+  updateAiModerationSettings: (payload: AiModerationSettingsPayload) =>
+    sendJson<AiModerationSettings>('/api/admin/ai-moderation', 'PUT', payload),
   register: (payload: RegisterPayload) => sendJson<{ message: string }>('/api/auth/register', 'POST', payload),
   verifyEmail: (token: string) =>
     sendJson<{ message: string; user: AuthUser }>('/api/auth/verify-email', 'POST', { token }),
@@ -835,12 +876,15 @@ export const api = {
         cursor: params.cursor ?? undefined,
         limit: params.limit,
         search: params.search?.trim(),
-        tagId: params.tagId
+        tagId: params.tagId,
+        language: params.language
       })}`
     ),
   createLifePost: (payload: LifePostPayload) => sendJson<LifePost>('/api/life-posts', 'POST', payload),
   updateLifePost: (id: string | number, payload: LifePostPayload) =>
     sendJson<LifePost>(`/api/life-posts/${id}`, 'PUT', payload),
+  retryLifePostModeration: (id: string | number) =>
+    sendJson<LifePost>(`/api/life-posts/${id}/moderation/retry`, 'POST', {}),
   deleteLifePost: (id: string | number) => deleteJson(`/api/life-posts/${id}`),
   setLifeReaction: (id: string | number, reactionType: LifeReactionType) =>
     sendJson<LifePost>(`/api/life-posts/${id}/reaction`, 'PUT', { reactionType }),
@@ -851,17 +895,21 @@ export const api = {
     getJson<LifeCommentsPage>(
       `/api/life-posts/${postId}/comments${buildQuery({
         cursor: params.cursor ?? undefined,
-        limit: params.limit
+        limit: params.limit,
+        language: params.language
       })}`
     ),
   createLifeCommentReply: (postId: string | number, commentId: string | number, payload: LifeCommentPayload) =>
     sendJson<LifeComment>(`/api/life-posts/${postId}/comments/${commentId}/replies`, 'POST', payload),
+  retryLifeCommentModeration: (id: string | number) =>
+    sendJson<LifeComment>(`/api/life-comments/${id}/moderation/retry`, 'POST', {}),
   deleteLifeComment: (id: string | number) => deleteJson(`/api/life-comments/${id}`),
   entityDiscussion: (entityType: DiscussionEntityType, entityId: string | number, params: CommentPageParams = {}) =>
     getJson<EntityDiscussionCommentsPage>(
       `/api/discussions/${entityType}/${entityId}/comments${buildQuery({
         cursor: params.cursor ?? undefined,
-        limit: params.limit
+        limit: params.limit,
+        language: params.language
       })}`
     ),
   createEntityDiscussionComment: (
@@ -875,6 +923,8 @@ export const api = {
     commentId: string | number,
     payload: EntityDiscussionCommentPayload
   ) => sendJson<EntityDiscussionComment>(`/api/discussions/${entityType}/${entityId}/comments/${commentId}/replies`, 'POST', payload),
+  retryEntityDiscussionModeration: (id: string | number) =>
+    sendJson<EntityDiscussionComment>(`/api/discussions/comments/${id}/moderation/retry`, 'POST', {}),
   deleteEntityDiscussionComment: (id: string | number) => deleteJson(`/api/discussions/comments/${id}`),
   uploadImage: (
     entityType: ImageUploadEntityType,

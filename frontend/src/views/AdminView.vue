@@ -29,6 +29,10 @@ import {
 import { defaultLocale, getCurrentLocale, loadSystemWordings, setCurrentLocale } from '../i18n';
 import {
   api,
+  type AiModerationApiFormat,
+  type AiModerationAuthMode,
+  type AiModerationSettings,
+  type AiModerationSettingsPayload,
   type AuthUser,
   type AdminUser,
   type ConfigType,
@@ -53,6 +57,7 @@ type AdminTab =
   | 'users'
   | 'roles'
   | 'permissions'
+  | 'aiModeration'
   | 'config'
   | 'languages'
   | 'wordings'
@@ -70,6 +75,7 @@ const adminTabIcons: Record<AdminTab, AppIcon> = {
   users: iconProfile,
   roles: iconKey,
   permissions: iconKey,
+  aiModeration: iconAdmin,
   config: iconAdmin,
   languages: iconTranslate,
   wordings: iconTranslate,
@@ -105,7 +111,8 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
       label: t('pages.admin.localizationGroup'),
       items: [
         { key: 'languages', label: t('pages.admin.languages'), permission: 'admin.languages.read' },
-        { key: 'wordings', label: t('pages.admin.wordings'), permission: 'admin.wordings.read' }
+        { key: 'wordings', label: t('pages.admin.wordings'), permission: 'admin.wordings.read' },
+        { key: 'aiModeration', label: t('pages.admin.aiModeration'), permission: 'admin.ai-moderation.read' }
       ]
     },
     {
@@ -150,6 +157,7 @@ const itemRows = ref<Item[]>([]);
 const recipeRows = ref<Recipe[]>([]);
 const habitatRows = ref<Habitat[]>([]);
 const wordingRows = ref<SystemWording[]>([]);
+const aiModerationSettings = ref<AiModerationSettings | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const busy = ref(false);
 const contentLoading = ref(false);
@@ -158,6 +166,16 @@ const configForm = ref({ id: 0, name: '', translations: {} as TranslationMap, ha
 const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
 const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
 const wordingForm = ref({ key: '', locale: defaultLocale, value: '', defaultValue: '', placeholders: [] as string[] });
+const aiModerationForm = ref({
+  enabled: true,
+  apiFormat: 'gemini-generate-content' as AiModerationApiFormat,
+  authMode: 'bearer-token' as AiModerationAuthMode,
+  endpoint: 'https://ai.example.com/v1beta',
+  model: 'gemini-2.0-flash-lite',
+  requestsPerMinute: 10,
+  apiKey: '',
+  clearApiKey: false
+});
 const userRoleForm = ref({ userId: 0, roleIds: [] as number[] });
 const roleForm = ref({ id: 0, key: '', name: '', description: '', level: 100, enabled: true });
 const rolePermissionForm = ref({ roleId: 0, permissionIds: [] as number[] });
@@ -255,6 +273,14 @@ const activeWordingSurfaceTab = computed({
     wordingSurface.value = value === 'frontend' || value === 'backend' || value === 'email' ? value : '';
   }
 });
+const aiModerationApiFormatOptions = computed<Array<{ value: AiModerationApiFormat; label: string }>>(() => [
+  { value: 'gemini-generate-content', label: t('pages.admin.aiModerationFormatGemini') },
+  { value: 'openai-chat-completions', label: t('pages.admin.aiModerationFormatOpenAi') }
+]);
+const aiModerationAuthModeOptions = computed<Array<{ value: AiModerationAuthMode; label: string }>>(() => [
+  { value: 'bearer-token', label: t('pages.admin.aiModerationAuthBearer') },
+  { value: 'query-key', label: t('pages.admin.aiModerationAuthQueryKey') }
+]);
 const filteredWordingRows = computed(() =>
   wordingRows.value.filter((item) => {
     if (wordingModule.value && item.module !== wordingModule.value) return false;
@@ -363,6 +389,19 @@ function resetLanguageForm() {
 
 function resetWordingForm() {
   wordingForm.value = { key: '', locale: wordingLocale.value || defaultLocale, value: '', defaultValue: '', placeholders: [] };
+}
+
+function resetAiModerationForm(settings: AiModerationSettings | null = aiModerationSettings.value) {
+  aiModerationForm.value = {
+    enabled: settings?.enabled ?? true,
+    apiFormat: settings?.apiFormat ?? 'gemini-generate-content',
+    authMode: settings?.authMode ?? 'bearer-token',
+    endpoint: settings?.endpoint ?? 'https://ai.example.com/v1beta',
+    model: settings?.model ?? 'gemini-2.0-flash-lite',
+    requestsPerMinute: settings?.requestsPerMinute ?? 10,
+    apiKey: '',
+    clearApiKey: false
+  };
 }
 
 function resetUserRoleForm() {
@@ -781,6 +820,11 @@ async function loadWordings() {
   wordingRows.value = await api.systemWordings({ locale: wordingLocale.value });
 }
 
+async function loadAiModerationSettings() {
+  aiModerationSettings.value = await api.aiModerationSettings();
+  resetAiModerationForm(aiModerationSettings.value);
+}
+
 async function reloadWordings() {
   await run(loadWordings);
 }
@@ -796,6 +840,27 @@ async function saveWording() {
       setCurrentLocale(getCurrentLocale());
     }
     closeWordingModal();
+  });
+}
+
+async function saveAiModerationSettings() {
+  await run(async () => {
+    const payload: AiModerationSettingsPayload = {
+      enabled: aiModerationForm.value.enabled,
+      apiFormat: aiModerationForm.value.apiFormat,
+      authMode: aiModerationForm.value.authMode,
+      endpoint: aiModerationForm.value.endpoint,
+      model: aiModerationForm.value.model,
+      requestsPerMinute: aiModerationForm.value.requestsPerMinute,
+      clearApiKey: aiModerationForm.value.clearApiKey
+    };
+
+    if (aiModerationForm.value.apiKey.trim()) {
+      payload.apiKey = aiModerationForm.value.apiKey.trim();
+    }
+
+    aiModerationSettings.value = await api.updateAiModerationSettings(payload);
+    resetAiModerationForm(aiModerationSettings.value);
   });
 }
 
@@ -863,6 +928,7 @@ async function loadCurrentTab(showSkeleton = false) {
     if (activeTab.value === 'permissions') await loadPermissions();
     if (activeTab.value === 'languages') await loadLanguages();
     if (activeTab.value === 'wordings') await loadWordings();
+    if (activeTab.value === 'aiModeration') await loadAiModerationSettings();
     if (activeTab.value === 'checklist') await loadChecklist();
     if (activeTab.value === 'pokemon') await loadPokemon();
     if (activeTab.value === 'items') await loadItems();
@@ -1333,6 +1399,110 @@ onMounted(() => {
           <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
         </div>
       </div>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'aiModeration'" class="detail-section">
+      <div class="detail-section__header">
+        <div>
+          <h2>{{ t('pages.admin.aiModeration') }}</h2>
+          <p class="meta-line">
+            {{
+              aiModerationSettings?.apiKeyConfigured
+                ? t('pages.admin.aiModerationApiKeyConfigured')
+                : t('pages.admin.aiModerationApiKeyMissing')
+            }}
+          </p>
+        </div>
+      </div>
+
+      <form class="modal-edit-form ai-moderation-form" @submit.prevent="saveAiModerationSettings">
+        <div class="check-row">
+          <label>
+            <input v-model="aiModerationForm.enabled" type="checkbox" :disabled="busy || !can('admin.ai-moderation.update')" />
+            {{ t('pages.admin.aiModerationEnabled') }}
+          </label>
+        </div>
+        <div class="field">
+          <label for="ai-moderation-format">{{ t('pages.admin.aiModerationFormat') }}</label>
+          <select
+            id="ai-moderation-format"
+            v-model="aiModerationForm.apiFormat"
+            :disabled="busy || !can('admin.ai-moderation.update')"
+            required
+          >
+            <option v-for="option in aiModerationApiFormatOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="ai-moderation-auth-mode">{{ t('pages.admin.aiModerationAuthMode') }}</label>
+          <select
+            id="ai-moderation-auth-mode"
+            v-model="aiModerationForm.authMode"
+            :disabled="busy || !can('admin.ai-moderation.update')"
+            required
+          >
+            <option v-for="option in aiModerationAuthModeOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="ai-moderation-endpoint">{{ t('pages.admin.aiModerationEndpoint') }}</label>
+          <input
+            id="ai-moderation-endpoint"
+            v-model="aiModerationForm.endpoint"
+            :disabled="busy || !can('admin.ai-moderation.update')"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="ai-moderation-model">{{ t('pages.admin.aiModerationModel') }}</label>
+          <input
+            id="ai-moderation-model"
+            v-model="aiModerationForm.model"
+            :disabled="busy || !can('admin.ai-moderation.update')"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="ai-moderation-rpm">{{ t('pages.admin.aiModerationRpm') }}</label>
+          <input
+            id="ai-moderation-rpm"
+            v-model.number="aiModerationForm.requestsPerMinute"
+            type="number"
+            min="1"
+            max="60"
+            :disabled="busy || !can('admin.ai-moderation.update')"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="ai-moderation-api-key">{{ t('pages.admin.aiModerationApiKey') }}</label>
+          <input
+            id="ai-moderation-api-key"
+            v-model="aiModerationForm.apiKey"
+            type="password"
+            autocomplete="new-password"
+            :disabled="busy || !can('admin.ai-moderation.update')"
+          />
+        </div>
+        <div class="check-row">
+          <label>
+            <input
+              v-model="aiModerationForm.clearApiKey"
+              type="checkbox"
+              :disabled="busy || !can('admin.ai-moderation.update') || !aiModerationSettings?.apiKeyConfigured"
+            />
+            {{ t('pages.admin.aiModerationClearApiKey') }}
+          </label>
+        </div>
+        <button v-if="can('admin.ai-moderation.update')" class="ui-button ui-button--primary" type="submit" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+      </form>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'pokemon'" class="detail-section">

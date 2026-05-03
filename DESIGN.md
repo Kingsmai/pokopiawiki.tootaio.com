@@ -293,9 +293,43 @@
 - 被删除实体的讨论会随实体删除一并清理。
 - 讨论按创建时间正序展示。
 - 讨论列表按顶层评论分页读取，支持 `limit` / `cursor`；每页顶层评论携带其一层回复，响应包含 `items`、`nextCursor`、`hasMore`、`total`。
+- 实体讨论评论和回复必须进入 AI 审核；未审核通过的评论不向普通访客公开。
+- 作者本人和拥有 `discussions.comments.delete-any` 权限的管理用户可看到相关评论的审核状态，并可触发重新审核。
+- 审核状态包括：`unreviewed`、`reviewing`、`approved`、`rejected`、`failed`；前端面向用户展示为未审核、审核中、审核通过、审核不通过、审核失败。
+- 新增或更新审核目标时先进入不可公开状态；只有 AI 审核通过后才进入普通公开讨论列表。
+- 审核失败不等于审核通过；失败内容保持不可公开，用户可重新审核。
+- AI 审核会自动识别评论适合的语言区，语言区使用启用状态的 `languages.code`，但不影响系统 UI 语言。
+- 讨论列表支持按语言区读取；`language=all` 或不传语言参数时读取全部已公开语言区，传入具体语言 code 时只读取对应语言区。
 - 讨论内容是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 - API 对外只返回评论作者的 `id` 和 `displayName`。
-- API 不返回邮箱、token/hash、内部调试字段、`deleted_at`、`deleted_by_user_id` 等内部删除字段。
+- API 不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误、`deleted_at`、`deleted_by_user_id` 等内部字段。
+
+## AI 审核
+
+- Life Post、Life Comment、实体讨论评论和实体讨论回复都是用户生成内容，必须经过 AI 审核。
+- AI 审核支持 Gemini-compatible `generateContent` API 和 OpenAI-compatible `chat/completions` API；End Point、API Key、模型、API 格式、鉴权方式、RPM 限流和启用状态可由拥有 `admin.ai-moderation.*` 权限的管理员配置。
+- 默认使用 Gemini-compatible `generateContent` API 和 Bearer token 鉴权，以兼容 NewAPI 等转发服务；鉴权方式仍支持 Gemini 原生 query `key`。
+- 后端日志必须对 API Key 脱敏，且不回显给前端。
+- 默认 End Point 为 `https://ai.example.com/v1beta`；API Key 不写入前端包，不回显给前端，管理 API 只返回是否已配置。
+- 管理配置存储在后端受控表中；API 不返回 API Key 明文、模型原始响应、prompt、请求体、内部错误堆栈或调试字段。
+- 后端日志可以记录安全脱敏后的第三方 HTTP 状态和错误摘要，用于排查 Endpoint、模型或鉴权配置问题；日志不得包含 API Key、审核 prompt 或用户正文。
+- 服务端审核请求必须限流，按配置的每分钟请求数串行发送，避免触发第三方 API RPM 限制。
+- 为节省 Token：
+  - 审核只发送待审核正文、允许的语言 code 和最小必要规则，不发送用户资料、页面上下文、审计 payload 或无关业务数据。
+  - 对相同正文和相同 API 配置/模型使用内容 hash 缓存审核结果，避免重复调用 AI。
+  - 审核请求使用结构化 JSON 输出、低温度和较小输出 token 上限。
+- 安全要求：
+  - 用户正文必须作为不可信内容处理，不能作为系统指令或开发指令执行。
+  - 不允许通过用户正文关闭、绕过或降低安全审核。
+  - 不使用会关闭 Gemini 安全拦截的配置；如果 Gemini 安全机制拦截 prompt 或候选结果，该内容按审核不通过处理。
+  - OpenAI-compatible 转发模式下仍必须使用独立系统指令和结构化 JSON 解析；模型未返回明确合法结果时按审核失败处理。
+  - 模型返回格式不合法、网络失败、超时或限流失败时，内容标记为审核失败，不得公开。
+  - 只有 `approved` 状态可向普通访客公开；`unreviewed`、`reviewing`、`rejected`、`failed` 均不可公开。
+- 审核语言区独立于系统 UI 语言：
+  - 前台可选择 All languages 或具体语言区浏览内容。
+  - 发布时客户端可传当前语言区作为 hint，但最终语言区由服务端 AI 审核结果决定。
+  - 如果 AI 无法识别到启用语言区，回退到默认语言。
+- 审核状态对普通访客不用于解释内部流程；只在作者本人或有管理权限的用户需要处理内容时展示。
 
 ## 全局配置数据
 
@@ -629,19 +663,27 @@ Life Post 可配置：
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
 - Feed 使用 Tabs 展示 Life 标签筛选；包含 All 和后台配置的 Life 标签；点击标签后按该标签筛选，搜索和标签筛选可以同时生效。
+- Feed 使用语言筛选展示 All languages 和启用语言；语言区筛选独立于系统 UI 语言，搜索、标签和语言筛选可以同时生效。
 - 信息流分页加载，初始展示最新一页，滚动到底部自动加载更多。
-- 当前没有图片上传、转发、置顶或单独审核流程。
+- 当前没有图片上传、转发或置顶。
+- Life Post 和 Life Comment 必须进入 AI 审核；未审核通过的内容不向普通访客公开。
+- 作者本人和拥有对应 `*-any` 管理权限的用户可以看到相关内容的审核状态，并可触发重新审核。
+- Life Post 必须展示审核状态：审核中、未审核、审核失败、审核不通过；审核通过也可作为状态展示。
+- 新增或更新 Life Post 后先进入不可公开状态，AI 审核通过后才出现在普通公开 Feed。
+- Life Comment 和回复审核通过后才出现在普通公开评论列表、评论数量和评论预览中。
+- 审核失败不等于审核通过；失败内容保持不可公开，用户可重新审核。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 
 API 暴露边界：
 
 - Life Post 作者信息只返回 `id` 和 `displayName`。
 - Life Post 标签只返回 `id` 和按当前语言解析后的 `name`。
+- Life Post 可返回面向用户展示所需的审核状态、审核语言区和是否可重审；不返回内部错误、AI prompt、模型响应或 retry 细节。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
 - Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
-- Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。每个 Life Post 的评论字段只包含 `commentCount` 和 `commentPreview`，不内嵌完整评论列表。
-- Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌。
-- API 不返回邮箱、token/hash、内部调试字段或不必要的审计 payload。
+- Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。每个 Life Post 的评论字段只包含已公开或当前用户可见评论的 `commentCount` 和 `commentPreview`，不内嵌完整评论列表。
+- Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌；普通访客只读取审核通过评论。
+- API 不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误或不必要的审计 payload。
 - API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
 - 非作者只有拥有对应 `*-any` 管理权限时才能编辑或删除其他用户的 Life Post 或 Life Comment。
 
@@ -727,13 +769,13 @@ API 暴露边界：
 - `GET /api/items/:id`
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
-- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `tagId` 按 Life 标签筛选。
-- `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论。
+- `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `tagId` 按 Life 标签筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区。
+- `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
 - `GET /api/users/:id/reactions`：分页读取该用户设置过 Reaction 且目标未删除的 Life Post。
 - `GET /api/users/:id/comments`：分页读取该用户未删除的 Life 评论和实体讨论评论。
-- `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`。
+- `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；支持 `language` 按审核语言区筛选；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`。
 
 认证 API：
 
@@ -772,14 +814,17 @@ API 暴露边界：
   - `POST /api/life-posts`
   - `PUT /api/life-posts/:id`
   - `DELETE /api/life-posts/:id`
+  - `POST /api/life-posts/:id/moderation/retry`
 - Life Comment 的创建，以及作者本人对 Life Comment 的删除，需要对应 `life.comments.*` 权限；管理他人内容需要对应 `*-any` 权限。
   - `POST /api/life-posts/:postId/comments`
   - `POST /api/life-posts/:postId/comments/:commentId/replies`
   - `DELETE /api/life-comments/:id`
+  - `POST /api/life-comments/:id/moderation/retry`
 - 实体讨论评论的创建、回复，以及作者本人对评论的删除，需要对应 `discussions.comments.*` 权限；管理他人内容需要对应 `*-any` 权限。
   - `POST /api/discussions/:entityType/:entityId/comments`
   - `POST /api/discussions/:entityType/:entityId/comments/:commentId/replies`
   - `DELETE /api/discussions/comments/:id`
+  - `POST /api/discussions/comments/:id/moderation/retry`
 - Life Reaction 的设置、替换和取消。
   - `PUT /api/life-posts/:id/reaction`
   - `DELETE /api/life-posts/:id/reaction`
@@ -787,8 +832,11 @@ API 暴露边界：
 - 全局配置项的查看、创建、更新、删除、排序需要对应 `admin.config.*` 权限。
 - 语言的查看、创建、更新、删除、排序需要对应 `admin.languages.*` 权限。
 - 系统级文案的查看和更新需要对应 `admin.wordings.*` 权限。
-  - `GET /api/admin/system-wordings`
-  - `PUT /api/admin/system-wordings/:key`
+- `GET /api/admin/system-wordings`
+- AI 审核配置的查看和更新需要对应 `admin.ai-moderation.*` 权限。
+  - `GET /api/admin/ai-moderation`
+  - `PUT /api/admin/ai-moderation`
+- `PUT /api/admin/system-wordings/:key`
 - Pokemon、物品、材料单、栖息地的列表排序需要对应实体的 `order` 权限。
 
 ## 开发与验证

@@ -12,6 +12,10 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PoolClient } from 'pg';
+import {
+  requestAiModerationReview,
+  type AiModerationStatus
+} from './aiModeration.ts';
 
 type QueryValue = string | string[] | undefined;
 
@@ -175,10 +179,12 @@ type DailyChecklistPayload = {
 type LifePostPayload = {
   body: string;
   tagIds: number[];
+  languageCode: string | null;
 };
 
 type LifeCommentPayload = {
   body: string;
+  languageCode: string | null;
 };
 
 type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats';
@@ -187,6 +193,7 @@ type DiscussionEntityDefinition = {
 };
 type EntityDiscussionCommentPayload = {
   body: string;
+  languageCode: string | null;
 };
 type EntityDiscussionCommentRow = {
   id: number;
@@ -195,6 +202,8 @@ type EntityDiscussionCommentRow = {
   parentCommentId: number | null;
   body: string;
   deleted: boolean;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
   createdAt: Date;
   createdAtCursor?: string;
   updatedAt: Date;
@@ -219,6 +228,8 @@ type LifeCommentRow = {
   parentCommentId: number | null;
   body: string;
   deleted: boolean;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
   createdAt: Date;
   createdAtCursor?: string;
   updatedAt: Date;
@@ -232,6 +243,8 @@ type LifeComment = Omit<LifeCommentRow, 'createdAtCursor'> & {
 type LifePostRow = {
   id: number;
   body: string;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
   createdAt: Date;
   createdAtCursor: string;
   updatedAt: Date;
@@ -472,6 +485,19 @@ function asString(value: QueryValue): string | undefined {
 export function cleanLocale(value: unknown): string {
   const locale = typeof value === 'string' ? value.trim() : '';
   return localePattern.test(locale) ? locale : defaultLocale;
+}
+
+function cleanModerationLanguageCode(value: unknown): string | null {
+  const languageCode = typeof value === 'string' ? value.trim() : '';
+  if (!languageCode || languageCode === 'all') {
+    return null;
+  }
+
+  if (!localePattern.test(languageCode)) {
+    throw validationError('server.validation.invalidField');
+  }
+
+  return languageCode;
 }
 
 function sqlLiteral(value: string): string {
@@ -2190,7 +2216,8 @@ function cleanLifePostPayload(payload: Record<string, unknown>): LifePostPayload
 
   return {
     body,
-    tagIds
+    tagIds,
+    languageCode: cleanModerationLanguageCode(payload.languageCode)
   };
 }
 
@@ -2200,7 +2227,7 @@ function cleanLifeCommentPayload(payload: Record<string, unknown>): LifeCommentP
     throw validationError('server.validation.commentTooLong');
   }
 
-  return { body };
+  return { body, languageCode: cleanModerationLanguageCode(payload.languageCode) };
 }
 
 function emptyLifeReactionCounts(): LifeReactionCounts {
@@ -2246,6 +2273,45 @@ function cleanUserCommentActivitySourceFilter(value: QueryValue): UserCommentAct
   return source;
 }
 
+function cleanModerationLanguageFilter(value: QueryValue): string | null {
+  return cleanModerationLanguageCode(asString(value));
+}
+
+function addModerationVisibilityCondition(
+  conditions: string[],
+  params: unknown[],
+  alias: string,
+  ownerColumn: string,
+  userId: number | null,
+  canViewAll: boolean
+): void {
+  if (canViewAll) {
+    return;
+  }
+
+  if (userId !== null) {
+    params.push(userId);
+    conditions.push(`(${alias}.ai_moderation_status = 'approved' OR ${ownerColumn} = $${params.length})`);
+    return;
+  }
+
+  conditions.push(`${alias}.ai_moderation_status = 'approved'`);
+}
+
+function addModerationLanguageCondition(
+  conditions: string[],
+  params: unknown[],
+  alias: string,
+  languageCode: string | null
+): void {
+  if (!languageCode) {
+    return;
+  }
+
+  params.push(languageCode);
+  conditions.push(`${alias}.ai_moderation_language_code = $${params.length}`);
+}
+
 function lifePostProjection(locale = defaultLocale): string {
   const tagName = localizedName('life-tags', 'lt', locale);
 
@@ -2253,6 +2319,8 @@ function lifePostProjection(locale = defaultLocale): string {
     SELECT
       lp.id,
       lp.body,
+      lp.ai_moderation_status AS "moderationStatus",
+      lp.ai_moderation_language_code AS "moderationLanguageCode",
       lp.created_at AS "createdAt",
       lp.created_at::text AS "createdAtCursor",
       lp.updated_at AS "updatedAt",
@@ -2373,6 +2441,8 @@ function hydrateLifePost(
   return {
     id: post.id,
     body: post.body,
+    moderationStatus: post.moderationStatus,
+    moderationLanguageCode: post.moderationLanguageCode,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
     author: post.author,
@@ -2393,6 +2463,8 @@ function lifeCommentProjection(whereClause: string): string {
       lc.parent_comment_id AS "parentCommentId",
       CASE WHEN lc.deleted_at IS NULL THEN lc.body ELSE '' END AS body,
       lc.deleted_at IS NOT NULL AS deleted,
+      lc.ai_moderation_status AS "moderationStatus",
+      lc.ai_moderation_language_code AS "moderationLanguageCode",
       lc.created_at AS "createdAt",
       lc.created_at::text AS "createdAtCursor",
       lc.updated_at AS "updatedAt",
@@ -2432,7 +2504,11 @@ function buildLifeCommentTree(rows: LifeCommentRow[]): LifeComment[] {
   return topLevelComments;
 }
 
-async function lifeCommentCountsForPosts(postIds: number[]): Promise<Map<number, number>> {
+async function lifeCommentCountsForPosts(
+  postIds: number[],
+  userId: number | null,
+  canViewAll: boolean
+): Promise<Map<number, number>> {
   const countsByPost = new Map<number, number>();
   for (const postId of postIds) {
     countsByPost.set(postId, 0);
@@ -2442,14 +2518,18 @@ async function lifeCommentCountsForPosts(postIds: number[]): Promise<Map<number,
     return countsByPost;
   }
 
+  const params: unknown[] = [postIds];
+  const conditions = ['lc.post_id = ANY($1::integer[])'];
+  addModerationVisibilityCondition(conditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
+
   const rows = await query<{ postId: number; total: number }>(
     `
       SELECT post_id AS "postId", COUNT(*)::integer AS total
-      FROM life_post_comments
-      WHERE post_id = ANY($1::integer[])
+      FROM life_post_comments lc
+      WHERE ${conditions.join(' AND ')}
       GROUP BY post_id
     `,
-    [postIds]
+    params
   );
 
   for (const row of rows) {
@@ -2459,11 +2539,20 @@ async function lifeCommentCountsForPosts(postIds: number[]): Promise<Map<number,
   return countsByPost;
 }
 
-async function lifeCommentPreviewForPosts(postIds: number[]): Promise<Map<number, LifeComment[]>> {
+async function lifeCommentPreviewForPosts(
+  postIds: number[],
+  userId: number | null,
+  canViewAll: boolean
+): Promise<Map<number, LifeComment[]>> {
   const commentsByPost = new Map<number, LifeComment[]>();
   if (postIds.length === 0) {
     return commentsByPost;
   }
+
+  const params: unknown[] = [postIds];
+  const previewConditions = ['lc.post_id = ANY($1::integer[])', 'lc.parent_comment_id IS NULL'];
+  addModerationVisibilityCondition(previewConditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
+  params.push(lifeCommentPreviewLimit);
 
   const rows = await query<LifeCommentRow>(
     `
@@ -2474,15 +2563,14 @@ async function lifeCommentPreviewForPosts(postIds: number[]): Promise<Map<number
             lc.id,
             ROW_NUMBER() OVER (PARTITION BY lc.post_id ORDER BY lc.created_at DESC, lc.id DESC) AS preview_rank
           FROM life_post_comments lc
-          WHERE lc.post_id = ANY($1::integer[])
-            AND lc.parent_comment_id IS NULL
+          WHERE ${previewConditions.join(' AND ')}
         ) ranked
-        WHERE preview_rank <= $2
+        WHERE preview_rank <= $${params.length}
       )
       ${lifeCommentProjection('WHERE lc.id IN (SELECT id FROM preview_top)')}
       ORDER BY lc.post_id, lc.created_at, lc.id
     `,
-    [postIds, lifeCommentPreviewLimit]
+    params
   );
 
   for (const postId of postIds) {
@@ -2492,20 +2580,28 @@ async function lifeCommentPreviewForPosts(postIds: number[]): Promise<Map<number
   return commentsByPost;
 }
 
-export async function listLifeComments(postIdValue: number, paramsQuery: QueryParams = {}): Promise<LifeCommentsPage | null> {
+export async function listLifeComments(
+  postIdValue: number,
+  paramsQuery: QueryParams = {},
+  userId: number | null = null,
+  canViewAll = false
+): Promise<LifeCommentsPage | null> {
   const postId = requirePositiveInteger(postIdValue, 'server.validation.recordInvalid');
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanCommentLimit(paramsQuery.limit);
+  const languageCode = cleanModerationLanguageFilter(paramsQuery.language);
+  const postParams: unknown[] = [postId];
+  const postConditions = ['lp.id = $1', 'lp.deleted_at IS NULL'];
+  addModerationVisibilityCondition(postConditions, postParams, 'lp', 'lp.created_by_user_id', userId, canViewAll);
   const exists = await queryOne<{ exists: boolean }>(
     `
       SELECT EXISTS (
         SELECT 1
-        FROM life_posts
-        WHERE id = $1
-          AND deleted_at IS NULL
+        FROM life_posts lp
+        WHERE ${postConditions.join(' AND ')}
       ) AS exists
     `,
-    [postId]
+    postParams
   );
 
   if (exists?.exists !== true) {
@@ -2514,6 +2610,8 @@ export async function listLifeComments(postIdValue: number, paramsQuery: QueryPa
 
   const params: unknown[] = [postId];
   const topLevelConditions = ['lc.post_id = $1', 'lc.parent_comment_id IS NULL'];
+  addModerationVisibilityCondition(topLevelConditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
+  addModerationLanguageCondition(topLevelConditions, params, 'lc', languageCode);
 
   if (cursor) {
     params.push(cursor.createdAt, cursor.id);
@@ -2533,21 +2631,31 @@ export async function listLifeComments(postIdValue: number, paramsQuery: QueryPa
   const topLevelComments = hasMore ? topLevelRows.slice(0, limit) : topLevelRows;
   const topLevelIds = topLevelComments.map((comment) => comment.id);
   const replyRows = topLevelIds.length
-    ? await query<LifeCommentRow>(
-        `
-          ${lifeCommentProjection('WHERE lc.parent_comment_id = ANY($1::integer[])')}
-          ORDER BY lc.created_at, lc.id
-        `,
-        [topLevelIds]
-      )
+    ? await (async () => {
+        const replyParams: unknown[] = [topLevelIds];
+        const replyConditions = ['lc.parent_comment_id = ANY($1::integer[])'];
+        addModerationVisibilityCondition(replyConditions, replyParams, 'lc', 'lc.created_by_user_id', userId, canViewAll);
+        addModerationLanguageCondition(replyConditions, replyParams, 'lc', languageCode);
+        return query<LifeCommentRow>(
+          `
+            ${lifeCommentProjection(`WHERE ${replyConditions.join(' AND ')}`)}
+            ORDER BY lc.created_at, lc.id
+          `,
+          replyParams
+        );
+      })()
     : [];
+  const totalParams: unknown[] = [postId];
+  const totalConditions = ['lc.post_id = $1'];
+  addModerationVisibilityCondition(totalConditions, totalParams, 'lc', 'lc.created_by_user_id', userId, canViewAll);
+  addModerationLanguageCondition(totalConditions, totalParams, 'lc', languageCode);
   const total = await queryOne<{ total: number }>(
     `
       SELECT COUNT(*)::integer AS total
-      FROM life_post_comments
-      WHERE post_id = $1
+      FROM life_post_comments lc
+      WHERE ${totalConditions.join(' AND ')}
     `,
-    [postId]
+    totalParams
   );
 
   return {
@@ -2645,12 +2753,14 @@ async function listLifePostsWithFilters(
   paramsQuery: QueryParams = {},
   userId: number | null = null,
   locale = defaultLocale,
-  filters: LifePostFilters = {}
+  filters: LifePostFilters = {},
+  canViewAll = false
 ): Promise<LifePostsPage> {
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanLifePostLimit(paramsQuery.limit);
   const search = asString(paramsQuery.search)?.trim();
   const tagIdValue = asString(paramsQuery.tagId)?.trim();
+  const languageCode = cleanModerationLanguageFilter(paramsQuery.language);
   const params: unknown[] = [];
   const conditions: string[] = ['lp.deleted_at IS NULL'];
 
@@ -2658,6 +2768,9 @@ async function listLifePostsWithFilters(
     params.push(filters.authorId);
     conditions.push(`lp.created_by_user_id = $${params.length}`);
   }
+
+  addModerationVisibilityCondition(conditions, params, 'lp', 'lp.created_by_user_id', userId, canViewAll);
+  addModerationLanguageCondition(conditions, params, 'lp', languageCode);
 
   if (search) {
     params.push(`%${search}%`);
@@ -2695,8 +2808,8 @@ async function listLifePostsWithFilters(
   const posts = hasMore ? rows.slice(0, limit) : rows;
 
   const postIds = posts.map((post) => post.id);
-  const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds);
-  const commentCountsByPost = await lifeCommentCountsForPosts(postIds);
+  const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds, userId, canViewAll);
+  const commentCountsByPost = await lifeCommentCountsForPosts(postIds, userId, canViewAll);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, userId);
 
   return {
@@ -2709,9 +2822,10 @@ async function listLifePostsWithFilters(
 export async function listLifePosts(
   paramsQuery: QueryParams = {},
   userId: number | null = null,
-  locale = defaultLocale
+  locale = defaultLocale,
+  canViewAll = false
 ): Promise<LifePostsPage> {
-  return listLifePostsWithFilters(paramsQuery, userId, locale);
+  return listLifePostsWithFilters(paramsQuery, userId, locale, {}, canViewAll);
 }
 
 async function getPublicProfileUser(userIdValue: number): Promise<PublicProfileUser | null> {
@@ -2747,7 +2861,13 @@ export async function getPublicUserProfile(userIdValue: number): Promise<PublicU
         COALESCE((SELECT COUNT(*)::integer FROM wiki_edit_logs WHERE user_id = $1 AND action = 'update'), 0) AS "wikiUpdates",
         COALESCE((SELECT COUNT(*)::integer FROM wiki_edit_logs WHERE user_id = $1 AND action = 'delete'), 0) AS "wikiDeletes",
         COALESCE((SELECT COUNT(*)::integer FROM entity_image_uploads WHERE created_by_user_id = $1), 0) AS "imageUploads",
-        COALESCE((SELECT COUNT(*)::integer FROM life_posts WHERE created_by_user_id = $1 AND deleted_at IS NULL), 0) AS "lifePosts",
+        COALESCE((
+          SELECT COUNT(*)::integer
+          FROM life_posts
+          WHERE created_by_user_id = $1
+            AND deleted_at IS NULL
+            AND ai_moderation_status = 'approved'
+        ), 0) AS "lifePosts",
         COALESCE((
           SELECT COUNT(*)::integer
           FROM life_post_comments lc
@@ -2755,6 +2875,8 @@ export async function getPublicUserProfile(userIdValue: number): Promise<PublicU
           WHERE lc.created_by_user_id = $1
             AND lc.deleted_at IS NULL
             AND lp.deleted_at IS NULL
+            AND lc.ai_moderation_status = 'approved'
+            AND lp.ai_moderation_status = 'approved'
         ), 0) AS "lifeComments",
         COALESCE((
           SELECT COUNT(*)::integer
@@ -2762,12 +2884,14 @@ export async function getPublicUserProfile(userIdValue: number): Promise<PublicU
           JOIN life_posts lp ON lp.id = lpr.post_id
           WHERE lpr.user_id = $1
             AND lp.deleted_at IS NULL
+            AND lp.ai_moderation_status = 'approved'
         ), 0) AS "lifeReactions",
         COALESCE((
           SELECT COUNT(*)::integer
           FROM entity_discussion_comments
           WHERE created_by_user_id = $1
             AND deleted_at IS NULL
+            AND ai_moderation_status = 'approved'
         ), 0) AS "discussionComments"
     `,
     [user.id]
@@ -2814,36 +2938,40 @@ export async function listUserLifePosts(
   userIdValue: number,
   paramsQuery: QueryParams = {},
   viewerUserId: number | null = null,
-  locale = defaultLocale
+  locale = defaultLocale,
+  canViewAll = false
 ): Promise<LifePostsPage | null> {
   const user = await getPublicProfileUser(userIdValue);
   if (!user) {
     return null;
   }
 
-  return listLifePostsWithFilters(paramsQuery, viewerUserId, locale, { authorId: user.id });
+  return listLifePostsWithFilters(paramsQuery, viewerUserId, locale, { authorId: user.id }, canViewAll);
 }
 
 async function hydrateLifePostsById(
   postIds: number[],
   viewerUserId: number | null,
-  locale: string
+  locale: string,
+  canViewAll = false
 ): Promise<Map<number, LifePost>> {
   const postById = new Map<number, LifePost>();
   if (postIds.length === 0) {
     return postById;
   }
 
+  const params: unknown[] = [postIds];
+  const conditions = ['lp.id = ANY($1::integer[])', 'lp.deleted_at IS NULL'];
+  addModerationVisibilityCondition(conditions, params, 'lp', 'lp.created_by_user_id', viewerUserId, canViewAll);
   const posts = await query<LifePostRow>(
     `
       ${lifePostProjection(locale)}
-      WHERE lp.id = ANY($1::integer[])
-        AND lp.deleted_at IS NULL
+      WHERE ${conditions.join(' AND ')}
     `,
-    [postIds]
+    params
   );
-  const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds);
-  const commentCountsByPost = await lifeCommentCountsForPosts(postIds);
+  const commentPreviewByPost = await lifeCommentPreviewForPosts(postIds, viewerUserId, canViewAll);
+  const commentCountsByPost = await lifeCommentCountsForPosts(postIds, viewerUserId, canViewAll);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts(postIds, viewerUserId);
 
   for (const post of posts) {
@@ -2868,7 +2996,7 @@ export async function listUserReactionActivities(
   const limit = cleanLifePostLimit(paramsQuery.limit);
   const reactionType = cleanLifeReactionFilter(paramsQuery.reactionType);
   const params: unknown[] = [user.id];
-  const conditions = ['lpr.user_id = $1', 'lp.deleted_at IS NULL'];
+  const conditions = ['lpr.user_id = $1', 'lp.deleted_at IS NULL', "lp.ai_moderation_status = 'approved'"];
 
   if (reactionType) {
     params.push(reactionType);
@@ -2997,6 +3125,8 @@ export async function listUserCommentActivities(
         WHERE lc.created_by_user_id = $1
           AND lc.deleted_at IS NULL
           AND lp.deleted_at IS NULL
+          AND lc.ai_moderation_status = 'approved'
+          AND lp.ai_moderation_status = 'approved'
 
         UNION ALL
 
@@ -3027,6 +3157,7 @@ export async function listUserCommentActivities(
         LEFT JOIN habitats h ON edc.entity_type = 'habitats' AND h.id = edc.entity_id
         WHERE edc.created_by_user_id = $1
           AND edc.deleted_at IS NULL
+          AND edc.ai_moderation_status = 'approved'
       )
       SELECT
         source,
@@ -3087,8 +3218,8 @@ async function getLifePostById(id: number, userId: number | null = null, locale 
     return null;
   }
 
-  const commentPreviewByPost = await lifeCommentPreviewForPosts([post.id]);
-  const commentCountsByPost = await lifeCommentCountsForPosts([post.id]);
+  const commentPreviewByPost = await lifeCommentPreviewForPosts([post.id], userId, false);
+  const commentCountsByPost = await lifeCommentCountsForPosts([post.id], userId, false);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts([post.id], userId);
   return hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost);
 }
@@ -3113,8 +3244,8 @@ export async function createLifePost(payload: Record<string, unknown>, userId: n
   const id = await withTransaction(async (client) => {
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO life_posts (body, created_by_user_id, updated_by_user_id)
-        VALUES ($1, $2, $2)
+        INSERT INTO life_posts (body, ai_moderation_status, ai_moderation_language_code, created_by_user_id, updated_by_user_id)
+        VALUES ($1, 'reviewing', NULL, $2, $2)
         RETURNING id
       `,
       [cleanPayload.body, userId]
@@ -3125,6 +3256,7 @@ export async function createLifePost(payload: Record<string, unknown>, userId: n
     return createdId;
   });
 
+  await requestAiModerationReview({ type: 'life-post', id }, { languageCode: cleanPayload.languageCode, resetRetries: true });
   return getLifePostById(id, userId, locale);
 }
 
@@ -3141,7 +3273,15 @@ export async function updateLifePost(
     const result = await client.query<{ id: number }>(
       `
         UPDATE life_posts
-        SET body = $1, updated_by_user_id = $2, updated_at = now()
+        SET body = $1,
+            ai_moderation_status = 'reviewing',
+            ai_moderation_language_code = NULL,
+            ai_moderation_content_hash = NULL,
+            ai_moderation_checked_at = NULL,
+            ai_moderation_retry_count = 0,
+            ai_moderation_updated_at = now(),
+            updated_by_user_id = $2,
+            updated_at = now()
         WHERE id = $3
           AND ($4 = true OR created_by_user_id = $2)
           AND deleted_at IS NULL
@@ -3158,6 +3298,13 @@ export async function updateLifePost(
     await replaceLifePostTags(client, resultId, cleanPayload.tagIds);
     return resultId;
   });
+
+  if (updatedId) {
+    await requestAiModerationReview(
+      { type: 'life-post', id: updatedId },
+      { languageCode: cleanPayload.languageCode, resetRetries: true }
+    );
+  }
 
   return updatedId ? getLifePostById(updatedId, userId, locale) : null;
 }
@@ -3181,6 +3328,27 @@ export async function deleteLifePost(id: number, userId: number, allowAny = fals
   return Boolean(result);
 }
 
+export async function retryLifePostModeration(id: number, userId: number, locale = defaultLocale, allowAny = false) {
+  const postId = requirePositiveInteger(id, 'server.validation.recordInvalid');
+  const row = await queryOne<{ id: number }>(
+    `
+      SELECT id
+      FROM life_posts
+      WHERE id = $1
+        AND ($3 = true OR created_by_user_id = $2)
+        AND deleted_at IS NULL
+    `,
+    [postId, userId, allowAny]
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  await requestAiModerationReview({ type: 'life-post', id: postId }, { incrementRetries: true });
+  return getLifePostById(postId, userId, locale);
+}
+
 export async function setLifePostReaction(
   postId: number,
   payload: Record<string, unknown>,
@@ -3198,6 +3366,7 @@ export async function setLifePostReaction(
         FROM life_posts
         WHERE id = $1
           AND deleted_at IS NULL
+          AND ai_moderation_status = 'approved'
       )
       ON CONFLICT (post_id, user_id)
       DO UPDATE SET reaction_type = EXCLUDED.reaction_type, updated_at = now()
@@ -3220,6 +3389,7 @@ export async function deleteLifePostReaction(postId: number, userId: number, loc
           FROM life_posts
           WHERE id = $1
             AND deleted_at IS NULL
+            AND ai_moderation_status = 'approved'
         )
       RETURNING post_id AS "postId"
     `,
@@ -3234,18 +3404,26 @@ export async function createLifeComment(postId: number, payload: Record<string, 
 
   const result = await queryOne<{ id: number }>(
     `
-      INSERT INTO life_post_comments (post_id, body, created_by_user_id)
-      SELECT $1, $2, $3
+      INSERT INTO life_post_comments (post_id, body, ai_moderation_status, ai_moderation_language_code, created_by_user_id)
+      SELECT $1, $2, 'reviewing', NULL, $3
       WHERE EXISTS (
         SELECT 1
         FROM life_posts
         WHERE id = $1
           AND deleted_at IS NULL
+          AND ai_moderation_status = 'approved'
       )
       RETURNING id
     `,
     [postId, cleanPayload.body, userId]
   );
+
+  if (result) {
+    await requestAiModerationReview(
+      { type: 'life-comment', id: result.id },
+      { languageCode: cleanPayload.languageCode, resetRetries: true }
+    );
+  }
 
   return result ? getLifeCommentById(result.id) : null;
 }
@@ -3260,19 +3438,35 @@ export async function createLifeCommentReply(
 
   const result = await queryOne<{ id: number }>(
     `
-      INSERT INTO life_post_comments (post_id, parent_comment_id, body, created_by_user_id)
-      SELECT lc.post_id, lc.id, $3, $4
+      INSERT INTO life_post_comments (
+        post_id,
+        parent_comment_id,
+        body,
+        ai_moderation_status,
+        ai_moderation_language_code,
+        created_by_user_id
+      )
+      SELECT lc.post_id, lc.id, $3, 'reviewing', NULL, $4
       FROM life_post_comments lc
       JOIN life_posts lp ON lp.id = lc.post_id
       WHERE lc.post_id = $1
         AND lc.id = $2
         AND lc.parent_comment_id IS NULL
         AND lc.deleted_at IS NULL
+        AND lc.ai_moderation_status = 'approved'
         AND lp.deleted_at IS NULL
+        AND lp.ai_moderation_status = 'approved'
       RETURNING id
     `,
     [postId, commentId, cleanPayload.body, userId]
   );
+
+  if (result) {
+    await requestAiModerationReview(
+      { type: 'life-comment', id: result.id },
+      { languageCode: cleanPayload.languageCode, resetRetries: true }
+    );
+  }
 
   return result ? getLifeCommentById(result.id) : null;
 }
@@ -3293,6 +3487,27 @@ export async function deleteLifeComment(id: number, userId: number, allowAny = f
   return Boolean(result);
 }
 
+export async function retryLifeCommentModeration(id: number, userId: number, allowAny = false) {
+  const commentId = requirePositiveInteger(id, 'server.validation.commentInvalid');
+  const row = await queryOne<{ id: number }>(
+    `
+      SELECT id
+      FROM life_post_comments
+      WHERE id = $1
+        AND ($3 = true OR created_by_user_id = $2)
+        AND deleted_at IS NULL
+    `,
+    [commentId, userId, allowAny]
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  await requestAiModerationReview({ type: 'life-comment', id: commentId }, { incrementRetries: true });
+  return getLifeCommentById(commentId);
+}
+
 function cleanDiscussionEntityType(value: unknown): DiscussionEntityType {
   if (typeof value !== 'string' || !Object.hasOwn(discussionEntityDefinitions, value)) {
     throw validationError('server.validation.entityTypeInvalid');
@@ -3307,7 +3522,7 @@ function cleanEntityDiscussionCommentPayload(payload: Record<string, unknown>): 
     throw validationError('server.validation.commentTooLong');
   }
 
-  return { body };
+  return { body, languageCode: cleanModerationLanguageCode(payload.languageCode) };
 }
 
 async function entityDiscussionExists(
@@ -3333,6 +3548,8 @@ function entityDiscussionCommentProjection(whereClause: string): string {
       edc.parent_comment_id AS "parentCommentId",
       CASE WHEN edc.deleted_at IS NULL THEN edc.body ELSE '' END AS body,
       edc.deleted_at IS NOT NULL AS deleted,
+      edc.ai_moderation_status AS "moderationStatus",
+      edc.ai_moderation_language_code AS "moderationLanguageCode",
       edc.created_at AS "createdAt",
       edc.created_at::text AS "createdAtCursor",
       edc.updated_at AS "updatedAt",
@@ -3391,12 +3608,15 @@ async function getEntityDiscussionCommentById(id: number): Promise<EntityDiscuss
 export async function listEntityDiscussionComments(
   entityTypeValue: string,
   entityIdValue: number,
-  paramsQuery: QueryParams = {}
+  paramsQuery: QueryParams = {},
+  userId: number | null = null,
+  canViewAll = false
 ): Promise<EntityDiscussionCommentsPage | null> {
   const entityType = cleanDiscussionEntityType(entityTypeValue);
   const entityId = requirePositiveInteger(entityIdValue, 'server.validation.recordInvalid');
   const cursor = decodeLifePostCursor(paramsQuery.cursor);
   const limit = cleanCommentLimit(paramsQuery.limit);
+  const languageCode = cleanModerationLanguageFilter(paramsQuery.language);
 
   if (!(await entityDiscussionExists(pool, entityType, entityId))) {
     return null;
@@ -3404,6 +3624,8 @@ export async function listEntityDiscussionComments(
 
   const params: unknown[] = [entityType, entityId];
   const topLevelConditions = ['edc.entity_type = $1', 'edc.entity_id = $2', 'edc.parent_comment_id IS NULL'];
+  addModerationVisibilityCondition(topLevelConditions, params, 'edc', 'edc.created_by_user_id', userId, canViewAll);
+  addModerationLanguageCondition(topLevelConditions, params, 'edc', languageCode);
 
   if (cursor) {
     params.push(cursor.createdAt, cursor.id);
@@ -3423,22 +3645,31 @@ export async function listEntityDiscussionComments(
   const topLevelComments = hasMore ? topLevelRows.slice(0, limit) : topLevelRows;
   const topLevelIds = topLevelComments.map((comment) => comment.id);
   const replyRows = topLevelIds.length
-    ? await query<EntityDiscussionCommentRow>(
-        `
-          ${entityDiscussionCommentProjection('WHERE edc.parent_comment_id = ANY($1::integer[])')}
-          ORDER BY edc.created_at, edc.id
-        `,
-        [topLevelIds]
-      )
+    ? await (async () => {
+        const replyParams: unknown[] = [topLevelIds];
+        const replyConditions = ['edc.parent_comment_id = ANY($1::integer[])'];
+        addModerationVisibilityCondition(replyConditions, replyParams, 'edc', 'edc.created_by_user_id', userId, canViewAll);
+        addModerationLanguageCondition(replyConditions, replyParams, 'edc', languageCode);
+        return query<EntityDiscussionCommentRow>(
+          `
+            ${entityDiscussionCommentProjection(`WHERE ${replyConditions.join(' AND ')}`)}
+            ORDER BY edc.created_at, edc.id
+          `,
+          replyParams
+        );
+      })()
     : [];
+  const totalParams: unknown[] = [entityType, entityId];
+  const totalConditions = ['edc.entity_type = $1', 'edc.entity_id = $2'];
+  addModerationVisibilityCondition(totalConditions, totalParams, 'edc', 'edc.created_by_user_id', userId, canViewAll);
+  addModerationLanguageCondition(totalConditions, totalParams, 'edc', languageCode);
   const total = await queryOne<{ total: number }>(
     `
       SELECT COUNT(*)::integer AS total
-      FROM entity_discussion_comments
-      WHERE entity_type = $1
-        AND entity_id = $2
+      FROM entity_discussion_comments edc
+      WHERE ${totalConditions.join(' AND ')}
     `,
-    [entityType, entityId]
+    totalParams
   );
 
   return {
@@ -3474,8 +3705,15 @@ export async function createEntityDiscussionComment(
 
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO entity_discussion_comments (entity_type, entity_id, body, created_by_user_id)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO entity_discussion_comments (
+          entity_type,
+          entity_id,
+          body,
+          ai_moderation_status,
+          ai_moderation_language_code,
+          created_by_user_id
+        )
+        VALUES ($1, $2, $3, 'reviewing', NULL, $4)
         RETURNING id
       `,
       [entityType, entityId, cleanPayload.body, userId]
@@ -3483,6 +3721,13 @@ export async function createEntityDiscussionComment(
 
     return result.rows[0].id;
   });
+
+  if (id) {
+    await requestAiModerationReview(
+      { type: 'discussion-comment', id },
+      { languageCode: cleanPayload.languageCode, resetRetries: true }
+    );
+  }
 
   return id ? getEntityDiscussionCommentById(id) : null;
 }
@@ -3511,15 +3756,18 @@ export async function createEntityDiscussionReply(
           entity_id,
           parent_comment_id,
           body,
+          ai_moderation_status,
+          ai_moderation_language_code,
           created_by_user_id
         )
-        SELECT edc.entity_type, edc.entity_id, edc.id, $4, $5
+        SELECT edc.entity_type, edc.entity_id, edc.id, $4, 'reviewing', NULL, $5
         FROM entity_discussion_comments edc
         WHERE edc.entity_type = $1
           AND edc.entity_id = $2
           AND edc.id = $3
           AND edc.parent_comment_id IS NULL
           AND edc.deleted_at IS NULL
+          AND edc.ai_moderation_status = 'approved'
         RETURNING id
       `,
       [entityType, entityId, commentId, cleanPayload.body, userId]
@@ -3527,6 +3775,13 @@ export async function createEntityDiscussionReply(
 
     return result.rows[0]?.id ?? null;
   });
+
+  if (id) {
+    await requestAiModerationReview(
+      { type: 'discussion-comment', id },
+      { languageCode: cleanPayload.languageCode, resetRetries: true }
+    );
+  }
 
   return id ? getEntityDiscussionCommentById(id) : null;
 }
@@ -3548,6 +3803,31 @@ export async function deleteEntityDiscussionComment(id: number, userId: number, 
   );
 
   return Boolean(result);
+}
+
+export async function retryEntityDiscussionCommentModeration(
+  id: number,
+  userId: number,
+  allowAny = false
+): Promise<EntityDiscussionComment | null> {
+  const commentId = requirePositiveInteger(id, 'server.validation.commentInvalid');
+  const row = await queryOne<{ id: number }>(
+    `
+      SELECT id
+      FROM entity_discussion_comments
+      WHERE id = $1
+        AND ($3 = true OR created_by_user_id = $2)
+        AND deleted_at IS NULL
+    `,
+    [commentId, userId, allowAny]
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  await requestAiModerationReview({ type: 'discussion-comment', id: commentId }, { incrementRetries: true });
+  return getEntityDiscussionCommentById(commentId);
 }
 
 async function deleteEntityDiscussionCommentsForEntity(

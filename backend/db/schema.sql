@@ -368,6 +368,19 @@ CROSS JOIN roles r
 WHERE r.key = 'owner'
 ON CONFLICT DO NOTHING;
 
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+CROSS JOIN roles r
+WHERE u.email_verified_at IS NOT NULL
+  AND r.key = 'editor'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM user_roles ur
+    WHERE ur.user_id = u.id
+  )
+ON CONFLICT DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS system_wording_keys (
   key text PRIMARY KEY,
   module text NOT NULL,

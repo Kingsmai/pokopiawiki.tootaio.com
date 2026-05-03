@@ -422,6 +422,24 @@ async function ensureOwnerRoleForUser(client: DbClient, userId: number): Promise
   );
 }
 
+async function ensureDefaultEditorRoleForUser(client: DbClient, userId: number): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO user_roles (user_id, role_id)
+      SELECT $1, r.id
+      FROM roles r
+      WHERE r.key = 'editor'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_roles ur
+          WHERE ur.user_id = $1
+        )
+      ON CONFLICT DO NOTHING
+    `,
+    [userId]
+  );
+}
+
 function toRoleSummary(row: RoleRow): RoleSummary {
   return {
     id: row.id,
@@ -832,6 +850,7 @@ export async function verifyEmail(payload: Record<string, unknown>, locale = def
       user.id
     ]);
     await ensureOwnerRoleForUser(client, user.id);
+    await ensureDefaultEditorRoleForUser(client, user.id);
 
     const publicUser = await publicUserById(user.id, client);
     return { message: await authMessage(locale, 'emailVerified'), user: publicUser ?? toPublicUser(user) };

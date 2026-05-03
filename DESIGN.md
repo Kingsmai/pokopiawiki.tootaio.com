@@ -172,6 +172,11 @@
   - 新建权限会自动关联到 `owner` 角色，确保 Owner 始终拥有可用权限全集；`owner` 角色的权限分配不能在管理端被手动删改。
   - 系统必须始终至少保留一个拥有 `admin.permissions.update` 且可管理权限的有效用户；核心 RBAC 管理权限（`admin.access`、`admin.users.*`、`admin.roles.*`、`admin.permissions.*`）不能被禁用或删除；不能删除最后一个 Owner，不能移除最后一个 Owner 的关键权限能力。
 - 权限管理能力本身也通过权限控制；只有拥有相应管理权限的用户可以查看、新增、编辑、删除权限、角色和用户角色关系。
+- 用户角色分配必须同时满足层级边界：
+  - `PUT /api/admin/users/:id/roles` 的基础权限为 `admin.users.update`。
+  - 调用者只能分配或移除 `roles.level` 严格低于自己最高启用角色等级的角色。
+  - `owner` 角色只能由当前拥有启用 `owner` 角色且拥有 `admin.users.assign-owner` 权限的调用者分配或移除。
+  - 非 Owner 即使拥有 `admin.users.update` 或自定义高等级角色，也不能分配或移除 `owner` 角色。
 - 管理 API 只返回权限管理所需字段，不返回密码、session token hash、verification/reset token hash、内部审计 payload 或调试字段。
 
 ## Referral
@@ -716,7 +721,7 @@ API 暴露边界：
 权限管理 API：
 
 - `GET /api/admin/users`：需要 `admin.users.read`
-- `PUT /api/admin/users/:id/roles`：需要 `admin.users.update`
+- `PUT /api/admin/users/:id/roles`：需要 `admin.users.update`；分配或移除 `owner` 还需要调用者本身是 Owner 且拥有 `admin.users.assign-owner`；所有角色变更受 `roles.level` 层级限制
 - `GET /api/admin/roles`：需要 `admin.roles.read`
 - `POST /api/admin/roles`：需要 `admin.roles.create`
 - `PUT /api/admin/roles/:id`：需要 `admin.roles.update`

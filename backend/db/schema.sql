@@ -139,6 +139,7 @@ VALUES
   ('admin.access', 'Access admin', 'Open the management area.', 'Admin', true),
   ('admin.users.read', 'View users', 'View user role assignments.', 'Users', true),
   ('admin.users.update', 'Manage user roles', 'Assign and remove roles from users.', 'Users', true),
+  ('admin.users.assign-owner', 'Assign Owner role', 'Assign and remove the Owner role from users.', 'Users', true),
   ('admin.roles.read', 'View roles', 'View role configuration.', 'Roles', true),
   ('admin.roles.create', 'Create roles', 'Create configurable roles.', 'Roles', true),
   ('admin.roles.update', 'Update roles', 'Edit roles and role permission assignments.', 'Roles', true),

@@ -140,10 +140,13 @@ type RolePermissionRow = QueryResultRow & {
 
 const roleKeyPattern = /^[a-z][a-z0-9-]{1,63}$/;
 const permissionKeyPattern = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
+const ownerRoleKey = 'owner';
+const assignOwnerPermissionKey = 'admin.users.assign-owner';
 const criticalPermissionKeys = [
   'admin.access',
   'admin.users.read',
   'admin.users.update',
+  assignOwnerPermissionKey,
   'admin.roles.read',
   'admin.roles.create',
   'admin.roles.update',
@@ -580,6 +583,10 @@ function cleanIdList(value: unknown): number[] {
   }
 
   return ids;
+}
+
+function highestRoleLevel(roles: RoleSummary[]): number {
+  return roles.reduce((highestLevel, role) => Math.max(highestLevel, role.level), -1);
 }
 
 async function assertCriticalPermissionsEnabled(client: DbClient): Promise<void> {
@@ -1357,28 +1364,74 @@ export async function updateAdminUserRoles(
       throw statusError('server.permissions.userNotFound', 404);
     }
 
-    if (roleIds.length) {
-      const countRow = await clientQueryOne<QueryResultRow & { count: string }>(
-        client,
-        'SELECT COUNT(*)::text AS count FROM roles WHERE id = ANY($1::int[])',
-        [roleIds]
-      );
-      if (Number(countRow?.count ?? 0) !== roleIds.length) {
-        throw statusError('server.permissions.roleNotFound', 404);
+    const currentRoleRows = await clientQuery<RoleRow>(
+      client,
+      `
+        SELECT r.id, r.key, r.name, r.description, r.level, r.enabled, r.system_role
+        FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = $1
+        ORDER BY r.id ASC
+      `,
+      [targetUserId]
+    );
+
+    const requestedRoleRows = roleIds.length
+      ? await clientQuery<RoleRow>(
+          client,
+          `
+            SELECT id, key, name, description, level, enabled, system_role
+            FROM roles
+            WHERE id = ANY($1::int[])
+            ORDER BY id ASC
+          `,
+          [roleIds]
+        )
+      : [];
+    if (requestedRoleRows.length !== roleIds.length) {
+      throw statusError('server.permissions.roleNotFound', 404);
+    }
+
+    const currentRoleIds = new Set(currentRoleRows.map((role) => role.id));
+    const nextRoleIds = new Set(roleIds);
+    const removedRoleRows = currentRoleRows.filter((role) => !nextRoleIds.has(role.id));
+    const addedRoleRows = requestedRoleRows.filter((role) => !currentRoleIds.has(role.id));
+    const changedRoleRows = [...removedRoleRows, ...addedRoleRows];
+
+    if (changedRoleRows.length) {
+      const assignerRoles = await userRoles(assignedByUserId, client);
+      const assignerMaxLevel = highestRoleLevel(assignerRoles);
+      const ownerRoleChanged = changedRoleRows.some((role) => role.key === ownerRoleKey);
+      const assignerIsOwner = assignerRoles.some((role) => role.key === ownerRoleKey);
+      const assignerPermissionKeys = ownerRoleChanged ? await userPermissions(assignedByUserId, client) : [];
+
+      if (ownerRoleChanged && (!assignerIsOwner || !assignerPermissionKeys.includes(assignOwnerPermissionKey))) {
+        throw statusError('server.permissions.ownerRoleOperationDenied', 403);
+      }
+
+      if (changedRoleRows.some((role) => role.key !== ownerRoleKey && role.level >= assignerMaxLevel)) {
+        throw statusError('server.permissions.roleLevelOperationDenied', 403);
       }
     }
 
-    await client.query('DELETE FROM user_roles WHERE user_id = $1', [targetUserId]);
-    if (roleIds.length) {
+    if (removedRoleRows.length) {
+      await client.query('DELETE FROM user_roles WHERE user_id = $1 AND role_id = ANY($2::int[])', [
+        targetUserId,
+        removedRoleRows.map((role) => role.id)
+      ]);
+    }
+
+    if (addedRoleRows.length) {
       await client.query(
         `
           INSERT INTO user_roles (user_id, role_id, assigned_by_user_id)
           SELECT $1, unnest($2::int[]), $3
           ON CONFLICT DO NOTHING
         `,
-        [targetUserId, roleIds, assignedByUserId]
+        [targetUserId, addedRoleRows.map((role) => role.id), assignedByUserId]
       );
     }
+
     await assertAccessControlSafe(client);
   });
 

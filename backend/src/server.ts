@@ -1,8 +1,10 @@
 import cors from '@fastify/cors';
 import multipart, { type MultipartFile } from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import {
   changeCurrentUserPassword,
@@ -111,13 +113,19 @@ import {
 } from './uploads.ts';
 
 const app = Fastify({
-  logger: true
+  logger: true,
+  trustProxy: process.env.TRUST_PROXY === 'true'
 });
 
 await app.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type', 'X-Locale'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   origin: process.env.FRONTEND_ORIGIN ?? true
+});
+
+await app.register(rateLimit, {
+  global: false,
+  hook: 'preHandler'
 });
 
 await mkdir(uploadRoot, { recursive: true });
@@ -147,6 +155,10 @@ app.setErrorHandler(async (error, _request, reply) => {
 
   if (pgError.code === '23514') {
     return reply.code(400).send({ message: await serverMessage(locale, 'invalidField') });
+  }
+
+  if (pgError.statusCode === 429) {
+    return reply.code(429).send({ message: await serverMessage(locale, 'rateLimited') });
   }
 
   if (pgError.statusCode && pgError.statusCode < 500) {
@@ -182,8 +194,241 @@ function serverMessage(
     | 'verifyEmailFirst'
     | 'permissionDenied'
     | 'notFound'
+    | 'rateLimited'
 ): Promise<string> {
   return systemMessage(locale, `server.errors.${key}`);
+}
+
+type RateLimitCheck = ReturnType<typeof app.createRateLimit>;
+type RateLimitResult = Awaited<ReturnType<RateLimitCheck>>;
+type RateLimitPolicy = 'accountWrite' | 'adminWrite' | 'communityReaction' | 'communityWrite' | 'fetch' | 'upload' | 'wikiWrite';
+type RateLimitedRequest = FastifyRequest & {
+  rateLimitUserId?: number;
+};
+
+function hashRateLimitPart(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 32);
+}
+
+function routeRateLimitPart(request: FastifyRequest): string {
+  return `${request.method}:${request.routeOptions.url ?? request.url.split('?')[0]}`;
+}
+
+function emailRateLimitPart(request: FastifyRequest): string {
+  const body = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  return hashRateLimitPart(email || 'missing-email');
+}
+
+function userRateLimitPart(request: FastifyRequest): string {
+  return String((request as RateLimitedRequest).rateLimitUserId ?? 'anonymous');
+}
+
+function userRouteRateLimitKey(scope: string, request: FastifyRequest): string {
+  return `${scope}:user:${userRateLimitPart(request)}:route:${routeRateLimitPart(request)}`;
+}
+
+function ipRouteRateLimitKey(scope: string, request: FastifyRequest): string {
+  return `${scope}:ip:${hashRateLimitPart(request.ip)}:route:${routeRateLimitPart(request)}`;
+}
+
+const authRouteIpRateLimit = app.createRateLimit({
+  max: 20,
+  timeWindow: '10 minutes',
+  keyGenerator: (request) => ipRouteRateLimitKey('auth', request)
+});
+const loginEmailRateLimit = app.createRateLimit({
+  max: 5,
+  timeWindow: '15 minutes',
+  keyGenerator: (request) => `auth:login:email:${emailRateLimitPart(request)}`
+});
+const registerEmailRateLimit = app.createRateLimit({
+  max: 3,
+  timeWindow: '1 hour',
+  keyGenerator: (request) => `auth:register:email:${emailRateLimitPart(request)}`
+});
+const passwordResetEmailRateLimit = app.createRateLimit({
+  max: 3,
+  timeWindow: '1 hour',
+  keyGenerator: (request) => `auth:password-reset:email:${emailRateLimitPart(request)}`
+});
+const passwordResetRouteIpRateLimit = app.createRateLimit({
+  max: 10,
+  timeWindow: '15 minutes',
+  keyGenerator: (request) => ipRouteRateLimitKey('auth:password-reset', request)
+});
+const protectedRouteIpRateLimit = app.createRateLimit({
+  max: 120,
+  timeWindow: '10 minutes',
+  keyGenerator: (request) => ipRouteRateLimitKey('protected', request)
+});
+const writeRouteIpRateLimit = app.createRateLimit({
+  max: 90,
+  timeWindow: '10 minutes',
+  keyGenerator: (request) => ipRouteRateLimitKey('write', request)
+});
+const userRouteWriteRateLimit = app.createRateLimit({
+  max: 30,
+  timeWindow: '10 minutes',
+  keyGenerator: (request) => userRouteRateLimitKey('write', request)
+});
+const fetchRouteIpRateLimit = app.createRateLimit({
+  max: 60,
+  timeWindow: '10 minutes',
+  keyGenerator: (request) => ipRouteRateLimitKey('fetch', request)
+});
+const userRouteFetchRateLimit = app.createRateLimit({
+  max: 30,
+  timeWindow: '10 minutes',
+  keyGenerator: (request) => userRouteRateLimitKey('fetch', request)
+});
+
+const userRateLimitPolicies: Record<RateLimitPolicy, RateLimitCheck[]> = {
+  accountWrite: [
+    writeRouteIpRateLimit,
+    app.createRateLimit({
+      max: 20,
+      timeWindow: '1 hour',
+      keyGenerator: (request) => `account-write:user:${userRateLimitPart(request)}`
+    }),
+    app.createRateLimit({
+      max: 1,
+      timeWindow: '5 seconds',
+      keyGenerator: (request) => `account-write-cooldown:user:${userRateLimitPart(request)}`
+    }),
+    userRouteWriteRateLimit
+  ],
+  adminWrite: [
+    writeRouteIpRateLimit,
+    app.createRateLimit({
+      max: 120,
+      timeWindow: '1 hour',
+      keyGenerator: (request) => `admin-write:user:${userRateLimitPart(request)}`
+    }),
+    app.createRateLimit({
+      max: 1,
+      timeWindow: '2 seconds',
+      keyGenerator: (request) => `admin-write-cooldown:user:${userRateLimitPart(request)}`
+    }),
+    userRouteWriteRateLimit
+  ],
+  communityReaction: [
+    writeRouteIpRateLimit,
+    app.createRateLimit({
+      max: 120,
+      timeWindow: '1 hour',
+      keyGenerator: (request) => `community-reaction:user:${userRateLimitPart(request)}`
+    }),
+    app.createRateLimit({
+      max: 1,
+      timeWindow: '1 second',
+      keyGenerator: (request) => `community-reaction-cooldown:user:${userRateLimitPart(request)}`
+    }),
+    userRouteWriteRateLimit
+  ],
+  communityWrite: [
+    writeRouteIpRateLimit,
+    app.createRateLimit({
+      max: 60,
+      timeWindow: '1 hour',
+      keyGenerator: (request) => `community-write:user:${userRateLimitPart(request)}`
+    }),
+    app.createRateLimit({
+      max: 1,
+      timeWindow: '5 seconds',
+      keyGenerator: (request) => `community-write-cooldown:user:${userRateLimitPart(request)}`
+    }),
+    userRouteWriteRateLimit
+  ],
+  fetch: [
+    fetchRouteIpRateLimit,
+    app.createRateLimit({
+      max: 60,
+      timeWindow: '10 minutes',
+      keyGenerator: (request) => `fetch:user:${userRateLimitPart(request)}`
+    }),
+    app.createRateLimit({
+      max: 1,
+      timeWindow: '1 second',
+      keyGenerator: (request) => `fetch-cooldown:user:${userRateLimitPart(request)}`
+    }),
+    userRouteFetchRateLimit
+  ],
+  upload: [
+    writeRouteIpRateLimit,
+    app.createRateLimit({
+      max: 20,
+      timeWindow: '1 hour',
+      keyGenerator: (request) => `upload:user:${userRateLimitPart(request)}`
+    }),
+    app.createRateLimit({
+      max: 1,
+      timeWindow: '30 seconds',
+      keyGenerator: (request) => `upload-cooldown:user:${userRateLimitPart(request)}`
+    }),
+    userRouteWriteRateLimit
+  ],
+  wikiWrite: [
+    writeRouteIpRateLimit,
+    app.createRateLimit({
+      max: 120,
+      timeWindow: '1 hour',
+      keyGenerator: (request) => `wiki-write:user:${userRateLimitPart(request)}`
+    }),
+    app.createRateLimit({
+      max: 1,
+      timeWindow: '2 seconds',
+      keyGenerator: (request) => `wiki-write-cooldown:user:${userRateLimitPart(request)}`
+    }),
+    userRouteWriteRateLimit
+  ]
+};
+
+async function sendRateLimited(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  result: Extract<RateLimitResult, { isAllowed: false }>
+): Promise<false> {
+  const retryAfter = Math.max(1, result.ttlInSeconds);
+  reply.header('retry-after', retryAfter);
+  reply.header('x-ratelimit-limit', result.max);
+  reply.header('x-ratelimit-remaining', 0);
+  reply.header('x-ratelimit-reset', retryAfter);
+  reply.code(result.isBanned ? 403 : 429).send({ message: await serverMessage(requestLocale(request), 'rateLimited') });
+  return false;
+}
+
+async function enforceRateLimits(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  checks: RateLimitCheck[]
+): Promise<boolean> {
+  for (const check of checks) {
+    const result = await check(request);
+    if (!result.isAllowed && result.isExceeded) {
+      return sendRateLimited(request, reply, result);
+    }
+  }
+
+  return true;
+}
+
+async function enforceAuthRateLimits(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  checks: RateLimitCheck[]
+): Promise<boolean> {
+  return enforceRateLimits(request, reply, [authRouteIpRateLimit, ...checks]);
+}
+
+async function enforceUserRateLimits(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  user: AuthUser,
+  policy: RateLimitPolicy
+): Promise<boolean> {
+  (request as RateLimitedRequest).rateLimitUserId = user.id;
+  return enforceRateLimits(request, reply, userRateLimitPolicies[policy]);
 }
 
 function badRequest(message: string): Error & { statusCode: number } {
@@ -197,6 +442,10 @@ async function notFound(reply: FastifyReply, request: FastifyRequest) {
 }
 
 async function requireVerifiedUser(request: FastifyRequest, reply: FastifyReply): Promise<AuthUser | null> {
+  if (!(await enforceRateLimits(request, reply, [protectedRouteIpRateLimit]))) {
+    return null;
+  }
+
   const token = getBearerToken(request.headers.authorization);
   const user = token ? await getUserBySessionToken(token) : null;
   const locale = requestLocale(request);
@@ -250,6 +499,34 @@ async function requireAnyPermission(
   return user;
 }
 
+async function requirePermissionWithRateLimits(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  permissionKey: string,
+  policy: RateLimitPolicy
+): Promise<AuthUser | null> {
+  const user = await requirePermission(request, reply, permissionKey);
+  if (!user || !(await enforceUserRateLimits(request, reply, user, policy))) {
+    return null;
+  }
+
+  return user;
+}
+
+async function requireAnyPermissionWithRateLimits(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  permissionKeys: string[],
+  policy: RateLimitPolicy
+): Promise<AuthUser | null> {
+  const user = await requireAnyPermission(request, reply, permissionKeys);
+  if (!user || !(await enforceUserRateLimits(request, reply, user, policy))) {
+    return null;
+  }
+
+  return user;
+}
+
 async function optionalUser(request: FastifyRequest): Promise<AuthUser | null> {
   const token = getBearerToken(request.headers.authorization);
   if (!token) {
@@ -263,23 +540,51 @@ async function optionalUser(request: FastifyRequest): Promise<AuthUser | null> {
   }
 }
 
-app.post('/api/auth/register', async (request, reply) =>
-  reply.code(201).send(await registerUser(request.body as Record<string, unknown>, requestLocale(request)))
-);
+app.post('/api/auth/register', async (request, reply) => {
+  if (!(await enforceAuthRateLimits(request, reply, [registerEmailRateLimit]))) {
+    return;
+  }
 
-app.post('/api/auth/verify-email', async (request) => verifyEmail(request.body as Record<string, unknown>, requestLocale(request)));
+  return reply.code(201).send(await registerUser(request.body as Record<string, unknown>, requestLocale(request)));
+});
 
-app.post('/api/auth/login', async (request) => loginUser(request.body as Record<string, unknown>, requestLocale(request)));
+app.post('/api/auth/verify-email', async (request, reply) => {
+  if (!(await enforceAuthRateLimits(request, reply, []))) {
+    return;
+  }
 
-app.post('/api/auth/request-password-reset', async (request) =>
-  requestPasswordReset(request.body as Record<string, unknown>, requestLocale(request))
-);
+  return verifyEmail(request.body as Record<string, unknown>, requestLocale(request));
+});
 
-app.post('/api/auth/reset-password', async (request) =>
-  resetPassword(request.body as Record<string, unknown>, requestLocale(request))
-);
+app.post('/api/auth/login', async (request, reply) => {
+  if (!(await enforceAuthRateLimits(request, reply, [loginEmailRateLimit]))) {
+    return;
+  }
+
+  return loginUser(request.body as Record<string, unknown>, requestLocale(request));
+});
+
+app.post('/api/auth/request-password-reset', async (request, reply) => {
+  if (!(await enforceAuthRateLimits(request, reply, [passwordResetEmailRateLimit, passwordResetRouteIpRateLimit]))) {
+    return;
+  }
+
+  return requestPasswordReset(request.body as Record<string, unknown>, requestLocale(request));
+});
+
+app.post('/api/auth/reset-password', async (request, reply) => {
+  if (!(await enforceAuthRateLimits(request, reply, [passwordResetRouteIpRateLimit]))) {
+    return;
+  }
+
+  return resetPassword(request.body as Record<string, unknown>, requestLocale(request));
+});
 
 app.get('/api/auth/me', async (request, reply) => {
+  if (!(await enforceRateLimits(request, reply, [protectedRouteIpRateLimit]))) {
+    return;
+  }
+
   const token = getBearerToken(request.headers.authorization);
   const user = token ? await getUserBySessionToken(token) : null;
 
@@ -291,6 +596,10 @@ app.get('/api/auth/me', async (request, reply) => {
 });
 
 app.patch('/api/auth/me', async (request, reply) => {
+  if (!(await enforceRateLimits(request, reply, [protectedRouteIpRateLimit]))) {
+    return;
+  }
+
   const token = getBearerToken(request.headers.authorization);
   const user = token ? await getUserBySessionToken(token) : null;
 
@@ -298,11 +607,19 @@ app.patch('/api/auth/me', async (request, reply) => {
     return reply.code(401).send({ message: await serverMessage(requestLocale(request), 'loginRequired') });
   }
 
+  if (!(await enforceUserRateLimits(request, reply, user, 'accountWrite'))) {
+    return;
+  }
+
   const payload = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
   return { user: await updateCurrentUser(user.id, payload, requestLocale(request)) };
 });
 
 app.patch('/api/auth/me/password', async (request, reply) => {
+  if (!(await enforceRateLimits(request, reply, [protectedRouteIpRateLimit]))) {
+    return;
+  }
+
   const token = getBearerToken(request.headers.authorization);
   const user = token ? await getUserBySessionToken(token) : null;
 
@@ -310,11 +627,19 @@ app.patch('/api/auth/me/password', async (request, reply) => {
     return reply.code(401).send({ message: await serverMessage(requestLocale(request), 'loginRequired') });
   }
 
+  if (!(await enforceUserRateLimits(request, reply, user, 'accountWrite'))) {
+    return;
+  }
+
   const payload = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
   return changeCurrentUserPassword(user.id, payload, token, requestLocale(request));
 });
 
 app.get('/api/auth/referral', async (request, reply) => {
+  if (!(await enforceRateLimits(request, reply, [protectedRouteIpRateLimit]))) {
+    return;
+  }
+
   const token = getBearerToken(request.headers.authorization);
   const user = token ? await getUserBySessionToken(token) : null;
 
@@ -340,7 +665,7 @@ app.get('/api/admin/users', async (request, reply) => {
 });
 
 app.put('/api/admin/users/:id/roles', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.users.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.users.update', 'adminWrite');
   if (!user) {
     return;
   }
@@ -354,12 +679,12 @@ app.get('/api/admin/roles', async (request, reply) => {
 });
 
 app.post('/api/admin/roles', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.roles.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.roles.create', 'adminWrite');
   return user ? reply.code(201).send(await createRole(request.body as Record<string, unknown>)) : undefined;
 });
 
 app.put('/api/admin/roles/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.roles.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.roles.update', 'adminWrite');
   if (!user) {
     return;
   }
@@ -368,7 +693,7 @@ app.put('/api/admin/roles/:id', async (request, reply) => {
 });
 
 app.put('/api/admin/roles/:id/permissions', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.roles.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.roles.update', 'adminWrite');
   if (!user) {
     return;
   }
@@ -377,7 +702,7 @@ app.put('/api/admin/roles/:id/permissions', async (request, reply) => {
 });
 
 app.delete('/api/admin/roles/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.roles.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.roles.delete', 'adminWrite');
   if (!user) {
     return;
   }
@@ -392,12 +717,12 @@ app.get('/api/admin/permissions', async (request, reply) => {
 });
 
 app.post('/api/admin/permissions', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.permissions.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.permissions.create', 'adminWrite');
   return user ? reply.code(201).send(await createPermission(request.body as Record<string, unknown>)) : undefined;
 });
 
 app.put('/api/admin/permissions/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.permissions.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.permissions.update', 'adminWrite');
   if (!user) {
     return;
   }
@@ -406,7 +731,7 @@ app.put('/api/admin/permissions/:id', async (request, reply) => {
 });
 
 app.delete('/api/admin/permissions/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.permissions.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.permissions.delete', 'adminWrite');
   if (!user) {
     return;
   }
@@ -469,14 +794,14 @@ app.get('/api/life-posts', async (request) => {
 });
 
 app.post('/api/life-posts', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'life.posts.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.posts.create', 'communityWrite');
   return user
     ? reply.code(201).send(await createLifePost(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.post('/api/life-posts/:postId/comments', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'life.comments.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.comments.create', 'communityWrite');
   if (!user) {
     return;
   }
@@ -486,7 +811,7 @@ app.post('/api/life-posts/:postId/comments', async (request, reply) => {
 });
 
 app.post('/api/life-posts/:postId/comments/:commentId/replies', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'life.comments.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.comments.create', 'communityWrite');
   if (!user) {
     return;
   }
@@ -501,7 +826,12 @@ app.post('/api/life-posts/:postId/comments/:commentId/replies', async (request, 
 });
 
 app.put('/api/life-posts/:id', async (request, reply) => {
-  const user = await requireAnyPermission(request, reply, ['life.posts.update', 'life.posts.update-any']);
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['life.posts.update', 'life.posts.update-any'],
+    'communityWrite'
+  );
   if (!user) {
     return;
   }
@@ -517,7 +847,7 @@ app.put('/api/life-posts/:id', async (request, reply) => {
 });
 
 app.put('/api/life-posts/:id/reaction', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'life.reactions.set');
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.reactions.set', 'communityReaction');
   if (!user) {
     return;
   }
@@ -527,7 +857,7 @@ app.put('/api/life-posts/:id/reaction', async (request, reply) => {
 });
 
 app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'life.reactions.set');
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.reactions.set', 'communityReaction');
   if (!user) {
     return;
   }
@@ -537,7 +867,12 @@ app.delete('/api/life-posts/:id/reaction', async (request, reply) => {
 });
 
 app.delete('/api/life-posts/:id', async (request, reply) => {
-  const user = await requireAnyPermission(request, reply, ['life.posts.delete', 'life.posts.delete-any']);
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['life.posts.delete', 'life.posts.delete-any'],
+    'communityWrite'
+  );
   if (!user) {
     return;
   }
@@ -547,7 +882,12 @@ app.delete('/api/life-posts/:id', async (request, reply) => {
 });
 
 app.delete('/api/life-comments/:id', async (request, reply) => {
-  const user = await requireAnyPermission(request, reply, ['life.comments.delete', 'life.comments.delete-any']);
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['life.comments.delete', 'life.comments.delete-any'],
+    'communityWrite'
+  );
   if (!user) {
     return;
   }
@@ -563,7 +903,7 @@ app.get('/api/discussions/:entityType/:entityId/comments', async (request, reply
 });
 
 app.post('/api/discussions/:entityType/:entityId/comments', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'discussions.comments.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'discussions.comments.create', 'communityWrite');
   if (!user) {
     return;
   }
@@ -579,7 +919,7 @@ app.post('/api/discussions/:entityType/:entityId/comments', async (request, repl
 });
 
 app.post('/api/discussions/:entityType/:entityId/comments/:commentId/replies', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'discussions.comments.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'discussions.comments.create', 'communityWrite');
   if (!user) {
     return;
   }
@@ -600,10 +940,12 @@ app.post('/api/discussions/:entityType/:entityId/comments/:commentId/replies', a
 });
 
 app.delete('/api/discussions/comments/:id', async (request, reply) => {
-  const user = await requireAnyPermission(request, reply, [
-    'discussions.comments.delete',
-    'discussions.comments.delete-any'
-  ]);
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['discussions.comments.delete', 'discussions.comments.delete-any'],
+    'communityWrite'
+  );
   if (!user) {
     return;
   }
@@ -622,7 +964,7 @@ app.get('/api/pokemon', async (request) =>
 );
 
 app.get('/api/pokemon/fetch-options', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pokemon.fetch');
+  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.fetch', 'fetch');
   return user
     ? listPokemonFetchOptions(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
     : undefined;
@@ -640,19 +982,19 @@ app.get('/api/pokemon/:id', async (request, reply) => {
 });
 
 app.post('/api/pokemon', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pokemon.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.create', 'wikiWrite');
   return user
     ? reply.code(201).send(await createPokemon(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.post('/api/pokemon/fetch', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pokemon.fetch');
+  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.fetch', 'fetch');
   return user ? fetchPokemonData(request.body as Record<string, unknown>, user.id) : undefined;
 });
 
 app.post('/api/pokemon/image-options', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pokemon.fetch');
+  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.fetch', 'fetch');
   return user ? fetchPokemonImageOptions(request.body as Record<string, unknown>) : undefined;
 });
 
@@ -664,7 +1006,7 @@ app.post('/api/uploads/:entityType', async (request, reply) => {
 
   const permissionKey =
     entityType === 'pokemon' ? 'pokemon.upload' : entityType === 'items' ? 'items.upload' : 'habitats.upload';
-  const user = await requirePermission(request, reply, permissionKey);
+  const user = await requirePermissionWithRateLimits(request, reply, permissionKey, 'upload');
   if (!user) {
     return;
   }
@@ -684,7 +1026,7 @@ app.post('/api/uploads/:entityType', async (request, reply) => {
 });
 
 app.put('/api/pokemon/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pokemon.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.update', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -699,7 +1041,7 @@ app.put('/api/pokemon/:id', async (request, reply) => {
 });
 
 app.delete('/api/pokemon/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pokemon.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.delete', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -722,14 +1064,14 @@ app.get('/api/habitats/:id', async (request, reply) => {
 });
 
 app.post('/api/habitats', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'habitats.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'habitats.create', 'wikiWrite');
   return user
     ? reply.code(201).send(await createHabitat(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.put('/api/habitats/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'habitats.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'habitats.update', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -744,7 +1086,7 @@ app.put('/api/habitats/:id', async (request, reply) => {
 });
 
 app.delete('/api/habitats/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'habitats.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'habitats.delete', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -769,14 +1111,14 @@ app.get('/api/items/:id', async (request, reply) => {
 });
 
 app.post('/api/items', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'items.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'items.create', 'wikiWrite');
   return user
     ? reply.code(201).send(await createItem(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.put('/api/items/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'items.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'items.update', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -791,7 +1133,7 @@ app.put('/api/items/:id', async (request, reply) => {
 });
 
 app.delete('/api/items/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'items.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'items.delete', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -816,14 +1158,14 @@ app.get('/api/recipes/:id', async (request, reply) => {
 });
 
 app.post('/api/recipes', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'recipes.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'recipes.create', 'wikiWrite');
   return user
     ? reply.code(201).send(await createRecipe(request.body as Record<string, unknown>, user.id, requestLocale(request)))
     : undefined;
 });
 
 app.put('/api/recipes/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'recipes.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'recipes.update', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -838,7 +1180,7 @@ app.put('/api/recipes/:id', async (request, reply) => {
 });
 
 app.delete('/api/recipes/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'recipes.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'recipes.delete', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -848,7 +1190,7 @@ app.delete('/api/recipes/:id', async (request, reply) => {
 });
 
 app.post('/api/admin/daily-checklist', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'checklist.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'checklist.create', 'wikiWrite');
   return user
     ? reply
         .code(201)
@@ -857,12 +1199,12 @@ app.post('/api/admin/daily-checklist', async (request, reply) => {
 });
 
 app.put('/api/admin/daily-checklist/order', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'checklist.order');
+  const user = await requirePermissionWithRateLimits(request, reply, 'checklist.order', 'wikiWrite');
   return user ? reorderDailyChecklistItems(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/daily-checklist/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'checklist.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'checklist.update', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -877,7 +1219,7 @@ app.put('/api/admin/daily-checklist/:id', async (request, reply) => {
 });
 
 app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'checklist.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'checklist.delete', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -887,22 +1229,22 @@ app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
 });
 
 app.put('/api/admin/pokemon/order', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pokemon.order');
+  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.order', 'wikiWrite');
   return user ? reorderPokemon(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/items/order', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'items.order');
+  const user = await requirePermissionWithRateLimits(request, reply, 'items.order', 'wikiWrite');
   return user ? reorderItems(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/recipes/order', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'recipes.order');
+  const user = await requirePermissionWithRateLimits(request, reply, 'recipes.order', 'wikiWrite');
   return user ? reorderRecipes(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/habitats/order', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'habitats.order');
+  const user = await requirePermissionWithRateLimits(request, reply, 'habitats.order', 'wikiWrite');
   return user ? reorderHabitats(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
@@ -912,17 +1254,17 @@ app.get('/api/admin/languages', async (request, reply) => {
 });
 
 app.post('/api/admin/languages', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.languages.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.languages.create', 'adminWrite');
   return user ? reply.code(201).send(await createLanguage(request.body as Record<string, unknown>)) : undefined;
 });
 
 app.put('/api/admin/languages/order', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.languages.order');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.languages.order', 'adminWrite');
   return user ? reorderLanguages(request.body as Record<string, unknown>) : undefined;
 });
 
 app.put('/api/admin/languages/:code', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.languages.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.languages.update', 'adminWrite');
   if (!user) {
     return;
   }
@@ -931,7 +1273,7 @@ app.put('/api/admin/languages/:code', async (request, reply) => {
 });
 
 app.delete('/api/admin/languages/:code', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.languages.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.languages.delete', 'adminWrite');
   if (!user) {
     return;
   }
@@ -946,7 +1288,7 @@ app.get('/api/admin/system-wordings', async (request, reply) => {
 });
 
 app.put('/api/admin/system-wordings/:key', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.wordings.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.wordings.update', 'adminWrite');
   if (!user) {
     return;
   }
@@ -967,7 +1309,7 @@ app.get('/api/admin/config/:type', async (request, reply) => {
 });
 
 app.post('/api/admin/config/:type', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.config.create');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.create', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -981,7 +1323,7 @@ app.post('/api/admin/config/:type', async (request, reply) => {
 });
 
 app.put('/api/admin/config/:type/order', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.config.order');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.order', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -993,7 +1335,7 @@ app.put('/api/admin/config/:type/order', async (request, reply) => {
 });
 
 app.put('/api/admin/config/:type/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.config.update');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.update', 'wikiWrite');
   if (!user) {
     return;
   }
@@ -1006,7 +1348,7 @@ app.put('/api/admin/config/:type/:id', async (request, reply) => {
 });
 
 app.delete('/api/admin/config/:type/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'admin.config.delete');
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.config.delete', 'wikiWrite');
   if (!user) {
     return;
   }

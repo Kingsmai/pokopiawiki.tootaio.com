@@ -675,7 +675,8 @@ export const systemWordingMessages = {
       loginRequired: 'Please log in first',
       verifyEmailFirst: 'Please complete email verification first',
       permissionDenied: 'Permission denied',
-      notFound: 'Not found'
+      notFound: 'Not found',
+      rateLimited: 'Too many requests. Please try again later.'
     },
     auth: {
       emailRequired: 'Email is required',
@@ -1456,7 +1457,8 @@ export const systemWordingMessages = {
         loginRequired: '请先登录',
         verifyEmailFirst: '请先完成邮箱验证',
         permissionDenied: '权限不足',
-        notFound: '未找到记录'
+        notFound: '未找到记录',
+        rateLimited: '请求过于频繁，请稍后再试。'
       },
       auth: {
         emailRequired: '请输入邮箱',

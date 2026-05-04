@@ -3262,7 +3262,8 @@ button:disabled,
   font-weight: 950;
 }
 
-.life-comments__header span {
+.life-comments__header > span,
+.life-comments__header > div > span {
   min-width: 32px;
   padding: 2px 8px;
   border: 1px solid var(--line);
@@ -3272,6 +3273,25 @@ button:disabled,
   font-size: 13px;
   font-weight: 900;
   text-align: center;
+}
+
+.life-comments__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.life-comments__sort select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .life-comment-form {
@@ -3384,6 +3404,13 @@ button:disabled,
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.life-comment__action-count {
+  min-width: 1ch;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .life-comments__empty {
@@ -4525,6 +4552,26 @@ button:disabled,
 .entity-discussion-empty p {
   margin: 4px 0 0;
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.entity-discussion-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.entity-discussion-sort select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 800;
 }

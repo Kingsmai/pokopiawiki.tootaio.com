@@ -299,12 +299,14 @@ VALUES
   ('life.comments.create', 'Create Life comments', 'Create Life comments and replies.', 'Life', true),
   ('life.comments.delete', 'Delete own Life comments', 'Delete own Life comments.', 'Life', true),
   ('life.comments.delete-any', 'Delete any Life comment', 'Delete any Life comment.', 'Life', true),
+  ('life.comments.like', 'Like Life comments', 'Like and unlike Life comments.', 'Life', true),
   ('life.reactions.set', 'Set Life reactions', 'Set and remove Life reactions.', 'Life', true),
   ('life.ratings.set', 'Set Life ratings', 'Set and remove Life star ratings.', 'Life', true),
   ('users.follow', 'Follow users', 'Follow and unfollow public user profiles.', 'Users', true),
   ('discussions.comments.create', 'Create discussion comments', 'Create entity discussion comments and replies.', 'Discussions', true),
   ('discussions.comments.delete', 'Delete own discussion comments', 'Delete own entity discussion comments.', 'Discussions', true),
-  ('discussions.comments.delete-any', 'Delete any discussion comment', 'Delete any entity discussion comment.', 'Discussions', true)
+  ('discussions.comments.delete-any', 'Delete any discussion comment', 'Delete any entity discussion comment.', 'Discussions', true),
+  ('discussions.comments.like', 'Like discussion comments', 'Like and unlike entity discussion comments.', 'Discussions', true)
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO roles (key, name, description, level, enabled, system_role)
@@ -391,12 +393,14 @@ JOIN permissions p ON p.key = ANY (ARRAY[
   'life.comments.create',
   'life.comments.delete',
   'life.comments.delete-any',
+  'life.comments.like',
   'life.reactions.set',
   'life.ratings.set',
   'users.follow',
   'discussions.comments.create',
   'discussions.comments.delete',
-  'discussions.comments.delete-any'
+  'discussions.comments.delete-any',
+  'discussions.comments.like'
 ])
 WHERE r.key = 'admin'
   AND NOT EXISTS (
@@ -460,11 +464,13 @@ JOIN permissions p ON p.key = ANY (ARRAY[
   'life.posts.delete',
   'life.comments.create',
   'life.comments.delete',
+  'life.comments.like',
   'life.reactions.set',
   'life.ratings.set',
   'users.follow',
   'discussions.comments.create',
-  'discussions.comments.delete'
+  'discussions.comments.delete',
+  'discussions.comments.like'
 ])
 WHERE r.key = 'editor'
   AND NOT EXISTS (
@@ -508,11 +514,13 @@ JOIN permissions p ON p.key = ANY (ARRAY[
   'life.posts.delete',
   'life.comments.create',
   'life.comments.delete',
+  'life.comments.like',
   'life.reactions.set',
   'life.ratings.set',
   'users.follow',
   'discussions.comments.create',
-  'discussions.comments.delete'
+  'discussions.comments.delete',
+  'discussions.comments.like'
 ])
 WHERE r.key = 'member'
   AND NOT EXISTS (
@@ -526,6 +534,20 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
 JOIN permissions p ON p.key = 'life.ratings.set'
+WHERE r.key IN ('admin', 'editor', 'member')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.key = 'life.comments.like'
+WHERE r.key IN ('admin', 'editor', 'member')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.key = 'discussions.comments.like'
 WHERE r.key IN ('admin', 'editor', 'member')
 ON CONFLICT DO NOTHING;
 
@@ -743,6 +765,19 @@ CREATE INDEX IF NOT EXISTS life_post_comments_parent_idx
 
 CREATE INDEX IF NOT EXISTS life_post_comments_user_idx
   ON life_post_comments(created_by_user_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS life_comment_likes (
+  comment_id integer NOT NULL REFERENCES life_post_comments(id) ON DELETE CASCADE,
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (comment_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS life_comment_likes_comment_idx
+  ON life_comment_likes(comment_id);
+
+CREATE INDEX IF NOT EXISTS life_comment_likes_user_idx
+  ON life_comment_likes(user_id, created_at DESC, comment_id DESC);
 
 CREATE TABLE IF NOT EXISTS life_post_reactions (
   post_id integer NOT NULL REFERENCES life_posts(id) ON DELETE CASCADE,
@@ -1234,6 +1269,19 @@ CREATE INDEX IF NOT EXISTS entity_discussion_comments_parent_idx
 
 CREATE INDEX IF NOT EXISTS entity_discussion_comments_user_idx
   ON entity_discussion_comments(created_by_user_id);
+
+CREATE TABLE IF NOT EXISTS entity_discussion_comment_likes (
+  comment_id integer NOT NULL REFERENCES entity_discussion_comments(id) ON DELETE CASCADE,
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (comment_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS entity_discussion_comment_likes_comment_idx
+  ON entity_discussion_comment_likes(comment_id);
+
+CREATE INDEX IF NOT EXISTS entity_discussion_comment_likes_user_idx
+  ON entity_discussion_comment_likes(user_id, created_at DESC, comment_id DESC);
 
 ALTER TABLE entity_discussion_comments
   DROP CONSTRAINT IF EXISTS entity_discussion_comments_entity_type_check;

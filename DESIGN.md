@@ -377,8 +377,9 @@
 - 讨论回复只支持一层回复，不做无限嵌套。
 - 评论作者拥有 `discussions.comments.delete` 权限时可以删除自己的评论；拥有 `discussions.comments.delete-any` 权限的用户可以删除其他用户评论；删除后正文不再展示，已有回复保留在原位置。
 - 被删除实体的讨论会随实体删除一并清理。
-- 讨论按创建时间正序展示。
 - 讨论列表按顶层评论分页读取，支持 `limit` / `cursor`；每页顶层评论携带其一层回复，响应包含 `items`、`nextCursor`、`hasMore`、`total`。
+- 讨论列表支持 `sort`：`oldest` 默认按创建时间正序；`latest` 按创建时间倒序；`most-liked` 按点赞数倒序；`most-replied` 按直接回复数倒序；同分时使用创建时间和 ID 保持稳定排序。排序只作用于顶层评论，回复始终按创建时间正序展示。
+- 已注册并完成邮箱验证且拥有 `discussions.comments.like` 权限的用户可以点赞或取消点赞审核通过且未删除的实体讨论评论；每个用户对每条评论最多 1 个 Like。
 - 实体讨论评论和回复必须进入 AI 审核；未审核通过的评论不向普通访客公开。
 - 作者本人和拥有 `discussions.comments.delete-any` 权限的管理用户可看到相关评论的审核状态，并可触发重新审核。
 - 审核状态包括：`unreviewed`、`reviewing`、`approved`、`rejected`、`failed`；前端面向用户展示为未审核、审核中、审核通过、审核不通过、审核失败。
@@ -390,6 +391,7 @@
 - 讨论列表支持按语言区读取；`language=all` 或不传语言参数时读取全部已公开语言区，传入具体语言 code 时只读取对应语言区。
 - 讨论内容是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 - API 对外只返回评论作者的 `id` 和 `displayName`。
+- API 对外返回讨论评论的 `likeCount`、`replyCount` 和当前用户自己的 `myLiked`；不返回点赞用户列表、邮箱、角色、权限或内部审计。
 - API 可返回作者本人或管理用户处理评论所需的审核状态、语言区和 `rejected` / `failed` 原因详情；不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误、错误堆栈、`deleted_at`、`deleted_by_user_id` 等内部字段。
 
 ## AI 审核
@@ -828,7 +830,9 @@ Life Post 可配置：
 - 已软删除的 Life Post 详情页返回未找到，不公开软删除字段。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
 - Life Post 详情页默认展示该 Post 的评论区，并使用独立分页接口继续加载完整评论列表。
-- Life Feed 只随每条 Life Post 返回评论总数和最近少量评论预览；完整评论列表在展开评论区后通过独立分页接口按顶层评论正序读取，每页顶层评论携带其一层回复。
+- Life Feed 只随每条 Life Post 返回评论总数和最近少量评论预览；完整评论列表在展开评论区后通过独立分页接口读取，每页顶层评论携带其一层回复。
+- Life Comment 列表支持 `sort`：`oldest` 默认按创建时间正序；`latest` 按创建时间倒序；`most-liked` 按点赞数倒序；`most-replied` 按直接回复数倒序；同分时使用创建时间和 ID 保持稳定排序。排序只作用于顶层评论，回复始终按创建时间正序展示。
+- 已注册并完成邮箱验证且拥有 `life.comments.like` 权限的用户可以点赞或取消点赞审核通过且未删除的 Life Comment；每个用户对每条评论最多 1 个 Like。
 - 已注册并完成邮箱验证且拥有 `life.reactions.set` 权限的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
 - 用户可在 Life Post 的 Reaction 汇总处打开 Modal 查看公开 Reaction 用户列表；列表支持按 Reaction 类型筛选并分页加载。
@@ -850,7 +854,7 @@ Life Post 可配置：
 - 新增或更新 Life Post 后先进入不可公开状态，AI 审核通过后才出现在普通公开 Feed。
 - Life Comment 和回复审核通过且未删除后才出现在普通公开评论列表、评论数量和评论预览中；已删除评论只在作者自己的可见评论列表、评论数量和评论预览中保留，以便作者 Undo。
 - 审核失败不等于审核通过；失败内容保持不可公开，用户可重新审核。
-- `reviewing` 表示审核正在进行中，前端不展示重新审核入口；只有 `unreviewed`、`rejected` 和 `failed` 这类非进行中且未通过状态可触发重新审核。
+- `reviewing` 表示审核正在进行中，前端不展示重新审核入口；只有 `unreviewed`、`rejected` 和 `failed` 这类非进行中且未通过状态可触发重新审核，API 也必须拒绝对 `reviewing` 或 `approved` 评论重新审核。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 
 API 暴露边界：
@@ -861,11 +865,12 @@ API 暴露边界：
 - Life Post Rating 只返回 `ratingAverage`、`ratingCount` 和当前用户自己的 `myRating`；不返回其他用户的评分明细。
 - Life Post 可返回面向用户展示所需的审核状态、审核语言区、审核原因详情和是否可重审；审核原因详情仅用于 `rejected` / `failed`，不返回内部错误、AI prompt、模型响应、错误堆栈或 retry 细节。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
+- Life Comment 只返回 `likeCount`、`replyCount` 和当前用户自己的 `myLiked`；不返回点赞用户列表、邮箱、角色、权限或内部审计。
 - Life Post 列表和详情中的 Life Reaction 只返回按类型汇总的数量和当前用户自己的 Reaction，不内嵌其他用户明细。
 - Life Reaction 用户列表 API 只返回公开用户摘要 `id`、`displayName`、`reactionType` 和 `reactedAt`；不返回邮箱、角色、权限、token/hash、内部审计或其他用户隐私字段。
 - Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。每个 Life Post 的评论字段只包含已公开或当前用户可见评论的 `commentCount` 和 `commentPreview`，不内嵌完整评论列表。
 - Life Post 详情 API 返回单条 Life Post，字段边界与列表项一致；评论字段仍只包含 `commentCount` 和少量 `commentPreview`，完整评论通过评论分页接口读取。
-- Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌；普通访客只读取审核通过评论。
+- Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌；普通访客只读取审核通过评论；支持 `sort` 为 `oldest`、`latest`、`most-liked` 或 `most-replied`。
 - Life Comment 可返回作者本人或管理用户处理评论所需的审核状态、语言区和 `rejected` / `failed` 原因详情。
 - API 不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误、错误堆栈或不必要的审计 payload。
 - API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
@@ -1013,14 +1018,14 @@ API 暴露边界：
 - `GET /api/life-posts/following`：需要登录；分页读取当前用户已 Follow 用户发布的 Life Post 动态，支持与 Life Feed 相同的 `cursor` / `limit`、搜索、Category、语言、Game Version、Rateable 和排序筛选。
 - `GET /api/life-posts/:id`：读取单条 Life Post 详情，遵守软删除和审核可见性规则。
 - `GET /api/life-posts/:id/reactions`：分页读取该 Life Post 的公开 Reaction 用户列表；支持 `cursor` / `limit` 和 `reactionType` 筛选。
-- `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选。
+- `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选；支持 `sort` 为 `oldest`、`latest`、`most-liked` 或 `most-replied`。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计、公开社区统计和公开 Follow 统计；登录用户读取时返回自己与目标用户的关系状态。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
 - `GET /api/users/:id/reactions`：分页读取该用户设置过 Reaction 且目标未删除的 Life Post。
 - `GET /api/users/:id/comments`：分页读取该用户未删除的 Life 评论和实体讨论评论。
 - `PUT /api/users/:id/follow`：需要 `users.follow`；Follow 指定用户并返回更新后的公开 Profile。
 - `DELETE /api/users/:id/follow`：需要 `users.follow`；Unfollow 指定用户并返回更新后的公开 Profile。
-- `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；支持 `language` 按审核语言区筛选；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`、`ancient-artifacts`。
+- `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；支持 `language` 按审核语言区筛选；支持 `sort` 为 `oldest`、`latest`、`most-liked` 或 `most-replied`；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`、`ancient-artifacts`。
 
 认证 API：
 
@@ -1075,11 +1080,17 @@ API 暴露边界：
   - `DELETE /api/life-comments/:id`
   - `POST /api/life-comments/:id/restore`
   - `POST /api/life-comments/:id/moderation/retry`
+- Life Comment 的点赞和取消点赞需要 `life.comments.like` 权限。
+  - `PUT /api/life-comments/:id/like`
+  - `DELETE /api/life-comments/:id/like`
 - 实体讨论评论的创建、回复，以及作者本人对评论的删除，需要对应 `discussions.comments.*` 权限；管理他人内容需要对应 `*-any` 权限。
   - `POST /api/discussions/:entityType/:entityId/comments`
   - `POST /api/discussions/:entityType/:entityId/comments/:commentId/replies`
   - `DELETE /api/discussions/comments/:id`
   - `POST /api/discussions/comments/:id/moderation/retry`
+- 实体讨论评论的点赞和取消点赞需要 `discussions.comments.like` 权限。
+  - `PUT /api/discussions/comments/:id/like`
+  - `DELETE /api/discussions/comments/:id/like`
 - Life Reaction 的设置、替换和取消。
   - `PUT /api/life-posts/:id/reaction`
   - `DELETE /api/life-posts/:id/reaction`

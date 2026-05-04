@@ -55,7 +55,9 @@ import {
   deleteHabitat,
   deleteItem,
   deleteLanguage,
+  deleteEntityDiscussionCommentLike,
   deleteLifeComment,
+  deleteLifeCommentLike,
   deleteLifePost,
   deleteLifePostRating,
   deleteLifePostReaction,
@@ -108,6 +110,8 @@ import {
   restoreLifeComment,
   setLifePostRating,
   setLifePostReaction,
+  setEntityDiscussionCommentLike,
+  setLifeCommentLike,
   updateConfig,
   updateAncientArtifact,
   updateDailyChecklistItem,
@@ -1470,6 +1474,26 @@ app.post('/api/life-comments/:id/restore', async (request, reply) => {
   return comment ? comment : notFound(reply, request);
 });
 
+app.put('/api/life-comments/:id/like', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.comments.like', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const comment = await setLifeCommentLike(Number(id), user.id);
+  return comment ? comment : notFound(reply, request);
+});
+
+app.delete('/api/life-comments/:id/like', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.comments.like', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const comment = await deleteLifeCommentLike(Number(id), user.id);
+  return comment ? comment : notFound(reply, request);
+});
+
 app.post('/api/life-comments/:id/moderation/retry', async (request, reply) => {
   const user = await requireAnyPermissionWithRateLimits(
     request,
@@ -1577,6 +1601,28 @@ app.post('/api/discussions/comments/:id/moderation/retry', async (request, reply
     user.id,
     userHasPermission(user, 'discussions.comments.delete-any')
   );
+  return comment ? comment : notFound(reply, request);
+});
+
+app.put('/api/discussions/comments/:id/like', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'discussions.comments.like', 'communityReaction');
+  if (!user) {
+    return;
+  }
+
+  const { id } = request.params as { id: string };
+  const comment = await setEntityDiscussionCommentLike(Number(id), user.id);
+  return comment ? comment : notFound(reply, request);
+});
+
+app.delete('/api/discussions/comments/:id/like', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'discussions.comments.like', 'communityReaction');
+  if (!user) {
+    return;
+  }
+
+  const { id } = request.params as { id: string };
+  const comment = await deleteEntityDiscussionCommentLike(Number(id), user.id);
   return comment ? comment : notFound(reply, request);
 });
 

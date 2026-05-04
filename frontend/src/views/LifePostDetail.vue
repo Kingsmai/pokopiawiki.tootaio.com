@@ -33,6 +33,7 @@ import {
   setAuthToken,
   type AiModerationStatus,
   type AuthUser,
+  type CommentSort,
   type LifeComment,
   type LifePost,
   type LifeReactionType,
@@ -53,6 +54,7 @@ const commentsLoading = ref(false);
 const commentsLoadingMore = ref(false);
 const commentsLoaded = ref(false);
 const commentsError = ref('');
+const activeCommentSort = ref<CommentSort>('oldest');
 const commentBodies = ref<Record<number, string>>({});
 const replyBodies = ref<Record<number, string>>({});
 const replyTargetId = ref<number | null>(null);
@@ -82,9 +84,16 @@ function can(permissionKey: string) {
 }
 
 const canComment = computed(() => can('life.comments.create'));
+const canLikeComments = computed(() => can('life.comments.like'));
 const canReact = computed(() => can('life.reactions.set'));
 const canRate = computed(() => can('life.ratings.set'));
 const canCommentOnPost = computed(() => canComment.value && post.value?.moderationStatus === 'approved');
+const commentSortOptions = computed<Array<{ value: CommentSort; label: string }>>(() => [
+  { value: 'oldest', label: t('pages.life.sortOldest') },
+  { value: 'latest', label: t('pages.life.sortLatest') },
+  { value: 'most-liked', label: t('pages.life.sortMostLiked') },
+  { value: 'most-replied', label: t('pages.life.sortMostReplied') }
+]);
 
 function routePostId() {
   const value = route.params.id;
@@ -185,7 +194,7 @@ async function loadComments(reset = false) {
   }
 
   try {
-    const page = await api.lifeComments(currentPost.id, { limit: lifeCommentPageSize, cursor });
+    const page = await api.lifeComments(currentPost.id, { limit: lifeCommentPageSize, cursor, sort: activeCommentSort.value });
     comments.value = reset || !commentsLoaded.value ? page.items : mergeComments(comments.value, page.items);
     commentsNextCursor.value = page.nextCursor;
     commentsHasMore.value = page.hasMore;
@@ -206,6 +215,17 @@ function commentKey(postId: number) {
 
 function replyKey(commentId: number) {
   return `reply-${commentId}`;
+}
+
+function likeKey(commentId: number) {
+  return `like-${commentId}`;
+}
+
+function handleCommentSortChange(event: Event) {
+  if (event.target instanceof HTMLSelectElement) {
+    activeCommentSort.value = event.target.value as CommentSort;
+    void loadComments(true);
+  }
 }
 
 function isCommentBusy(key: string) {
@@ -230,6 +250,19 @@ function canManageComment(comment: LifeComment) {
 
 function canRestoreComment(comment: LifeComment) {
   return comment.deleted && currentUser.value?.id === comment.author?.id && can('life.comments.delete');
+}
+
+function canLikeComment(comment: LifeComment) {
+  return canLikeComments.value && !comment.deleted && comment.moderationStatus === 'approved';
+}
+
+function canRetryCommentModeration(comment: LifeComment) {
+  return (
+    !comment.deleted &&
+    comment.moderationStatus !== 'approved' &&
+    comment.moderationStatus !== 'reviewing' &&
+    (currentUser.value?.id === comment.author?.id || can('life.comments.delete-any'))
+  );
 }
 
 function canSeeCommentModeration(comment: LifeComment) {
@@ -269,6 +302,10 @@ function reactionCountLabel(currentPost: LifePost, type: LifeReactionType) {
     reaction: reactionLabel(type),
     count: currentPost.reactionCounts[type] ?? 0
   });
+}
+
+function commentLikeLabel(comment: LifeComment) {
+  return comment.myLiked ? t('pages.life.unlikeComment') : t('pages.life.likeComment');
 }
 
 function openReactionUsersModal(postId: number, reactionType: LifeReactionType | null = null) {
@@ -536,6 +573,9 @@ async function submitComment(currentPost: LifePost) {
     currentPost.commentCount = commentsTotal.value;
     commentsLoaded.value = true;
     commentBodies.value[currentPost.id] = '';
+    if (activeCommentSort.value !== 'oldest') {
+      void loadComments(true);
+    }
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.commentFailed'));
   } finally {
@@ -571,10 +611,14 @@ async function submitReply(currentPost: LifePost, comment: LifeComment) {
       languageCode: comment.moderationLanguageCode ?? currentPost.moderationLanguageCode
     });
     comment.replies.push(reply);
+    comment.replyCount += 1;
     commentsTotal.value += 1;
     currentPost.commentCount = commentsTotal.value;
     commentsLoaded.value = true;
     cancelReply(comment.id);
+    if (activeCommentSort.value === 'most-replied') {
+      void loadComments(true);
+    }
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.replyFailed'));
   } finally {
@@ -664,6 +708,45 @@ async function restoreComment(comment: LifeComment) {
     comments.value = [...comments.value];
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.restoreCommentFailed'));
+  } finally {
+    commentBusyKey.value = '';
+  }
+}
+
+async function retryCommentModeration(comment: LifeComment) {
+  const key = replyKey(comment.id);
+  commentBusyKey.value = key;
+  clearCommentError(key);
+
+  try {
+    const updated = await api.retryLifeCommentModeration(comment.id);
+    replaceCommentInTree(comments.value, updated);
+    comments.value = [...comments.value];
+  } catch (error) {
+    setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.moderationRetryFailed'));
+  } finally {
+    commentBusyKey.value = '';
+  }
+}
+
+async function toggleCommentLike(comment: LifeComment) {
+  if (!canLikeComment(comment)) {
+    return;
+  }
+
+  const key = likeKey(comment.id);
+  commentBusyKey.value = key;
+  clearCommentError(key);
+
+  try {
+    const updated = comment.myLiked ? await api.deleteLifeCommentLike(comment.id) : await api.setLifeCommentLike(comment.id);
+    replaceCommentInTree(comments.value, updated);
+    comments.value = [...comments.value];
+    if (activeCommentSort.value === 'most-liked') {
+      void loadComments(true);
+    }
+  } catch (error) {
+    setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.commentLikeFailed'));
   } finally {
     commentBusyKey.value = '';
   }
@@ -921,8 +1004,18 @@ onUnmounted(() => {
 
         <section :id="`life-comments-${post.id}`" class="life-comments" :aria-label="t('pages.life.comments')">
           <div class="life-comments__header">
-            <h3>{{ t('pages.life.comments') }}</h3>
-            <span>{{ commentsTotal }}</span>
+            <div>
+              <h3>{{ t('pages.life.comments') }}</h3>
+              <span>{{ commentsTotal }}</span>
+            </div>
+            <label class="life-comments__sort">
+              <span>{{ t('pages.life.sort') }}</span>
+              <select :value="activeCommentSort" @change="handleCommentSortChange">
+                <option v-for="option in commentSortOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
           </div>
 
           <form v-if="canCommentOnPost" class="life-comment-form" @submit.prevent="submitComment(post)">
@@ -996,6 +1089,19 @@ onUnmounted(() => {
 
                   <div v-if="!comment.deleted || canRestoreComment(comment)" class="life-comment__actions">
                     <button
+                      v-if="!comment.deleted"
+                      class="life-icon-button life-icon-button--flat"
+                      type="button"
+                      :aria-label="commentLikeLabel(comment)"
+                      :aria-pressed="comment.myLiked"
+                      :disabled="!canLikeComment(comment) || isCommentBusy(likeKey(comment.id))"
+                      @click="toggleCommentLike(comment)"
+                    >
+                      <Icon :icon="iconReactionLike" class="ui-icon" aria-hidden="true" />
+                      <span class="life-comment__action-count">{{ comment.likeCount }}</span>
+                      <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.commentLikeCount', { count: comment.likeCount }) }}</span>
+                    </button>
+                    <button
                       v-if="!comment.deleted && canCommentOnPost"
                       class="life-icon-button life-icon-button--flat"
                       type="button"
@@ -1026,8 +1132,24 @@ onUnmounted(() => {
                       <Icon :icon="iconUndo" class="ui-icon" aria-hidden="true" />
                       <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.restoreComment') }}</span>
                     </button>
+                    <button
+                      v-if="canRetryCommentModeration(comment)"
+                      class="life-icon-button life-icon-button--flat"
+                      type="button"
+                      :aria-label="isCommentBusy(replyKey(comment.id)) ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry')"
+                      :disabled="isCommentBusy(replyKey(comment.id))"
+                      @click="retryCommentModeration(comment)"
+                    >
+                      <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
+                      <span class="life-action-tooltip" role="tooltip">
+                        {{ isCommentBusy(replyKey(comment.id)) ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry') }}
+                      </span>
+                    </button>
                   </div>
 
+                  <p v-if="commentErrors[likeKey(comment.id)]" class="life-form__error" role="alert">
+                    {{ commentErrors[likeKey(comment.id)] }}
+                  </p>
                   <p v-if="commentErrors[replyKey(comment.id)]" class="life-form__error" role="alert">
                     {{ commentErrors[replyKey(comment.id)] }}
                   </p>
@@ -1092,7 +1214,20 @@ onUnmounted(() => {
                           <strong>{{ t('pages.life.moderationReason') }}</strong>
                           <span>{{ reply.moderationReason }}</span>
                         </p>
-                        <div v-if="canManageComment(reply) || canRestoreComment(reply)" class="life-comment__actions">
+                        <div v-if="!reply.deleted || canRestoreComment(reply)" class="life-comment__actions">
+                          <button
+                            v-if="!reply.deleted"
+                            class="life-icon-button life-icon-button--flat"
+                            type="button"
+                            :aria-label="commentLikeLabel(reply)"
+                            :aria-pressed="reply.myLiked"
+                            :disabled="!canLikeComment(reply) || isCommentBusy(likeKey(reply.id))"
+                            @click="toggleCommentLike(reply)"
+                          >
+                            <Icon :icon="iconReactionLike" class="ui-icon" aria-hidden="true" />
+                            <span class="life-comment__action-count">{{ reply.likeCount }}</span>
+                            <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.commentLikeCount', { count: reply.likeCount }) }}</span>
+                          </button>
                           <button
                             v-if="canManageComment(reply)"
                             class="life-icon-button life-icon-button--flat life-icon-button--danger"
@@ -1114,7 +1249,23 @@ onUnmounted(() => {
                             <Icon :icon="iconUndo" class="ui-icon" aria-hidden="true" />
                             <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.restoreComment') }}</span>
                           </button>
+                          <button
+                            v-if="canRetryCommentModeration(reply)"
+                            class="life-icon-button life-icon-button--flat"
+                            type="button"
+                            :aria-label="isCommentBusy(replyKey(reply.id)) ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry')"
+                            :disabled="isCommentBusy(replyKey(reply.id))"
+                            @click="retryCommentModeration(reply)"
+                          >
+                            <Icon :icon="iconWarning" class="ui-icon" aria-hidden="true" />
+                            <span class="life-action-tooltip" role="tooltip">
+                              {{ isCommentBusy(replyKey(reply.id)) ? t('pages.life.moderationRetrying') : t('pages.life.moderationRetry') }}
+                            </span>
+                          </button>
                         </div>
+                        <p v-if="commentErrors[likeKey(reply.id)]" class="life-form__error" role="alert">
+                          {{ commentErrors[likeKey(reply.id)] }}
+                        </p>
                         <p v-if="commentErrors[replyKey(reply.id)]" class="life-form__error" role="alert">
                           {{ commentErrors[replyKey(reply.id)] }}
                         </p>

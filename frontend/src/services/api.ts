@@ -421,7 +421,10 @@ export interface CommentPageParams {
   cursor?: string | null;
   limit?: number;
   language?: string;
+  sort?: CommentSort;
 }
+
+export type CommentSort = 'oldest' | 'latest' | 'most-liked' | 'most-replied';
 
 export interface LifeComment {
   id: number;
@@ -435,6 +438,9 @@ export interface LifeComment {
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;
+  likeCount: number;
+  replyCount: number;
+  myLiked: boolean;
   replies: LifeComment[];
 }
 
@@ -831,6 +837,9 @@ export interface EntityDiscussionComment {
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;
+  likeCount: number;
+  replyCount: number;
+  myLiked: boolean;
   replies: EntityDiscussionComment[];
 }
 
@@ -1229,7 +1238,8 @@ export const api = {
       `/api/life-posts/${postId}/comments${buildQuery({
         cursor: params.cursor ?? undefined,
         limit: params.limit,
-        language: params.language
+        language: params.language,
+        sort: params.sort
       })}`
     ),
   createLifeCommentReply: (postId: string | number, commentId: string | number, payload: LifeCommentPayload) =>
@@ -1237,13 +1247,16 @@ export const api = {
   retryLifeCommentModeration: (id: string | number) =>
     sendJson<LifeComment>(`/api/life-comments/${id}/moderation/retry`, 'POST', {}),
   restoreLifeComment: (id: string | number) => sendJson<LifeComment>(`/api/life-comments/${id}/restore`, 'POST', {}),
+  setLifeCommentLike: (id: string | number) => sendJson<LifeComment>(`/api/life-comments/${id}/like`, 'PUT', {}),
+  deleteLifeCommentLike: (id: string | number) => deleteAndGetJson<LifeComment>(`/api/life-comments/${id}/like`),
   deleteLifeComment: (id: string | number) => deleteJson(`/api/life-comments/${id}`),
   entityDiscussion: (entityType: DiscussionEntityType, entityId: string | number, params: CommentPageParams = {}) =>
     getJson<EntityDiscussionCommentsPage>(
       `/api/discussions/${entityType}/${entityId}/comments${buildQuery({
         cursor: params.cursor ?? undefined,
         limit: params.limit,
-        language: params.language
+        language: params.language,
+        sort: params.sort
       })}`
     ),
   createEntityDiscussionComment: (
@@ -1259,6 +1272,10 @@ export const api = {
   ) => sendJson<EntityDiscussionComment>(`/api/discussions/${entityType}/${entityId}/comments/${commentId}/replies`, 'POST', payload),
   retryEntityDiscussionModeration: (id: string | number) =>
     sendJson<EntityDiscussionComment>(`/api/discussions/comments/${id}/moderation/retry`, 'POST', {}),
+  setEntityDiscussionCommentLike: (id: string | number) =>
+    sendJson<EntityDiscussionComment>(`/api/discussions/comments/${id}/like`, 'PUT', {}),
+  deleteEntityDiscussionCommentLike: (id: string | number) =>
+    deleteAndGetJson<EntityDiscussionComment>(`/api/discussions/comments/${id}/like`),
   deleteEntityDiscussionComment: (id: string | number) => deleteJson(`/api/discussions/comments/${id}`),
   uploadImage: (
     entityType: ImageUploadEntityType,

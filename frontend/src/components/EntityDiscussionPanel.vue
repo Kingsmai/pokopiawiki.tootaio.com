@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import StatusBadge from './StatusBadge.vue';
 import Tabs, { type TabOption } from './Tabs.vue';
-import { iconCancel, iconComment, iconDelete, iconReply, iconWarning } from '../icons';
+import { iconCancel, iconComment, iconDelete, iconReactionLike, iconReply, iconWarning } from '../icons';
 import {
   api,
   getAuthToken,
@@ -13,6 +13,7 @@ import {
   setAuthToken,
   type AiModerationStatus,
   type AuthUser,
+  type CommentSort,
   type DiscussionEntityType,
   type EntityDiscussionComment,
   type Language,
@@ -41,7 +42,9 @@ const formError = ref('');
 const commentErrors = ref<Record<string, string>>({});
 const commentInput = ref<HTMLTextAreaElement | null>(null);
 const activeLanguageCode = ref('all');
+const activeSort = ref<CommentSort>('oldest');
 const moderationBusyId = ref<number | null>(null);
+const likeBusyId = ref<number | null>(null);
 const commentMaxLength = 1000;
 const discussionPageSize = 20;
 const allLanguageValue = 'all';
@@ -56,11 +59,18 @@ function can(permissionKey: string) {
 }
 
 const canComment = computed(() => can('discussions.comments.create'));
+const canLikeComments = computed(() => can('discussions.comments.like'));
 const charactersLeft = computed(() => Math.max(0, commentMaxLength - body.value.length));
 const selectedLanguageCode = computed(() => (activeLanguageCode.value === allLanguageValue ? undefined : activeLanguageCode.value));
 const languageTabs = computed<TabOption[]>(() => [
   { value: allLanguageValue, label: t('discussion.allLanguages') },
   ...languages.value.map((language) => ({ value: language.code, label: language.name }))
+]);
+const sortOptions = computed<Array<{ value: CommentSort; label: string }>>(() => [
+  { value: 'oldest', label: t('discussion.sortOldest') },
+  { value: 'latest', label: t('discussion.sortLatest') },
+  { value: 'most-liked', label: t('discussion.sortMostLiked') },
+  { value: 'most-replied', label: t('discussion.sortMostReplied') }
 ]);
 
 async function loadCurrentUser() {
@@ -119,7 +129,8 @@ async function loadDiscussion(reset = true) {
     const page = await api.entityDiscussion(props.entityType, props.entityId, {
       limit: discussionPageSize,
       cursor: reset ? null : nextCursor.value,
-      language: selectedLanguageCode.value
+      language: selectedLanguageCode.value,
+      sort: activeSort.value
     });
     if (nextRequestId === requestId) {
       comments.value = reset ? page.items : mergeComments(comments.value, page.items);
@@ -151,6 +162,17 @@ function commentKey(commentId: number) {
   return `comment-${commentId}`;
 }
 
+function likeKey(commentId: number) {
+  return `like-${commentId}`;
+}
+
+function handleSortChange(event: Event) {
+  if (event.target instanceof HTMLSelectElement) {
+    activeSort.value = event.target.value as CommentSort;
+    void loadDiscussion();
+  }
+}
+
 function replyBody(commentId: number) {
   return replyBodies.value[commentId] ?? '';
 }
@@ -179,6 +201,14 @@ function canSeeModeration(comment: EntityDiscussionComment) {
 
 function canRetryModeration(comment: EntityDiscussionComment) {
   return !comment.deleted && comment.moderationStatus !== 'approved' && comment.moderationStatus !== 'reviewing' && canSeeModeration(comment);
+}
+
+function canLikeComment(comment: EntityDiscussionComment) {
+  return canLikeComments.value && !comment.deleted && comment.moderationStatus === 'approved';
+}
+
+function commentLikeLabel(comment: EntityDiscussionComment) {
+  return comment.myLiked ? t('discussion.unlikeComment') : t('discussion.likeComment');
 }
 
 function moderationReasonVisible(comment: EntityDiscussionComment) {
@@ -267,6 +297,9 @@ async function submitComment() {
     comments.value = [...comments.value, comment];
     commentTotal.value += 1;
     body.value = '';
+    if (activeSort.value !== 'oldest') {
+      void loadDiscussion();
+    }
   } catch (error) {
     formError.value = error instanceof Error && error.message ? error.message : t('discussion.commentFailed');
   } finally {
@@ -291,8 +324,12 @@ async function submitReply(comment: EntityDiscussionComment) {
       languageCode: selectedLanguageCode.value ?? comment.moderationLanguageCode
     });
     comment.replies.push(reply);
+    comment.replyCount += 1;
     commentTotal.value += 1;
     cancelReply(comment.id);
+    if (activeSort.value === 'most-replied') {
+      void loadDiscussion();
+    }
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('discussion.replyFailed'));
   } finally {
@@ -314,6 +351,49 @@ async function retryModeration(comment: EntityDiscussionComment) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('discussion.moderationRetryFailed'));
   } finally {
     moderationBusyId.value = null;
+  }
+}
+
+function replaceCommentInTree(items: EntityDiscussionComment[], updated: EntityDiscussionComment): boolean {
+  for (let index = 0; index < items.length; index += 1) {
+    const comment = items[index];
+    if (!comment) {
+      continue;
+    }
+    if (comment.id === updated.id) {
+      items[index] = { ...updated, replies: comment.replies };
+      return true;
+    }
+    if (replaceCommentInTree(comment.replies, updated)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function toggleCommentLike(comment: EntityDiscussionComment) {
+  if (!canLikeComment(comment)) {
+    return;
+  }
+
+  const key = likeKey(comment.id);
+  likeBusyId.value = comment.id;
+  clearCommentError(key);
+
+  try {
+    const updated = comment.myLiked
+      ? await api.deleteEntityDiscussionCommentLike(comment.id)
+      : await api.setEntityDiscussionCommentLike(comment.id);
+    replaceCommentInTree(comments.value, updated);
+    comments.value = [...comments.value];
+    if (activeSort.value === 'most-liked') {
+      void loadDiscussion();
+    }
+  } catch (error) {
+    setCommentError(key, error instanceof Error && error.message ? error.message : t('discussion.commentLikeFailed'));
+  } finally {
+    likeBusyId.value = null;
   }
 }
 
@@ -455,6 +535,14 @@ onUnmounted(() => {
     </div>
 
     <Tabs id="entity-discussion-language" v-model="activeLanguageCode" :tabs="languageTabs" :label="t('discussion.languages')" />
+    <label class="entity-discussion-sort">
+      <span>{{ t('discussion.sort') }}</span>
+      <select :value="activeSort" @change="handleSortChange">
+        <option v-for="option in sortOptions" :key="option.value" :value="option.value">
+          {{ option.label }}
+        </option>
+      </select>
+    </label>
 
     <div v-if="!authReady" class="entity-discussion-skeleton" aria-hidden="true">
       <Skeleton variant="box" height="112px" />
@@ -529,6 +617,18 @@ onUnmounted(() => {
 
           <div v-if="!comment.deleted" class="entity-discussion-comment__actions">
             <button
+              class="life-icon-button life-icon-button--flat"
+              type="button"
+              :aria-label="commentLikeLabel(comment)"
+              :aria-pressed="comment.myLiked"
+              :disabled="!canLikeComment(comment) || likeBusyId === comment.id"
+              @click="toggleCommentLike(comment)"
+            >
+              <Icon :icon="iconReactionLike" class="ui-icon" aria-hidden="true" />
+              <span class="life-comment__action-count">{{ comment.likeCount }}</span>
+              <span class="life-action-tooltip" role="tooltip">{{ t('discussion.commentLikeCount', { count: comment.likeCount }) }}</span>
+            </button>
+            <button
               v-if="canComment"
               class="life-icon-button life-icon-button--flat"
               type="button"
@@ -563,6 +663,9 @@ onUnmounted(() => {
             </button>
           </div>
 
+          <p v-if="commentErrors[likeKey(comment.id)]" class="entity-discussion-form__error" role="alert">
+            {{ commentErrors[likeKey(comment.id)] }}
+          </p>
           <p v-if="commentErrors[commentKey(comment.id)]" class="entity-discussion-form__error" role="alert">
             {{ commentErrors[commentKey(comment.id)] }}
           </p>
@@ -624,7 +727,19 @@ onUnmounted(() => {
                   <strong>{{ t('discussion.moderationReason') }}</strong>
                   <span>{{ reply.moderationReason }}</span>
                 </p>
-                <div v-if="canManageComment(reply) || canRetryModeration(reply)" class="entity-discussion-comment__actions">
+                <div v-if="!reply.deleted" class="entity-discussion-comment__actions">
+                  <button
+                    class="life-icon-button life-icon-button--flat"
+                    type="button"
+                    :aria-label="commentLikeLabel(reply)"
+                    :aria-pressed="reply.myLiked"
+                    :disabled="!canLikeComment(reply) || likeBusyId === reply.id"
+                    @click="toggleCommentLike(reply)"
+                  >
+                    <Icon :icon="iconReactionLike" class="ui-icon" aria-hidden="true" />
+                    <span class="life-comment__action-count">{{ reply.likeCount }}</span>
+                    <span class="life-action-tooltip" role="tooltip">{{ t('discussion.commentLikeCount', { count: reply.likeCount }) }}</span>
+                  </button>
                   <button
                     v-if="canRetryModeration(reply)"
                     class="life-icon-button life-icon-button--flat"
@@ -639,6 +754,7 @@ onUnmounted(() => {
                     </span>
                   </button>
                   <button
+                    v-if="canManageComment(reply)"
                     class="life-icon-button life-icon-button--flat life-icon-button--danger"
                     type="button"
                     :aria-label="t('discussion.deleteComment')"
@@ -648,6 +764,9 @@ onUnmounted(() => {
                     <span class="life-action-tooltip" role="tooltip">{{ t('discussion.deleteComment') }}</span>
                   </button>
                 </div>
+                <p v-if="commentErrors[likeKey(reply.id)]" class="entity-discussion-form__error" role="alert">
+                  {{ commentErrors[likeKey(reply.id)] }}
+                </p>
                 <p v-if="commentErrors[commentKey(reply.id)]" class="entity-discussion-form__error" role="alert">
                   {{ commentErrors[commentKey(reply.id)] }}
                 </p>

@@ -43,6 +43,7 @@ type NotificationRow = {
   entityId: number | null;
   reactionType: LifeReactionType | null;
   moderationStatus: NotificationModerationStatus | null;
+  moderationReason: string | null;
   readAt: Date | null;
   createdAt: Date;
   createdAtCursor: string;
@@ -67,6 +68,7 @@ export type NotificationItem = {
   target: NotificationTarget;
   reactionType: LifeReactionType | null;
   moderationStatus: NotificationModerationStatus | null;
+  moderationReason: string | null;
   readAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -88,6 +90,7 @@ type NotificationWsMessage =
       target: NotificationTarget;
       moderationStatus: NotificationModerationStatus;
       moderationLanguageCode: string | null;
+      moderationReason: string | null;
     };
 
 const defaultNotificationLimit = 15;
@@ -152,6 +155,7 @@ function notificationProjection(): string {
       n.entity_id AS "entityId",
       n.reaction_type AS "reactionType",
       n.moderation_status AS "moderationStatus",
+      n.moderation_reason AS "moderationReason",
       n.read_at AS "readAt",
       n.created_at AS "createdAt",
       n.created_at::text AS "createdAtCursor",
@@ -216,6 +220,7 @@ function toNotificationItem(row: NotificationRow): NotificationItem {
     },
     reactionType: row.reactionType,
     moderationStatus: row.moderationStatus,
+    moderationReason: row.moderationReason,
     readAt: row.readAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
@@ -277,13 +282,15 @@ async function publishModerationUpdate(
   userId: number,
   target: NotificationTarget,
   moderationStatus: NotificationModerationStatus,
-  moderationLanguageCode: string | null
+  moderationLanguageCode: string | null,
+  moderationReason: string | null
 ): Promise<void> {
   broadcastNotificationMessage(userId, {
     type: 'moderation.updated',
     target,
     moderationStatus,
-    moderationLanguageCode
+    moderationLanguageCode,
+    moderationReason
   });
 }
 
@@ -563,6 +570,7 @@ export async function createModerationResultNotification(
       id: number;
       recipientUserId: number;
       moderationLanguageCode: string | null;
+      moderationReason: string | null;
       lifePostId: number;
     }>(
       `
@@ -571,9 +579,10 @@ export async function createModerationResultNotification(
           actor_user_id,
           type,
           life_post_id,
-          moderation_status
+          moderation_status,
+          moderation_reason
         )
-        SELECT created_by_user_id, NULL, 'moderation_result', id, $2
+        SELECT created_by_user_id, NULL, 'moderation_result', id, $2, ai_moderation_reason
         FROM life_posts
         WHERE id = $1
           AND deleted_at IS NULL
@@ -586,6 +595,11 @@ export async function createModerationResultNotification(
             FROM life_posts
             WHERE id = $1
           ) AS "moderationLanguageCode",
+          (
+            SELECT ai_moderation_reason
+            FROM life_posts
+            WHERE id = $1
+          ) AS "moderationReason",
           life_post_id AS "lifePostId"
       `,
       [target.id, status]
@@ -605,7 +619,8 @@ export async function createModerationResultNotification(
           entityId: null
         },
         status,
-        row.moderationLanguageCode
+        row.moderationLanguageCode,
+        row.moderationReason
       );
     }
     return;
@@ -616,6 +631,7 @@ export async function createModerationResultNotification(
       id: number;
       recipientUserId: number;
       moderationLanguageCode: string | null;
+      moderationReason: string | null;
       lifePostId: number;
       lifeCommentId: number;
     }>(
@@ -627,7 +643,8 @@ export async function createModerationResultNotification(
           life_post_id,
           life_comment_id,
           parent_life_comment_id,
-          moderation_status
+          moderation_status,
+          moderation_reason
         )
         SELECT
           lc.created_by_user_id,
@@ -636,7 +653,8 @@ export async function createModerationResultNotification(
           lc.post_id,
           lc.id,
           lc.parent_comment_id,
-          $2
+          $2,
+          lc.ai_moderation_reason
         FROM life_post_comments lc
         JOIN life_posts lp ON lp.id = lc.post_id
         WHERE lc.id = $1
@@ -651,6 +669,11 @@ export async function createModerationResultNotification(
             FROM life_post_comments
             WHERE id = $1
           ) AS "moderationLanguageCode",
+          (
+            SELECT ai_moderation_reason
+            FROM life_post_comments
+            WHERE id = $1
+          ) AS "moderationReason",
           life_post_id AS "lifePostId",
           life_comment_id AS "lifeCommentId"
       `,
@@ -671,7 +694,8 @@ export async function createModerationResultNotification(
           entityId: null
         },
         status,
-        row.moderationLanguageCode
+        row.moderationLanguageCode,
+        row.moderationReason
       );
     }
     return;
@@ -681,6 +705,7 @@ export async function createModerationResultNotification(
     id: number;
     recipientUserId: number;
     moderationLanguageCode: string | null;
+    moderationReason: string | null;
     discussionCommentId: number;
     entityType: DiscussionEntityType;
     entityId: number;
@@ -694,7 +719,8 @@ export async function createModerationResultNotification(
         parent_discussion_comment_id,
         entity_type,
         entity_id,
-        moderation_status
+        moderation_status,
+        moderation_reason
       )
       SELECT
         created_by_user_id,
@@ -704,7 +730,8 @@ export async function createModerationResultNotification(
         parent_comment_id,
         entity_type,
         entity_id,
-        $2
+        $2,
+        ai_moderation_reason
       FROM entity_discussion_comments
       WHERE id = $1
         AND deleted_at IS NULL
@@ -717,6 +744,11 @@ export async function createModerationResultNotification(
           FROM entity_discussion_comments
           WHERE id = $1
         ) AS "moderationLanguageCode",
+        (
+          SELECT ai_moderation_reason
+          FROM entity_discussion_comments
+          WHERE id = $1
+        ) AS "moderationReason",
         discussion_comment_id AS "discussionCommentId",
         entity_type AS "entityType",
         entity_id AS "entityId"
@@ -738,7 +770,8 @@ export async function createModerationResultNotification(
         entityId: row.entityId
       },
       status,
-      row.moderationLanguageCode
+      row.moderationLanguageCode,
+      row.moderationReason
     );
   }
 }

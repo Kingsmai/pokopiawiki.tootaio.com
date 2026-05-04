@@ -181,6 +181,16 @@ function canRetryModeration(comment: EntityDiscussionComment) {
   return !comment.deleted && comment.moderationStatus !== 'approved' && comment.moderationStatus !== 'reviewing' && canSeeModeration(comment);
 }
 
+function moderationReasonVisible(comment: EntityDiscussionComment) {
+  return (
+    !comment.deleted &&
+    canSeeModeration(comment) &&
+    (comment.moderationStatus === 'rejected' || comment.moderationStatus === 'failed') &&
+    comment.moderationReason !== null &&
+    comment.moderationReason.trim() !== ''
+  );
+}
+
 function moderationLabel(status: AiModerationStatus) {
   const labels: Record<AiModerationStatus, string> = {
     unreviewed: t('discussion.moderationUnreviewed'),
@@ -299,6 +309,7 @@ async function retryModeration(comment: EntityDiscussionComment) {
     const updated = await api.retryEntityDiscussionModeration(comment.id);
     comment.moderationStatus = updated.moderationStatus;
     comment.moderationLanguageCode = updated.moderationLanguageCode;
+    comment.moderationReason = updated.moderationReason;
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('discussion.moderationRetryFailed'));
   } finally {
@@ -310,16 +321,18 @@ function updateDiscussionCommentModeration(
   items: EntityDiscussionComment[],
   commentId: number,
   status: AiModerationStatus,
-  languageCode: string | null
+  languageCode: string | null,
+  reason: string | null
 ): boolean {
   for (const comment of items) {
     if (comment.id === commentId) {
       comment.moderationStatus = status;
       comment.moderationLanguageCode = languageCode;
+      comment.moderationReason = reason;
       return true;
     }
 
-    if (updateDiscussionCommentModeration(comment.replies, commentId, status, languageCode)) {
+    if (updateDiscussionCommentModeration(comment.replies, commentId, status, languageCode, reason)) {
       return true;
     }
   }
@@ -336,7 +349,7 @@ function handleModerationUpdate(event: Event) {
     return;
   }
 
-  const { target, moderationStatus, moderationLanguageCode } = event.detail;
+  const { target, moderationStatus, moderationLanguageCode, moderationReason } = event.detail;
   if (
     target.type !== 'discussion-comment' ||
     target.discussionCommentId === null ||
@@ -350,7 +363,8 @@ function handleModerationUpdate(event: Event) {
     comments.value,
     target.discussionCommentId,
     moderationStatus,
-    moderationLanguageCode
+    moderationLanguageCode,
+    moderationReason
   );
   if (updated) {
     comments.value = [...comments.value];
@@ -508,6 +522,10 @@ onUnmounted(() => {
             />
           </div>
           <p v-if="!comment.deleted" class="entity-discussion-comment__body">{{ comment.body }}</p>
+          <p v-if="moderationReasonVisible(comment)" class="life-moderation-detail life-moderation-detail--comment">
+            <strong>{{ t('discussion.moderationReason') }}</strong>
+            <span>{{ comment.moderationReason }}</span>
+          </p>
 
           <div v-if="!comment.deleted" class="entity-discussion-comment__actions">
             <button
@@ -602,6 +620,10 @@ onUnmounted(() => {
                   />
                 </div>
                 <p v-if="!reply.deleted" class="entity-discussion-comment__body">{{ reply.body }}</p>
+                <p v-if="moderationReasonVisible(reply)" class="life-moderation-detail life-moderation-detail--comment">
+                  <strong>{{ t('discussion.moderationReason') }}</strong>
+                  <span>{{ reply.moderationReason }}</span>
+                </p>
                 <div v-if="canManageComment(reply) || canRetryModeration(reply)" class="entity-discussion-comment__actions">
                   <button
                     v-if="canRetryModeration(reply)"

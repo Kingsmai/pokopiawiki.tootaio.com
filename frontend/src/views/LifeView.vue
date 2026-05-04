@@ -478,6 +478,10 @@ function canManageComment(comment: LifeComment) {
   return !comment.deleted && ((currentUser.value?.id === comment.author?.id && can('life.comments.delete')) || can('life.comments.delete-any'));
 }
 
+function canSeeCommentModeration(comment: LifeComment) {
+  return currentUser.value?.id === comment.author?.id || can('life.comments.delete-any');
+}
+
 function commentKey(postId: number) {
   return `post-${postId}`;
 }
@@ -579,20 +583,26 @@ function canRetryModeration(post: LifePost) {
   return post.moderationStatus !== 'approved' && post.moderationStatus !== 'reviewing' && canManage(post);
 }
 
+function moderationReasonVisible(status: AiModerationStatus, reason: string | null) {
+  return (status === 'rejected' || status === 'failed') && reason !== null && reason.trim() !== '';
+}
+
 function updateLifeCommentModeration(
   items: LifeComment[],
   commentId: number,
   status: AiModerationStatus,
-  languageCode: string | null
+  languageCode: string | null,
+  reason: string | null
 ): boolean {
   for (const comment of items) {
     if (comment.id === commentId) {
       comment.moderationStatus = status;
       comment.moderationLanguageCode = languageCode;
+      comment.moderationReason = reason;
       return true;
     }
 
-    if (updateLifeCommentModeration(comment.replies, commentId, status, languageCode)) {
+    if (updateLifeCommentModeration(comment.replies, commentId, status, languageCode, reason)) {
       return true;
     }
   }
@@ -609,7 +619,7 @@ function handleModerationUpdate(event: Event) {
     return;
   }
 
-  const { target, moderationStatus, moderationLanguageCode } = event.detail;
+  const { target, moderationStatus, moderationLanguageCode, moderationReason } = event.detail;
   if (target.type === 'life-post' && target.lifePostId !== null) {
     const currentPost = posts.value.find((post) => post.id === target.lifePostId);
     if (!currentPost) {
@@ -619,7 +629,8 @@ function handleModerationUpdate(event: Event) {
     const updatedPost = {
       ...currentPost,
       moderationStatus,
-      moderationLanguageCode
+      moderationLanguageCode,
+      moderationReason
     };
     if (!matchesCurrentFilters(updatedPost)) {
       posts.value = posts.value.filter((post) => post.id !== updatedPost.id);
@@ -639,7 +650,13 @@ function handleModerationUpdate(event: Event) {
   }
 
   const page = commentPage(currentPost);
-  const updated = updateLifeCommentModeration(page.items, target.lifeCommentId, moderationStatus, moderationLanguageCode);
+  const updated = updateLifeCommentModeration(
+    page.items,
+    target.lifeCommentId,
+    moderationStatus,
+    moderationLanguageCode,
+    moderationReason
+  );
   if (updated) {
     setCommentPage(currentPost.id, { ...page, items: [...page.items] });
   } else if (moderationStatus === 'approved' && areCommentsExpanded(currentPost.id)) {
@@ -1488,6 +1505,11 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <p v-if="canManage(post) && moderationReasonVisible(post.moderationStatus, post.moderationReason)" class="life-moderation-detail">
+              <strong>{{ t('pages.life.moderationReason') }}</strong>
+              <span>{{ post.moderationReason }}</span>
+            </p>
+
             <p v-if="ratingErrors[post.id]" class="life-form__error" role="alert">{{ ratingErrors[post.id] }}</p>
             <p v-if="moderationErrors[post.id]" class="life-form__error" role="alert">{{ moderationErrors[post.id] }}</p>
             <p v-if="reactionErrors[post.id]" class="life-form__error" role="alert">{{ reactionErrors[post.id] }}</p>
@@ -1556,8 +1578,21 @@ onUnmounted(() => {
                         </RouterLink>
                         <strong v-else>{{ commentAuthorName(comment) }}</strong>
                         <time :datetime="comment.createdAt">{{ formatPostTime(comment.createdAt) }}</time>
+                        <StatusBadge
+                          v-if="canSeeCommentModeration(comment)"
+                          :label="moderationLabel(comment.moderationStatus)"
+                          :tone="moderationTone(comment.moderationStatus)"
+                          compact
+                        />
                       </div>
                       <p v-if="!comment.deleted" class="life-comment__body">{{ comment.body }}</p>
+                      <p
+                        v-if="canSeeCommentModeration(comment) && moderationReasonVisible(comment.moderationStatus, comment.moderationReason)"
+                        class="life-moderation-detail life-moderation-detail--comment"
+                      >
+                        <strong>{{ t('pages.life.moderationReason') }}</strong>
+                        <span>{{ comment.moderationReason }}</span>
+                      </p>
 
                       <div v-if="!comment.deleted" class="life-comment__actions">
                         <button
@@ -1631,8 +1666,21 @@ onUnmounted(() => {
                               </RouterLink>
                               <strong v-else>{{ commentAuthorName(reply) }}</strong>
                               <time :datetime="reply.createdAt">{{ formatPostTime(reply.createdAt) }}</time>
+                              <StatusBadge
+                                v-if="canSeeCommentModeration(reply)"
+                                :label="moderationLabel(reply.moderationStatus)"
+                                :tone="moderationTone(reply.moderationStatus)"
+                                compact
+                              />
                             </div>
                             <p v-if="!reply.deleted" class="life-comment__body">{{ reply.body }}</p>
+                            <p
+                              v-if="canSeeCommentModeration(reply) && moderationReasonVisible(reply.moderationStatus, reply.moderationReason)"
+                              class="life-moderation-detail life-moderation-detail--comment"
+                            >
+                              <strong>{{ t('pages.life.moderationReason') }}</strong>
+                              <span>{{ reply.moderationReason }}</span>
+                            </p>
                             <div v-if="canManageComment(reply)" class="life-comment__actions">
                               <button
                                 class="life-icon-button life-icon-button--flat life-icon-button--danger"

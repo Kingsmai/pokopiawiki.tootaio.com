@@ -240,6 +240,7 @@ type EntityDiscussionCommentRow = {
   deleted: boolean;
   moderationStatus: AiModerationStatus;
   moderationLanguageCode: string | null;
+  moderationReason: string | null;
   createdAt: Date;
   createdAtCursor?: string;
   updatedAt: Date;
@@ -281,6 +282,7 @@ type LifeCommentRow = {
   deleted: boolean;
   moderationStatus: AiModerationStatus;
   moderationLanguageCode: string | null;
+  moderationReason: string | null;
   createdAt: Date;
   createdAtCursor?: string;
   updatedAt: Date;
@@ -296,6 +298,7 @@ type LifePostRow = {
   body: string;
   moderationStatus: AiModerationStatus;
   moderationLanguageCode: string | null;
+  moderationReason: string | null;
   createdAt: Date;
   createdAtCursor: string;
   updatedAt: Date;
@@ -2659,6 +2662,7 @@ function lifePostProjection(locale = defaultLocale): string {
       lp.body,
       lp.ai_moderation_status AS "moderationStatus",
       lp.ai_moderation_language_code AS "moderationLanguageCode",
+      lp.ai_moderation_reason AS "moderationReason",
       lp.created_at AS "createdAt",
       lp.created_at::text AS "createdAtCursor",
       lp.updated_at AS "updatedAt",
@@ -2852,6 +2856,7 @@ function hydrateLifePost(
     body: post.body,
     moderationStatus: post.moderationStatus,
     moderationLanguageCode: post.moderationLanguageCode,
+    moderationReason: post.moderationReason,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
     author: post.author,
@@ -2878,6 +2883,7 @@ function lifeCommentProjection(whereClause: string): string {
       lc.deleted_at IS NOT NULL AS deleted,
       lc.ai_moderation_status AS "moderationStatus",
       lc.ai_moderation_language_code AS "moderationLanguageCode",
+      lc.ai_moderation_reason AS "moderationReason",
       lc.created_at AS "createdAt",
       lc.created_at::text AS "createdAtCursor",
       lc.updated_at AS "updatedAt",
@@ -4220,6 +4226,7 @@ function entityDiscussionCommentProjection(whereClause: string): string {
       edc.deleted_at IS NOT NULL AS deleted,
       edc.ai_moderation_status AS "moderationStatus",
       edc.ai_moderation_language_code AS "moderationLanguageCode",
+      edc.ai_moderation_reason AS "moderationReason",
       edc.created_at AS "createdAt",
       edc.created_at::text AS "createdAtCursor",
       edc.updated_at AS "updatedAt",

@@ -353,6 +353,7 @@ export interface LifePost {
   body: string;
   moderationStatus: AiModerationStatus;
   moderationLanguageCode: string | null;
+  moderationReason: string | null;
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;
@@ -399,6 +400,7 @@ export interface LifeComment {
   deleted: boolean;
   moderationStatus: AiModerationStatus;
   moderationLanguageCode: string | null;
+  moderationReason: string | null;
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;
@@ -449,6 +451,7 @@ export interface NotificationItem {
   target: NotificationTarget;
   reactionType: LifeReactionType | null;
   moderationStatus: NotificationModerationStatus | null;
+  moderationReason: string | null;
   readAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -485,6 +488,7 @@ export type NotificationWsMessage =
       target: NotificationTarget;
       moderationStatus: NotificationModerationStatus;
       moderationLanguageCode: string | null;
+      moderationReason: string | null;
     };
 
 export const moderationUpdateEvent = 'pokopia-moderation-update';
@@ -781,6 +785,7 @@ export interface EntityDiscussionComment {
   deleted: boolean;
   moderationStatus: AiModerationStatus;
   moderationLanguageCode: string | null;
+  moderationReason: string | null;
   createdAt: string;
   updatedAt: string;
   author: UserSummary | null;

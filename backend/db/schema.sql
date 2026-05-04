@@ -197,11 +197,15 @@ CREATE TABLE IF NOT EXISTS ai_moderation_cache (
   model text NOT NULL,
   status text NOT NULL CHECK (status IN ('approved', 'rejected')),
   language_code text REFERENCES languages(code) ON DELETE SET NULL,
+  reason text,
   checked_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (content_hash, model),
   CHECK (length(content_hash) BETWEEN 32 AND 128),
   CHECK (length(model) BETWEEN 1 AND 120)
 );
+
+ALTER TABLE ai_moderation_cache
+  ADD COLUMN IF NOT EXISTS reason text;
 
 CREATE TABLE IF NOT EXISTS rate_limit_settings (
   id boolean PRIMARY KEY DEFAULT true CHECK (id = true),
@@ -657,6 +661,7 @@ CREATE TABLE IF NOT EXISTS life_posts (
   game_version_id integer REFERENCES game_versions(id) ON DELETE SET NULL,
   ai_moderation_status text NOT NULL DEFAULT 'unreviewed' CHECK (ai_moderation_status IN ('unreviewed', 'reviewing', 'approved', 'rejected', 'failed')),
   ai_moderation_language_code text REFERENCES languages(code) ON DELETE SET NULL,
+  ai_moderation_reason text,
   ai_moderation_content_hash text,
   ai_moderation_checked_at timestamptz,
   ai_moderation_retry_count integer NOT NULL DEFAULT 0 CHECK (ai_moderation_retry_count >= 0),
@@ -696,6 +701,7 @@ CREATE TABLE IF NOT EXISTS life_post_comments (
   body text NOT NULL CHECK (length(body) BETWEEN 1 AND 1000),
   ai_moderation_status text NOT NULL DEFAULT 'unreviewed' CHECK (ai_moderation_status IN ('unreviewed', 'reviewing', 'approved', 'rejected', 'failed')),
   ai_moderation_language_code text REFERENCES languages(code) ON DELETE SET NULL,
+  ai_moderation_reason text,
   ai_moderation_content_hash text,
   ai_moderation_checked_at timestamptz,
   ai_moderation_retry_count integer NOT NULL DEFAULT 0 CHECK (ai_moderation_retry_count >= 0),
@@ -1186,6 +1192,7 @@ CREATE TABLE IF NOT EXISTS entity_discussion_comments (
   body text NOT NULL CHECK (length(body) BETWEEN 1 AND 1000),
   ai_moderation_status text NOT NULL DEFAULT 'unreviewed' CHECK (ai_moderation_status IN ('unreviewed', 'reviewing', 'approved', 'rejected', 'failed')),
   ai_moderation_language_code text REFERENCES languages(code) ON DELETE SET NULL,
+  ai_moderation_reason text,
   ai_moderation_content_hash text,
   ai_moderation_checked_at timestamptz,
   ai_moderation_retry_count integer NOT NULL DEFAULT 0 CHECK (ai_moderation_retry_count >= 0),
@@ -1238,6 +1245,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   entity_id integer,
   reaction_type text CHECK (reaction_type IS NULL OR reaction_type IN ('like', 'helpful', 'fun', 'thanks')),
   moderation_status text CHECK (moderation_status IS NULL OR moderation_status IN ('approved', 'rejected', 'failed')),
+  moderation_reason text,
   read_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -1278,6 +1286,9 @@ CREATE TABLE IF NOT EXISTS notification_ws_tickets (
 CREATE INDEX IF NOT EXISTS notification_ws_tickets_user_idx
   ON notification_ws_tickets(user_id, expires_at DESC);
 
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS moderation_reason text;
+
 ALTER TABLE life_tags
   ADD COLUMN IF NOT EXISTS is_rateable boolean NOT NULL DEFAULT false;
 
@@ -1300,6 +1311,7 @@ ALTER TABLE life_posts
   ADD COLUMN IF NOT EXISTS category_id integer REFERENCES life_tags(id) ON DELETE RESTRICT,
   ADD COLUMN IF NOT EXISTS game_version_id integer REFERENCES game_versions(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS ai_moderation_language_code text REFERENCES languages(code) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS ai_moderation_reason text,
   ADD COLUMN IF NOT EXISTS ai_moderation_content_hash text,
   ADD COLUMN IF NOT EXISTS ai_moderation_checked_at timestamptz,
   ADD COLUMN IF NOT EXISTS ai_moderation_retry_count integer NOT NULL DEFAULT 0 CHECK (ai_moderation_retry_count >= 0),
@@ -1342,6 +1354,7 @@ CREATE INDEX IF NOT EXISTS life_post_ratings_user_idx
 ALTER TABLE life_post_comments
   ADD COLUMN IF NOT EXISTS ai_moderation_status text NOT NULL DEFAULT 'unreviewed' CHECK (ai_moderation_status IN ('unreviewed', 'reviewing', 'approved', 'rejected', 'failed')),
   ADD COLUMN IF NOT EXISTS ai_moderation_language_code text REFERENCES languages(code) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS ai_moderation_reason text,
   ADD COLUMN IF NOT EXISTS ai_moderation_content_hash text,
   ADD COLUMN IF NOT EXISTS ai_moderation_checked_at timestamptz,
   ADD COLUMN IF NOT EXISTS ai_moderation_retry_count integer NOT NULL DEFAULT 0 CHECK (ai_moderation_retry_count >= 0),
@@ -1350,6 +1363,7 @@ ALTER TABLE life_post_comments
 ALTER TABLE entity_discussion_comments
   ADD COLUMN IF NOT EXISTS ai_moderation_status text NOT NULL DEFAULT 'unreviewed' CHECK (ai_moderation_status IN ('unreviewed', 'reviewing', 'approved', 'rejected', 'failed')),
   ADD COLUMN IF NOT EXISTS ai_moderation_language_code text REFERENCES languages(code) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS ai_moderation_reason text,
   ADD COLUMN IF NOT EXISTS ai_moderation_content_hash text,
   ADD COLUMN IF NOT EXISTS ai_moderation_checked_at timestamptz,
   ADD COLUMN IF NOT EXISTS ai_moderation_retry_count integer NOT NULL DEFAULT 0 CHECK (ai_moderation_retry_count >= 0),

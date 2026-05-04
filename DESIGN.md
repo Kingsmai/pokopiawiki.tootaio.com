@@ -251,7 +251,7 @@
 - Notifications 用于让已登录用户接收与自己相关的社区互动和审核结果。
 - 通知持久化存储，用户离线期间产生的通知会在下次登录后继续可见。
 - 通知和审核状态实时更新可以走 WebSocket；WebSocket 连接使用短期一次性 ticket，不把 session token 放入 WebSocket URL。
-- AI 审核从 `reviewing` 变更为 `approved`、`rejected` 或 `failed` 后，前端当前可见的对应 Life Post、Life Comment 或实体讨论评论状态应通过 WebSocket 直接更新，不要求用户刷新页面。
+- AI 审核从 `reviewing` 变更为 `approved`、`rejected` 或 `failed` 后，前端当前可见的对应 Life Post、Life Comment 或实体讨论评论状态、语言区和可展示的审核原因详情应通过 WebSocket 直接更新，不要求用户刷新页面。
 - 通知范围：
   - Life Post 收到审核通过后的顶层评论时，通知 Life Post 作者。
   - Life Comment 收到审核通过后的回复时，通知父评论作者。
@@ -268,10 +268,11 @@
   - 目标跳转信息 `target`：只包含目标类型、ID、路径和必要业务引用
   - `reactionType`
   - `moderationStatus`
+  - `moderationReason`：仅当审核结果为 `rejected` 或 `failed` 时可包含面向用户的简短原因详情；`approved` 时为 `null`
   - `readAt`
   - `createdAt`
   - `updatedAt`
-- 通知 API 不返回邮箱、角色、权限、session、token/hash、AI prompt、模型响应、内部审核错误、调试字段或内部审计 payload。
+- 通知 API 不返回邮箱、角色、权限、session、token/hash、AI prompt、模型响应、内部审核错误、错误堆栈、调试字段或内部审计 payload。
 - 前端在主导航登录区展示通知入口、未读数量和通知列表；点击通知后标记已读并跳转到对应 Life Post 或 Wiki 详情页。
 
 ## 滥用防护与限流
@@ -375,11 +376,12 @@
 - 新增或更新审核目标时先进入不可公开状态；只有 AI 审核通过后才进入普通公开讨论列表。
 - 审核失败不等于审核通过；失败内容保持不可公开，用户可重新审核。
 - `reviewing` 表示审核正在进行中，前端不展示重新审核入口；只有 `unreviewed`、`rejected` 和 `failed` 这类非进行中且未通过状态可触发重新审核。
+- `rejected` 和 `failed` 可向作者本人或有管理权限的用户展示简短原因详情；`approved` 和 `reviewing` 不展示原因。
 - AI 审核会自动识别评论适合的语言区，语言区使用启用状态的 `languages.code`，但不影响系统 UI 语言。
 - 讨论列表支持按语言区读取；`language=all` 或不传语言参数时读取全部已公开语言区，传入具体语言 code 时只读取对应语言区。
 - 讨论内容是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 - API 对外只返回评论作者的 `id` 和 `displayName`。
-- API 不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误、`deleted_at`、`deleted_by_user_id` 等内部字段。
+- API 可返回作者本人或管理用户处理评论所需的审核状态、语言区和 `rejected` / `failed` 原因详情；不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误、错误堆栈、`deleted_at`、`deleted_by_user_id` 等内部字段。
 
 ## AI 审核
 
@@ -402,6 +404,7 @@
   - OpenAI-compatible 转发模式下仍必须使用独立系统指令和结构化 JSON 解析；模型未返回明确合法结果时按审核失败处理。
   - 模型返回格式不合法、网络失败、超时或限流失败时，内容标记为审核失败，不得公开。
   - 只有 `approved` 状态可向普通访客公开；`unreviewed`、`reviewing`、`rejected`、`failed` 均不可公开。
+- 审核不通过或审核失败时，后端可保存并通过 API / WebSocket 返回面向用户的简短原因详情；原因详情必须经过清洗和长度限制，不得包含 AI prompt、模型原始响应、内部错误、错误堆栈、调试信息、API Key、token/hash、系统策略原文或用户不需要处理的实现细节。
 - 审核语言区独立于系统 UI 语言：
   - 前台可选择 All languages 或具体语言区浏览内容。
   - 发布时客户端可传当前语言区作为 hint，但最终语言区由服务端 AI 审核结果决定。
@@ -846,14 +849,15 @@ API 暴露边界：
 - Life Post Category 只返回 `id` 和按当前语言解析后的 `name`。
 - Life Post Game Version 只返回 `id`、展示用 `name` 和可展示 `changeLog`；未选择版本时返回 `null`。
 - Life Post Rating 只返回 `ratingAverage`、`ratingCount` 和当前用户自己的 `myRating`；不返回其他用户的评分明细。
-- Life Post 可返回面向用户展示所需的审核状态、审核语言区和是否可重审；不返回内部错误、AI prompt、模型响应或 retry 细节。
+- Life Post 可返回面向用户展示所需的审核状态、审核语言区、审核原因详情和是否可重审；审核原因详情仅用于 `rejected` / `failed`，不返回内部错误、AI prompt、模型响应、错误堆栈或 retry 细节。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
 - Life Post 列表和详情中的 Life Reaction 只返回按类型汇总的数量和当前用户自己的 Reaction，不内嵌其他用户明细。
 - Life Reaction 用户列表 API 只返回公开用户摘要 `id`、`displayName`、`reactionType` 和 `reactedAt`；不返回邮箱、角色、权限、token/hash、内部审计或其他用户隐私字段。
 - Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。每个 Life Post 的评论字段只包含已公开或当前用户可见评论的 `commentCount` 和 `commentPreview`，不内嵌完整评论列表。
 - Life Post 详情 API 返回单条 Life Post，字段边界与列表项一致；评论字段仍只包含 `commentCount` 和少量 `commentPreview`，完整评论通过评论分页接口读取。
 - Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌；普通访客只读取审核通过评论。
-- API 不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误或不必要的审计 payload。
+- Life Comment 可返回作者本人或管理用户处理评论所需的审核状态、语言区和 `rejected` / `failed` 原因详情。
+- API 不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误、错误堆栈或不必要的审计 payload。
 - API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
 - 非作者只有拥有对应 `*-any` 管理权限时才能编辑或删除其他用户的 Life Post 或 Life Comment。
 

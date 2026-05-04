@@ -296,6 +296,15 @@ function notificationText(notification: NotificationItem) {
   return t('notifications.moderationFailed', { target });
 }
 
+function notificationReasonVisible(notification: NotificationItem) {
+  return (
+    notification.type === 'moderation_result' &&
+    (notification.moderationStatus === 'rejected' || notification.moderationStatus === 'failed') &&
+    notification.moderationReason !== null &&
+    notification.moderationReason.trim() !== ''
+  );
+}
+
 function notificationIcon(notification: NotificationItem) {
   if (notification.type === 'life_post_comment') {
     return iconComment;
@@ -409,6 +418,9 @@ onBeforeUnmount(() => {
             </span>
             <span class="notification-item__copy">
               <strong>{{ notificationText(notification) }}</strong>
+              <span v-if="notificationReasonVisible(notification)" class="notification-item__detail">
+                {{ notification.moderationReason }}
+              </span>
               <time :datetime="notification.createdAt">{{ formatDateTime(notification.createdAt) }}</time>
             </span>
           </button>

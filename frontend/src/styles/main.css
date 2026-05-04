@@ -611,6 +611,14 @@ svg {
   overflow-wrap: anywhere;
 }
 
+.notification-item__detail {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .notification-item__copy time {
   color: var(--muted);
   font-size: 12px;
@@ -2472,6 +2480,36 @@ button:disabled,
   margin: 0;
   color: var(--danger);
   font-weight: 850;
+}
+
+.life-moderation-detail {
+  display: grid;
+  gap: 4px;
+  max-width: 72ch;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--line));
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.life-moderation-detail strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.life-moderation-detail--comment {
+  max-width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .life-form__actions,

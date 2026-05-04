@@ -1142,7 +1142,6 @@ async function nextPokemonInternalId(
 async function reorderTableRows(
   client: DbClient,
   tableName: string,
-  entityType: string,
   ids: number[],
   userId: number
 ): Promise<void> {
@@ -1171,9 +1170,6 @@ async function reorderTableRows(
       `,
       [nextSortOrder, userId, id]
     );
-    const changes: EditChange[] = [];
-    pushChange(changes, 'Sort order', String(previousSortOrder), String(nextSortOrder));
-    await recordEditLog(client, entityType, id, 'update', userId, changes);
   }
 }
 
@@ -2798,9 +2794,6 @@ export async function reorderDailyChecklistItems(payload: Record<string, unknown
         `,
         [nextSortOrder, userId, id]
       );
-      const changes: EditChange[] = [];
-      pushChange(changes, 'Sort order', String(previousSortOrder), String(nextSortOrder));
-      await recordEditLog(client, 'daily-checklist-items', id, 'update', userId, changes);
     }
   });
 
@@ -5339,7 +5332,7 @@ export async function reorderConfig(type: ConfigType, payload: Record<string, un
   }
 
   await withTransaction(async (client) => {
-    await reorderTableRows(client, definition.table, type, ids, userId);
+    await reorderTableRows(client, definition.table, ids, userId);
   });
 
   return listConfig(type, locale);
@@ -5440,7 +5433,7 @@ async function reorderContent(type: SortableContentType, payload: Record<string,
   }
 
   await withTransaction(async (client) => {
-    await reorderTableRows(client, definition.table, definition.entityType, ids, userId);
+    await reorderTableRows(client, definition.table, ids, userId);
   });
 }
 
@@ -6618,7 +6611,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
       }
 
       orderedIds.splice(targetIndex + (cleanPayload.insertAfterItemId !== null ? 1 : 0), 0, itemId);
-      await reorderTableRows(client, 'items', 'items', orderedIds, userId);
+      await reorderTableRows(client, 'items', orderedIds, userId);
     }
 
     await recordEditLog(client, 'items', itemId, 'create', userId);
@@ -7526,7 +7519,7 @@ export async function reorderDishCategories(payload: Record<string, unknown>, us
     throw validationError('server.validation.selectRecord');
   }
   await withTransaction(async (client) => {
-    await reorderTableRows(client, 'dish_categories', 'dish-categories', ids, userId);
+    await reorderTableRows(client, 'dish_categories', ids, userId);
   });
   return listDish(locale);
 }
@@ -7537,7 +7530,7 @@ export async function reorderDishes(payload: Record<string, unknown>, userId: nu
     throw validationError('server.validation.selectRecord');
   }
   await withTransaction(async (client) => {
-    await reorderTableRows(client, 'dishes', 'dishes', ids, userId);
+    await reorderTableRows(client, 'dishes', ids, userId);
   });
   return listDish(locale);
 }

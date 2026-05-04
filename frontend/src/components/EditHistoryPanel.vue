@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n';
 import type { EditHistoryAction, EditHistoryEntry, EditInfo, UserSummary } from '../services/api';
 
-defineProps<{
+const props = defineProps<{
   entity: EditInfo;
   history: EditHistoryEntry[];
 }>();
@@ -118,7 +118,11 @@ function changeValue(value: string): string {
 }
 
 function visibleChanges(entry: EditHistoryEntry) {
-  return entry.changes.filter((change) => change.label !== 'Display ID');
+  return entry.changes.filter((change) => change.label !== 'Display ID' && change.label !== 'Sort order' && change.label !== '排序');
+}
+
+function visibleHistoryEntries() {
+  return props.history.filter((entry) => entry.action !== 'update' || visibleChanges(entry).length > 0);
 }
 
 function historySummary(entry: EditHistoryEntry): string {
@@ -148,29 +152,29 @@ function formatDateTime(value: string): string {
       <div>
         <dt>{{ t('history.createdBy') }}</dt>
         <dd>
-          <RouterLink v-if="entity.createdBy" class="user-profile-link" :to="`/profile/${entity.createdBy.id}`">
-            {{ entity.createdBy.displayName }}
+          <RouterLink v-if="props.entity.createdBy" class="user-profile-link" :to="`/profile/${props.entity.createdBy.id}`">
+            {{ props.entity.createdBy.displayName }}
           </RouterLink>
-          <strong v-else>{{ displayName(entity.createdBy) }}</strong>
-          <time :datetime="entity.createdAt">{{ formatDateTime(entity.createdAt) }}</time>
+          <strong v-else>{{ displayName(props.entity.createdBy) }}</strong>
+          <time :datetime="props.entity.createdAt">{{ formatDateTime(props.entity.createdAt) }}</time>
         </dd>
       </div>
       <div>
         <dt>{{ t('history.lastEdited') }}</dt>
         <dd>
-          <RouterLink v-if="entity.updatedBy" class="user-profile-link" :to="`/profile/${entity.updatedBy.id}`">
-            {{ entity.updatedBy.displayName }}
+          <RouterLink v-if="props.entity.updatedBy" class="user-profile-link" :to="`/profile/${props.entity.updatedBy.id}`">
+            {{ props.entity.updatedBy.displayName }}
           </RouterLink>
-          <strong v-else>{{ displayName(entity.updatedBy) }}</strong>
-          <time :datetime="entity.updatedAt">{{ formatDateTime(entity.updatedAt) }}</time>
+          <strong v-else>{{ displayName(props.entity.updatedBy) }}</strong>
+          <time :datetime="props.entity.updatedAt">{{ formatDateTime(props.entity.updatedAt) }}</time>
         </dd>
       </div>
     </dl>
 
     <section class="edit-history-list" aria-labelledby="edit-history-list-title">
       <h3 id="edit-history-list-title">{{ t('history.editHistory') }}</h3>
-      <ol v-if="history.length" class="edit-timeline">
-        <li v-for="entry in history" :key="`${entry.action}-${entry.createdAt}-${entry.user?.id ?? 'system'}`">
+      <ol v-if="visibleHistoryEntries().length" class="edit-timeline">
+        <li v-for="entry in visibleHistoryEntries()" :key="`${entry.action}-${entry.createdAt}-${entry.user?.id ?? 'system'}`">
           <span class="edit-timeline__avatar" aria-hidden="true">{{ actionMark(entry.action) }}</span>
           <div class="edit-timeline__body">
             <details class="edit-history-entry">

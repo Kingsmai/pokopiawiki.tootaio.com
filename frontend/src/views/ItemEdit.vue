@@ -36,7 +36,9 @@ const busy = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
 const itemForm = ref({
+  displayId: 1,
   name: '',
+  details: '',
   translations: {} as TranslationMap,
   categoryId: '',
   usageId: '',
@@ -52,12 +54,15 @@ const itemForm = ref({
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
+const isEventCreate = computed(() => route.name === 'event-item-new');
 const pageTitle = computed(() =>
   isEditing.value
     ? t('pages.items.editTitle', { name: itemForm.value.name || t('pages.items.fallbackName') })
-    : t('pages.items.newTitle')
+    : isEventCreate.value
+      ? t('pages.eventItems.newTitle')
+      : t('pages.items.newTitle')
 );
-const cancelTo = computed(() => (isEditing.value ? `/items/${routeId.value}` : '/items'));
+const cancelTo = computed(() => (isEditing.value ? `/items/${routeId.value}` : isEventCreate.value ? '/event-items' : '/items'));
 const hasRecipe = ref(false);
 const imageEntityName = computed(() => itemNameForSave().trim());
 const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
@@ -112,7 +117,9 @@ async function loadEditor() {
     if (isEditing.value) {
       const item = await api.itemDetail(routeId.value);
       itemForm.value = {
+        displayId: item.displayId,
         name: item.baseName ?? item.name,
+        details: item.baseDetails ?? item.details,
         translations: item.translations ?? {},
         categoryId: String(item.category.id),
         usageId: item.usage ? String(item.usage.id) : '',
@@ -128,28 +135,15 @@ async function loadEditor() {
       currentImage.value = item.image;
       imageHistory.value = item.imageHistory;
       hasRecipe.value = item.recipe !== null;
+    } else if (isEventCreate.value) {
+      itemForm.value.isEventItem = true;
+    } else {
+      itemForm.value.isEventItem = false;
     }
   } catch (error) {
     message.value = errorText(error, t('errors.loadFailed'));
   } finally {
     loading.value = false;
-  }
-}
-
-async function createSingleOption(selectKey: string, type: ConfigType, name: string, assign: (value: string) => void) {
-  const cleanName = name.trim();
-  if (!cleanName || !canCreateConfig.value) return;
-
-  creatingSelect.value = selectKey;
-  message.value = '';
-  try {
-    const created = await api.createConfig(type, { name: cleanName });
-    await loadOptions();
-    assign(String(created.id));
-  } catch (error) {
-    message.value = errorText(error, t('errors.addFailed'));
-  } finally {
-    creatingSelect.value = '';
   }
 }
 
@@ -179,7 +173,9 @@ async function saveItem() {
 
   try {
     const payload: ItemPayload = {
+      displayId: itemForm.value.displayId,
       name: itemNameForSave(),
+      details: itemForm.value.details,
       translations: itemForm.value.translations,
       categoryId: Number(itemForm.value.categoryId),
       usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
@@ -230,6 +226,22 @@ onMounted(() => {
         required
       />
 
+      <div class="field">
+        <label for="item-display-id">{{ t('pages.items.displayId') }}</label>
+        <input id="item-display-id" v-model.number="itemForm.displayId" type="number" min="1" required />
+      </div>
+
+      <TranslationFields
+        id-prefix="item-details"
+        v-model:base-value="itemForm.details"
+        v-model:translations="itemForm.translations"
+        field="details"
+        :label="t('pages.items.description')"
+        :languages="languages"
+        multiline
+        :rows="4"
+      />
+
       <ImageUploadField
         v-model="itemForm.imagePath"
         entity-type="items"
@@ -252,11 +264,8 @@ onMounted(() => {
           v-model="itemForm.categoryId"
           :options="options.itemCategories"
           :multiple="false"
-          :allow-create="canCreateConfig"
-          :creating="creatingSelect === 'item-category'"
           :placeholder="t('common.select')"
           :search-placeholder="t('pages.items.searchCategory')"
-          @create="createSingleOption('item-category', 'item-categories', $event, (value) => (itemForm.categoryId = value))"
         />
       </div>
 
@@ -267,11 +276,8 @@ onMounted(() => {
           v-model="itemForm.usageId"
           :options="options.itemUsages"
           :multiple="false"
-          :allow-create="canCreateConfig"
-          :creating="creatingSelect === 'item-usage'"
           :placeholder="t('common.none')"
           :search-placeholder="t('pages.items.searchUsage')"
-          @create="createSingleOption('item-usage', 'item-usages', $event, (value) => (itemForm.usageId = value))"
         />
       </div>
 
@@ -280,7 +286,7 @@ onMounted(() => {
         <label><input v-model="itemForm.dualDyeable" type="checkbox" /> {{ t('pages.items.dualDyeable') }}</label>
         <label><input v-model="itemForm.patternEditable" type="checkbox" /> {{ t('pages.items.patternEditable') }}</label>
         <label><input v-model="itemForm.noRecipe" type="checkbox" :disabled="hasRecipe" /> {{ t('pages.items.noRecipe') }}</label>
-        <label><input v-model="itemForm.isEventItem" type="checkbox" /> {{ t('pages.items.eventItem') }}</label>
+        <label><input v-model="itemForm.isEventItem" type="checkbox" :disabled="isEventCreate" /> {{ t('pages.items.eventItem') }}</label>
       </div>
 
       <div class="field">

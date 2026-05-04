@@ -6,6 +6,7 @@ import AppShell from './components/AppShell.vue';
 import {
   iconAction,
   iconAdmin,
+  iconArtifact,
   iconAutomation,
   iconChecklist,
   iconClothes,
@@ -49,6 +50,8 @@ const navItems = computed(() => {
     { label: t('nav.habitats'), to: '/habitats', icon: iconHabitat },
     { label: t('nav.eventHabitats'), to: '/event-habitats', icon: iconEvent },
     { label: t('nav.items'), to: '/items', icon: iconItem },
+    { label: t('nav.eventItems'), to: '/event-items', icon: iconEvent },
+    { label: t('nav.ancientArtifacts'), to: '/ancient-artifacts', icon: iconArtifact },
     { label: t('nav.recipes'), to: '/recipes', icon: iconRecipe },
     { label: t('nav.automation'), to: '/automation', icon: iconAutomation, badge: inDevBadge() },
     { label: t('nav.dish'), to: '/dish', icon: iconDish, badge: inDevBadge() },

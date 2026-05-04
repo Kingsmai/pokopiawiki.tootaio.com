@@ -7,6 +7,7 @@ import Skeleton from '../components/Skeleton.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import {
   iconAction,
+  iconArtifact,
   iconAutomation,
   iconChevronRight,
   iconChecklist,
@@ -36,6 +37,8 @@ const primarySections = computed(() => [
   { key: 'habitats', to: '/habitats', icon: iconHabitat },
   { key: 'eventHabitats', to: '/event-habitats', icon: iconEvent },
   { key: 'items', to: '/items', icon: iconItem },
+  { key: 'eventItems', to: '/event-items', icon: iconEvent },
+  { key: 'ancientArtifacts', to: '/ancient-artifacts', icon: iconArtifact },
   { key: 'recipes', to: '/recipes', icon: iconRecipe }
 ]);
 

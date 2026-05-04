@@ -48,6 +48,8 @@ export const systemWordingMessages = {
       habitats: 'Habitats',
       eventHabitats: 'Event Habitats',
       items: 'Items',
+      eventItems: 'Event Items',
+      ancientArtifacts: 'Ancient Artifacts',
       recipes: 'Recipes',
       automation: 'Automation',
       dish: 'Dish',
@@ -80,11 +82,13 @@ export const systemWordingMessages = {
     },
     seo: {
       siteDescription:
-        'Browse Pokopia Wiki for Pokemon, Event Pokemon, habitats, Event Habitats, items, recipes, daily tasks, and Life community posts for Pokemon Pokopia.',
+        'Browse Pokopia Wiki for Pokemon, Event Pokemon, habitats, Event Habitats, items, Event Items, Ancient Artifacts, recipes, daily tasks, and Life community posts for Pokemon Pokopia.',
       pokemonDetailDescription:
         'Read {name} details in Pokopia Wiki, including habitat, types, specialities, favourites, stats, related items, discussions, and edit history.',
       itemDetailDescription:
         'Browse {name} item details in Pokopia Wiki, including category, usage, acquisition methods, customization, related recipes, habitats, and Pokemon drops.',
+      ancientArtifactDetailDescription:
+        'Browse {name} Ancient Artifact details in Pokopia Wiki, including category, tags, description, discussions, and edit history.',
       habitatDetailDescription:
         'View {name} habitat details in Pokopia Wiki, including recipes, possible Pokemon, maps, time, weather, discussions, and edit history.',
       recipeDetailDescription:
@@ -190,6 +194,14 @@ export const systemWordingMessages = {
           items: {
             title: 'Items',
             description: 'Browse categories, usage, acquisition methods, customization, and tags.'
+          },
+          eventItems: {
+            title: 'Event Items',
+            description: 'Browse limited event items with their own Display IDs and shared item categories.'
+          },
+          ancientArtifacts: {
+            title: 'Ancient Artifacts',
+            description: 'Browse Lost Relics and Fossils with tags, descriptions, and wiki history.'
           },
           recipes: {
             title: 'Recipes',
@@ -608,6 +620,7 @@ export const systemWordingMessages = {
       items: {
         title: 'Items',
         subtitle: 'Browse items by category, usage, and tags.',
+        kicker: 'Items',
         detailKicker: 'Item Detail',
         detailSubtitle: 'Item detail',
         editKicker: 'Item Edit',
@@ -618,6 +631,8 @@ export const systemWordingMessages = {
         loadingList: 'Loading item list',
         loadingDetail: 'Loading item detail',
         loadingEdit: 'Loading item editor',
+        displayId: 'Display ID',
+        description: 'Description',
         category: 'Category',
         usage: 'Usage',
         tags: 'Tags',
@@ -636,6 +651,35 @@ export const systemWordingMessages = {
         searchCategory: 'Search categories',
         searchUsage: 'Search usages',
         searchMethods: 'Search acquisition methods',
+        searchTags: 'Search tags'
+      },
+      eventItems: {
+        title: 'Event Items',
+        subtitle: 'Browse event items by category, usage, and tags.',
+        kicker: 'Event Items',
+        detailKicker: 'Event Item Detail',
+        editSubtitle: 'Maintain event item category, usage, acquisition methods, customization, and tags.',
+        newTitle: 'New event item'
+      },
+      ancientArtifacts: {
+        title: 'Ancient Artifacts',
+        subtitle: 'Browse Ancient Artifacts by relic, fossil category, and tags.',
+        kicker: 'Ancient Artifacts',
+        detailKicker: 'Ancient Artifact Detail',
+        detailSubtitle: 'Ancient Artifact detail',
+        editKicker: 'Ancient Artifact Edit',
+        editSubtitle: 'Maintain Ancient Artifact Display ID, image, description, category, tags, and translations.',
+        newTitle: 'New Ancient Artifact',
+        editTitle: 'Edit {name}',
+        fallbackName: 'Ancient Artifact',
+        loadingList: 'Loading Ancient Artifact list',
+        loadingDetail: 'Loading Ancient Artifact detail',
+        loadingEdit: 'Loading Ancient Artifact editor',
+        displayId: 'Display ID',
+        description: 'Description',
+        category: 'Category',
+        tags: 'Tags',
+        searchCategory: 'Search categories',
         searchTags: 'Search tags'
       },
       recipes: {
@@ -862,6 +906,7 @@ export const systemWordingMessages = {
         checklist: 'CheckList',
         pokemonList: 'Pokemon list',
         itemList: 'Item list',
+        ancientArtifactList: 'Ancient Artifact list',
         recipeList: 'Recipe list',
         habitatList: 'Habitat list',
         dataTools: 'Data tools',
@@ -886,6 +931,7 @@ export const systemWordingMessages = {
         dataToolScopePokemon: 'Pokemon',
         dataToolScopeHabitats: 'Habitats',
         dataToolScopeItems: 'Items',
+        dataToolScopeArtifacts: 'Ancient Artifacts',
         dataToolScopeRecipes: 'Recipes',
         dataToolScopeChecklist: 'Daily CheckList',
         languages: 'Languages',
@@ -973,8 +1019,6 @@ export const systemWordingMessages = {
       skills: 'Specialities',
       environments: 'Ideal Habitats',
       favoriteThings: 'Favourites / tags',
-      itemCategories: 'Item categories',
-      itemUsages: 'Item usages',
       acquisitionMethods: 'Acquisition methods',
       maps: 'Maps',
       lifeCategories: 'Life categories',
@@ -1151,9 +1195,12 @@ export const systemWordingMessages = {
       environmentRequired: 'Ideal Habitat is required',
       skillNoDrop: 'This speciality cannot have a drop item',
       habitatNameRequired: 'Habitat name is required',
+      itemDisplayIdRequired: 'Item Display ID is required',
       usageRequired: 'Usage is required',
       itemNameRequired: 'Item name is required',
       categoryRequired: 'Category is required',
+      artifactDisplayIdRequired: 'Ancient Artifact Display ID is required',
+      artifactNameRequired: 'Ancient Artifact name is required',
       recipeFreeWithRecipe: 'An item with a recipe cannot be marked as recipe-free',
       itemRequired: 'Item is required',
       recipeFreeItem: 'This item is marked as recipe-free',
@@ -1246,6 +1293,8 @@ export const systemWordingMessages = {
       habitats: '栖息地',
       eventHabitats: 'Event Habitats',
       items: '物品',
+      eventItems: 'Event Items',
+      ancientArtifacts: 'Ancient Artifacts',
       recipes: '材料单',
       automation: '自动化',
       dish: '料理',
@@ -1277,9 +1326,10 @@ export const systemWordingMessages = {
       }
     },
     seo: {
-      siteDescription: '浏览 Pokopia Wiki 的 Pokemon、Event Pokemon、栖息地、Event Habitats、物品、材料单、每日清单和 Life 社区动态。',
+      siteDescription: '浏览 Pokopia Wiki 的 Pokemon、Event Pokemon、栖息地、Event Habitats、物品、Event Items、Ancient Artifacts、材料单、每日清单和 Life 社区动态。',
       pokemonDetailDescription: '查看 {name} 在 Pokopia Wiki 中的栖息地、属性、特长、喜欢的东西、六维、相关物品、讨论和编辑历史。',
       itemDetailDescription: '查看 {name} 在 Pokopia Wiki 中的分类、用途、入手方式、自定义、相关材料单、栖息地和 Pokemon 掉落。',
+      ancientArtifactDetailDescription: '查看 {name} 在 Pokopia Wiki 中的分类、标签、介绍、讨论和编辑历史。',
       habitatDetailDescription: '查看 {name} 在 Pokopia Wiki 中的配方、可能出现的 Pokemon、地图、时间、天气、讨论和编辑历史。',
       recipeDetailDescription: '查看 {name} 材料单在 Pokopia Wiki 中的结果物品、入手方式、需要材料、讨论和编辑历史。'
     },
@@ -1383,6 +1433,14 @@ export const systemWordingMessages = {
           items: {
             title: '物品',
             description: '按分类、用途、入手方式、自定义和标签浏览物品。'
+          },
+          eventItems: {
+            title: 'Event Items',
+            description: '浏览限时活动物品，并维护独立的 Display ID 与共享分类。'
+          },
+          ancientArtifacts: {
+            title: 'Ancient Artifacts',
+            description: '浏览 Lost Relics 和 Fossils 的标签、介绍与 Wiki 历史。'
           },
           recipes: {
             title: '材料单',
@@ -1781,6 +1839,7 @@ export const systemWordingMessages = {
       items: {
         title: '物品',
         subtitle: '按分类、用途、标签查看物品。',
+        kicker: '物品',
         detailKicker: 'Item Detail',
         detailSubtitle: '物品详情',
         editKicker: 'Item Edit',
@@ -1791,6 +1850,8 @@ export const systemWordingMessages = {
         loadingList: '正在加载列表',
         loadingDetail: '正在加载物品详情',
         loadingEdit: '正在加载物品编辑内容',
+        displayId: 'Display ID',
+        description: '介绍',
         category: '分类',
         usage: '用途',
         tags: '标签',
@@ -1809,6 +1870,35 @@ export const systemWordingMessages = {
         searchCategory: '搜索分类',
         searchUsage: '搜索用途',
         searchMethods: '搜索入手方式',
+        searchTags: '搜索标签'
+      },
+      eventItems: {
+        title: 'Event Items',
+        subtitle: '按分类、用途、标签查看活动物品。',
+        kicker: 'Event Items',
+        detailKicker: 'Event Item Detail',
+        editSubtitle: '维护 Event Item 分类、用途、入手方式、自定义和标签。',
+        newTitle: '新增 Event Item'
+      },
+      ancientArtifacts: {
+        title: 'Ancient Artifacts',
+        subtitle: '按遗物、化石分类和标签查看 Ancient Artifacts。',
+        kicker: 'Ancient Artifacts',
+        detailKicker: 'Ancient Artifact Detail',
+        detailSubtitle: 'Ancient Artifact 详情',
+        editKicker: 'Ancient Artifact Edit',
+        editSubtitle: '维护 Ancient Artifact Display ID、图片、介绍、分类、标签和翻译。',
+        newTitle: '新增 Ancient Artifact',
+        editTitle: '编辑 {name}',
+        fallbackName: 'Ancient Artifact',
+        loadingList: '正在加载 Ancient Artifact 列表',
+        loadingDetail: '正在加载 Ancient Artifact 详情',
+        loadingEdit: '正在加载 Ancient Artifact 编辑内容',
+        displayId: 'Display ID',
+        description: '介绍',
+        category: '分类',
+        tags: '标签',
+        searchCategory: '搜索分类',
         searchTags: '搜索标签'
       },
       recipes: {
@@ -2035,6 +2125,7 @@ export const systemWordingMessages = {
         checklist: 'CheckList',
         pokemonList: 'Pokemon 列表',
         itemList: '物品列表',
+        ancientArtifactList: 'Ancient Artifact 列表',
         recipeList: '材料单列表',
         habitatList: '栖息地列表',
         dataTools: '数据工具',
@@ -2059,6 +2150,7 @@ export const systemWordingMessages = {
         dataToolScopePokemon: 'Pokemon',
         dataToolScopeHabitats: '栖息地',
         dataToolScopeItems: '物品',
+        dataToolScopeArtifacts: 'Ancient Artifacts',
         dataToolScopeRecipes: '材料单',
         dataToolScopeChecklist: '每日 CheckList',
         languages: '语言',
@@ -2146,8 +2238,6 @@ export const systemWordingMessages = {
       skills: '特长',
       environments: '喜欢的环境',
       favoriteThings: '喜欢的东西 / 标签',
-      itemCategories: '物品分类',
-      itemUsages: '物品用途',
       acquisitionMethods: '入手方式',
       maps: '地图',
       lifeCategories: 'Life Categories',
@@ -2324,9 +2414,12 @@ export const systemWordingMessages = {
         environmentRequired: '请选择喜欢的环境',
         skillNoDrop: '这个特长不能设置掉落物',
         habitatNameRequired: '请输入栖息地名称',
+        itemDisplayIdRequired: '请输入物品 Display ID',
         usageRequired: '请选择用途',
         itemNameRequired: '请输入物品名称',
         categoryRequired: '请选择分类',
+        artifactDisplayIdRequired: '请输入 Ancient Artifact Display ID',
+        artifactNameRequired: '请输入 Ancient Artifact 名称',
         recipeFreeWithRecipe: '已有材料单的物品不能标记为无材料单',
         itemRequired: '请选择物品',
         recipeFreeItem: '这个物品已标记为无材料单',

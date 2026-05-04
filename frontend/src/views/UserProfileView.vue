@@ -38,7 +38,7 @@ import {
 } from '../services/api';
 
 type ProfileTab = 'feeds' | 'contributions' | 'reactions' | 'comments' | 'account';
-type PrimaryContributionFilter = 'pokemon' | 'items' | 'recipes' | 'habitats' | 'daily-checklist';
+type PrimaryContributionFilter = 'pokemon' | 'items' | 'ancient-artifacts' | 'recipes' | 'habitats' | 'daily-checklist';
 type ContributionFilter = 'all' | PrimaryContributionFilter | 'config';
 type ReactionFilter = 'all' | LifeReactionType;
 type CommentFilter = 'all' | ProfileCommentSource;
@@ -46,6 +46,7 @@ type CommentFilter = 'all' | ProfileCommentSource;
 const primaryContributionFilters: PrimaryContributionFilter[] = [
   'pokemon',
   'items',
+  'ancient-artifacts',
   'recipes',
   'habitats',
   'daily-checklist'
@@ -582,6 +583,7 @@ function contentTypeLabel(contentType: string): string {
   const labels: Record<string, string> = {
     pokemon: t('nav.pokemon'),
     items: t('nav.items'),
+    'ancient-artifacts': t('nav.ancientArtifacts'),
     recipes: t('nav.recipes'),
     habitats: t('nav.habitats'),
     'daily-checklist': t('nav.checklist'),
@@ -589,8 +591,6 @@ function contentTypeLabel(contentType: string): string {
     skills: t('config.skills'),
     environments: t('config.environments'),
     'favorite-things': t('config.favoriteThings'),
-    'item-categories': t('config.itemCategories'),
-    'item-usages': t('config.itemUsages'),
     'acquisition-methods': t('config.acquisitionMethods'),
     maps: t('config.maps'),
     'life-tags': t('config.lifeCategories')
@@ -603,7 +603,8 @@ function discussionTargetRoute(type: DiscussionEntityType, id: number): string {
     pokemon: `/pokemon/${id}`,
     items: `/items/${id}`,
     recipes: `/recipes/${id}`,
-    habitats: `/habitats/${id}`
+    habitats: `/habitats/${id}`,
+    'ancient-artifacts': `/ancient-artifacts/${id}`
   }[type];
 }
 

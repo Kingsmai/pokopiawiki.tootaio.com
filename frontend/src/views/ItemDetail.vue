@@ -36,6 +36,8 @@ const itemSubtitle = computed(() => {
 
   return item.value.usage ? `${item.value.category.name} · ${item.value.usage.name}` : item.value.category.name;
 });
+const detailKicker = computed(() => (item.value?.isEventItem ? t('pages.eventItems.detailKicker') : t('pages.items.detailKicker')));
+const listTarget = computed(() => (item.value?.isEventItem ? '/event-items' : '/items'));
 
 const customization = computed(() => {
   if (!item.value) {
@@ -55,7 +57,7 @@ async function loadItemDetail() {
 
   if (route.meta.editorModal !== true) {
     applySeo({
-      title: `${nextItem.name} - ${t('pages.items.title')}`,
+      title: `${nextItem.name} - ${t(nextItem.isEventItem ? 'pages.eventItems.title' : 'pages.items.title')}`,
       description: t('seo.itemDetailDescription', { name: nextItem.name }),
       canonicalPath: `/items/${nextItem.id}`,
       image: nextItem.image?.url
@@ -147,14 +149,14 @@ watch(
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="item.name" :subtitle="itemSubtitle">
-      <template #kicker>{{ t('pages.items.detailKicker') }}</template>
+    <PageHeader :title="`#${item.displayId} ${item.name}`" :subtitle="itemSubtitle">
+      <template #kicker>{{ detailKicker }}</template>
       <template #actions>
         <RouterLink v-if="canUpdateItem" class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>
-        <RouterLink class="ui-button ui-button--blue ui-button--small" to="/items">
+        <RouterLink class="ui-button ui-button--blue ui-button--small" :to="listTarget">
           <Icon :icon="iconBack" class="ui-icon" aria-hidden="true" />
           {{ t('common.backToList') }}
         </RouterLink>
@@ -181,6 +183,10 @@ watch(
             <section class="detail-section entity-profile-overview" :aria-label="t('common.details')">
               <dl class="entity-profile-facts">
                 <div>
+                  <dt>{{ t('pages.items.displayId') }}</dt>
+                  <dd>#{{ item.displayId }}</dd>
+                </div>
+                <div>
                   <dt>{{ t('pages.items.category') }}</dt>
                   <dd>{{ item.category.name }}</dd>
                 </div>
@@ -195,6 +201,11 @@ watch(
               </dl>
 
               <div class="entity-profile-groups">
+                <div class="entity-profile-group">
+                  <h3 class="section-subtitle">{{ t('pages.items.description') }}</h3>
+                  <p v-if="item.details" class="preserve-lines">{{ item.details }}</p>
+                  <p v-else class="meta-line">{{ t('common.none') }}</p>
+                </div>
                 <div class="entity-profile-group">
                   <h3 class="section-subtitle">{{ t('pages.items.acquisitionMethods') }}</h3>
                   <EntityChips v-if="item.acquisitionMethods.length" :items="item.acquisitionMethods" />

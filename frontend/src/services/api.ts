@@ -117,7 +117,7 @@ export interface EntityImageUpload extends EntityImage {
   uploadedBy: UserSummary | null;
 }
 
-export type ImageUploadEntityType = 'pokemon' | 'items' | 'habitats';
+export type ImageUploadEntityType = 'pokemon' | 'items' | 'habitats' | 'ancient-artifacts';
 
 export interface PokemonImage extends EntityImage {
   style: string;
@@ -246,6 +246,7 @@ export interface HabitatUsage {
 }
 
 export interface RecipeResultItem extends NamedEntity {
+  displayId: number;
   image?: EntityImage | null;
   category?: NamedEntity;
   usage?: NamedEntity | null;
@@ -253,8 +254,11 @@ export interface RecipeResultItem extends NamedEntity {
 
 export interface Item extends EditInfo {
   id: number;
+  displayId: number;
   name: string;
   baseName?: string;
+  details: string;
+  baseDetails?: string;
   isEventItem: boolean;
   translations?: TranslationMap;
   image: EntityImage | null;
@@ -268,6 +272,24 @@ export interface Item extends EditInfo {
   noRecipe: boolean;
   tags: NamedEntity[];
   recipe: RecipeSummary | null;
+}
+
+export interface AncientArtifact extends EditInfo {
+  id: number;
+  displayId: number;
+  name: string;
+  baseName?: string;
+  details: string;
+  baseDetails?: string;
+  translations?: TranslationMap;
+  category: NamedEntity;
+  tags: NamedEntity[];
+  image: EntityImage | null;
+}
+
+export interface AncientArtifactDetail extends AncientArtifact {
+  editHistory: EditHistoryEntry[];
+  imageHistory: EntityImageUpload[];
 }
 
 export interface ItemDetail extends Item {
@@ -296,7 +318,7 @@ export interface DailyChecklistItem {
   translations?: TranslationMap;
 }
 
-export type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'recipes' | 'checklist';
+export type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'artifacts' | 'recipes' | 'checklist';
 
 export interface DataToolScopeSummary {
   scope: DataToolScope;
@@ -395,6 +417,7 @@ export interface Options {
   favoriteThings: NamedEntity[];
   itemCategories: NamedEntity[];
   itemUsages: NamedEntity[];
+  ancientArtifactCategories: NamedEntity[];
   acquisitionMethods: NamedEntity[];
   itemTags: NamedEntity[];
   maps: NamedEntity[];
@@ -546,8 +569,6 @@ export type ConfigType =
   | 'skills'
   | 'environments'
   | 'favorite-things'
-  | 'item-categories'
-  | 'item-usages'
   | 'acquisition-methods'
   | 'maps'
   | 'life-tags'
@@ -598,7 +619,9 @@ export interface PokemonImageOptionsResult {
 }
 
 export interface ItemPayload {
+  displayId: number;
   name: string;
+  details: string;
   translations?: TranslationMap;
   categoryId: number;
   usageId: number | null;
@@ -608,6 +631,16 @@ export interface ItemPayload {
   noRecipe: boolean;
   isEventItem: boolean;
   acquisitionMethodIds: number[];
+  tagIds: number[];
+  imagePath: string;
+}
+
+export interface AncientArtifactPayload {
+  displayId: number;
+  name: string;
+  details: string;
+  translations?: TranslationMap;
+  categoryId: number;
   tagIds: number[];
   imagePath: string;
 }
@@ -650,7 +683,7 @@ export interface LifeCommentPayload {
   languageCode?: string | null;
 }
 
-export type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats';
+export type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats' | 'ancient-artifacts';
 
 export interface EntityDiscussionComment {
   id: number;
@@ -1104,13 +1137,23 @@ export const api = {
     sendJson<HabitatDetail>(`/api/habitats/${id}`, 'PUT', payload),
   deleteHabitat: (id: string | number) => deleteJson(`/api/habitats/${id}`),
   reorderHabitats: (ids: number[]) => sendJson<Habitat[]>('/api/admin/habitats/order', 'PUT', { ids }),
-  items: (params: Record<string, string | number | undefined>) =>
+  items: (params: Record<string, string | number | boolean | undefined>) =>
     getJson<Item[]>(`/api/items${buildQuery(params)}`),
   itemDetail: (id: string | number) => getJson<ItemDetail>(`/api/items/${id}`),
   createItem: (payload: ItemPayload) => sendJson<ItemDetail>('/api/items', 'POST', payload),
   updateItem: (id: string | number, payload: ItemPayload) => sendJson<ItemDetail>(`/api/items/${id}`, 'PUT', payload),
   deleteItem: (id: string | number) => deleteJson(`/api/items/${id}`),
   reorderItems: (ids: number[]) => sendJson<Item[]>('/api/admin/items/order', 'PUT', { ids }),
+  ancientArtifacts: (params: Record<string, string | number | undefined> = {}) =>
+    getJson<AncientArtifact[]>(`/api/ancient-artifacts${buildQuery(params)}`),
+  ancientArtifactDetail: (id: string | number) => getJson<AncientArtifactDetail>(`/api/ancient-artifacts/${id}`),
+  createAncientArtifact: (payload: AncientArtifactPayload) =>
+    sendJson<AncientArtifactDetail>('/api/ancient-artifacts', 'POST', payload),
+  updateAncientArtifact: (id: string | number, payload: AncientArtifactPayload) =>
+    sendJson<AncientArtifactDetail>(`/api/ancient-artifacts/${id}`, 'PUT', payload),
+  deleteAncientArtifact: (id: string | number) => deleteJson(`/api/ancient-artifacts/${id}`),
+  reorderAncientArtifacts: (ids: number[]) =>
+    sendJson<AncientArtifact[]>('/api/admin/ancient-artifacts/order', 'PUT', { ids }),
   recipes: (params: Record<string, string | number | undefined> = {}) =>
     getJson<Recipe[]>(`/api/recipes${buildQuery(params)}`),
   recipeDetail: (id: string | number) => getJson<RecipeDetail>(`/api/recipes/${id}`),

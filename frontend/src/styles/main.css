@@ -4114,6 +4114,13 @@ button:disabled,
   min-width: 0;
 }
 
+.preserve-lines {
+  margin: 0;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .entity-profile-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));

@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg';
 import type { AuthUser } from './auth.ts';
 import { query, queryOne } from './db.ts';
 
-export type UploadEntityType = 'pokemon' | 'items' | 'habitats';
+export type UploadEntityType = 'pokemon' | 'items' | 'habitats' | 'ancient-artifacts';
 
 export type EntityImageUpload = {
   id: number;
@@ -26,7 +26,7 @@ type MultipartField = {
   value?: unknown;
 };
 
-const uploadEntityTypes = new Set<UploadEntityType>(['pokemon', 'items', 'habitats']);
+const uploadEntityTypes = new Set<UploadEntityType>(['pokemon', 'items', 'habitats', 'ancient-artifacts']);
 const imageMimeTypes = new Map([
   ['image/png', '.png'],
   ['image/jpeg', '.jpg'],

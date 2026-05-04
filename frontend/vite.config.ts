@@ -3,7 +3,18 @@ import vue from '@vitejs/plugin-vue';
 
 const fallbackSiteUrl = 'https://pokopiawiki.tootaio.com';
 const frontendPort = 20015;
-const sitemapPaths = ['/pokemon', '/event-pokemon', '/habitats', '/event-habitats', '/items', '/recipes', '/checklist', '/life'];
+const sitemapPaths = [
+  '/pokemon',
+  '/event-pokemon',
+  '/habitats',
+  '/event-habitats',
+  '/items',
+  '/event-items',
+  '/ancient-artifacts',
+  '/recipes',
+  '/checklist',
+  '/life'
+];
 const robotsDisallowPaths = [
   '/admin',
   '/login',
@@ -18,7 +29,10 @@ const robotsDisallowPaths = [
   '/event-habitats/new',
   '/habitats/*/edit',
   '/items/new',
+  '/event-items/new',
   '/items/*/edit',
+  '/ancient-artifacts/new',
+  '/ancient-artifacts/*/edit',
   '/recipes/new',
   '/recipes/*/edit',
   '/automation',

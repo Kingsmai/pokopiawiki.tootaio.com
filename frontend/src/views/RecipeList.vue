@@ -155,7 +155,7 @@ watch(itemQuery, loadItems);
       <EntityCard
         v-for="item in items"
         :key="item.id"
-        :title="item.name"
+        :title="`#${item.displayId} ${item.name}`"
         :subtitle="item.category.name"
         :to="recipeTarget(item)"
         :icon="itemIcon(item)"

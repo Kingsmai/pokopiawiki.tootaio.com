@@ -35,6 +35,7 @@ import {
 import { initializeDatabase, pool } from './db.ts';
 import {
   cleanLocale,
+  createAncientArtifact,
   createConfig,
   createDailyChecklistItem,
   createEntityDiscussionComment,
@@ -48,6 +49,7 @@ import {
   createPokemon,
   createRecipe,
   deleteConfig,
+  deleteAncientArtifact,
   deleteDailyChecklistItem,
   deleteEntityDiscussionComment,
   deleteHabitat,
@@ -63,6 +65,7 @@ import {
   fetchPokemonData,
   fetchPokemonImageOptions,
   getAdminDataToolsSummary,
+  getAncientArtifact,
   getHabitat,
   getItem,
   getOptions,
@@ -71,6 +74,7 @@ import {
   getRecipe,
   importAdminData,
   isConfigType,
+  listAncientArtifacts,
   listEntityDiscussionComments,
   listConfig,
   listDailyChecklistItems,
@@ -86,6 +90,7 @@ import {
   listUserLifePosts,
   listUserReactionActivities,
   reorderConfig,
+  reorderAncientArtifacts,
   reorderDailyChecklistItems,
   reorderHabitats,
   reorderItems,
@@ -98,6 +103,7 @@ import {
   setLifePostRating,
   setLifePostReaction,
   updateConfig,
+  updateAncientArtifact,
   updateDailyChecklistItem,
   updateHabitat,
   updateItem,
@@ -1504,7 +1510,13 @@ app.post('/api/uploads/:entityType', async (request, reply) => {
   }
 
   const permissionKey =
-    entityType === 'pokemon' ? 'pokemon.upload' : entityType === 'items' ? 'items.upload' : 'habitats.upload';
+    entityType === 'pokemon'
+      ? 'pokemon.upload'
+      : entityType === 'items'
+        ? 'items.upload'
+        : entityType === 'habitats'
+          ? 'habitats.upload'
+          : 'ancient-artifacts.upload';
   const user = await requirePermissionWithRateLimits(request, reply, permissionKey, 'upload');
   if (!user) {
     return;
@@ -1643,6 +1655,53 @@ app.delete('/api/items/:id', async (request, reply) => {
   return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 
+app.get('/api/ancient-artifacts', async (request) =>
+  listAncientArtifacts(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
+);
+
+app.get('/api/ancient-artifacts/:id', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const artifact = await getAncientArtifact(Number(id), requestLocale(request));
+
+  if (!artifact) {
+    return notFound(reply, request);
+  }
+
+  return artifact;
+});
+
+app.post('/api/ancient-artifacts', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'ancient-artifacts.create', 'wikiWrite');
+  return user
+    ? reply.code(201).send(await createAncientArtifact(request.body as Record<string, unknown>, user.id, requestLocale(request)))
+    : undefined;
+});
+
+app.put('/api/ancient-artifacts/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'ancient-artifacts.update', 'wikiWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const artifact = await updateAncientArtifact(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
+
+  if (!artifact) {
+    return notFound(reply, request);
+  }
+
+  return artifact;
+});
+
+app.delete('/api/ancient-artifacts/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'ancient-artifacts.delete', 'wikiWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteAncientArtifact(Number(id), user.id);
+  return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
 app.get('/api/recipes', async (request) =>
   listRecipes(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
 );
@@ -1737,6 +1796,11 @@ app.put('/api/admin/pokemon/order', async (request, reply) => {
 app.put('/api/admin/items/order', async (request, reply) => {
   const user = await requirePermissionWithRateLimits(request, reply, 'items.order', 'wikiWrite');
   return user ? reorderItems(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
+});
+
+app.put('/api/admin/ancient-artifacts/order', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'ancient-artifacts.order', 'wikiWrite');
+  return user ? reorderAncientArtifacts(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/recipes/order', async (request, reply) => {

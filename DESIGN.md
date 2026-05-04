@@ -5,7 +5,7 @@
 - Pokopia Wiki 是一个面向 Pokopia 游戏资料的社区 Wiki。
 - 所有人都可以浏览 Wiki 内容。
 - 已注册并完成邮箱验证且拥有对应权限的用户可以创建、编辑、删除 Wiki 内容。
-- 前台以 Home 首页、Pokemon、Event Pokemon、栖息地、Event Habitats、物品、材料单、每日 CheckList、Life、Automation、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
+- 前台以 Home 首页、Pokemon、Event Pokemon、栖息地、Event Habitats、物品、Event Items、Ancient Artifacts、材料单、每日 CheckList、Life、Automation、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
 - Home 首页路径为 `/`，用于聚合公开 Wiki 入口；Logo 导航回到 Home，用户可从 Home 进入核心资料、每日 CheckList、Life 和正在准备中的分区。
 - 管理入口用于维护全局配置、语言、系统文案、列表排序和每日 CheckList。
 
@@ -53,10 +53,9 @@
   - Pokemon Types
   - 喜欢的环境
   - 喜欢的东西 / 标签
-  - 物品分类
-  - 物品用途
   - 入手方式
   - 物品
+  - Ancient Artifacts
   - 地图
   - 栖息地
   - 每日 CheckList Task
@@ -65,7 +64,7 @@
 - 支持翻译的字段：
   - `name`
   - `title`
-  - `details`：仅 Pokemon 介绍使用
+  - `details`：Pokemon、物品和 Ancient Artifacts 的介绍 / 说明
   - `genus`：仅 Pokemon Genus 使用
 - 实体仍保留基础 `name`、`title`、`details` 或 `genus` 字段，默认语言内容以基础字段为准。
 - API 返回展示名称时按当前语言解析，回退顺序为：请求语言翻译 -> 默认语言翻译 -> 基础字段。
@@ -196,6 +195,7 @@
   - Pokemon
   - Habitats
   - Items
+  - Ancient Artifacts
   - Recipes
   - Daily CheckList
 - Items 与 Recipes 存在依赖关系；选择 Items 进行导出、导入或 Wipe 时，系统必须自动同时纳入 Recipes，前端确认内容也必须显示 Recipes。
@@ -204,6 +204,7 @@
   - Wipe Pokemon 会删除 Pokemon 及其属性 / 特长 / 喜欢的东西 / 掉落关联，并移除栖息地中的 Pokemon 出现配置，但不删除栖息地本身。
   - Wipe Habitats 会删除栖息地、栖息地配方项和 Pokemon 出现配置，但不删除 Pokemon、Items 或 Maps。
   - Wipe Items 会先删除 Recipes，再删除物品、物品入手方式 / 喜欢的东西关联、栖息地配方项和 Pokemon 掉落关联。
+  - Wipe Ancient Artifacts 会删除 Ancient Artifacts、标签关联、实体翻译、编辑历史和实体讨论评论。
   - Wipe Recipes 会删除材料单、材料项和入手方式关联，但不删除 Items。
   - Wipe Daily CheckList 会删除清单任务和任务翻译 / 编辑历史。
   - 对被清空的 identity 主表重置自增 ID；Pokemon 内部 ID 不是 identity，未关联官方 data 的自定义 Pokemon 系统分配区间仍按当前数据库最大值继续。
@@ -378,7 +379,7 @@
 
 ## 全局配置数据
 
-以下配置项都支持创建、编辑、删除、翻译和拖拽排序。
+以下配置项都支持创建、编辑、删除、翻译和拖拽排序。物品分类、物品用途和 Ancient Artifacts 分类是代码维护的系统固定列表，不属于可配置数据。
 
 ### 特长
 
@@ -403,16 +404,6 @@
 - 同时用于：
   - Pokemon 喜欢的东西
   - 物品标签
-
-### 物品分类
-
-- 名称
-- 用于物品和材料单按结果物品分类展示。
-
-### 物品用途
-
-- 名称
-- 物品用途可为空。
 
 ### 入手方式
 
@@ -552,10 +543,28 @@ Pokemon 详情页展示：
 
 物品可配置：
 
+- Display ID：用于物品和 Event Items 各自列表内展示与排序；`display_id` 与 `is_event_item` 组合唯一
 - 名称
-- 是否为 Event Habitat：`is_event_item`
-- 分类：必填
-- 用途：可为空
+- 介绍
+- 是否为 Event Item：`is_event_item`
+- 分类：必填，使用系统固定列表，不在管理端配置：
+  - Furniture
+  - Misc
+  - Outdoor
+  - Utilities
+  - Buildings
+  - Blocks
+  - Kits
+  - Nature
+  - Food
+  - Materials
+  - Key Items
+  - Other
+- 用途：可为空，使用系统固定列表，不在管理端配置：
+  - Decoration
+  - Relaxation
+  - Toy
+  - Road
 - 入手方式：可多选
 - 客制化：
   - 可染色
@@ -567,14 +576,20 @@ Pokemon 详情页展示：
 - 翻译
 - 排序
 
+Items 与 Event Items 使用相同数据模型：
+
+- Items 列表只展示 `is_event_item = false` 的物品。
+- Event Items 列表只展示 `is_event_item = true` 的物品。
+- Event Items 与 Items 共用物品分类、用途、入手方式、标签、图片、翻译和材料单逻辑。
+
 物品列表功能：
 
 - 搜索
 - 按分类展示为标签页
 - 按用途筛选
 - 按标签筛选
-- 按自定义排序展示
-- 物品列表卡片使用与 Pokemon 列表一致的居中图鉴式布局，只展示物品图标、名称和分类；不展示标签、入手方式或编辑元信息。
+- 按 Display ID 和自定义排序展示
+- 物品列表卡片使用与 Pokemon 列表一致的居中图鉴式布局，只展示物品图标、`#Display ID 名称` 和分类；不展示标签、入手方式或编辑元信息。
 - 有用途的物品在卡片左上角以斜 Ribbon 展示用途名称。
 - 已配置图标时，物品卡片展示图标缩略图；未配置图标时保留默认物品标记。
 
@@ -583,6 +598,8 @@ Pokemon 详情页展示：
 - 基本信息
 - 当前图标图片；未配置图标时展示默认物品标记占位符
 - 顶部按图标 / 占位符与核心信息概览并排展示，移动端改为单列；顶部概览卡片不显示 `Image` / `Details` 通用区块标题，也不展示图片历史缩略图
+- Display ID
+- 介绍
 - 分类
 - 用途
 - 入手方式
@@ -592,6 +609,42 @@ Pokemon 详情页展示：
 - 作为材料出现的材料单：展示结果物品图标和材料物品图标；未配置图标时显示默认物品标记占位符
 - 相关栖息地：展示栖息地图片或默认栖息地标记占位符，并展示配方材料物品图标
 - 相关 Pokemon 掉落：展示 Pokemon 图片；未配置图片时显示默认 Poké Ball 占位符
+- 最后编辑信息
+- 讨论
+- 编辑历史
+
+## Ancient Artifacts
+
+Ancient Artifacts 是独立 Wiki 内容类型，可配置：
+
+- Display ID：用于展示与排序
+- 名称
+- 介绍
+- 图片：使用 Ancient Artifacts 上传目录，支持图片历史
+- 分类：必填，使用系统固定列表，不在管理端配置：
+  - Lost Relics (L)
+  - Lost Relics (S)
+  - Fossils
+- 标签：复用全局“喜欢的东西 / 标签”配置，可多选
+- 翻译
+- 排序
+
+Ancient Artifacts 列表功能：
+
+- 搜索
+- 按分类展示为标签页
+- 按标签筛选
+- 按 Display ID 和自定义排序展示
+- 列表卡片使用与 Pokemon 列表一致的居中图鉴式布局，展示图片 / 默认 Ancient Artifact 标记、`#Display ID 名称` 和分类；不展示编辑元信息。
+
+Ancient Artifacts 详情页展示：
+
+- Display ID
+- 名称
+- 图片；未配置图片时展示默认 Ancient Artifact 标记
+- 介绍
+- 分类
+- 标签
 - 最后编辑信息
 - 讨论
 - 编辑历史
@@ -616,8 +669,8 @@ Pokemon 详情页展示：
 
 - 独立于物品列表展示
 - 按结果物品分类展示
-- 按自定义排序展示
-- 材料单列表卡片使用与 Pokemon 列表一致的居中图鉴式布局，按结果物品展示图标、名称和分类；不展示编辑元信息。
+- 按结果物品 Display ID 和自定义排序展示
+- 材料单列表卡片使用与 Pokemon 列表一致的居中图鉴式布局，按结果物品展示图标、`#Display ID 名称` 和分类；不展示编辑元信息。
 - 有用途的结果物品在卡片左上角以斜 Ribbon 展示用途名称。
 - Create Recipe 按钮展示在结果物品名称下方；已有材料单的卡片保留同等按钮空间但不显示按钮；标记为无材料单的物品展示禁用按钮；可创建材料单的物品展示可点击按钮并进入创建流程。
 
@@ -820,6 +873,7 @@ API 暴露边界：
 - 管理入口在全局侧边栏中保持单一 Admin 入口，`/admin` 内部使用页面内二级菜单分组组织管理模块：
   - 配置：System config。
   - 内容：Daily CheckList、Pokemon、物品、材料单、栖息地的维护、排序或删除入口，以及 Data Tools。
+  - 内容管理包含 Items、Event Items 与 Ancient Artifacts；Items / Event Items 使用同一物品数据模型，通过 `is_event_item` 拆分入口。
   - 本地化：Languages、System wordings。
   - 访问权限：Users、Roles、Permissions、Rate limits。
 - 登录用户的侧边栏账号入口进入 `/profile`；User Profile 属于账号入口，不作为 Wiki 主内容导航项。
@@ -837,7 +891,10 @@ API 暴露边界：
   - `/event-habitats/new`
   - `/habitats/:id/edit`
   - `/items/new`
+  - `/event-items/new`
   - `/items/:id/edit`
+  - `/ancient-artifacts/new`
+  - `/ancient-artifacts/:id/edit`
   - `/recipes/new`
   - `/recipes/:id/edit`
 - Life 使用信息流顶部 New Post / 编辑按钮打开普通 Modal 发布与编辑，不使用路由驱动 Modal。
@@ -859,6 +916,8 @@ API 暴露边界：
   - `/habitats`
   - `/event-habitats`
   - `/items`
+  - `/event-items`
+  - `/ancient-artifacts`
   - `/recipes`
   - `/checklist`
   - `/life`
@@ -883,8 +942,10 @@ API 暴露边界：
 - `GET /api/pokemon/:id`
 - `GET /api/habitats`：支持 `isEventItem=true|false` 按普通栖息地 / Event Habitats 拆分列表；未传时返回全部栖息地以兼容管理端和实体选择器
 - `GET /api/habitats/:id`
-- `GET /api/items`
+- `GET /api/items`：支持 `isEventItem=true|false` 按普通 Items / Event Items 拆分列表；未传时返回全部 Items 以兼容管理端和实体选择器
 - `GET /api/items/:id`
+- `GET /api/ancient-artifacts`：支持 `search`、`categoryId` 和 `tagIds` 筛选
+- `GET /api/ancient-artifacts/:id`
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区；支持 `gameVersionId` 按 Game Version 筛选；支持 `rateable` 按可评分 Category 筛选；支持 `sort` 为 `latest`、`oldest` 或 `top-rated`。
@@ -893,7 +954,7 @@ API 暴露边界：
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
 - `GET /api/users/:id/reactions`：分页读取该用户设置过 Reaction 且目标未删除的 Life Post。
 - `GET /api/users/:id/comments`：分页读取该用户未删除的 Life 评论和实体讨论评论。
-- `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；支持 `language` 按审核语言区筛选；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`。
+- `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；支持 `language` 按审核语言区筛选；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`、`ancient-artifacts`。
 
 认证 API：
 

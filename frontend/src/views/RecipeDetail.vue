@@ -114,7 +114,7 @@ watch(
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="recipe.name" :subtitle="recipeSubtitle">
+    <PageHeader :title="`#${recipe.item.displayId} ${recipe.name}`" :subtitle="recipeSubtitle">
       <template #kicker>{{ t('pages.recipes.detailKicker') }}</template>
       <template #actions>
         <RouterLink v-if="canUpdateRecipe" class="ui-button ui-button--primary ui-button--small" :to="`/recipes/${recipe.id}/edit`">
@@ -145,7 +145,7 @@ watch(
                   <Icon :icon="iconRecipe" class="entity-card__icon" aria-hidden="true" />
                 </span>
               </RouterLink>
-              <RouterLink class="entity-profile-title-link" :to="`/items/${recipe.item.id}`">{{ recipe.item.name }}</RouterLink>
+              <RouterLink class="entity-profile-title-link" :to="`/items/${recipe.item.id}`">#{{ recipe.item.displayId }} {{ recipe.item.name }}</RouterLink>
             </div>
           </section>
 

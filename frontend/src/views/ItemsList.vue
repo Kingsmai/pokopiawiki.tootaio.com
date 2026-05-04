@@ -13,6 +13,10 @@ import { iconAdd, iconItem } from '../icons';
 import { api, getAuthToken, type AuthUser, type Item, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
+const props = defineProps<{
+  eventOnly?: boolean;
+}>();
+
 const options = ref<Options | null>(null);
 const route = useRoute();
 const { t } = useI18n();
@@ -27,6 +31,10 @@ const tagIds = ref<string[]>([]);
 const categorySkeletonWidths = ['64px', '92px', '78px', '104px', '86px'];
 const filterSkeletonWidths = ['52px', '48px', '48px'];
 const skeletonCardCount = 6;
+const pageTitle = computed(() => (props.eventOnly ? t('pages.eventItems.title') : t('pages.items.title')));
+const pageSubtitle = computed(() => (props.eventOnly ? t('pages.eventItems.subtitle') : t('pages.items.subtitle')));
+const pageKicker = computed(() => (props.eventOnly ? t('pages.eventItems.kicker') : t('pages.items.kicker')));
+const createTarget = computed(() => (props.eventOnly ? '/event-items/new' : '/items/new'));
 
 const categoryTabs = computed<TabOption[]>(() => [
   { value: '', label: t('common.all') },
@@ -37,9 +45,10 @@ const itemQuery = computed(() => ({
   search: search.value,
   categoryId: categoryId.value,
   usageId: usageId.value,
-  tagIds: tagIds.value.join(',')
+  tagIds: tagIds.value.join(','),
+  isEventItem: props.eventOnly
 }));
-const showEditor = computed(() => route.name === 'item-new');
+const showEditor = computed(() => route.name === 'item-new' || route.name === 'event-item-new');
 const canCreateItem = computed(() => currentUser.value?.permissions.includes('items.create') === true);
 
 function itemCardImage(item: Item) {
@@ -69,10 +78,10 @@ watch(itemQuery, loadItems);
 
 <template>
   <section class="page-stack">
-    <PageHeader :title="t('pages.items.title')" :subtitle="t('pages.items.subtitle')">
-      <template #kicker>Bag</template>
+    <PageHeader :title="pageTitle" :subtitle="pageSubtitle">
+      <template #kicker>{{ pageKicker }}</template>
       <template #actions>
-        <RouterLink v-if="canCreateItem" class="ui-button ui-button--primary ui-button--small" to="/items/new">
+        <RouterLink v-if="canCreateItem" class="ui-button ui-button--primary ui-button--small" :to="createTarget">
           <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
           {{ t('common.add') }}
         </RouterLink>
@@ -136,7 +145,7 @@ watch(itemQuery, loadItems);
       <EntityCard
         v-for="item in items"
         :key="item.id"
-        :title="item.name"
+        :title="`#${item.displayId} ${item.name}`"
         :subtitle="item.category.name"
         :to="`/items/${item.id}`"
         :icon="iconItem"

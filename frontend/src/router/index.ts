@@ -6,6 +6,8 @@ import HabitatList from '../views/HabitatList.vue';
 import HabitatDetail from '../views/HabitatDetail.vue';
 import ItemsList from '../views/ItemsList.vue';
 import ItemDetail from '../views/ItemDetail.vue';
+import AncientArtifactList from '../views/AncientArtifactList.vue';
+import AncientArtifactDetail from '../views/AncientArtifactDetail.vue';
 import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
@@ -133,15 +135,40 @@ export const router = createRouter({
       }
     },
     { path: '/habitats/:id', name: 'habitat-detail', component: HabitatDetail, meta: { seo: seo({ titleKey: 'pages.habitats.detailKicker', descriptionKey: 'pages.habitats.subtitle' }) } },
-    { path: '/items', name: 'item-list', component: ItemsList, meta: { seo: seo({ titleKey: 'pages.items.title', descriptionKey: 'pages.items.subtitle' }) } },
+    {
+      path: '/items',
+      name: 'item-list',
+      component: ItemsList,
+      props: { eventOnly: false },
+      meta: { seo: seo({ titleKey: 'pages.items.title', descriptionKey: 'pages.items.subtitle' }) }
+    },
     {
       path: '/items/new',
       name: 'item-new',
       component: ItemsList,
+      props: { eventOnly: false },
       meta: {
         requiredPermission: 'items.create',
         editorModal: true,
         seo: seo({ titleKey: 'pages.items.newTitle', descriptionKey: 'pages.items.editSubtitle', canonicalPath: '/items', noindex: true })
+      }
+    },
+    {
+      path: '/event-items',
+      name: 'event-item-list',
+      component: ItemsList,
+      props: { eventOnly: true },
+      meta: { seo: seo({ titleKey: 'pages.eventItems.title', descriptionKey: 'pages.eventItems.subtitle', canonicalPath: '/event-items' }) }
+    },
+    {
+      path: '/event-items/new',
+      name: 'event-item-new',
+      component: ItemsList,
+      props: { eventOnly: true },
+      meta: {
+        requiredPermission: 'items.create',
+        editorModal: true,
+        seo: seo({ titleKey: 'pages.eventItems.newTitle', descriptionKey: 'pages.eventItems.editSubtitle', canonicalPath: '/event-items', noindex: true })
       }
     },
     {
@@ -160,6 +187,48 @@ export const router = createRouter({
       }
     },
     { path: '/items/:id', name: 'item-detail', component: ItemDetail, meta: { seo: seo({ titleKey: 'pages.items.detailKicker', descriptionKey: 'pages.items.subtitle' }) } },
+    {
+      path: '/ancient-artifacts',
+      name: 'ancient-artifact-list',
+      component: AncientArtifactList,
+      meta: { seo: seo({ titleKey: 'pages.ancientArtifacts.title', descriptionKey: 'pages.ancientArtifacts.subtitle' }) }
+    },
+    {
+      path: '/ancient-artifacts/new',
+      name: 'ancient-artifact-new',
+      component: AncientArtifactList,
+      meta: {
+        requiredPermission: 'ancient-artifacts.create',
+        editorModal: true,
+        seo: seo({
+          titleKey: 'pages.ancientArtifacts.newTitle',
+          descriptionKey: 'pages.ancientArtifacts.editSubtitle',
+          canonicalPath: '/ancient-artifacts',
+          noindex: true
+        })
+      }
+    },
+    {
+      path: '/ancient-artifacts/:id/edit',
+      name: 'ancient-artifact-edit',
+      component: AncientArtifactDetail,
+      meta: {
+        requiredPermission: 'ancient-artifacts.update',
+        editorModal: true,
+        seo: seo({
+          titleKey: 'pages.ancientArtifacts.editKicker',
+          descriptionKey: 'pages.ancientArtifacts.editSubtitle',
+          canonicalPath: (route) => `/ancient-artifacts/${String(route.params.id)}`,
+          noindex: true
+        })
+      }
+    },
+    {
+      path: '/ancient-artifacts/:id',
+      name: 'ancient-artifact-detail',
+      component: AncientArtifactDetail,
+      meta: { seo: seo({ titleKey: 'pages.ancientArtifacts.detailKicker', descriptionKey: 'pages.ancientArtifacts.subtitle' }) }
+    },
     { path: '/recipes', name: 'recipe-list', component: RecipeList, meta: { seo: seo({ titleKey: 'pages.recipes.title', descriptionKey: 'pages.recipes.subtitle' }) } },
     {
       path: '/recipes/new',

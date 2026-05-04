@@ -22,7 +22,7 @@ type QueryValue = string | string[] | undefined;
 type QueryParams = Record<string, QueryValue>;
 
 type DbClient = PoolClient;
-type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'recipes' | 'checklist';
+type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'artifacts' | 'recipes' | 'checklist';
 type DataToolScopeSummary = {
   scope: DataToolScope;
   count: number;
@@ -48,6 +48,7 @@ type EntityType =
   | 'item-usages'
   | 'acquisition-methods'
   | 'items'
+  | 'ancient-artifacts'
   | 'maps'
   | 'habitats'
   | 'daily-checklist-items'
@@ -59,8 +60,6 @@ type ConfigType =
   | 'skills'
   | 'environments'
   | 'favorite-things'
-  | 'item-categories'
-  | 'item-usages'
   | 'acquisition-methods'
   | 'maps'
   | 'life-tags'
@@ -74,7 +73,7 @@ type ConfigDefinition = {
   hasRateable?: boolean;
   hasChangeLog?: boolean;
 };
-type SortableContentType = 'pokemon' | 'items' | 'recipes' | 'habitats';
+type SortableContentType = 'pokemon' | 'items' | 'ancient-artifacts' | 'recipes' | 'habitats';
 type SortableContentDefinition = {
   table: string;
   entityType: SortableContentType;
@@ -171,16 +170,31 @@ type PokemonCsvData = {
 };
 
 type ItemPayload = {
+  displayId: number;
   name: string;
+  details: string;
   translations: TranslationInput;
   categoryId: number;
+  categoryKey: string;
   usageId: number | null;
+  usageKey: string | null;
   dyeable: boolean;
   dualDyeable: boolean;
   patternEditable: boolean;
   noRecipe: boolean;
   isEventItem: boolean;
   acquisitionMethodIds: number[];
+  tagIds: number[];
+  imagePath: string;
+};
+
+type AncientArtifactPayload = {
+  displayId: number;
+  name: string;
+  details: string;
+  translations: TranslationInput;
+  categoryId: number;
+  categoryKey: string;
   tagIds: number[];
   imagePath: string;
 };
@@ -208,7 +222,7 @@ type LifeCommentPayload = {
   languageCode: string | null;
 };
 
-type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats';
+type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats' | 'ancient-artifacts';
 type DiscussionEntityDefinition = {
   table: string;
 };
@@ -436,7 +450,9 @@ type PokemonChangeSource = {
   favorite_things: Array<{ name: string }>;
 } & TranslationChangeSource;
 type ItemChangeSource = {
+  displayId: number;
   name: string;
+  details: string;
   isEventItem: boolean;
   image: EntityImageValue | null;
   category: { name: string };
@@ -444,6 +460,14 @@ type ItemChangeSource = {
   customization: { dyeable: boolean; dualDyeable: boolean; patternEditable: boolean };
   noRecipe: boolean;
   acquisitionMethods: Array<{ name: string }>;
+  tags: Array<{ name: string }>;
+} & TranslationChangeSource;
+type AncientArtifactChangeSource = {
+  displayId: number;
+  name: string;
+  details: string;
+  image: EntityImageValue | null;
+  category: { name: string };
   tags: Array<{ name: string }>;
 } & TranslationChangeSource;
 type HabitatChangeSource = {
@@ -491,13 +515,45 @@ const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
   { key: 'speed', label: 'Speed' }
 ];
 
+type SystemListOption = {
+  id: number;
+  key: string;
+  labels: Record<typeof defaultLocale | 'zh-CN', string>;
+};
+
+const itemCategoryOptions = [
+  { id: 1, key: 'furniture', labels: { en: 'Furniture', 'zh-CN': '家具' } },
+  { id: 2, key: 'misc', labels: { en: 'Misc', 'zh-CN': '杂项' } },
+  { id: 3, key: 'outdoor', labels: { en: 'Outdoor', 'zh-CN': '户外' } },
+  { id: 4, key: 'utilities', labels: { en: 'Utilities', 'zh-CN': '实用工具' } },
+  { id: 5, key: 'buildings', labels: { en: 'Buildings', 'zh-CN': '建筑' } },
+  { id: 6, key: 'blocks', labels: { en: 'Blocks', 'zh-CN': '方块' } },
+  { id: 7, key: 'kits', labels: { en: 'Kits', 'zh-CN': '套件' } },
+  { id: 8, key: 'nature', labels: { en: 'Nature', 'zh-CN': '自然' } },
+  { id: 9, key: 'food', labels: { en: 'Food', 'zh-CN': '食物' } },
+  { id: 10, key: 'materials', labels: { en: 'Materials', 'zh-CN': '材料' } },
+  { id: 11, key: 'key-items', labels: { en: 'Key Items', 'zh-CN': '关键物品' } },
+  { id: 12, key: 'other', labels: { en: 'Other', 'zh-CN': '其他' } }
+] as const satisfies readonly SystemListOption[];
+
+const itemUsageOptions = [
+  { id: 1, key: 'decoration', labels: { en: 'Decoration', 'zh-CN': '装饰' } },
+  { id: 2, key: 'relaxation', labels: { en: 'Relaxation', 'zh-CN': '休闲' } },
+  { id: 3, key: 'toy', labels: { en: 'Toy', 'zh-CN': '玩具' } },
+  { id: 4, key: 'road', labels: { en: 'Road', 'zh-CN': '道路' } }
+] as const satisfies readonly SystemListOption[];
+
+const ancientArtifactCategoryOptions = [
+  { id: 1, key: 'lost-relics-l', labels: { en: 'Lost Relics (L)', 'zh-CN': 'Lost Relics (L)' } },
+  { id: 2, key: 'lost-relics-s', labels: { en: 'Lost Relics (S)', 'zh-CN': 'Lost Relics (S)' } },
+  { id: 3, key: 'fossils', labels: { en: 'Fossils', 'zh-CN': '化石' } }
+] as const satisfies readonly SystemListOption[];
+
 const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'pokemon-types': { table: 'pokemon_types', entityType: 'pokemon-types' },
   skills: { table: 'skills', entityType: 'skills', hasItemDrop: true },
   environments: { table: 'environments', entityType: 'environments' },
   'favorite-things': { table: 'favorite_things', entityType: 'favorite-things' },
-  'item-categories': { table: 'item_categories', entityType: 'item-categories' },
-  'item-usages': { table: 'item_usages', entityType: 'item-usages' },
   'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
   maps: { table: 'maps', entityType: 'maps' },
   'life-tags': { table: 'life_tags', entityType: 'life-tags', hasDefault: true, hasRateable: true },
@@ -507,6 +563,7 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
 const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
   pokemon: { table: 'pokemon', entityType: 'pokemon' },
   items: { table: 'items', entityType: 'items' },
+  'ancient-artifacts': { table: 'ancient_artifacts', entityType: 'ancient-artifacts' },
   recipes: { table: 'recipes', entityType: 'recipes' },
   habitats: { table: 'habitats', entityType: 'habitats' }
 };
@@ -515,7 +572,8 @@ const discussionEntityDefinitions: Record<DiscussionEntityType, DiscussionEntity
   pokemon: { table: 'pokemon' },
   items: { table: 'items' },
   recipes: { table: 'recipes' },
-  habitats: { table: 'habitats' }
+  habitats: { table: 'habitats' },
+  'ancient-artifacts': { table: 'ancient_artifacts' }
 };
 
 let pokemonCsvDataCache: Promise<PokemonCsvData> | null = null;
@@ -726,6 +784,52 @@ function optionSelect(
   return query(`SELECT o.id, ${name} AS name FROM ${tableName} o ORDER BY ${orderByEntity('o')}`);
 }
 
+function systemListLabel(option: SystemListOption, locale: string): string {
+  const clean = cleanLocale(locale) as keyof SystemListOption['labels'];
+  return option.labels[clean] ?? option.labels[defaultLocale];
+}
+
+function systemListOptions(options: readonly SystemListOption[], locale: string): Array<{ id: number; key: string; name: string }> {
+  return options.map((option) => ({ id: option.id, key: option.key, name: systemListLabel(option, locale) }));
+}
+
+function systemListOptionById(
+  options: readonly SystemListOption[],
+  id: number,
+  message: string
+): SystemListOption {
+  const option = options.find((item) => item.id === id);
+  if (!option) {
+    throw validationError(message);
+  }
+  return option;
+}
+
+function systemListOptionByKey(options: readonly SystemListOption[], key: string | null | undefined): SystemListOption | null {
+  return options.find((item) => item.key === key) ?? null;
+}
+
+function systemListNameByKey(options: readonly SystemListOption[], key: string | null | undefined, locale = defaultLocale): string | null {
+  const option = systemListOptionByKey(options, key);
+  return option ? systemListLabel(option, locale) : null;
+}
+
+function systemListIdSql(expression: string, options: readonly SystemListOption[]): string {
+  const cases = options.map((option) => `WHEN ${sqlLiteral(option.key)} THEN ${option.id}`).join(' ');
+  return `CASE ${expression} ${cases} ELSE NULL END`;
+}
+
+function systemListNameSql(expression: string, options: readonly SystemListOption[], locale: string): string {
+  const cases = options
+    .map((option) => `WHEN ${sqlLiteral(option.key)} THEN ${sqlLiteral(systemListLabel(option, locale))}`)
+    .join(' ');
+  return `CASE ${expression} ${cases} ELSE '' END`;
+}
+
+function systemListJsonSql(expression: string, options: readonly SystemListOption[], locale: string): string {
+  return `json_build_object('id', ${systemListIdSql(expression, options)}, 'key', ${expression}, 'name', ${systemListNameSql(expression, options, locale)})`;
+}
+
 function lifeCategoryOptions(locale: string): Promise<Array<{ id: number; name: string; isDefault: boolean; isRateable: boolean }>> {
   const name = localizedName('life-tags', 'lc', locale);
   return query(
@@ -821,7 +925,7 @@ function cleanOptionalText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function cleanUploadImagePath(value: unknown, entityType: 'items' | 'habitats'): string {
+function cleanUploadImagePath(value: unknown, entityType: 'items' | 'habitats' | 'ancient-artifacts'): string {
   const imagePath = cleanOptionalText(value);
   if (imagePath === '') {
     return '';
@@ -2030,17 +2134,17 @@ async function itemEditChanges(
   after: ItemPayload
 ): Promise<EditChange[]> {
   const changes: EditChange[] = [];
-  const categoryNames = await entityNameMap(client, 'item_categories', [after.categoryId]);
-  const usageNames = await entityNameMap(client, 'item_usages', after.usageId ? [after.usageId] : []);
   const methodNames = await entityNameMap(client, 'acquisition_methods', after.acquisitionMethodIds);
   const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
 
   pushChange(changes, 'Name', before.name, after.name);
-  pushTranslationChanges(changes, before.translations, after.translations, ['name']);
+  pushChange(changes, 'Display ID', String(before.displayId), String(after.displayId));
+  pushChange(changes, 'Description', before.details, after.details);
+  pushTranslationChanges(changes, before.translations, after.translations, ['name', 'details']);
   pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
-  pushChange(changes, 'Category', before.category.name, categoryNames.get(after.categoryId));
-  pushChange(changes, 'Usage', before.usage?.name, after.usageId ? usageNames.get(after.usageId) : null);
+  pushChange(changes, 'Category', before.category.name, systemListNameByKey(itemCategoryOptions, after.categoryKey));
+  pushChange(changes, 'Usage', before.usage?.name, systemListNameByKey(itemUsageOptions, after.usageKey));
   pushChange(changes, 'Dyeable', boolValue(before.customization.dyeable), boolValue(after.dyeable));
   pushChange(changes, 'Dual dyeable', boolValue(before.customization.dualDyeable), boolValue(after.dualDyeable));
   pushChange(changes, 'Pattern editable', boolValue(before.customization.patternEditable), boolValue(after.patternEditable));
@@ -2048,6 +2152,24 @@ async function itemEditChanges(
   pushChange(changes, 'Acquisition methods', namedListValue(before.acquisitionMethods), namesFromIds(after.acquisitionMethodIds, methodNames));
   pushChange(changes, 'Tags', namedListValue(before.tags), namesFromIds(after.tagIds, tagNames));
 
+  return changes;
+}
+
+async function ancientArtifactEditChanges(
+  client: DbClient,
+  before: AncientArtifactChangeSource,
+  after: AncientArtifactPayload
+): Promise<EditChange[]> {
+  const changes: EditChange[] = [];
+  const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
+
+  pushChange(changes, 'Name', before.name, after.name);
+  pushChange(changes, 'Display ID', String(before.displayId), String(after.displayId));
+  pushChange(changes, 'Description', before.details, after.details);
+  pushTranslationChanges(changes, before.translations, after.translations, ['name', 'details']);
+  pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
+  pushChange(changes, 'Category', before.category.name, systemListNameByKey(ancientArtifactCategoryOptions, after.categoryKey));
+  pushChange(changes, 'Tags', namedListValue(before.tags), namesFromIds(after.tagIds, tagNames));
   return changes;
 }
 
@@ -2221,8 +2343,6 @@ export async function getOptions(locale = defaultLocale) {
     skills,
     environments,
     favoriteThings,
-    itemCategories,
-    itemUsages,
     acquisitionMethods,
     maps,
     lifeCategories,
@@ -2232,8 +2352,6 @@ export async function getOptions(locale = defaultLocale) {
     skillOptions(locale),
     optionSelect('environments', 'environments', locale),
     optionSelect('favorite_things', 'favorite-things', locale),
-    optionSelect('item_categories', 'item-categories', locale),
-    optionSelect('item_usages', 'item-usages', locale),
     optionSelect('acquisition_methods', 'acquisition-methods', locale),
     optionSelect('maps', 'maps', locale),
     lifeCategoryOptions(locale),
@@ -2245,8 +2363,9 @@ export async function getOptions(locale = defaultLocale) {
     skills,
     environments,
     favoriteThings,
-    itemCategories,
-    itemUsages,
+    itemCategories: systemListOptions(itemCategoryOptions, locale),
+    itemUsages: systemListOptions(itemUsageOptions, locale),
+    ancientArtifactCategories: systemListOptions(ancientArtifactCategoryOptions, locale),
     acquisitionMethods,
     itemTags: favoriteThings,
     maps,
@@ -3379,6 +3498,7 @@ export async function listUserCommentActivities(
   const itemName = localizedName('items', 'i', locale);
   const recipeItemName = localizedName('items', 'recipe_item', locale);
   const habitatName = localizedName('habitats', 'h', locale);
+  const artifactName = localizedName('ancient-artifacts', 'a', locale);
   const params: unknown[] = [user.id];
   const outerConditions: string[] = [];
 
@@ -3444,6 +3564,7 @@ export async function listUserCommentActivities(
               WHEN 'items' THEN ${itemName}
               WHEN 'recipes' THEN ${recipeItemName}
               WHEN 'habitats' THEN ${habitatName}
+              WHEN 'ancient-artifacts' THEN ${artifactName}
               ELSE ''
             END,
             ''
@@ -3455,6 +3576,7 @@ export async function listUserCommentActivities(
         LEFT JOIN recipes r ON edc.entity_type = 'recipes' AND r.id = edc.entity_id
         LEFT JOIN items recipe_item ON recipe_item.id = r.item_id
         LEFT JOIN habitats h ON edc.entity_type = 'habitats' AND h.id = edc.entity_id
+        LEFT JOIN ancient_artifacts a ON edc.entity_type = 'ancient-artifacts' AND a.id = edc.entity_id
         WHERE edc.created_by_user_id = $1
           AND edc.deleted_at IS NULL
           AND edc.ai_moderation_status = 'approved'
@@ -4434,6 +4556,11 @@ export async function reorderItems(payload: Record<string, unknown>, userId: num
   return listItems({}, locale);
 }
 
+export async function reorderAncientArtifacts(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  await reorderContent('ancient-artifacts', payload, userId);
+  return listAncientArtifacts({}, locale);
+}
+
 export async function reorderRecipes(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   await reorderContent('recipes', payload, userId);
   return listRecipes({}, locale);
@@ -4507,7 +4634,6 @@ export async function getPokemon(id: number, locale = defaultLocale) {
   const habitatName = localizedName('habitats', 'h', locale);
   const mapName = localizedName('maps', 'm', locale);
   const itemName = localizedName('items', 'i', locale);
-  const categoryName = localizedName('item-categories', 'c', locale);
   const tagName = localizedName('favorite-things', 'ft', locale);
   const relatedPokemonName = localizedName('pokemon', 'related_pokemon', locale);
   const relatedEnvironmentName = localizedName('environments', 'related_environment', locale);
@@ -4551,16 +4677,15 @@ export async function getPokemon(id: number, locale = defaultLocale) {
           i.id,
           ${itemName} AS name,
           ${uploadedImageJson('i.image_path')} AS image,
-          json_build_object('id', c.id, 'name', ${categoryName}) AS category,
+          ${systemListJsonSql('i.category_key', itemCategoryOptions, locale)} AS category,
           json_agg(json_build_object('id', ft.id, 'name', ${tagName}) ORDER BY ${orderByEntity('ft')}) AS tags
         FROM pokemon_favorite_things pft
         JOIN item_favorite_things ift ON ift.favorite_thing_id = pft.favorite_thing_id
         JOIN favorite_things ft ON ft.id = pft.favorite_thing_id
         JOIN items i ON i.id = ift.item_id
-        JOIN item_categories c ON c.id = i.category_id
         WHERE pft.pokemon_id = $1
-        GROUP BY i.id, i.name, i.image_path, i.sort_order, c.id, c.name, c.sort_order
-        ORDER BY ${orderByEntity('c')}, ${orderByEntity('i')}
+        GROUP BY i.id, i.name, i.image_path, i.category_key, i.sort_order
+        ORDER BY i.category_key, ${orderByEntity('i')}
       `,
       [id]
     ),
@@ -5190,21 +5315,26 @@ export async function deleteHabitat(id: number, userId: number) {
 
 function itemProjection(locale: string): string {
   const itemName = localizedName('items', 'i', locale);
-  const categoryName = localizedName('item-categories', 'c', locale);
-  const usageName = localizedName('item-usages', 'u', locale);
+  const itemDetails = localizedField('items', 'i.id', 'i.details', 'details', locale);
   const tagName = localizedName('favorite-things', 't', locale);
 
   return `
     SELECT
       i.id,
+      i.display_id AS "displayId",
       ${itemName} AS name,
       i.name AS "baseName",
+      ${itemDetails} AS details,
+      i.details AS "baseDetails",
       i.is_event_item AS "isEventItem",
       ${translationsSelect('items', 'i.id')} AS translations,
       ${auditSelect('i', 'item_created_user', 'item_updated_user')},
       ${uploadedImageJson('i.image_path')} AS image,
-      json_build_object('id', c.id, 'name', ${categoryName}) AS category,
-      CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'name', ${usageName}) END AS usage,
+      ${systemListJsonSql('i.category_key', itemCategoryOptions, locale)} AS category,
+      CASE
+        WHEN i.usage_key IS NULL THEN NULL
+        ELSE ${systemListJsonSql('i.usage_key', itemUsageOptions, locale)}
+      END AS usage,
       json_build_object(
         'dyeable', i.dyeable,
         'dualDyeable', i.dual_dyeable,
@@ -5234,8 +5364,6 @@ function itemProjection(locale: string): string {
         )
       END AS recipe
     FROM items i
-    JOIN item_categories c ON c.id = i.category_id
-    LEFT JOIN item_usages u ON u.id = i.usage_id
     LEFT JOIN recipes item_recipe ON item_recipe.item_id = i.id
     LEFT JOIN users recipe_created_user ON recipe_created_user.id = item_recipe.created_by_user_id
     LEFT JOIN users recipe_updated_user ON recipe_updated_user.id = item_recipe.updated_by_user_id
@@ -5248,23 +5376,35 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
   const conditions: string[] = [];
   const categoryId = Number(asString(paramsQuery.categoryId));
   const usageId = Number(asString(paramsQuery.usageId));
+  const isEventItem = asString(paramsQuery.isEventItem);
   const tagIds = parseIdList(asString(paramsQuery.tagIds));
   const search = asString(paramsQuery.search)?.trim();
   const recipeOrder = asString(paramsQuery.recipeOrder) === '1';
+  const categoryOption = Number.isInteger(categoryId) && categoryId > 0
+    ? systemListOptionById(itemCategoryOptions, categoryId, 'server.validation.categoryRequired')
+    : null;
+  const usageOption = Number.isInteger(usageId) && usageId > 0
+    ? systemListOptionById(itemUsageOptions, usageId, 'server.validation.usageRequired')
+    : null;
 
   if (search) {
     params.push(`%${search}%`);
     conditions.push(`${localizedName('items', 'i', locale)} ILIKE $${params.length}`);
   }
 
-  if (Number.isInteger(categoryId) && categoryId > 0) {
-    params.push(categoryId);
-    conditions.push(`i.category_id = $${params.length}`);
+  if (isEventItem === 'true' || isEventItem === 'false') {
+    params.push(isEventItem === 'true');
+    conditions.push(`i.is_event_item = $${params.length}`);
   }
 
-  if (Number.isInteger(usageId) && usageId > 0) {
-    params.push(usageId);
-    conditions.push(`i.usage_id = $${params.length}`);
+  if (categoryOption) {
+    params.push(categoryOption.key);
+    conditions.push(`i.category_key = $${params.length}`);
+  }
+
+  if (usageOption) {
+    params.push(usageOption.key);
+    conditions.push(`i.usage_key = $${params.length}`);
   }
 
   const tagFilter = sqlForRelationFilter(
@@ -5282,8 +5422,8 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const orderClause = recipeOrder
-    ? `ORDER BY CASE WHEN item_recipe.id IS NULL THEN 1 ELSE 0 END, item_recipe.sort_order, item_recipe.id, ${orderByEntity('i')}`
-    : `ORDER BY ${orderByEntity('i')}`;
+    ? `ORDER BY CASE WHEN item_recipe.id IS NULL THEN 1 ELSE 0 END, item_recipe.sort_order, item_recipe.id, i.display_id, ${orderByEntity('i')}`
+    : `ORDER BY i.display_id, ${orderByEntity('i')}`;
   return query(`${itemProjection(locale)} ${whereClause} ${orderClause}`, params);
 }
 
@@ -5295,8 +5435,6 @@ export async function getItem(id: number, locale = defaultLocale) {
 
   const acquisitionMethodName = localizedName('acquisition-methods', 'am', locale);
   const resultItemName = localizedName('items', 'result_item', locale);
-  const resultItemCategoryName = localizedName('item-categories', 'result_category', locale);
-  const resultItemUsageName = localizedName('item-usages', 'result_usage', locale);
   const materialItemName = localizedName('items', 'mi', locale);
   const habitatName = localizedName('habitats', 'h', locale);
   const recipeItemName = localizedName('items', 'recipe_item', locale);
@@ -5342,18 +5480,17 @@ export async function getItem(id: number, locale = defaultLocale) {
           ), '[]'::json) AS materials,
           json_build_object(
             'id', result_item.id,
+            'displayId', result_item.display_id,
             'name', ${resultItemName},
             'image', ${uploadedImageJson('result_item.image_path')},
-            'category', json_build_object('id', result_category.id, 'name', ${resultItemCategoryName}),
+            'category', ${systemListJsonSql('result_item.category_key', itemCategoryOptions, locale)},
             'usage', CASE
-              WHEN result_usage.id IS NULL THEN NULL
-              ELSE json_build_object('id', result_usage.id, 'name', ${resultItemUsageName})
+              WHEN result_item.usage_key IS NULL THEN NULL
+              ELSE ${systemListJsonSql('result_item.usage_key', itemUsageOptions, locale)}
             END
           ) AS item
         FROM recipes r
         JOIN items result_item ON result_item.id = r.item_id
-        JOIN item_categories result_category ON result_category.id = result_item.category_id
-        LEFT JOIN item_usages result_usage ON result_usage.id = result_item.usage_id
         ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
         WHERE r.item_id = $1
       `,
@@ -5442,15 +5579,22 @@ export async function getItem(id: number, locale = defaultLocale) {
 }
 
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
+  const categoryId = requirePositiveInteger(payload.categoryId, 'server.validation.categoryRequired');
   const usageId = payload.usageId === null || payload.usageId === '' || payload.usageId === undefined
     ? null
     : requirePositiveInteger(payload.usageId, 'server.validation.usageRequired');
+  const category = systemListOptionById(itemCategoryOptions, categoryId, 'server.validation.categoryRequired');
+  const usage = usageId === null ? null : systemListOptionById(itemUsageOptions, usageId, 'server.validation.usageRequired');
 
   return {
+    displayId: requirePositiveInteger(payload.displayId, 'server.validation.itemDisplayIdRequired'),
     name: cleanName(payload.name, 'server.validation.itemNameRequired'),
-    translations: cleanTranslations(payload.translations, ['name']),
-    categoryId: requirePositiveInteger(payload.categoryId, 'server.validation.categoryRequired'),
+    details: cleanOptionalText(payload.details),
+    translations: cleanTranslations(payload.translations, ['name', 'details']),
+    categoryId,
+    categoryKey: category.key,
     usageId,
+    usageKey: usage?.key ?? null,
     dyeable: Boolean(payload.dyeable),
     dualDyeable: Boolean(payload.dualDyeable),
     patternEditable: Boolean(payload.patternEditable),
@@ -5500,9 +5644,11 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
     const result = await client.query<{ id: number }>(
       `
         INSERT INTO items (
+          display_id,
           name,
-          category_id,
-          usage_id,
+          details,
+          category_key,
+          usage_key,
           dyeable,
           dual_dyeable,
           pattern_editable,
@@ -5513,13 +5659,15 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
         RETURNING id
       `,
       [
+        cleanPayload.displayId,
         cleanPayload.name,
-        cleanPayload.categoryId,
-        cleanPayload.usageId,
+        cleanPayload.details,
+        cleanPayload.categoryKey,
+        cleanPayload.usageKey,
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
@@ -5533,7 +5681,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
     const itemId = result.rows[0].id;
     await linkEntityImageUpload(client, 'items', itemId, cleanPayload.imagePath, cleanPayload.name);
     await replaceItemRelations(client, itemId, cleanPayload);
-    await replaceEntityTranslations(client, 'items', itemId, cleanPayload.translations, ['name']);
+    await replaceEntityTranslations(client, 'items', itemId, cleanPayload.translations, ['name', 'details']);
     await recordEditLog(client, 'items', itemId, 'create', userId);
     return itemId;
   });
@@ -5549,23 +5697,27 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
     const result = await client.query(
       `
         UPDATE items
-        SET name = $1,
-            category_id = $2,
-            usage_id = $3,
-            dyeable = $4,
-            dual_dyeable = $5,
-            pattern_editable = $6,
-            no_recipe = $7,
-            is_event_item = $8,
-            image_path = $9,
-            updated_by_user_id = $10,
+        SET display_id = $1,
+            name = $2,
+            details = $3,
+            category_key = $4,
+            usage_key = $5,
+            dyeable = $6,
+            dual_dyeable = $7,
+            pattern_editable = $8,
+            no_recipe = $9,
+            is_event_item = $10,
+            image_path = $11,
+            updated_by_user_id = $12,
             updated_at = now()
-        WHERE id = $11
+        WHERE id = $13
       `,
       [
+        cleanPayload.displayId,
         cleanPayload.name,
-        cleanPayload.categoryId,
-        cleanPayload.usageId,
+        cleanPayload.details,
+        cleanPayload.categoryKey,
+        cleanPayload.usageKey,
         cleanPayload.dyeable,
         cleanPayload.dualDyeable,
         cleanPayload.patternEditable,
@@ -5581,7 +5733,7 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
     }
     await linkEntityImageUpload(client, 'items', id, cleanPayload.imagePath, cleanPayload.name);
     await replaceItemRelations(client, id, cleanPayload);
-    await replaceEntityTranslations(client, 'items', id, cleanPayload.translations, ['name']);
+    await replaceEntityTranslations(client, 'items', id, cleanPayload.translations, ['name', 'details']);
     const changes = before ? await itemEditChanges(client, before as unknown as ItemChangeSource, cleanPayload) : [];
     await recordEditLog(client, 'items', id, 'update', userId, changes);
     return true;
@@ -5603,16 +5755,211 @@ export async function deleteItem(id: number, userId: number) {
   });
 }
 
+function ancientArtifactProjection(locale: string): string {
+  const artifactName = localizedName('ancient-artifacts', 'a', locale);
+  const artifactDetails = localizedField('ancient-artifacts', 'a.id', 'a.details', 'details', locale);
+  const tagName = localizedName('favorite-things', 't', locale);
+
+  return `
+    SELECT
+      a.id,
+      a.display_id AS "displayId",
+      ${artifactName} AS name,
+      a.name AS "baseName",
+      ${artifactDetails} AS details,
+      a.details AS "baseDetails",
+      ${translationsSelect('ancient-artifacts', 'a.id')} AS translations,
+      ${systemListJsonSql('a.category_key', ancientArtifactCategoryOptions, locale)} AS category,
+      ${uploadedImageJson('a.image_path')} AS image,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', t.id, 'name', ${tagName}) ORDER BY ${orderByEntity('t')})
+        FROM ancient_artifact_favorite_things aaft
+        JOIN favorite_things t ON t.id = aaft.favorite_thing_id
+        WHERE aaft.ancient_artifact_id = a.id
+      ), '[]'::json) AS tags,
+      ${auditSelect('a', 'artifact_created_user', 'artifact_updated_user')}
+    FROM ancient_artifacts a
+    ${auditJoins('a', 'artifact_created_user', 'artifact_updated_user')}
+  `;
+}
+
+export async function listAncientArtifacts(paramsQuery: QueryParams = {}, locale = defaultLocale) {
+  const params: unknown[] = [];
+  const conditions: string[] = [];
+  const search = asString(paramsQuery.search)?.trim();
+  const categoryId = Number(asString(paramsQuery.categoryId));
+  const tagIds = parseIdList(asString(paramsQuery.tagIds));
+  const categoryOption = Number.isInteger(categoryId) && categoryId > 0
+    ? systemListOptionById(ancientArtifactCategoryOptions, categoryId, 'server.validation.categoryRequired')
+    : null;
+
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`${localizedName('ancient-artifacts', 'a', locale)} ILIKE $${params.length}`);
+  }
+
+  if (categoryOption) {
+    params.push(categoryOption.key);
+    conditions.push(`a.category_key = $${params.length}`);
+  }
+
+  const tagFilter = sqlForRelationFilter(
+    tagIds,
+    'any',
+    'ancient_artifact_favorite_things',
+    'ancient_artifact_id',
+    'favorite_thing_id',
+    'a.id',
+    params
+  );
+  if (tagFilter) {
+    conditions.push(tagFilter);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return query(`${ancientArtifactProjection(locale)} ${whereClause} ORDER BY a.display_id, ${orderByEntity('a')}`, params);
+}
+
+export async function getAncientArtifact(id: number, locale = defaultLocale) {
+  const artifact = await queryOne(`${ancientArtifactProjection(locale)} WHERE a.id = $1`, [id]);
+  if (!artifact) {
+    return null;
+  }
+
+  const editHistory = await getEditHistory('ancient-artifacts', id);
+  const imageHistory = await listEntityImageUploads('ancient-artifacts', id);
+  return { ...artifact, editHistory, imageHistory };
+}
+
+function cleanAncientArtifactPayload(payload: Record<string, unknown>): AncientArtifactPayload {
+  const categoryId = requirePositiveInteger(payload.categoryId, 'server.validation.categoryRequired');
+  const category = systemListOptionById(ancientArtifactCategoryOptions, categoryId, 'server.validation.categoryRequired');
+
+  return {
+    displayId: requirePositiveInteger(payload.displayId, 'server.validation.artifactDisplayIdRequired'),
+    name: cleanName(payload.name, 'server.validation.artifactNameRequired'),
+    details: cleanOptionalText(payload.details),
+    translations: cleanTranslations(payload.translations, ['name', 'details']),
+    categoryId,
+    categoryKey: category.key,
+    tagIds: cleanIds(payload.tagIds),
+    imagePath: cleanUploadImagePath(payload.imagePath, 'ancient-artifacts')
+  };
+}
+
+async function replaceAncientArtifactRelations(client: DbClient, artifactId: number, payload: AncientArtifactPayload): Promise<void> {
+  await client.query('DELETE FROM ancient_artifact_favorite_things WHERE ancient_artifact_id = $1', [artifactId]);
+
+  for (const tagId of payload.tagIds) {
+    await client.query(
+      'INSERT INTO ancient_artifact_favorite_things (ancient_artifact_id, favorite_thing_id) VALUES ($1, $2)',
+      [artifactId, tagId]
+    );
+  }
+}
+
+export async function createAncientArtifact(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const cleanPayload = cleanAncientArtifactPayload(payload);
+
+  const id = await withTransaction(async (client) => {
+    const sortOrder = await nextSortOrder(client, 'ancient_artifacts');
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO ancient_artifacts (
+          display_id,
+          name,
+          details,
+          category_key,
+          image_path,
+          sort_order,
+          created_by_user_id,
+          updated_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+        RETURNING id
+      `,
+      [
+        cleanPayload.displayId,
+        cleanPayload.name,
+        cleanPayload.details,
+        cleanPayload.categoryKey,
+        cleanPayload.imagePath,
+        sortOrder,
+        userId
+      ]
+    );
+    const artifactId = result.rows[0].id;
+    await linkEntityImageUpload(client, 'ancient-artifacts', artifactId, cleanPayload.imagePath, cleanPayload.name);
+    await replaceAncientArtifactRelations(client, artifactId, cleanPayload);
+    await replaceEntityTranslations(client, 'ancient-artifacts', artifactId, cleanPayload.translations, ['name', 'details']);
+    await recordEditLog(client, 'ancient-artifacts', artifactId, 'create', userId);
+    return artifactId;
+  });
+
+  return getAncientArtifact(id, locale);
+}
+
+export async function updateAncientArtifact(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const cleanPayload = cleanAncientArtifactPayload(payload);
+  const before = await getAncientArtifact(id, defaultLocale);
+
+  const updated = await withTransaction(async (client) => {
+    const result = await client.query(
+      `
+        UPDATE ancient_artifacts
+        SET display_id = $1,
+            name = $2,
+            details = $3,
+            category_key = $4,
+            image_path = $5,
+            updated_by_user_id = $6,
+            updated_at = now()
+        WHERE id = $7
+      `,
+      [cleanPayload.displayId, cleanPayload.name, cleanPayload.details, cleanPayload.categoryKey, cleanPayload.imagePath, userId, id]
+    );
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await linkEntityImageUpload(client, 'ancient-artifacts', id, cleanPayload.imagePath, cleanPayload.name);
+    await replaceAncientArtifactRelations(client, id, cleanPayload);
+    await replaceEntityTranslations(client, 'ancient-artifacts', id, cleanPayload.translations, ['name', 'details']);
+    const changes = before ? await ancientArtifactEditChanges(client, before as unknown as AncientArtifactChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'ancient-artifacts', id, 'update', userId, changes);
+    return true;
+  });
+
+  return updated ? getAncientArtifact(id, locale) : null;
+}
+
+export async function deleteAncientArtifact(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>('DELETE FROM ancient_artifacts WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await deleteEntityDiscussionCommentsForEntity(client, 'ancient-artifacts', id);
+    await deleteEntityTranslations(client, 'ancient-artifacts', id);
+    await recordEditLog(client, 'ancient-artifacts', id, 'delete', userId);
+    return true;
+  });
+}
+
 export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaultLocale) {
   const params: unknown[] = [];
   const conditions: string[] = [];
   const categoryId = Number(asString(paramsQuery.categoryId));
+  const categoryOption = Number.isInteger(categoryId) && categoryId > 0
+    ? systemListOptionById(itemCategoryOptions, categoryId, 'server.validation.categoryRequired')
+    : null;
   const resultItemName = localizedName('items', 'result_item', locale);
   const materialItemName = localizedName('items', 'i', locale);
 
-  if (Number.isInteger(categoryId) && categoryId > 0) {
-    params.push(categoryId);
-    conditions.push(`result_item.category_id = $${params.length}`);
+  if (categoryOption) {
+    params.push(categoryOption.key);
+    conditions.push(`result_item.category_key = $${params.length}`);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -5637,8 +5984,6 @@ export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaul
 
 export async function getRecipe(id: number, locale = defaultLocale) {
   const resultItemName = localizedName('items', 'result_item', locale);
-  const resultItemCategoryName = localizedName('item-categories', 'result_category', locale);
-  const resultItemUsageName = localizedName('item-usages', 'result_usage', locale);
   const acquisitionMethodName = localizedName('acquisition-methods', 'am', locale);
   const materialItemName = localizedName('items', 'i', locale);
 
@@ -5670,18 +6015,17 @@ export async function getRecipe(id: number, locale = defaultLocale) {
         ), '[]'::json) AS materials,
         json_build_object(
           'id', result_item.id,
+          'displayId', result_item.display_id,
           'name', ${resultItemName},
           'image', ${uploadedImageJson('result_item.image_path')},
-          'category', json_build_object('id', result_category.id, 'name', ${resultItemCategoryName}),
+          'category', ${systemListJsonSql('result_item.category_key', itemCategoryOptions, locale)},
           'usage', CASE
-            WHEN result_usage.id IS NULL THEN NULL
-            ELSE json_build_object('id', result_usage.id, 'name', ${resultItemUsageName})
+            WHEN result_item.usage_key IS NULL THEN NULL
+            ELSE ${systemListJsonSql('result_item.usage_key', itemUsageOptions, locale)}
           END
         ) AS item
       FROM recipes r
       JOIN items result_item ON result_item.id = r.item_id
-      JOIN item_categories result_category ON result_category.id = result_item.category_id
-      LEFT JOIN item_usages result_usage ON result_usage.id = result_item.usage_id
       ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
       WHERE r.id = $1
     `,
@@ -5791,11 +6135,12 @@ export async function deleteRecipe(id: number, userId: number) {
   });
 }
 
-const dataToolScopes = ['pokemon', 'habitats', 'items', 'recipes', 'checklist'] as const satisfies readonly DataToolScope[];
+const dataToolScopes = ['pokemon', 'habitats', 'items', 'artifacts', 'recipes', 'checklist'] as const satisfies readonly DataToolScope[];
 const dataToolMainTables: Record<DataToolScope, string> = {
   pokemon: 'pokemon',
   habitats: 'habitats',
   items: 'items',
+  artifacts: 'ancient_artifacts',
   recipes: 'recipes',
   checklist: 'daily_checklist_items'
 };
@@ -5839,9 +6184,11 @@ const dataToolColumns = {
   habitatPokemon: ['habitat_id', 'pokemon_id', 'map_id', 'time_of_day', 'weather', 'rarity'],
   items: [
     'id',
+    'display_id',
     'name',
-    'category_id',
-    'usage_id',
+    'details',
+    'category_key',
+    'usage_key',
     'dyeable',
     'dual_dyeable',
     'pattern_editable',
@@ -5856,6 +6203,20 @@ const dataToolColumns = {
   ],
   itemAcquisitionMethods: ['item_id', 'acquisition_method_id'],
   itemFavoriteThings: ['item_id', 'favorite_thing_id'],
+  artifactFavoriteThings: ['ancient_artifact_id', 'favorite_thing_id'],
+  artifacts: [
+    'id',
+    'display_id',
+    'name',
+    'details',
+    'category_key',
+    'image_path',
+    'sort_order',
+    'created_by_user_id',
+    'updated_by_user_id',
+    'created_at',
+    'updated_at'
+  ],
   recipes: ['id', 'item_id', 'sort_order', 'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'],
   recipeAcquisitionMethods: ['recipe_id', 'acquisition_method_id'],
   recipeMaterials: ['recipe_id', 'item_id', 'quantity'],
@@ -5965,8 +6326,20 @@ async function tableRows(client: DbClient, sql: string, params: unknown[] = []):
   return result.rows;
 }
 
-function normalizeImportValue(column: string, value: unknown): unknown {
+function normalizeImportValue(column: string, value: unknown, row: Record<string, unknown>): unknown {
   if (value === undefined) {
+    if (column === 'display_id' && typeof row.id === 'number') {
+      return row.id;
+    }
+    if (column === 'details') {
+      return '';
+    }
+    if (column === 'image_path') {
+      return '';
+    }
+    if (column === 'category_key') {
+      return 'other';
+    }
     return null;
   }
   if (column === 'changes' && typeof value !== 'string') {
@@ -5978,7 +6351,7 @@ function normalizeImportValue(column: string, value: unknown): unknown {
 async function insertRows(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
   for (const row of rows) {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
-    const values = columns.map((column) => normalizeImportValue(column, row[column]));
+    const values = columns.map((column) => normalizeImportValue(column, row[column], row));
     await client.query(`INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`, values);
   }
 }
@@ -5995,7 +6368,16 @@ async function resetIdentity(client: DbClient, tableName: string): Promise<void>
 }
 
 async function resetDataToolIdentities(client: DbClient): Promise<void> {
-  for (const tableName of ['daily_checklist_items', 'items', 'recipes', 'habitats', 'wiki_edit_logs', 'entity_image_uploads', 'entity_discussion_comments']) {
+  for (const tableName of [
+    'daily_checklist_items',
+    'items',
+    'ancient_artifacts',
+    'recipes',
+    'habitats',
+    'wiki_edit_logs',
+    'entity_image_uploads',
+    'entity_discussion_comments'
+  ]) {
     await resetIdentity(client, tableName);
   }
 }
@@ -6022,6 +6404,12 @@ async function wipeItemsData(client: DbClient): Promise<void> {
   await client.query('DELETE FROM habitat_recipe_items');
   await client.query('DELETE FROM pokemon_skill_item_drops');
   await client.query('DELETE FROM items');
+}
+
+async function wipeAncientArtifactsData(client: DbClient): Promise<void> {
+  await deleteGenericEntityRows(client, ['ancient-artifacts']);
+  await client.query('DELETE FROM ancient_artifact_favorite_things');
+  await client.query('DELETE FROM ancient_artifacts');
 }
 
 async function wipePokemonData(client: DbClient): Promise<void> {
@@ -6052,6 +6440,9 @@ async function wipeDataToolScopes(client: DbClient, scopes: DataToolScope[], res
     await wipeItemsData(client);
   } else if (scopeSet.has('recipes')) {
     await wipeRecipesData(client);
+  }
+  if (scopeSet.has('artifacts')) {
+    await wipeAncientArtifactsData(client);
   }
   if (scopeSet.has('pokemon')) {
     await wipePokemonData(client);
@@ -6114,12 +6505,23 @@ async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<
 
   if (scope === 'items') {
     return {
-      items: await tableRows(client, 'SELECT * FROM items ORDER BY sort_order, id'),
+      items: await tableRows(client, 'SELECT * FROM items ORDER BY display_id, sort_order, id'),
       itemAcquisitionMethods: await tableRows(client, 'SELECT * FROM item_acquisition_methods ORDER BY item_id, acquisition_method_id'),
       itemFavoriteThings: await tableRows(client, 'SELECT * FROM item_favorite_things ORDER BY item_id, favorite_thing_id'),
       pokemonSkillItemDrops: await tableRows(client, 'SELECT * FROM pokemon_skill_item_drops ORDER BY pokemon_id, skill_id'),
       habitatRecipeItems: await tableRows(client, 'SELECT * FROM habitat_recipe_items ORDER BY habitat_id, item_id'),
       ...(await exportGenericScopeData(client, 'items', true))
+    };
+  }
+
+  if (scope === 'artifacts') {
+    return {
+      artifacts: await tableRows(client, 'SELECT * FROM ancient_artifacts ORDER BY display_id, sort_order, id'),
+      artifactFavoriteThings: await tableRows(
+        client,
+        'SELECT * FROM ancient_artifact_favorite_things ORDER BY ancient_artifact_id, favorite_thing_id'
+      ),
+      ...(await exportGenericScopeData(client, 'ancient-artifacts', true))
     };
   }
 
@@ -6145,12 +6547,14 @@ async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<
 
 async function importScopeMainRows(client: DbClient, bundle: DataToolsBundle): Promise<void> {
   const itemData = bundle.data.items;
+  const artifactData = bundle.data.artifacts;
   const pokemonData = bundle.data.pokemon;
   const habitatData = bundle.data.habitats;
   const checklistData = bundle.data.checklist;
   const recipeData = bundle.data.recipes;
 
   await insertRows(client, 'items', dataToolColumns.items, dataToolTableRows(itemData, 'items'));
+  await insertRows(client, 'ancient_artifacts', dataToolColumns.artifacts, dataToolTableRows(artifactData, 'artifacts'));
   await insertRows(client, 'pokemon', dataToolColumns.pokemon, dataToolTableRows(pokemonData, 'pokemon'));
   await insertRows(client, 'habitats', dataToolColumns.habitats, dataToolTableRows(habitatData, 'habitats'));
   await insertRows(client, 'daily_checklist_items', dataToolColumns.checklist, dataToolTableRows(checklistData, 'checklist'));
@@ -6159,6 +6563,7 @@ async function importScopeMainRows(client: DbClient, bundle: DataToolsBundle): P
 
 async function importScopeRelationRows(client: DbClient, bundle: DataToolsBundle): Promise<void> {
   const itemData = bundle.data.items;
+  const artifactData = bundle.data.artifacts;
   const pokemonData = bundle.data.pokemon;
   const habitatData = bundle.data.habitats;
   const recipeData = bundle.data.recipes;
@@ -6168,6 +6573,12 @@ async function importScopeRelationRows(client: DbClient, bundle: DataToolsBundle
 
   await insertRows(client, 'item_acquisition_methods', dataToolColumns.itemAcquisitionMethods, dataToolTableRows(itemData, 'itemAcquisitionMethods'));
   await insertRows(client, 'item_favorite_things', dataToolColumns.itemFavoriteThings, dataToolTableRows(itemData, 'itemFavoriteThings'));
+  await insertRows(
+    client,
+    'ancient_artifact_favorite_things',
+    dataToolColumns.artifactFavoriteThings,
+    dataToolTableRows(artifactData, 'artifactFavoriteThings')
+  );
   await insertRows(client, 'pokemon_pokemon_types', dataToolColumns.pokemonTypeLinks, dataToolTableRows(pokemonData, 'pokemonTypeLinks'));
   await insertRows(client, 'pokemon_skills', dataToolColumns.pokemonSkills, dataToolTableRows(pokemonData, 'pokemonSkills'));
   await insertRows(client, 'pokemon_favorite_things', dataToolColumns.pokemonFavoriteThings, dataToolTableRows(pokemonData, 'pokemonFavoriteThings'));

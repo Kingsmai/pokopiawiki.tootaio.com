@@ -12,6 +12,7 @@ import TranslationFields from '../components/TranslationFields.vue';
 import {
   iconAdd,
   iconAdmin,
+  iconArtifact,
   iconCancel,
   iconChecklist,
   iconDelete,
@@ -30,6 +31,7 @@ import {
 import { defaultLocale, getCurrentLocale, loadSystemWordings, setCurrentLocale } from '../i18n';
 import {
   api,
+  type AncientArtifact,
   type AiModerationApiFormat,
   type AiModerationAuthMode,
   type AiModerationSettings,
@@ -76,6 +78,7 @@ type AdminTab =
   | 'checklist'
   | 'pokemon'
   | 'items'
+  | 'ancientArtifacts'
   | 'recipes'
   | 'habitats';
 type AdminGroup = 'content' | 'configuration' | 'localization' | 'access';
@@ -102,7 +105,7 @@ const rateLimitPolicyKeys: RateLimitPolicyKey[] = [
   'upload',
   'fetch'
 ];
-const dataToolScopeKeys: DataToolScope[] = ['pokemon', 'habitats', 'items', 'recipes', 'checklist'];
+const dataToolScopeKeys: DataToolScope[] = ['pokemon', 'habitats', 'items', 'artifacts', 'recipes', 'checklist'];
 const defaultRateLimitPolicies: Record<RateLimitPolicyKey, RateLimitPolicySettings> = {
   accountWrite: { maxRequests: 20, timeWindowSeconds: 60 * 60, cooldownSeconds: 5 },
   adminWrite: { maxRequests: 120, timeWindowSeconds: 60 * 60, cooldownSeconds: 2 },
@@ -126,6 +129,7 @@ const adminTabIcons: Record<AdminTab, AppIcon> = {
   checklist: iconChecklist,
   pokemon: iconPokemon,
   items: iconItem,
+  ancientArtifacts: iconArtifact,
   recipes: iconRecipe,
   habitats: iconHabitat
 };
@@ -146,6 +150,11 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
         { key: 'checklist', label: t('pages.admin.checklist'), permission: ['checklist.create', 'checklist.update', 'checklist.delete', 'checklist.order'] },
         { key: 'pokemon', label: t('pages.admin.pokemonList'), permission: ['pokemon.order', 'pokemon.delete'] },
         { key: 'items', label: t('pages.admin.itemList'), permission: ['items.order', 'items.delete'] },
+        {
+          key: 'ancientArtifacts',
+          label: t('pages.admin.ancientArtifactList'),
+          permission: ['ancient-artifacts.order', 'ancient-artifacts.delete']
+        },
         { key: 'recipes', label: t('pages.admin.recipeList'), permission: ['recipes.order', 'recipes.delete'] },
         { key: 'habitats', label: t('pages.admin.habitatList'), permission: ['habitats.order', 'habitats.delete'] },
         { key: 'dataTools', label: t('pages.admin.dataTools'), permission: ['admin.data.export', 'admin.data.import'] }
@@ -185,8 +194,6 @@ const configTypes = computed<
   { key: 'skills', label: t('config.skills'), supportsItemDrop: true },
   { key: 'environments', label: t('config.environments') },
   { key: 'favorite-things', label: t('config.favoriteThings') },
-  { key: 'item-categories', label: t('config.itemCategories') },
-  { key: 'item-usages', label: t('config.itemUsages') },
   { key: 'acquisition-methods', label: t('config.acquisitionMethods') },
   { key: 'maps', label: t('config.maps') },
   { key: 'life-tags', label: t('config.lifeCategories'), supportsDefault: true, supportsRateable: true },
@@ -203,6 +210,7 @@ const languageRows = ref<Language[]>([]);
 const checklistRows = ref<DailyChecklistItem[]>([]);
 const pokemonRows = ref<Pokemon[]>([]);
 const itemRows = ref<Item[]>([]);
+const ancientArtifactRows = ref<AncientArtifact[]>([]);
 const recipeRows = ref<Recipe[]>([]);
 const habitatRows = ref<Habitat[]>([]);
 const wordingRows = ref<SystemWording[]>([]);
@@ -401,7 +409,9 @@ const configLabel = (item: EditableConfig) => item.name;
 const pokemonKey = (item: Pokemon) => item.id;
 const pokemonLabel = (item: Pokemon) => `#${item.displayId} ${item.name}`;
 const itemKey = (item: Item) => item.id;
-const itemLabel = (item: Item) => item.name;
+const itemLabel = (item: Item) => `#${item.displayId} ${item.name}`;
+const ancientArtifactKey = (item: AncientArtifact) => item.id;
+const ancientArtifactLabel = (item: AncientArtifact) => `#${item.displayId} ${item.name}`;
 const recipeKey = (item: Recipe) => item.id;
 const recipeLabel = (item: Recipe) => item.name;
 const habitatKey = (item: Habitat) => item.id;
@@ -768,6 +778,10 @@ function previewItemOrder(rows: Item[]) {
   itemRows.value = rows;
 }
 
+function previewAncientArtifactOrder(rows: AncientArtifact[]) {
+  ancientArtifactRows.value = rows;
+}
+
 function previewRecipeOrder(rows: Recipe[]) {
   recipeRows.value = rows;
 }
@@ -832,6 +846,18 @@ async function persistItemOrder(nextRows: Item[], fallbackRows: Item[]) {
       itemRows.value = await api.reorderItems(nextRows.map((item) => item.id));
     } catch (error) {
       itemRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
+async function persistAncientArtifactOrder(nextRows: AncientArtifact[], fallbackRows: AncientArtifact[]) {
+  ancientArtifactRows.value = nextRows;
+  await run(async () => {
+    try {
+      ancientArtifactRows.value = await api.reorderAncientArtifacts(nextRows.map((item) => item.id));
+    } catch (error) {
+      ancientArtifactRows.value = fallbackRows;
       throw error;
     }
   });
@@ -942,6 +968,10 @@ async function loadPokemon() {
 
 async function loadItems() {
   itemRows.value = await api.items({});
+}
+
+async function loadAncientArtifacts() {
+  ancientArtifactRows.value = await api.ancientArtifacts();
 }
 
 async function loadRecipes() {
@@ -1121,6 +1151,7 @@ async function loadCurrentTab(showSkeleton = false) {
     if (activeTab.value === 'checklist') await loadChecklist();
     if (activeTab.value === 'pokemon') await loadPokemon();
     if (activeTab.value === 'items') await loadItems();
+    if (activeTab.value === 'ancientArtifacts') await loadAncientArtifacts();
     if (activeTab.value === 'recipes') await loadRecipes();
     if (activeTab.value === 'habitats') await loadHabitats();
   } finally {
@@ -1205,6 +1236,13 @@ async function removeItem(id: number) {
   await run(async () => {
     await api.deleteItem(id);
     await loadItems();
+  });
+}
+
+async function removeAncientArtifact(id: number) {
+  await run(async () => {
+    await api.deleteAncientArtifact(id);
+    await loadAncientArtifacts();
   });
 }
 
@@ -1982,9 +2020,37 @@ onMounted(() => {
         @reorder="persistItemOrder"
       >
         <template #default="{ item }">
-          <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
+          <RouterLink :to="`/items/${item.id}`">#{{ item.displayId }} {{ item.name }}</RouterLink>
           <span class="row-actions">
             <button v-if="can('items.delete')" type="button" :disabled="busy" @click="removeItem(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
+          </span>
+        </template>
+      </ReorderableList>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'ancientArtifacts'" class="detail-section">
+      <h2>{{ t('pages.admin.ancientArtifactList') }}</h2>
+      <ReorderableList
+        v-if="ancientArtifactRows.length"
+        :items="ancientArtifactRows"
+        :item-key="ancientArtifactKey"
+        :item-label="ancientArtifactLabel"
+        list-key-prefix="ancient-artifacts"
+        :disabled="busy || !can('ancient-artifacts.order')"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewAncientArtifactOrder"
+        @cancel="previewAncientArtifactOrder"
+        @reorder="persistAncientArtifactOrder"
+      >
+        <template #default="{ item }">
+          <RouterLink :to="`/ancient-artifacts/${item.id}`">#{{ item.displayId }} {{ item.name }}</RouterLink>
+          <span class="row-actions">
+            <button v-if="can('ancient-artifacts.delete')" type="button" :disabled="busy" @click="removeAncientArtifact(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               {{ t('common.delete') }}
             </button>

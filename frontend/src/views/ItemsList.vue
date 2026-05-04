@@ -132,8 +132,12 @@ watch(itemQuery, loadItems);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid catalog-card-grid" aria-busy="true" :aria-label="t('pages.items.loadingList')">
-      <article v-for="index in skeletonCardCount" :key="`item-skeleton-${index}`" class="entity-card entity-card--skeleton">
+    <div v-if="loading" class="entity-grid catalog-card-grid collections-card-grid" aria-busy="true" :aria-label="t('pages.items.loadingList')">
+      <article
+        v-for="index in skeletonCardCount"
+        :key="`item-skeleton-${index}`"
+        class="entity-card entity-card--skeleton entity-card--collection-compact"
+      >
         <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
           <Skeleton width="128px" height="24px" />
@@ -141,7 +145,7 @@ watch(itemQuery, loadItems);
         </div>
       </article>
     </div>
-    <div v-else class="entity-grid catalog-card-grid">
+    <div v-else class="entity-grid catalog-card-grid collections-card-grid">
       <EntityCard
         v-for="item in items"
         :key="item.id"
@@ -151,6 +155,7 @@ watch(itemQuery, loadItems);
         :icon="iconItem"
         :image="itemCardImage(item)"
         :ribbon="item.usage?.name"
+        compact-tooltip
       />
     </div>
 

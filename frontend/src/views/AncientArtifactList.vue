@@ -113,8 +113,12 @@ watch(artifactQuery, loadArtifacts);
       </div>
     </FilterPanel>
 
-    <div v-if="loading" class="entity-grid catalog-card-grid" aria-busy="true" :aria-label="t('pages.ancientArtifacts.loadingList')">
-      <article v-for="index in skeletonCardCount" :key="`artifact-skeleton-${index}`" class="entity-card entity-card--skeleton">
+    <div v-if="loading" class="entity-grid catalog-card-grid collections-card-grid" aria-busy="true" :aria-label="t('pages.ancientArtifacts.loadingList')">
+      <article
+        v-for="index in skeletonCardCount"
+        :key="`artifact-skeleton-${index}`"
+        class="entity-card entity-card--skeleton entity-card--collection-compact"
+      >
         <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
           <Skeleton width="128px" height="24px" />
@@ -122,7 +126,7 @@ watch(artifactQuery, loadArtifacts);
         </div>
       </article>
     </div>
-    <div v-else class="entity-grid catalog-card-grid">
+    <div v-else class="entity-grid catalog-card-grid collections-card-grid">
       <EntityCard
         v-for="artifact in artifacts"
         :key="artifact.id"
@@ -131,6 +135,7 @@ watch(artifactQuery, loadArtifacts);
         :to="`/ancient-artifacts/${artifact.id}`"
         :icon="iconArtifact"
         :image="artifactCardImage(artifact)"
+        compact-tooltip
       />
     </div>
 

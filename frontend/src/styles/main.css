@@ -2343,9 +2343,17 @@ button:disabled,
   object-fit: contain;
 }
 
-.entity-card__ribbon {
+.entity-card__ribbon-clip {
   position: absolute;
   z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  border-radius: calc(var(--radius-card) - 2px);
+  pointer-events: none;
+}
+
+.entity-card__ribbon {
+  position: absolute;
   top: 14px;
   left: -38px;
   width: 132px;
@@ -2362,7 +2370,6 @@ button:disabled,
   font-size: 0.72rem;
   font-weight: 950;
   line-height: 1;
-  pointer-events: none;
   text-align: center;
 }
 
@@ -2436,6 +2443,86 @@ button:disabled,
 .catalog-card-grid .entity-card__subtitle {
   min-height: 20px;
   font-weight: 850;
+}
+
+.collections-card-grid {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.collections-card-grid .entity-card--collection-compact {
+  min-height: 0;
+  aspect-ratio: 1;
+  align-content: center;
+  justify-content: center;
+  gap: 0;
+  padding: 10px;
+  overflow: visible;
+}
+
+.collections-card-grid .entity-card--collection-compact:hover,
+.collections-card-grid .entity-card--collection-compact:focus-visible {
+  z-index: 4;
+}
+
+.collections-card-grid .entity-card--collection-compact .entity-card__mark {
+  width: min(100%, 72px);
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.collections-card-grid .entity-card--collection-compact .skeleton-entity-mark {
+  width: min(100%, 72px) !important;
+  height: auto !important;
+  aspect-ratio: 1;
+}
+
+.collections-card-grid .entity-card--collection-compact .entity-card__content {
+  display: none;
+}
+
+.entity-card__tooltip {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: 180px;
+  padding: 6px 8px;
+  transform: translate(-50%, 4px);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--line-strong);
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.entity-card__tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -4px) rotate(45deg);
+  border-right: 2px solid var(--line-strong);
+  border-bottom: 2px solid var(--line-strong);
+  background: var(--surface-raised);
+}
+
+.entity-card--collection-compact:hover .entity-card__tooltip,
+.entity-card--collection-compact:focus-visible .entity-card__tooltip {
+  transform: translate(-50%, 0);
+  opacity: 1;
 }
 
 .catalog-card-action {
@@ -7759,6 +7846,31 @@ button:disabled,
     text-align: left;
   }
 
+  .collections-card-grid {
+    gap: 10px;
+  }
+
+  .collections-card-grid .entity-card--collection-compact {
+    aspect-ratio: auto;
+    justify-content: stretch;
+    gap: 10px;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .collections-card-grid .entity-card--collection-compact .entity-card__content {
+    display: grid;
+  }
+
+  .collections-card-grid .entity-card--collection-compact .skeleton-entity-mark {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  .collections-card-grid .entity-card--collection-compact .entity-card__tooltip {
+    display: none;
+  }
+
   .pokemon-list-grid .entity-card__mark,
   .catalog-card-grid .entity-card__mark {
     width: 56px;
@@ -8689,6 +8801,11 @@ button:disabled,
     padding: 10px;
   }
 
+  .collections-card-grid .entity-card--collection-compact {
+    gap: 8px;
+    padding: 10px;
+  }
+
   .entity-card__mark {
     width: 34px;
     height: 34px;
@@ -8698,6 +8815,16 @@ button:disabled,
   .catalog-card-grid .entity-card__mark {
     width: 48px;
     height: 48px;
+  }
+
+  .collections-card-grid .entity-card--collection-compact .entity-card__mark {
+    width: 48px;
+    height: 48px;
+  }
+
+  .collections-card-grid .entity-card--collection-compact .skeleton-entity-mark {
+    width: 48px !important;
+    height: 48px !important;
   }
 
   .pokemon-list-grid .pokeball-mark,

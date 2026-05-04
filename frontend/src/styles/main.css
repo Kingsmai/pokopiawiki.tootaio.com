@@ -1346,6 +1346,96 @@ button:disabled,
   box-shadow: 0 2px 0 var(--line);
 }
 
+.item-create-action {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.item-create-action__control {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: var(--radius-control);
+  box-shadow: 0 2px 0 var(--line-strong);
+}
+
+.item-create-action__control .ui-button {
+  box-shadow: none;
+}
+
+.item-create-action__control .ui-button:hover,
+.item-create-action__control .ui-button:active {
+  transform: none;
+  box-shadow: none;
+}
+
+.item-create-action__control .ui-button:disabled {
+  box-shadow: none;
+}
+
+.item-create-action__primary {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.item-create-action__menu-button {
+  position: relative;
+  min-width: 38px;
+  padding-inline: 8px;
+  border-left-width: 1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.item-create-action__control.has-defaults .item-create-action__menu-button::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--pokemon-blue);
+}
+
+.item-create-defaults-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 45;
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.item-create-defaults-menu__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.item-create-defaults-menu__header strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.item-create-defaults-menu .field {
+  min-width: 0;
+}
+
+.item-create-defaults-menu__checks {
+  display: grid;
+  gap: 8px;
+}
+
 .filter-panel,
 .toolbar {
   display: grid;

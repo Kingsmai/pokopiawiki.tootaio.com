@@ -51,6 +51,17 @@ const itemForm = ref({
   imagePath: ''
 });
 
+type ItemCreateDefaults = {
+  categoryId: string;
+  dyeable: boolean;
+  dualDyeable: boolean;
+  patternEditable: boolean;
+  noRecipe: boolean;
+  acquisitionMethodIds: string[];
+};
+
+const itemCreateDefaultsStorageKey = 'pokopia_item_create_defaults';
+
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
 const isEventCreate = computed(() => route.name === 'event-item-new');
@@ -73,6 +84,76 @@ function toIds(values: string[]): number[] {
 
 function errorText(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function readItemCreateDefaults(): ItemCreateDefaults {
+  if (typeof sessionStorage === 'undefined') {
+    return {
+      categoryId: '',
+      dyeable: false,
+      dualDyeable: false,
+      patternEditable: false,
+      noRecipe: false,
+      acquisitionMethodIds: []
+    };
+  }
+
+  try {
+    const rawValue = sessionStorage.getItem(itemCreateDefaultsStorageKey);
+    if (!rawValue) {
+      return {
+        categoryId: '',
+        dyeable: false,
+        dualDyeable: false,
+        patternEditable: false,
+        noRecipe: false,
+        acquisitionMethodIds: []
+      };
+    }
+
+    const parsedValue = JSON.parse(rawValue) as Partial<ItemCreateDefaults>;
+    return {
+      categoryId: typeof parsedValue.categoryId === 'string' ? parsedValue.categoryId : '',
+      dyeable: parsedValue.dyeable === true,
+      dualDyeable: parsedValue.dualDyeable === true,
+      patternEditable: parsedValue.patternEditable === true,
+      noRecipe: parsedValue.noRecipe === true,
+      acquisitionMethodIds: Array.isArray(parsedValue.acquisitionMethodIds)
+        ? parsedValue.acquisitionMethodIds.filter((item) => typeof item === 'string')
+        : []
+    };
+  } catch {
+    return {
+      categoryId: '',
+      dyeable: false,
+      dualDyeable: false,
+      patternEditable: false,
+      noRecipe: false,
+      acquisitionMethodIds: []
+    };
+  }
+}
+
+function applyItemCreateDefaults(isEventItem: boolean) {
+  const loadedOptions = options.value;
+  if (!loadedOptions) {
+    itemForm.value.isEventItem = isEventItem;
+    return;
+  }
+
+  const defaults = readItemCreateDefaults();
+  const categoryIds = new Set(loadedOptions.itemCategories.map((item) => String(item.id)));
+  const methodIds = new Set(loadedOptions.acquisitionMethods.map((item) => String(item.id)));
+  itemForm.value = {
+    ...itemForm.value,
+    categoryId: categoryIds.has(defaults.categoryId) ? defaults.categoryId : '',
+    dyeable: defaults.dyeable,
+    dualDyeable: defaults.dualDyeable,
+    patternEditable: defaults.patternEditable,
+    noRecipe: defaults.noRecipe,
+    isEventItem,
+    acquisitionMethodIds: defaults.acquisitionMethodIds.filter((item) => methodIds.has(item))
+  };
 }
 
 function closeEditor() {
@@ -133,10 +214,8 @@ async function loadEditor() {
       currentImage.value = item.image;
       imageHistory.value = item.imageHistory;
       hasRecipe.value = item.recipe !== null;
-    } else if (isEventCreate.value) {
-      itemForm.value.isEventItem = true;
     } else {
-      itemForm.value.isEventItem = false;
+      applyItemCreateDefaults(isEventCreate.value);
     }
   } catch (error) {
     message.value = errorText(error, t('errors.loadFailed'));

@@ -250,7 +250,8 @@
 
 - Notifications 用于让已登录用户接收与自己相关的社区互动和审核结果。
 - 通知持久化存储，用户离线期间产生的通知会在下次登录后继续可见。
-- 通知实时推送可以走 WebSocket；WebSocket 连接使用短期一次性 ticket，不把 session token 放入 WebSocket URL。
+- 通知和审核状态实时更新可以走 WebSocket；WebSocket 连接使用短期一次性 ticket，不把 session token 放入 WebSocket URL。
+- AI 审核从 `reviewing` 变更为 `approved`、`rejected` 或 `failed` 后，前端当前可见的对应 Life Post、Life Comment 或实体讨论评论状态应通过 WebSocket 直接更新，不要求用户刷新页面。
 - 通知范围：
   - Life Post 收到审核通过后的顶层评论时，通知 Life Post 作者。
   - Life Comment 收到审核通过后的回复时，通知父评论作者。
@@ -373,6 +374,7 @@
 - 审核状态包括：`unreviewed`、`reviewing`、`approved`、`rejected`、`failed`；前端面向用户展示为未审核、审核中、审核通过、审核不通过、审核失败。
 - 新增或更新审核目标时先进入不可公开状态；只有 AI 审核通过后才进入普通公开讨论列表。
 - 审核失败不等于审核通过；失败内容保持不可公开，用户可重新审核。
+- `reviewing` 表示审核正在进行中，前端不展示重新审核入口；只有 `unreviewed`、`rejected` 和 `failed` 这类非进行中且未通过状态可触发重新审核。
 - AI 审核会自动识别评论适合的语言区，语言区使用启用状态的 `languages.code`，但不影响系统 UI 语言。
 - 讨论列表支持按语言区读取；`language=all` 或不传语言参数时读取全部已公开语言区，传入具体语言 code 时只读取对应语言区。
 - 讨论内容是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
@@ -835,6 +837,7 @@ Life Post 可配置：
 - 新增或更新 Life Post 后先进入不可公开状态，AI 审核通过后才出现在普通公开 Feed。
 - Life Comment 和回复审核通过后才出现在普通公开评论列表、评论数量和评论预览中。
 - 审核失败不等于审核通过；失败内容保持不可公开，用户可重新审核。
+- `reviewing` 表示审核正在进行中，前端不展示重新审核入口；只有 `unreviewed`、`rejected` 和 `failed` 这类非进行中且未通过状态可触发重新审核。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。
 
 API 暴露边界：

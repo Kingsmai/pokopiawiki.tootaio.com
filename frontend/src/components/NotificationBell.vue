@@ -17,6 +17,7 @@ import {
 import {
   api,
   getAuthToken,
+  moderationUpdateEvent,
   notificationWebSocketUrl,
   type AuthUser,
   type LifeReactionType,
@@ -140,9 +141,13 @@ async function connectNotifications() {
           return;
         }
 
-        unreadCount.value = message.unreadCount;
+        if ('unreadCount' in message) {
+          unreadCount.value = message.unreadCount;
+        }
         if (message.type === 'notifications.created') {
           upsertNotification(message.notification);
+        } else if (message.type === 'moderation.updated') {
+          window.dispatchEvent(new CustomEvent(moderationUpdateEvent, { detail: message }));
         }
       } catch {
         // Invalid socket payloads are ignored.

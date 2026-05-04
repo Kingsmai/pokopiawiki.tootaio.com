@@ -82,7 +82,13 @@ export type NotificationsPage = {
 type NotificationWsMessage =
   | { type: 'notifications.connected'; unreadCount: number }
   | { type: 'notifications.created'; notification: NotificationItem; unreadCount: number }
-  | { type: 'notifications.unread'; unreadCount: number };
+  | { type: 'notifications.unread'; unreadCount: number }
+  | {
+      type: 'moderation.updated';
+      target: NotificationTarget;
+      moderationStatus: NotificationModerationStatus;
+      moderationLanguageCode: string | null;
+    };
 
 const defaultNotificationLimit = 15;
 const maxNotificationLimit = 50;
@@ -264,6 +270,20 @@ async function publishUnreadCount(userId: number): Promise<void> {
   broadcastNotificationMessage(userId, {
     type: 'notifications.unread',
     unreadCount: await unreadNotificationCount(userId)
+  });
+}
+
+async function publishModerationUpdate(
+  userId: number,
+  target: NotificationTarget,
+  moderationStatus: NotificationModerationStatus,
+  moderationLanguageCode: string | null
+): Promise<void> {
+  broadcastNotificationMessage(userId, {
+    type: 'moderation.updated',
+    target,
+    moderationStatus,
+    moderationLanguageCode
   });
 }
 
@@ -539,7 +559,12 @@ export async function createModerationResultNotification(
   status: NotificationModerationStatus
 ): Promise<void> {
   if (target.type === 'life-post') {
-    const row = await queryOne<{ id: number; recipientUserId: number }>(
+    const row = await queryOne<{
+      id: number;
+      recipientUserId: number;
+      moderationLanguageCode: string | null;
+      lifePostId: number;
+    }>(
       `
         INSERT INTO notifications (
           recipient_user_id,
@@ -553,16 +578,47 @@ export async function createModerationResultNotification(
         WHERE id = $1
           AND deleted_at IS NULL
           AND created_by_user_id IS NOT NULL
-        RETURNING id, recipient_user_id AS "recipientUserId"
+        RETURNING
+          id,
+          recipient_user_id AS "recipientUserId",
+          (
+            SELECT ai_moderation_language_code
+            FROM life_posts
+            WHERE id = $1
+          ) AS "moderationLanguageCode",
+          life_post_id AS "lifePostId"
       `,
       [target.id, status]
     );
     await publishInsertedNotification(row);
+    if (row) {
+      await publishModerationUpdate(
+        row.recipientUserId,
+        {
+          type: 'life-post',
+          id: row.lifePostId,
+          path: `/life/${row.lifePostId}`,
+          lifePostId: row.lifePostId,
+          lifeCommentId: null,
+          discussionCommentId: null,
+          entityType: null,
+          entityId: null
+        },
+        status,
+        row.moderationLanguageCode
+      );
+    }
     return;
   }
 
   if (target.type === 'life-comment') {
-    const row = await queryOne<{ id: number; recipientUserId: number }>(
+    const row = await queryOne<{
+      id: number;
+      recipientUserId: number;
+      moderationLanguageCode: string | null;
+      lifePostId: number;
+      lifeCommentId: number;
+    }>(
       `
         INSERT INTO notifications (
           recipient_user_id,
@@ -587,15 +643,48 @@ export async function createModerationResultNotification(
           AND lc.deleted_at IS NULL
           AND lp.deleted_at IS NULL
           AND lc.created_by_user_id IS NOT NULL
-        RETURNING id, recipient_user_id AS "recipientUserId"
+        RETURNING
+          id,
+          recipient_user_id AS "recipientUserId",
+          (
+            SELECT ai_moderation_language_code
+            FROM life_post_comments
+            WHERE id = $1
+          ) AS "moderationLanguageCode",
+          life_post_id AS "lifePostId",
+          life_comment_id AS "lifeCommentId"
       `,
       [target.id, status]
     );
     await publishInsertedNotification(row);
+    if (row) {
+      await publishModerationUpdate(
+        row.recipientUserId,
+        {
+          type: 'life-comment',
+          id: row.lifeCommentId,
+          path: `/life/${row.lifePostId}`,
+          lifePostId: row.lifePostId,
+          lifeCommentId: row.lifeCommentId,
+          discussionCommentId: null,
+          entityType: null,
+          entityId: null
+        },
+        status,
+        row.moderationLanguageCode
+      );
+    }
     return;
   }
 
-  const row = await queryOne<{ id: number; recipientUserId: number }>(
+  const row = await queryOne<{
+    id: number;
+    recipientUserId: number;
+    moderationLanguageCode: string | null;
+    discussionCommentId: number;
+    entityType: DiscussionEntityType;
+    entityId: number;
+  }>(
     `
       INSERT INTO notifications (
         recipient_user_id,
@@ -620,11 +709,38 @@ export async function createModerationResultNotification(
       WHERE id = $1
         AND deleted_at IS NULL
         AND created_by_user_id IS NOT NULL
-      RETURNING id, recipient_user_id AS "recipientUserId"
+      RETURNING
+        id,
+        recipient_user_id AS "recipientUserId",
+        (
+          SELECT ai_moderation_language_code
+          FROM entity_discussion_comments
+          WHERE id = $1
+        ) AS "moderationLanguageCode",
+        discussion_comment_id AS "discussionCommentId",
+        entity_type AS "entityType",
+        entity_id AS "entityId"
     `,
     [target.id, status]
   );
   await publishInsertedNotification(row);
+  if (row) {
+    await publishModerationUpdate(
+      row.recipientUserId,
+      {
+        type: 'discussion-comment',
+        id: row.discussionCommentId,
+        path: discussionEntityPath(row.entityType, row.entityId) ?? '/',
+        lifePostId: null,
+        lifeCommentId: null,
+        discussionCommentId: row.discussionCommentId,
+        entityType: row.entityType,
+        entityId: row.entityId
+      },
+      status,
+      row.moderationLanguageCode
+    );
+  }
 }
 
 function wsFrame(data: Buffer, opcode = 0x1): Buffer {

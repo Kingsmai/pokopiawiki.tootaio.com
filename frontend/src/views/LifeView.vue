@@ -34,6 +34,7 @@ import {
 import {
   api,
   getAuthToken,
+  moderationUpdateEvent,
   onAuthTokenChange,
   setAuthToken,
   type AiModerationStatus,
@@ -43,7 +44,8 @@ import {
   type LifeCategory,
   type LifeComment,
   type LifePost,
-  type LifeReactionType
+  type LifeReactionType,
+  type ModerationUpdateDetail
 } from '../services/api';
 
 type LifeCommentPageState = {
@@ -574,7 +576,75 @@ function moderationTone(status: AiModerationStatus) {
 }
 
 function canRetryModeration(post: LifePost) {
-  return post.moderationStatus !== 'approved' && canManage(post);
+  return post.moderationStatus !== 'approved' && post.moderationStatus !== 'reviewing' && canManage(post);
+}
+
+function updateLifeCommentModeration(
+  items: LifeComment[],
+  commentId: number,
+  status: AiModerationStatus,
+  languageCode: string | null
+): boolean {
+  for (const comment of items) {
+    if (comment.id === commentId) {
+      comment.moderationStatus = status;
+      comment.moderationLanguageCode = languageCode;
+      return true;
+    }
+
+    if (updateLifeCommentModeration(comment.replies, commentId, status, languageCode)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isModerationUpdateEvent(event: Event): event is CustomEvent<ModerationUpdateDetail> {
+  return event instanceof CustomEvent && event.detail?.type === 'moderation.updated';
+}
+
+function handleModerationUpdate(event: Event) {
+  if (!isModerationUpdateEvent(event)) {
+    return;
+  }
+
+  const { target, moderationStatus, moderationLanguageCode } = event.detail;
+  if (target.type === 'life-post' && target.lifePostId !== null) {
+    const currentPost = posts.value.find((post) => post.id === target.lifePostId);
+    if (!currentPost) {
+      return;
+    }
+
+    const updatedPost = {
+      ...currentPost,
+      moderationStatus,
+      moderationLanguageCode
+    };
+    if (!matchesCurrentFilters(updatedPost)) {
+      posts.value = posts.value.filter((post) => post.id !== updatedPost.id);
+      return;
+    }
+    posts.value = posts.value.map((post) => (post.id === updatedPost.id ? updatedPost : post));
+    return;
+  }
+
+  if (target.type !== 'life-comment' || target.lifePostId === null || target.lifeCommentId === null) {
+    return;
+  }
+
+  const currentPost = posts.value.find((post) => post.id === target.lifePostId);
+  if (!currentPost) {
+    return;
+  }
+
+  const page = commentPage(currentPost);
+  const updated = updateLifeCommentModeration(page.items, target.lifeCommentId, moderationStatus, moderationLanguageCode);
+  if (updated) {
+    setCommentPage(currentPost.id, { ...page, items: [...page.items] });
+  } else if (moderationStatus === 'approved' && areCommentsExpanded(currentPost.id)) {
+    void loadComments(currentPost, true);
+  }
 }
 
 async function retryPostModeration(post: LifePost) {
@@ -1040,6 +1110,7 @@ watch(locale, () => {
 onMounted(() => {
   document.addEventListener('click', closeReactionPickerFromDocument);
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
+  window.addEventListener(moderationUpdateEvent, handleModerationUpdate);
   void loadCurrentUser();
   void loadLanguages();
   void loadLifeCategories();
@@ -1053,6 +1124,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', closeReactionPickerFromDocument);
   document.removeEventListener('keydown', closeReactionPickerFromKeyboard);
+  window.removeEventListener(moderationUpdateEvent, handleModerationUpdate);
   disconnectFeedObserver();
   removeAuthListener?.();
 });

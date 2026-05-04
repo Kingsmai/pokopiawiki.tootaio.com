@@ -27,13 +27,15 @@ import {
 import {
   api,
   getAuthToken,
+  moderationUpdateEvent,
   onAuthTokenChange,
   setAuthToken,
   type AiModerationStatus,
   type AuthUser,
   type LifeComment,
   type LifePost,
-  type LifeReactionType
+  type LifeReactionType,
+  type ModerationUpdateDetail
 } from '../services/api';
 
 const { locale, t } = useI18n();
@@ -272,12 +274,64 @@ function moderationTone(status: AiModerationStatus) {
 }
 
 function canRetryModeration(currentPost: LifePost) {
-  return currentPost.moderationStatus !== 'approved' && canManage(currentPost);
+  return currentPost.moderationStatus !== 'approved' && currentPost.moderationStatus !== 'reviewing' && canManage(currentPost);
 }
 
 function replacePost(updatedPost: LifePost) {
   post.value = updatedPost;
   commentsTotal.value = updatedPost.commentCount;
+}
+
+function updateLifeCommentModeration(
+  items: LifeComment[],
+  commentId: number,
+  status: AiModerationStatus,
+  languageCode: string | null
+): boolean {
+  for (const comment of items) {
+    if (comment.id === commentId) {
+      comment.moderationStatus = status;
+      comment.moderationLanguageCode = languageCode;
+      return true;
+    }
+
+    if (updateLifeCommentModeration(comment.replies, commentId, status, languageCode)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isModerationUpdateEvent(event: Event): event is CustomEvent<ModerationUpdateDetail> {
+  return event instanceof CustomEvent && event.detail?.type === 'moderation.updated';
+}
+
+function handleModerationUpdate(event: Event) {
+  if (!isModerationUpdateEvent(event) || !post.value) {
+    return;
+  }
+
+  const { target, moderationStatus, moderationLanguageCode } = event.detail;
+  if (target.type === 'life-post' && target.lifePostId === post.value.id) {
+    post.value = {
+      ...post.value,
+      moderationStatus,
+      moderationLanguageCode
+    };
+    return;
+  }
+
+  if (target.type !== 'life-comment' || target.lifePostId !== post.value.id || target.lifeCommentId === null) {
+    return;
+  }
+
+  const updated = updateLifeCommentModeration(comments.value, target.lifeCommentId, moderationStatus, moderationLanguageCode);
+  if (updated) {
+    comments.value = [...comments.value];
+  } else if (moderationStatus === 'approved') {
+    void loadComments(true);
+  }
 }
 
 async function retryPostModeration(currentPost: LifePost) {
@@ -558,6 +612,7 @@ watch(locale, () => {
 onMounted(() => {
   document.addEventListener('click', closeReactionPickerFromDocument);
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
+  window.addEventListener(moderationUpdateEvent, handleModerationUpdate);
   void loadCurrentUser();
   void loadPost();
   removeAuthListener = onAuthTokenChange(() => {
@@ -569,6 +624,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', closeReactionPickerFromDocument);
   document.removeEventListener('keydown', closeReactionPickerFromKeyboard);
+  window.removeEventListener(moderationUpdateEvent, handleModerationUpdate);
   removeAuthListener?.();
 });
 </script>

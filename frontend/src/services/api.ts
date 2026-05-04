@@ -479,7 +479,17 @@ export interface NotificationWsTicket {
 export type NotificationWsMessage =
   | { type: 'notifications.connected'; unreadCount: number }
   | { type: 'notifications.created'; notification: NotificationItem; unreadCount: number }
-  | { type: 'notifications.unread'; unreadCount: number };
+  | { type: 'notifications.unread'; unreadCount: number }
+  | {
+      type: 'moderation.updated';
+      target: NotificationTarget;
+      moderationStatus: NotificationModerationStatus;
+      moderationLanguageCode: string | null;
+    };
+
+export const moderationUpdateEvent = 'pokopia-moderation-update';
+
+export type ModerationUpdateDetail = Extract<NotificationWsMessage, { type: 'moderation.updated' }>;
 
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];

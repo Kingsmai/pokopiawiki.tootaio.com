@@ -8,13 +8,15 @@ import { iconCancel, iconComment, iconDelete, iconReply, iconWarning } from '../
 import {
   api,
   getAuthToken,
+  moderationUpdateEvent,
   onAuthTokenChange,
   setAuthToken,
   type AiModerationStatus,
   type AuthUser,
   type DiscussionEntityType,
   type EntityDiscussionComment,
-  type Language
+  type Language,
+  type ModerationUpdateDetail
 } from '../services/api';
 import Skeleton from './Skeleton.vue';
 
@@ -176,7 +178,7 @@ function canSeeModeration(comment: EntityDiscussionComment) {
 }
 
 function canRetryModeration(comment: EntityDiscussionComment) {
-  return !comment.deleted && comment.moderationStatus !== 'approved' && canSeeModeration(comment);
+  return !comment.deleted && comment.moderationStatus !== 'approved' && comment.moderationStatus !== 'reviewing' && canSeeModeration(comment);
 }
 
 function moderationLabel(status: AiModerationStatus) {
@@ -304,6 +306,59 @@ async function retryModeration(comment: EntityDiscussionComment) {
   }
 }
 
+function updateDiscussionCommentModeration(
+  items: EntityDiscussionComment[],
+  commentId: number,
+  status: AiModerationStatus,
+  languageCode: string | null
+): boolean {
+  for (const comment of items) {
+    if (comment.id === commentId) {
+      comment.moderationStatus = status;
+      comment.moderationLanguageCode = languageCode;
+      return true;
+    }
+
+    if (updateDiscussionCommentModeration(comment.replies, commentId, status, languageCode)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isModerationUpdateEvent(event: Event): event is CustomEvent<ModerationUpdateDetail> {
+  return event instanceof CustomEvent && event.detail?.type === 'moderation.updated';
+}
+
+function handleModerationUpdate(event: Event) {
+  if (!isModerationUpdateEvent(event)) {
+    return;
+  }
+
+  const { target, moderationStatus, moderationLanguageCode } = event.detail;
+  if (
+    target.type !== 'discussion-comment' ||
+    target.discussionCommentId === null ||
+    target.entityType !== props.entityType ||
+    target.entityId !== Number(props.entityId)
+  ) {
+    return;
+  }
+
+  const updated = updateDiscussionCommentModeration(
+    comments.value,
+    target.discussionCommentId,
+    moderationStatus,
+    moderationLanguageCode
+  );
+  if (updated) {
+    comments.value = [...comments.value];
+  } else if (moderationStatus === 'approved') {
+    void loadDiscussion();
+  }
+}
+
 function markCommentDeleted(rows: EntityDiscussionComment[], id: number): boolean {
   for (const comment of rows) {
     if (comment.id === id) {
@@ -361,6 +416,7 @@ watch(activeLanguageCode, () => {
 });
 
 onMounted(() => {
+  window.addEventListener(moderationUpdateEvent, handleModerationUpdate);
   void loadCurrentUser();
   void loadLanguages();
   void loadDiscussion();
@@ -370,6 +426,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener(moderationUpdateEvent, handleModerationUpdate);
   removeAuthListener?.();
 });
 </script>

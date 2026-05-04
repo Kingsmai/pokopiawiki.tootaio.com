@@ -8,6 +8,7 @@
 - 前台以 Home 首页、Pokedex（Main Game / Event）、Habitat Dex（Main Game / Event）、Collections（Main Game / Event / Ancient Artifacts）、材料单、每日 CheckList、Life、Automation、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
 - Home 首页路径为 `/`，用于聚合公开 Wiki 入口；Logo 导航回到 Home，用户可从 Home 进入核心资料、每日 CheckList、Life 和正在准备中的分区。
 - 桌面端使用侧边栏导航，侧边栏可折叠为图标栏；移动端继续使用抽屉式侧边栏。
+- 全局顶部导航栏承载语言切换、通知、User Profile 和登录 / 退出等账号操作；除 User Profile 可展示用户名外，顶部操作以图标按钮呈现。
 - 管理入口用于维护全局配置、语言、系统文案、列表排序和每日 CheckList。
 
 ## 技术栈

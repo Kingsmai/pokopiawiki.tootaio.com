@@ -248,25 +248,98 @@ onBeforeUnmount(() => {
       'app-shell--sidebar-collapsed': sidebarCollapsed
     }"
   >
-    <header class="mobile-topbar">
-      <button
-        class="sidebar-toggle"
-        type="button"
-        :aria-label="sidebarOpen ? t('nav.closeMenu') : t('nav.openMenu')"
-        :aria-expanded="sidebarOpen"
-        aria-controls="app-sidebar"
-        @click="toggleSidebar"
-      >
-        <Icon :icon="sidebarOpen ? iconClose : iconMenu" class="ui-icon" aria-hidden="true" />
-      </button>
+    <header class="site-topbar">
+      <div class="site-topbar__inner">
+        <div class="site-topbar__brand">
+          <button
+            class="sidebar-toggle"
+            type="button"
+            :aria-label="sidebarOpen ? t('nav.closeMenu') : t('nav.openMenu')"
+            :aria-expanded="sidebarOpen"
+            aria-controls="app-sidebar"
+            @click="toggleSidebar"
+          >
+            <Icon :icon="sidebarOpen ? iconClose : iconMenu" class="ui-icon" aria-hidden="true" />
+          </button>
 
-      <RouterLink class="brand-lockup brand-lockup--mobile" to="/" aria-label="Pokopia Wiki" @click="closeSidebar">
-        <PokeBallMark size="34px" />
-        <span>
-          <span class="pokemon-word">Pokopia</span>
-          <span class="brand-subtitle">Community Wiki</span>
-        </span>
-      </RouterLink>
+          <RouterLink class="brand-lockup brand-lockup--topbar" to="/" aria-label="Pokopia Wiki" @click="closeSidebar">
+            <PokeBallMark size="34px" />
+            <span>
+              <span class="pokemon-word">Pokopia</span>
+              <span class="brand-subtitle">Community Wiki</span>
+            </span>
+          </RouterLink>
+        </div>
+
+        <div class="site-topbar__spacer" aria-hidden="true"></div>
+
+        <div class="topbar-actions">
+          <div ref="languageMenu" class="language-menu" @keydown="onLanguageMenuKeydown">
+            <button
+              ref="languageMenuButton"
+              class="language-menu__trigger"
+              type="button"
+              :aria-label="t('nav.language')"
+              :aria-expanded="languageMenuOpen"
+              aria-haspopup="menu"
+              @click="toggleLanguageMenu"
+            >
+              <Icon :icon="iconTranslate" class="language-menu__icon" aria-hidden="true" />
+            </button>
+
+            <div v-if="languageMenuOpen" class="language-menu__dropdown" role="menu">
+              <button
+                v-for="language in languages"
+                :key="language.code"
+                class="language-menu__item"
+                :class="{ active: language.code === locale }"
+                type="button"
+                role="menuitemradio"
+                :aria-checked="language.code === locale"
+                @click="selectLocale(language.code)"
+              >
+                <span>{{ language.name }}</span>
+                <span class="language-menu__code">{{ language.code }}</span>
+              </button>
+            </div>
+          </div>
+
+          <template v-if="currentUser">
+            <NotificationBell :current-user="currentUser" />
+            <RouterLink class="auth-user" to="/profile" :aria-label="t('nav.profile')" @click="closeSidebar">
+              <Icon :icon="iconProfile" class="ui-icon auth-user__icon" aria-hidden="true" />
+              <span class="auth-user__name">{{ currentUser.displayName || currentUser.email }}</span>
+            </RouterLink>
+            <button
+              class="ui-button ui-button--ghost ui-button--small topbar-actions__icon-button"
+              type="button"
+              :aria-label="t('nav.logout')"
+              @click="requestLogout"
+            >
+              <Icon :icon="iconLogout" class="ui-icon" aria-hidden="true" />
+            </button>
+          </template>
+
+          <template v-else>
+            <RouterLink
+              class="ui-button ui-button--ghost ui-button--small topbar-actions__icon-button"
+              to="/login"
+              :aria-label="t('nav.login')"
+              @click="closeSidebar"
+            >
+              <Icon :icon="iconLogin" class="ui-icon" aria-hidden="true" />
+            </RouterLink>
+            <RouterLink
+              class="ui-button ui-button--primary ui-button--small topbar-actions__icon-button"
+              to="/register"
+              :aria-label="t('nav.register')"
+              @click="closeSidebar"
+            >
+              <Icon :icon="iconRegister" class="ui-icon" aria-hidden="true" />
+            </RouterLink>
+          </template>
+        </div>
+      </div>
     </header>
 
     <button class="site-sidebar-scrim" type="button" :aria-label="t('nav.closeMenu')" @click="closeSidebar"></button>
@@ -378,100 +451,6 @@ onBeforeUnmount(() => {
             </RouterLink>
           </template>
         </nav>
-
-        <div class="auth-actions">
-          <div ref="languageMenu" class="language-menu" @keydown="onLanguageMenuKeydown">
-            <button
-              ref="languageMenuButton"
-              class="language-menu__trigger"
-              type="button"
-              :aria-label="t('nav.language')"
-              :aria-expanded="languageMenuOpen"
-              aria-haspopup="menu"
-              @focus="showSidebarTooltip(t('nav.language'), $event)"
-              @blur="hideSidebarTooltip"
-              @pointerenter="showSidebarTooltip(t('nav.language'), $event)"
-              @pointerleave="hideSidebarTooltip"
-              @click="toggleLanguageMenu"
-            >
-              <Icon :icon="iconTranslate" class="language-menu__icon" aria-hidden="true" />
-              <span class="language-menu__glyph" aria-hidden="true">文/A</span>
-            </button>
-
-            <div v-if="languageMenuOpen" class="language-menu__dropdown" role="menu">
-              <button
-                v-for="language in languages"
-                :key="language.code"
-                class="language-menu__item"
-                :class="{ active: language.code === locale }"
-                type="button"
-                role="menuitemradio"
-                :aria-checked="language.code === locale"
-                @click="selectLocale(language.code)"
-              >
-                <span>{{ language.name }}</span>
-                <span class="language-menu__code">{{ language.code }}</span>
-              </button>
-            </div>
-          </div>
-          <template v-if="currentUser">
-            <NotificationBell :current-user="currentUser" />
-            <RouterLink
-              class="auth-user"
-              to="/profile"
-              :aria-label="t('nav.profile')"
-              @focus="showSidebarTooltip(t('nav.profile'), $event)"
-              @blur="hideSidebarTooltip"
-              @pointerenter="showSidebarTooltip(t('nav.profile'), $event)"
-              @pointerleave="hideSidebarTooltip"
-              @click="closeSidebar"
-            >
-              <Icon :icon="iconProfile" class="ui-icon auth-user__icon" aria-hidden="true" />
-              <span class="auth-user__name">{{ currentUser.displayName || currentUser.email }}</span>
-            </RouterLink>
-            <button
-              class="ui-button ui-button--ghost ui-button--small"
-              type="button"
-              :aria-label="t('nav.logout')"
-              @focus="showSidebarTooltip(t('nav.logout'), $event)"
-              @blur="hideSidebarTooltip"
-              @pointerenter="showSidebarTooltip(t('nav.logout'), $event)"
-              @pointerleave="hideSidebarTooltip"
-              @click="requestLogout"
-            >
-              <Icon :icon="iconLogout" class="ui-icon" aria-hidden="true" />
-              <span class="auth-actions__label">{{ t('nav.logout') }}</span>
-            </button>
-          </template>
-          <template v-else>
-            <RouterLink
-              class="ui-button ui-button--ghost ui-button--small"
-              to="/login"
-              :aria-label="t('nav.login')"
-              @focus="showSidebarTooltip(t('nav.login'), $event)"
-              @blur="hideSidebarTooltip"
-              @pointerenter="showSidebarTooltip(t('nav.login'), $event)"
-              @pointerleave="hideSidebarTooltip"
-              @click="closeSidebar"
-            >
-              <Icon :icon="iconLogin" class="ui-icon" aria-hidden="true" />
-              <span class="auth-actions__label">{{ t('nav.login') }}</span>
-            </RouterLink>
-            <RouterLink
-              class="ui-button ui-button--primary ui-button--small"
-              to="/register"
-              :aria-label="t('nav.register')"
-              @focus="showSidebarTooltip(t('nav.register'), $event)"
-              @blur="hideSidebarTooltip"
-              @pointerenter="showSidebarTooltip(t('nav.register'), $event)"
-              @pointerleave="hideSidebarTooltip"
-              @click="closeSidebar"
-            >
-              <Icon :icon="iconRegister" class="ui-icon" aria-hidden="true" />
-              <span class="auth-actions__label">{{ t('nav.register') }}</span>
-            </RouterLink>
-          </template>
-        </div>
       </div>
     </aside>
 

@@ -109,6 +109,7 @@ svg {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   transition: grid-template-columns 0.18s ease;
 }
 
@@ -118,15 +119,67 @@ svg {
   padding: 0 24px;
 }
 
-.mobile-topbar,
 .site-sidebar-scrim {
   display: none;
+}
+
+.site-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  grid-column: 2;
+  border-bottom: 1px solid rgba(31, 42, 59, 0.12);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.site-topbar__inner {
+  width: min(100%, var(--container));
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 auto;
+  padding: 10px 24px;
+}
+
+.site-topbar__brand {
+  min-width: 0;
+  display: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-toggle {
+  display: none;
+}
+
+.site-topbar__spacer {
+  flex: 1 1 auto;
+}
+
+.topbar-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topbar-actions__icon-button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 
 .site-sidebar {
   position: sticky;
   top: 0;
   z-index: 50;
+  grid-column: 1;
+  grid-row: 1 / span 3;
   align-self: start;
   height: 100dvh;
   border-right: 1px solid rgba(31, 42, 59, 0.12);
@@ -137,7 +190,7 @@ svg {
 .site-sidebar__inner {
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
   padding: 18px 14px;
 }
@@ -347,24 +400,6 @@ svg {
   background: var(--pokemon-yellow);
 }
 
-.auth-actions {
-  display: grid;
-  align-content: end;
-  gap: 8px;
-  min-width: 0;
-}
-
-.auth-actions .ui-button {
-  width: 100%;
-  justify-content: flex-start;
-}
-
-.auth-actions__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .language-menu {
   position: relative;
 }
@@ -373,19 +408,14 @@ svg {
   position: relative;
 }
 
-.site-sidebar .notification-menu__trigger {
-  width: 100%;
-  min-height: 44px;
-  justify-content: flex-start;
-}
-
 .notification-menu__trigger {
-  min-height: 38px;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 7px 10px;
+  padding: 0;
   border: 2px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--surface);
@@ -426,10 +456,15 @@ svg {
 }
 
 .notification-menu__label {
-  min-width: 0;
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
+  border: 0;
 }
 
 .notification-menu__badge {
@@ -465,13 +500,6 @@ svg {
   border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-raised);
-}
-
-.site-sidebar .notification-menu__dropdown {
-  top: auto;
-  right: auto;
-  bottom: calc(100% + 6px);
-  left: 0;
 }
 
 .notification-menu__header {
@@ -658,19 +686,14 @@ svg {
   border-radius: 0;
 }
 
-.site-sidebar .language-menu__trigger {
-  width: 100%;
-  min-height: 44px;
-  justify-content: flex-start;
-}
-
 .language-menu__trigger {
-  min-height: 38px;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 7px 10px;
+  padding: 0;
   border: 2px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--surface);
@@ -704,10 +727,6 @@ svg {
   height: 18px;
 }
 
-.language-menu__glyph {
-  white-space: nowrap;
-}
-
 .language-menu__dropdown {
   position: absolute;
   top: calc(100% + 6px);
@@ -721,14 +740,6 @@ svg {
   border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-raised);
-}
-
-.site-sidebar .language-menu__dropdown {
-  top: auto;
-  bottom: calc(100% + 6px);
-  right: auto;
-  left: 0;
-  width: min(220px, calc(100vw - 40px));
 }
 
 .language-menu__item {
@@ -773,7 +784,7 @@ svg {
 
 .auth-user {
   min-height: 44px;
-  max-width: 100%;
+  max-width: min(220px, 32vw);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -853,6 +864,11 @@ svg {
     padding: 14px 10px;
   }
 
+  .app-shell--sidebar-collapsed .site-topbar__brand {
+    flex: 0 1 auto;
+    display: flex;
+  }
+
   .app-shell--sidebar-collapsed .site-sidebar__header {
     display: grid;
     justify-items: center;
@@ -865,11 +881,7 @@ svg {
   }
 
   .app-shell--sidebar-collapsed .site-sidebar__header .brand-lockup > span,
-  .app-shell--sidebar-collapsed .side-nav__label,
-  .app-shell--sidebar-collapsed .auth-user__name,
-  .app-shell--sidebar-collapsed .auth-actions__label,
-  .app-shell--sidebar-collapsed .notification-menu__label,
-  .app-shell--sidebar-collapsed .language-menu__glyph {
+  .app-shell--sidebar-collapsed .side-nav__label {
     width: 0;
     min-width: 0;
     max-width: 0;
@@ -878,18 +890,11 @@ svg {
   }
 
   .app-shell--sidebar-collapsed .side-nav__link,
-  .app-shell--sidebar-collapsed .auth-actions .ui-button,
-  .app-shell--sidebar-collapsed .auth-user,
-  .app-shell--sidebar-collapsed .site-sidebar .notification-menu__trigger,
-  .app-shell--sidebar-collapsed .site-sidebar .language-menu__trigger {
+  .app-shell--sidebar-collapsed .side-nav__group-trigger {
     justify-content: center;
     gap: 0;
     padding-right: 8px;
     padding-left: 8px;
-  }
-
-  .app-shell--sidebar-collapsed .side-nav__group-trigger {
-    gap: 4px;
   }
 
   .app-shell--sidebar-collapsed .side-nav__chevron {
@@ -913,19 +918,11 @@ svg {
     display: none;
   }
 
-  .app-shell--sidebar-collapsed .site-sidebar .language-menu__dropdown {
-    bottom: 0;
-    left: calc(100% + 8px);
-  }
-
-  .app-shell--sidebar-collapsed .site-sidebar .notification-menu__dropdown {
-    bottom: 0;
-    left: calc(100% + 8px);
-  }
 }
 
 .page {
   position: relative;
+  grid-column: 2;
   --page-padding-x: 24px;
   width: min(100%, var(--container));
   margin: 0 auto;
@@ -6843,27 +6840,39 @@ button:disabled,
 
   .app-shell {
     display: block;
-    padding-top: 58px;
+    padding-top: 60px;
   }
 
-  .mobile-topbar {
+  .site-topbar {
     position: fixed;
     inset: 0 0 auto;
     z-index: 55;
-    min-height: 58px;
-    display: flex;
-    align-items: center;
+  }
+
+  .site-topbar__inner {
+    min-height: 60px;
     gap: 10px;
     padding: 8px 12px;
-    border-bottom: 1px solid rgba(31, 42, 59, 0.12);
-    background: color-mix(in srgb, var(--surface) 90%, transparent);
-    backdrop-filter: blur(18px);
+  }
+
+  .site-topbar__brand {
+    flex: 1 1 auto;
+    display: flex;
+  }
+
+  .site-topbar__spacer {
+    display: none;
+  }
+
+  .topbar-actions {
+    flex: 0 0 auto;
+    gap: 6px;
   }
 
   .sidebar-toggle {
-    width: 40px;
-    min-width: 40px;
-    min-height: 40px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
     display: inline-grid;
     place-items: center;
     border: 2px solid var(--line);
@@ -6878,12 +6887,20 @@ button:disabled,
     color: var(--pokemon-blue-deep);
   }
 
-  .brand-lockup--mobile .pokemon-word {
+  .brand-lockup--topbar {
+    min-width: 0;
+  }
+
+  .brand-lockup--topbar .pokemon-word {
     font-size: 22px;
   }
 
-  .brand-lockup--mobile .brand-subtitle {
+  .brand-lockup--topbar .brand-subtitle {
     font-size: 10px;
+  }
+
+  .site-topbar .auth-user {
+    max-width: 130px;
   }
 
   .sidebar-collapse-toggle {
@@ -6927,11 +6944,6 @@ button:disabled,
   .side-nav__link--child {
     min-height: 36px;
     padding: 7px 8px 7px 34px;
-  }
-
-  .auth-actions {
-    gap: 6px;
-    padding-top: 10px;
   }
 
   .app-shell--sidebar-open .site-sidebar {
@@ -8137,38 +8149,52 @@ button:disabled,
 
 @media (max-width: 430px) {
   .app-shell {
-    padding-top: 52px;
+    padding-top: 56px;
   }
 
-  .mobile-topbar {
-    min-height: 52px;
+  .site-topbar__inner {
+    min-height: 56px;
     gap: 8px;
     padding: 6px 10px;
   }
 
   .sidebar-toggle {
-    width: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .brand-lockup,
-  .brand-lockup--mobile {
+  .brand-lockup--topbar {
     gap: 8px;
   }
 
-  .brand-lockup--mobile .pokeball-mark {
+  .brand-lockup--topbar .pokeball-mark {
     --ball-size: 28px !important;
   }
 
-  .brand-lockup--mobile .pokemon-word {
+  .brand-lockup--topbar .pokemon-word {
     font-size: 19px;
     -webkit-text-stroke-width: 1.5px;
     text-shadow: 1px 2px 0 var(--pokemon-blue);
   }
 
-  .brand-lockup--mobile .brand-subtitle {
+  .brand-lockup--topbar .brand-subtitle,
+  .site-topbar .auth-user__name {
     display: none;
+  }
+
+  .site-topbar .auth-user {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .topbar-actions {
+    gap: 4px;
   }
 
   .site-sidebar {
@@ -8496,5 +8522,21 @@ button:disabled,
     border-right: 0;
     border-left: 0;
     border-radius: 0;
+  }
+
+  .site-topbar .topbar-actions__icon-button,
+  .site-topbar .auth-user,
+  .site-topbar .notification-menu__trigger,
+  .site-topbar .language-menu__trigger {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .brand-lockup--topbar > span {
+    display: none;
   }
 }

@@ -2,14 +2,14 @@
 import { Icon } from '@iconify/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
-import { iconAdd, iconChevronDown, iconItem } from '../icons';
+import { iconAdd, iconChevronDown, iconChevronUp, iconItem } from '../icons';
 import { api, getAuthToken, type AuthUser, type Item, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
@@ -19,16 +19,30 @@ const props = defineProps<{
 
 const options = ref<Options | null>(null);
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 const items = ref<Item[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
+const ordering = ref(false);
 const search = ref('');
 const categoryId = ref('');
 const usageId = ref('');
 const tagIds = ref<string[]>([]);
 const createDefaultsMenu = ref<HTMLElement | null>(null);
 const createDefaultsOpen = ref(false);
+const itemContextMenu = ref<{
+  item: Item;
+  x: number;
+  y: number;
+} | null>(null);
+const itemContextMenuRef = ref<HTMLElement | null>(null);
+const draggingItemId = ref<number | null>(null);
+const dropTargetItemId = ref<number | null>(null);
+const dropInsertAfter = ref(false);
+const suppressNextItemClick = ref(false);
+const dragSourceItems = ref<Item[]>([]);
+const dropCommitted = ref(false);
 
 type ItemCreateDefaults = {
   categoryId: string;
@@ -59,6 +73,16 @@ const pageTitle = computed(() => (props.eventOnly ? t('pages.eventItems.title') 
 const pageSubtitle = computed(() => (props.eventOnly ? t('pages.eventItems.subtitle') : t('pages.items.subtitle')));
 const pageKicker = computed(() => (props.eventOnly ? t('pages.eventItems.kicker') : t('pages.items.kicker')));
 const createTarget = computed(() => (props.eventOnly ? '/event-items/new' : '/items/new'));
+const isAllView = computed(() => !props.eventOnly && categoryId.value === '');
+const hasActiveFilters = computed(
+  () => search.value.trim() !== '' || usageId.value !== '' || tagIds.value.length > 0 || categoryId.value !== ''
+);
+const itemSortingAllowed = computed(
+  () => isAllView.value && !hasActiveFilters.value && currentUser.value?.permissions.includes('items.order') === true
+);
+const itemInsertionAllowed = computed(
+  () => itemSortingAllowed.value && currentUser.value?.permissions.includes('items.create') === true
+);
 
 const categoryTabs = computed<TabOption[]>(() => [
   { value: '', label: t('common.all') },
@@ -86,6 +110,57 @@ const hasItemCreateDefaults = computed(
 
 function itemCardImage(item: Item) {
   return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : undefined;
+}
+
+function sameItem(first: number, second: number): boolean {
+  return first === second;
+}
+
+function reorderedItems(currentItems: Item[], draggedId: number, targetId: number, insertAfter: boolean): Item[] {
+  if (sameItem(draggedId, targetId)) {
+    return currentItems;
+  }
+
+  const draggedItem = currentItems.find((item) => sameItem(item.id, draggedId));
+  if (!draggedItem) {
+    return currentItems;
+  }
+
+  const nextItems = currentItems.filter((item) => !sameItem(item.id, draggedId));
+  const targetIndex = nextItems.findIndex((item) => sameItem(item.id, targetId));
+  if (targetIndex < 0) {
+    return currentItems;
+  }
+
+  nextItems.splice(targetIndex + (insertAfter ? 1 : 0), 0, draggedItem);
+  return nextItems;
+}
+
+function hasOrderChanged(currentItems: Item[], nextItems: Item[]): boolean {
+  return currentItems.length !== nextItems.length || currentItems.some((item, index) => !sameItem(item.id, nextItems[index]?.id ?? -1));
+}
+
+function clampMenuPosition(x: number, y: number) {
+  const width = 216;
+  const height = 104;
+  return {
+    x: Math.max(16, Math.min(x, window.innerWidth - width - 16)),
+    y: Math.max(16, Math.min(y, window.innerHeight - height - 16))
+  };
+}
+
+function menuPositionForEvent(event: MouseEvent | KeyboardEvent) {
+  if (event instanceof MouseEvent) {
+    return clampMenuPosition(event.clientX, event.clientY);
+  }
+
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    return clampMenuPosition(rect.left, rect.bottom + 6);
+  }
+
+  return clampMenuPosition(window.innerWidth / 2, window.innerHeight / 2);
 }
 
 function readItemCreateDefaults(): ItemCreateDefaults {
@@ -171,19 +246,170 @@ function clearItemCreateDefaults() {
 }
 
 function onCreateDefaultsDocumentPointerDown(event: PointerEvent) {
-  if (createDefaultsMenu.value && !createDefaultsMenu.value.contains(event.target as Node)) {
+  const target = event.target as Node | null;
+  if (createDefaultsMenu.value && target && !createDefaultsMenu.value.contains(target)) {
     closeCreateDefaultsMenu();
+  }
+
+  if (itemContextMenu.value && itemContextMenuRef.value && target && !itemContextMenuRef.value.contains(target)) {
+    closeItemContextMenu();
   }
 }
 
 function onCreateDefaultsKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     closeCreateDefaultsMenu();
+    closeItemContextMenu();
   }
 
   if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
     openCreateDefaultsMenu(event);
   }
+}
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    closeCreateDefaultsMenu();
+    closeItemContextMenu();
+  }
+}
+
+function closeItemContextMenu() {
+  itemContextMenu.value = null;
+}
+
+function openItemContextMenu(item: Item, event: MouseEvent | KeyboardEvent) {
+  if (!itemInsertionAllowed.value) {
+    return;
+  }
+
+  event.preventDefault();
+  closeCreateDefaultsMenu();
+
+  const { x, y } = menuPositionForEvent(event);
+  itemContextMenu.value = { item, x, y };
+}
+
+function startItemInsert(position: 'before' | 'after') {
+  if (!itemContextMenu.value) {
+    return;
+  }
+
+  const queryKey = position === 'before' ? 'insertBeforeItemId' : 'insertAfterItemId';
+  void router.push({
+    path: createTarget.value,
+    query: { [queryKey]: String(itemContextMenu.value.item.id) }
+  });
+  closeItemContextMenu();
+}
+
+function clearItemDragState() {
+  draggingItemId.value = null;
+  dropTargetItemId.value = null;
+  dropInsertAfter.value = false;
+  dragSourceItems.value = [];
+  dropCommitted.value = false;
+}
+
+function startItemDrag(item: Item, event: DragEvent) {
+  if (!itemSortingAllowed.value || ordering.value) {
+    return;
+  }
+
+  draggingItemId.value = item.id;
+  dropTargetItemId.value = null;
+  dropInsertAfter.value = false;
+  suppressNextItemClick.value = false;
+  dragSourceItems.value = [...items.value];
+  dropCommitted.value = false;
+  event.dataTransfer?.setData('text/plain', String(item.id));
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.dropEffect = 'move';
+  }
+}
+
+function endItemDrag() {
+  if (draggingItemId.value !== null && !dropCommitted.value && dragSourceItems.value.length) {
+    items.value = [...dragSourceItems.value];
+  }
+
+  if (draggingItemId.value !== null) {
+    suppressNextItemClick.value = true;
+  }
+
+  clearItemDragState();
+}
+
+function previewItemDrop(targetItem: Item, event: DragEvent) {
+  if (!itemSortingAllowed.value || draggingItemId.value === null || ordering.value) {
+    return;
+  }
+
+  const draggedId = draggingItemId.value;
+  if (sameItem(draggedId, targetItem.id)) {
+    dropTargetItemId.value = null;
+    dropInsertAfter.value = false;
+    return;
+  }
+
+  const element = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  const insertAfter = element ? event.clientY > element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2 : false;
+  dropTargetItemId.value = targetItem.id;
+  dropInsertAfter.value = insertAfter;
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  const nextItems = reorderedItems(items.value, draggedId, targetItem.id, insertAfter);
+  if (hasOrderChanged(items.value, nextItems)) {
+    items.value = nextItems;
+  }
+}
+
+async function dropItem(targetItem: Item, event: DragEvent) {
+  if (!itemSortingAllowed.value || draggingItemId.value === null || ordering.value) {
+    clearItemDragState();
+    return;
+  }
+
+  previewItemDrop(targetItem, event);
+  const nextItems = [...items.value];
+  const previousItems = dragSourceItems.value.length ? [...dragSourceItems.value] : nextItems;
+  dropCommitted.value = true;
+  clearItemDragState();
+
+  if (!hasOrderChanged(previousItems, nextItems)) {
+    return;
+  }
+
+  items.value = nextItems;
+  ordering.value = true;
+  suppressNextItemClick.value = true;
+  try {
+    await api.reorderItems(nextItems.map((item) => item.id));
+    items.value = await api.items(itemQuery.value);
+  } catch {
+    items.value = previousItems;
+  } finally {
+    ordering.value = false;
+  }
+}
+
+function handleItemKeydown(item: Item, event: KeyboardEvent) {
+  if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+    openItemContextMenu(item, event);
+  }
+}
+
+function handleItemClick(event: MouseEvent) {
+  if (!suppressNextItemClick.value) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  suppressNextItemClick.value = false;
 }
 
 async function loadItems() {
@@ -194,6 +420,7 @@ async function loadItems() {
 
 onMounted(async () => {
   document.addEventListener('pointerdown', onCreateDefaultsDocumentPointerDown);
+  document.addEventListener('keydown', onDocumentKeydown);
   if (getAuthToken()) {
     try {
       currentUser.value = (await api.me()).user;
@@ -208,11 +435,21 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onCreateDefaultsDocumentPointerDown);
+  document.removeEventListener('keydown', onDocumentKeydown);
 });
 
 watch(itemQuery, loadItems);
 watch(itemCreateDefaults, persistItemCreateDefaults, { deep: true });
-watch(showEditor, closeCreateDefaultsMenu);
+watch(showEditor, () => {
+  closeCreateDefaultsMenu();
+  closeItemContextMenu();
+});
+watch(itemSortingAllowed, (allowed) => {
+  if (!allowed) {
+    clearItemDragState();
+    closeItemContextMenu();
+  }
+});
 </script>
 
 <template>
@@ -341,7 +578,7 @@ watch(showEditor, closeCreateDefaultsMenu);
       <article
         v-for="index in skeletonCardCount"
         :key="`item-skeleton-${index}`"
-        class="entity-card entity-card--skeleton entity-card--collection-compact"
+        class="entity-card entity-card--skeleton entity-card--collection-compact item-grid-card"
       >
         <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
         <div class="entity-card__content">
@@ -350,18 +587,57 @@ watch(showEditor, closeCreateDefaultsMenu);
         </div>
       </article>
     </div>
-    <div v-else class="entity-grid catalog-card-grid collections-card-grid">
-      <EntityCard
+    <TransitionGroup v-else name="item-grid" tag="div" class="entity-grid catalog-card-grid collections-card-grid">
+      <div
         v-for="item in items"
         :key="item.id"
-        :title="item.name"
-        :subtitle="item.category.name"
-        :to="`/items/${item.id}`"
-        :icon="iconItem"
-        :image="itemCardImage(item)"
-        :ribbon="item.usage?.name"
-        compact-tooltip
-      />
+        class="item-grid-slot"
+        :class="{
+          'item-grid-card--interactive': itemSortingAllowed,
+          'is-dragging': draggingItemId === item.id,
+          'is-drop-target': dropTargetItemId === item.id,
+          'is-drop-after': dropTargetItemId === item.id && dropInsertAfter,
+          'is-drop-before': dropTargetItemId === item.id && !dropInsertAfter
+        }"
+        :draggable="itemSortingAllowed"
+        :aria-haspopup="itemInsertionAllowed ? 'menu' : undefined"
+        @contextmenu="openItemContextMenu(item, $event)"
+        @dragstart="startItemDrag(item, $event)"
+        @dragend="endItemDrag"
+        @dragover.prevent="previewItemDrop(item, $event)"
+        @drop.prevent="dropItem(item, $event)"
+        @click.capture="handleItemClick"
+        @keydown="handleItemKeydown(item, $event)"
+      >
+        <EntityCard
+          :title="item.name"
+          :subtitle="item.category.name"
+          :to="`/items/${item.id}`"
+          :icon="iconItem"
+          :image="itemCardImage(item)"
+          :ribbon="item.usage?.name"
+          class="item-grid-card"
+          compact-tooltip
+        />
+      </div>
+    </TransitionGroup>
+
+    <div
+      v-if="itemContextMenu"
+      ref="itemContextMenuRef"
+      class="item-context-menu"
+      role="menu"
+      :aria-label="t('pages.items.itemActions')"
+      :style="{ left: `${itemContextMenu.x}px`, top: `${itemContextMenu.y}px` }"
+    >
+      <button type="button" class="item-context-menu__option" role="menuitem" @click="startItemInsert('before')">
+        <Icon :icon="iconChevronUp" class="ui-icon" aria-hidden="true" />
+        {{ t('pages.items.insertBeforeItem') }}
+      </button>
+      <button type="button" class="item-context-menu__option" role="menuitem" @click="startItemInsert('after')">
+        <Icon :icon="iconChevronDown" class="ui-icon" aria-hidden="true" />
+        {{ t('pages.items.insertAfterItem') }}
+      </button>
     </div>
 
     <ItemEdit v-if="showEditor" />

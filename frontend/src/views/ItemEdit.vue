@@ -65,6 +65,8 @@ const itemCreateDefaultsStorageKey = 'pokopia_item_create_defaults';
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
 const isEventCreate = computed(() => route.name === 'event-item-new');
+const insertBeforeItemId = computed(() => queryItemId(route.query.insertBeforeItemId));
+const insertAfterItemId = computed(() => queryItemId(route.query.insertAfterItemId));
 const pageTitle = computed(() =>
   isEditing.value
     ? t('pages.items.editTitle', { name: itemForm.value.name || t('pages.items.fallbackName') })
@@ -80,6 +82,12 @@ const canUploadImage = computed(() => currentUser.value?.permissions.includes('i
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function queryItemId(value: unknown): number | null {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const id = Number(rawValue);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 function errorText(error: unknown, fallback: string) {
@@ -264,6 +272,12 @@ async function saveItem() {
       tagIds: toIds(itemForm.value.tagIds),
       imagePath: itemForm.value.imagePath
     };
+    if (!isEditing.value && insertBeforeItemId.value !== null) {
+      payload.insertBeforeItemId = insertBeforeItemId.value;
+    }
+    if (!isEditing.value && insertAfterItemId.value !== null) {
+      payload.insertAfterItemId = insertAfterItemId.value;
+    }
     const saved = isEditing.value ? await api.updateItem(routeId.value, payload) : await api.createItem(payload);
     await router.push(`/items/${saved.id}`);
   } catch (error) {

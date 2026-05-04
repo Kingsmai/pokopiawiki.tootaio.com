@@ -216,6 +216,8 @@ type ItemPayload = {
   acquisitionMethodIds: number[];
   tagIds: number[];
   imagePath: string;
+  insertBeforeItemId: number | null;
+  insertAfterItemId: number | null;
 };
 
 type AncientArtifactPayload = {
@@ -6477,8 +6479,14 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
   const usageId = payload.usageId === null || payload.usageId === '' || payload.usageId === undefined
     ? null
     : requirePositiveInteger(payload.usageId, 'server.validation.usageRequired');
+  const insertBeforeItemId = cleanOptionalPositiveInteger(payload.insertBeforeItemId);
+  const insertAfterItemId = cleanOptionalPositiveInteger(payload.insertAfterItemId);
   const category = systemListOptionById(itemCategoryOptions, categoryId, 'server.validation.categoryRequired');
   const usage = usageId === null ? null : systemListOptionById(itemUsageOptions, usageId, 'server.validation.usageRequired');
+
+  if (insertBeforeItemId !== null && insertAfterItemId !== null) {
+    throw validationError('server.validation.invalidField');
+  }
 
   return {
     name: cleanName(payload.name, 'server.validation.itemNameRequired'),
@@ -6495,8 +6503,26 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     isEventItem: Boolean(payload.isEventItem),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     tagIds: cleanIds(payload.tagIds),
-    imagePath: cleanUploadImagePath(payload.imagePath, 'items')
+    imagePath: cleanUploadImagePath(payload.imagePath, 'items'),
+    insertBeforeItemId,
+    insertAfterItemId
   };
+}
+
+function cleanOptionalPositiveInteger(value: unknown): number | null {
+  if (value === null || value === '' || value === undefined) {
+    return null;
+  }
+
+  return requirePositiveInteger(value, 'server.validation.invalidField');
+}
+
+async function orderedItemIds(client: DbClient, isEventItem: boolean): Promise<number[]> {
+  const rows = await client.query<{ id: number }>(
+    'SELECT id FROM items WHERE is_event_item = $1 ORDER BY sort_order, id',
+    [isEventItem]
+  );
+  return rows.rows.map((row) => row.id);
 }
 
 async function ensureItemCanDisableRecipe(client: DbClient, itemId: number, noRecipe: boolean): Promise<void> {
@@ -6573,6 +6599,28 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
     await linkEntityImageUpload(client, 'items', itemId, cleanPayload.imagePath, cleanPayload.name);
     await replaceItemRelations(client, itemId, cleanPayload);
     await replaceEntityTranslations(client, 'items', itemId, cleanPayload.translations, ['name', 'details']);
+
+    if (cleanPayload.insertBeforeItemId !== null || cleanPayload.insertAfterItemId !== null) {
+      const targetId = cleanPayload.insertBeforeItemId ?? cleanPayload.insertAfterItemId;
+      if (targetId === null) {
+        throw validationError('server.validation.invalidField');
+      }
+
+      const orderedIds = await orderedItemIds(client, cleanPayload.isEventItem);
+      const targetIndex = orderedIds.indexOf(targetId);
+      if (targetIndex < 0) {
+        throw validationError('server.validation.recordMissing');
+      }
+
+      const insertedIndex = orderedIds.indexOf(itemId);
+      if (insertedIndex >= 0) {
+        orderedIds.splice(insertedIndex, 1);
+      }
+
+      orderedIds.splice(targetIndex + (cleanPayload.insertAfterItemId !== null ? 1 : 0), 0, itemId);
+      await reorderTableRows(client, 'items', 'items', orderedIds, userId);
+    }
+
     await recordEditLog(client, 'items', itemId, 'create', userId);
     return itemId;
   });

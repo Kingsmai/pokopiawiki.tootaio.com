@@ -800,6 +800,8 @@ export interface ItemPayload {
   acquisitionMethodIds: number[];
   tagIds: number[];
   imagePath: string;
+  insertBeforeItemId?: number | null;
+  insertAfterItemId?: number | null;
 }
 
 export interface AncientArtifactPayload {

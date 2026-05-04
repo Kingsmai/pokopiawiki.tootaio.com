@@ -1796,9 +1796,21 @@ app.get('/api/items/:id', async (request, reply) => {
 
 app.post('/api/items', async (request, reply) => {
   const user = await requirePermissionWithRateLimits(request, reply, 'items.create', 'wikiWrite');
-  return user
-    ? reply.code(201).send(await createItem(request.body as Record<string, unknown>, user.id, requestLocale(request)))
-    : undefined;
+  if (!user) {
+    return undefined;
+  }
+
+  const payload = request.body as Record<string, unknown>;
+  const hasInsertAnchor =
+    (payload.insertBeforeItemId !== undefined && payload.insertBeforeItemId !== null && payload.insertBeforeItemId !== '') ||
+    (payload.insertAfterItemId !== undefined && payload.insertAfterItemId !== null && payload.insertAfterItemId !== '');
+
+  if (hasInsertAnchor && !userHasPermission(user, 'items.order')) {
+    reply.code(403).send({ message: await serverMessage(requestLocale(request), 'permissionDenied') });
+    return undefined;
+  }
+
+  return reply.code(201).send(await createItem(payload, user.id, requestLocale(request)));
 });
 
 app.put('/api/items/:id', async (request, reply) => {

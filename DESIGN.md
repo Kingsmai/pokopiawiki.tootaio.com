@@ -638,6 +638,7 @@ Items 与 Event Items 使用相同数据模型：
 - 按用途筛选
 - 按标签筛选
 - 按自定义排序展示
+- All 视图在满足写入权限时支持对 Grid Item 右键插入新物品到前/后，并支持直接拖曳 Item 调整排序；插入与拖曳只作用于当前展示的 Items 列表，不影响 Event Items 入口。
 - 新增物品入口支持当前浏览器 Session 的默认值菜单；用户可为新建物品预设分类、客制化勾选项和入手方式。默认值只影响 `/items/new` 与 `/event-items/new` 的新建表单初始值，不影响编辑已有物品，不改变 API、数据库模型、权限或审计行为；Event Items 仍由 `/event-items/new` 入口决定 `is_event_item`。
 - 物品列表桌面端使用 12 列紧凑 Grid，每个格子只展示物品图标；有用途的物品在卡片左上角以斜 Ribbon 展示用途名称；物品名称通过 hover / focus Tooltip 展示。
 - 物品列表移动端保持常规卡片布局，展示物品图标、名称和分类。

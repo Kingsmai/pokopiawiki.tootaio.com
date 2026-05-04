@@ -18,7 +18,8 @@ import {
   iconItem,
   iconLife,
   iconPokemon,
-  iconRecipe
+  iconRecipe,
+  type AppIcon
 } from './icons';
 import { getCurrentLocale, loadSystemWordings, onLocaleChange, setCurrentLocale } from './i18n';
 import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser, type Language } from './services/api';
@@ -34,24 +35,66 @@ const languages = ref<Language[]>([
 let removeAuthListener: (() => void) | null = null;
 let removeLocaleListener: (() => void) | null = null;
 
-function inDevBadge() {
-  return { label: t('common.inDev'), tone: 'info' as const };
+type NavBadge = {
+  label: string;
+  tone?: 'info' | 'success' | 'warning' | 'danger' | 'neutral';
+};
+
+type NavLinkItem = {
+  label: string;
+  to: string;
+  icon?: AppIcon;
+  badge?: NavBadge;
+};
+
+type NavGroupItem = {
+  key: string;
+  label: string;
+  icon?: AppIcon;
+  children: NavLinkItem[];
+};
+
+type NavItem = NavLinkItem | NavGroupItem;
+
+function inDevBadge(): NavBadge {
+  return { label: t('common.inDev'), tone: 'info' };
 }
 
 function can(permissionKey: string) {
   return currentUser.value?.permissions.includes(permissionKey) === true;
 }
 
-const navItems = computed(() => {
-  const items = [
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
     { label: t('nav.home'), to: '/', icon: iconHome },
-    { label: t('nav.pokemon'), to: '/pokemon', icon: iconPokemon },
-    { label: t('nav.eventPokemon'), to: '/event-pokemon', icon: iconEvent },
-    { label: t('nav.habitats'), to: '/habitats', icon: iconHabitat },
-    { label: t('nav.eventHabitats'), to: '/event-habitats', icon: iconEvent },
-    { label: t('nav.items'), to: '/items', icon: iconItem },
-    { label: t('nav.eventItems'), to: '/event-items', icon: iconEvent },
-    { label: t('nav.ancientArtifacts'), to: '/ancient-artifacts', icon: iconArtifact },
+    {
+      key: 'pokedex',
+      label: t('nav.pokedex'),
+      icon: iconPokemon,
+      children: [
+        { label: t('nav.mainGame'), to: '/pokemon', icon: iconPokemon },
+        { label: t('nav.event'), to: '/event-pokemon', icon: iconEvent }
+      ]
+    },
+    {
+      key: 'habitat-dex',
+      label: t('nav.habitatDex'),
+      icon: iconHabitat,
+      children: [
+        { label: t('nav.mainGame'), to: '/habitats', icon: iconHabitat },
+        { label: t('nav.event'), to: '/event-habitats', icon: iconEvent }
+      ]
+    },
+    {
+      key: 'collections',
+      label: t('nav.collections'),
+      icon: iconItem,
+      children: [
+        { label: t('nav.mainGame'), to: '/items', icon: iconItem },
+        { label: t('nav.event'), to: '/event-items', icon: iconEvent },
+        { label: t('nav.ancientArtifacts'), to: '/ancient-artifacts', icon: iconArtifact }
+      ]
+    },
     { label: t('nav.recipes'), to: '/recipes', icon: iconRecipe },
     { label: t('nav.automation'), to: '/automation', icon: iconAutomation, badge: inDevBadge() },
     { label: t('nav.dish'), to: '/dish', icon: iconDish, badge: inDevBadge() },

@@ -109,6 +109,7 @@ svg {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
+  transition: grid-template-columns 0.18s ease;
 }
 
 .container {
@@ -141,12 +142,58 @@ svg {
   padding: 18px 14px;
 }
 
+.site-sidebar__header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .brand-lockup {
   min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 12px;
   width: fit-content;
+}
+
+.site-sidebar__header .brand-lockup {
+  flex: 1 1 auto;
+}
+
+.sidebar-collapse-toggle {
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    transform 0.14s ease;
+}
+
+.sidebar-collapse-toggle:hover {
+  border-color: var(--pokemon-blue);
+  background: rgba(255, 203, 5, 0.22);
+  color: var(--pokemon-blue-deep);
+}
+
+.sidebar-collapse-toggle__icon {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.14s ease;
+}
+
+.sidebar-collapse-toggle__icon--expanded {
+  transform: rotate(180deg);
 }
 
 .pokemon-word {
@@ -175,7 +222,33 @@ svg {
   align-content: start;
   gap: 6px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 2px 0;
+  scrollbar-color: rgba(104, 116, 135, 0.2) transparent;
+  scrollbar-width: thin;
+}
+
+.side-nav:hover,
+.side-nav:focus-within {
+  scrollbar-color: rgba(104, 116, 135, 0.42) transparent;
+}
+
+.side-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.side-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.side-nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(104, 116, 135, 0.18);
+}
+
+.side-nav:hover::-webkit-scrollbar-thumb,
+.side-nav:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(104, 116, 135, 0.38);
 }
 
 .side-nav__link {
@@ -206,6 +279,46 @@ svg {
   background: var(--pokemon-blue);
   color: #ffffff;
   box-shadow: 0 2px 0 var(--line-strong);
+}
+
+.side-nav__group {
+  display: grid;
+  gap: 4px;
+}
+
+.side-nav__group-trigger {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-nav__group-trigger.router-link-active {
+  background: rgba(42, 117, 187, 0.12);
+  color: var(--pokemon-blue-deep);
+  box-shadow: inset 0 0 0 1px rgba(42, 117, 187, 0.18);
+}
+
+.side-nav__chevron {
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  transition: transform 0.14s ease;
+}
+
+.side-nav__children {
+  display: grid;
+  gap: 4px;
+  margin-left: 15px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+.side-nav__link--child {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 14px;
 }
 
 .side-nav__label {
@@ -244,6 +357,12 @@ svg {
 .auth-actions .ui-button {
   width: 100%;
   justify-content: flex-start;
+}
+
+.auth-actions__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .language-menu {
@@ -403,6 +522,110 @@ svg {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-tooltip {
+  position: fixed;
+  z-index: 95;
+  max-width: min(230px, calc(100vw - 96px));
+  padding: 7px 10px;
+  border-radius: var(--radius-small);
+  background: #172036;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.sidebar-tooltip::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 0;
+  height: 0;
+  transform: translateY(-50%);
+  border-top: 6px solid transparent;
+  border-right: 6px solid #172036;
+  border-bottom: 6px solid transparent;
+}
+
+@media (min-width: 901px) {
+  .app-shell--sidebar-collapsed {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .app-shell--sidebar-collapsed .site-sidebar__inner {
+    gap: 14px;
+    padding: 14px 10px;
+  }
+
+  .app-shell--sidebar-collapsed .site-sidebar__header {
+    display: grid;
+    justify-items: center;
+  }
+
+  .app-shell--sidebar-collapsed .site-sidebar__header .brand-lockup {
+    width: 44px;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .app-shell--sidebar-collapsed .site-sidebar__header .brand-lockup > span,
+  .app-shell--sidebar-collapsed .side-nav__label,
+  .app-shell--sidebar-collapsed .auth-user__name,
+  .app-shell--sidebar-collapsed .auth-actions__label,
+  .app-shell--sidebar-collapsed .language-menu__glyph {
+    width: 0;
+    min-width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  .app-shell--sidebar-collapsed .side-nav__link,
+  .app-shell--sidebar-collapsed .auth-actions .ui-button,
+  .app-shell--sidebar-collapsed .auth-user,
+  .app-shell--sidebar-collapsed .site-sidebar .language-menu__trigger {
+    justify-content: center;
+    gap: 0;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .app-shell--sidebar-collapsed .side-nav__group-trigger {
+    gap: 4px;
+  }
+
+  .app-shell--sidebar-collapsed .side-nav__chevron {
+    width: 14px;
+    height: 14px;
+    margin-left: 0;
+  }
+
+  .app-shell--sidebar-collapsed .side-nav__children {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .app-shell--sidebar-collapsed .side-nav__link--child {
+    min-height: 38px;
+    padding: 8px;
+  }
+
+  .app-shell--sidebar-collapsed .side-nav__badge {
+    display: none;
+  }
+
+  .app-shell--sidebar-collapsed .site-sidebar .language-menu__dropdown {
+    bottom: 0;
+    left: calc(100% + 8px);
+  }
 }
 
 .page {
@@ -2990,6 +3213,12 @@ button:disabled,
   .life-reaction-option,
   .life-action-tooltip,
   .life-search-control__clear,
+  .app-shell,
+  .sidebar-collapse-toggle,
+  .sidebar-collapse-toggle__icon,
+  .sidebar-tooltip,
+  .side-nav__link,
+  .side-nav__chevron,
   .reorderable-row,
   .reorderable-list-move,
   .drag-handle {
@@ -6159,6 +6388,10 @@ button:disabled,
 
   .brand-lockup--mobile .brand-subtitle {
     font-size: 11px;
+  }
+
+  .sidebar-collapse-toggle {
+    display: none;
   }
 
   .site-sidebar {

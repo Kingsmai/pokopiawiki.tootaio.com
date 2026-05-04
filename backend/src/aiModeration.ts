@@ -1,6 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { createHash } from 'node:crypto';
 import { pool, query, queryOne } from './db.ts';
+import {
+  createApprovedCommentNotification,
+  createModerationResultNotification
+} from './notifications.ts';
 
 export type AiModerationStatus = 'unreviewed' | 'reviewing' | 'approved' | 'rejected' | 'failed';
 export type AiModerationTargetType = 'life-post' | 'life-comment' | 'discussion-comment';
@@ -643,6 +647,26 @@ async function updateTargetStatus(
   languageCode: string | null
 ): Promise<void> {
   await pool.query(targetQueries[target.type].updateStatus, [target.id, status, languageCode]);
+
+  if (status !== 'approved' && status !== 'rejected' && status !== 'failed') {
+    return;
+  }
+
+  try {
+    await createModerationResultNotification(target, status);
+    if (status === 'approved') {
+      await createApprovedCommentNotification(target);
+    }
+  } catch (error) {
+    logger?.warn(
+      {
+        err: moderationLogError(error),
+        targetType: target.type,
+        targetId: target.id
+      },
+      'Notification dispatch failed'
+    );
+  }
 }
 
 async function waitForRequestSlot(requestsPerMinute: number): Promise<void> {

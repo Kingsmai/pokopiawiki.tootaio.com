@@ -16,6 +16,7 @@ import {
   requestAiModerationReview,
   type AiModerationStatus
 } from './aiModeration.ts';
+import { createLifePostReactionNotification } from './notifications.ts';
 
 type QueryValue = string | string[] | undefined;
 
@@ -3988,6 +3989,10 @@ export async function setLifePostReaction(
     `,
     [postId, userId, reactionType]
   );
+
+  if (result) {
+    await createLifePostReactionNotification(result.postId, userId);
+  }
 
   return result ? getLifePostById(result.postId, userId, locale) : null;
 }

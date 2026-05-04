@@ -6,6 +6,7 @@ export const iconAction: AppIcon = 'mdi:gesture-tap-button';
 export const iconArtifact: AppIcon = 'mdi:diamond-stone';
 export const iconAutomation: AppIcon = 'mdi:factory';
 export const iconBack: AppIcon = 'mdi:arrow-left';
+export const iconBell: AppIcon = 'mdi:bell-outline';
 export const iconCancel: AppIcon = 'mdi:close';
 export const iconCheck: AppIcon = 'mdi:check';
 export const iconChecklist: AppIcon = 'mdi:checkbox-marked-outline';

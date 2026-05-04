@@ -16,6 +16,7 @@ import {
   type AppIcon
 } from '../icons';
 import type { AuthUser, Language } from '../services/api';
+import NotificationBell from './NotificationBell.vue';
 import PokeBallMark from './PokeBallMark.vue';
 import StatusBadge from './StatusBadge.vue';
 
@@ -414,6 +415,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <template v-if="currentUser">
+            <NotificationBell :current-user="currentUser" />
             <RouterLink
               class="auth-user"
               to="/profile"

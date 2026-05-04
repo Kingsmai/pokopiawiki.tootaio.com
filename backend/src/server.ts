@@ -134,6 +134,13 @@ import {
   saveEntityImageUpload,
   uploadRoot
 } from './uploads.ts';
+import {
+  createNotificationWebSocketTicket,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  setupNotificationWebSocketServer
+} from './notifications.ts';
 
 const app = Fastify({
   logger: true,
@@ -1039,6 +1046,32 @@ app.get('/api/auth/referral', async (request, reply) => {
   }
 
   return { referral: await getReferralSummary(user.id) };
+});
+
+app.get('/api/notifications', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? listNotifications(user.id, request.query as Record<string, string | string[] | undefined>) : undefined;
+});
+
+app.post('/api/notifications/ws-ticket', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? createNotificationWebSocketTicket(user.id) : undefined;
+});
+
+app.post('/api/notifications/read-all', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  return user ? markAllNotificationsRead(user.id) : undefined;
+});
+
+app.post('/api/notifications/:id/read', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+
+  const { id } = request.params as { id: string };
+  const result = await markNotificationRead(Number(id), user.id);
+  return result.notification ? result : notFound(reply, request);
 });
 
 app.post('/api/auth/logout', async (request, reply) => {
@@ -2004,6 +2037,7 @@ try {
   await initializeDatabase();
   await syncSystemWordingCatalog();
   await startAiModerationWorker(app.log);
+  setupNotificationWebSocketServer(app.server, app.log);
   await app.listen({ host: '0.0.0.0', port });
 } catch (error) {
   app.log.error(error);

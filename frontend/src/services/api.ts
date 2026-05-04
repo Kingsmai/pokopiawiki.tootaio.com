@@ -339,6 +339,14 @@ export interface DataToolsBundle {
 export type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
 export type LifeReactionCounts = Record<LifeReactionType, number>;
 export type AiModerationStatus = 'unreviewed' | 'reviewing' | 'approved' | 'rejected' | 'failed';
+export type NotificationType =
+  | 'life_post_comment'
+  | 'life_comment_reply'
+  | 'discussion_comment_reply'
+  | 'life_post_reaction'
+  | 'moderation_result';
+export type NotificationModerationStatus = Extract<AiModerationStatus, 'approved' | 'rejected' | 'failed'>;
+export type NotificationTargetType = 'life-post' | 'life-comment' | 'discussion-comment';
 
 export interface LifePost {
   id: number;
@@ -422,6 +430,56 @@ export interface LifeReactionUsersParams {
   limit?: number;
   reactionType?: LifeReactionType;
 }
+
+export interface NotificationTarget {
+  type: NotificationTargetType;
+  id: number;
+  path: string;
+  lifePostId: number | null;
+  lifeCommentId: number | null;
+  discussionCommentId: number | null;
+  entityType: DiscussionEntityType | null;
+  entityId: number | null;
+}
+
+export interface NotificationItem {
+  id: number;
+  type: NotificationType;
+  actor: UserSummary | null;
+  target: NotificationTarget;
+  reactionType: LifeReactionType | null;
+  moderationStatus: NotificationModerationStatus | null;
+  readAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationsPage {
+  items: NotificationItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  unreadCount: number;
+}
+
+export interface NotificationsParams {
+  cursor?: string | null;
+  limit?: number;
+}
+
+export interface NotificationReadResponse {
+  notification: NotificationItem | null;
+  unreadCount: number;
+}
+
+export interface NotificationWsTicket {
+  ticket: string;
+  expiresAt: string;
+}
+
+export type NotificationWsMessage =
+  | { type: 'notifications.connected'; unreadCount: number }
+  | { type: 'notifications.created'; notification: NotificationItem; unreadCount: number }
+  | { type: 'notifications.unread'; unreadCount: number };
 
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];
@@ -858,6 +916,15 @@ function requestHeaders(): HeadersInit {
   };
 }
 
+export function notificationWebSocketUrl(ticket: string): string {
+  const base = new URL(apiBaseUrl, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
+  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  base.pathname = '/api/notifications/ws';
+  base.search = '';
+  base.searchParams.set('ticket', ticket);
+  return base.toString();
+}
+
 async function getErrorMessage(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as { message?: unknown };
@@ -993,6 +1060,17 @@ export const api = {
   changePassword: (payload: ChangePasswordPayload) =>
     sendJson<{ message: string }>('/api/auth/me/password', 'PATCH', payload),
   referral: () => getJson<{ referral: ReferralSummary }>('/api/auth/referral'),
+  notifications: (params: NotificationsParams = {}) =>
+    getJson<NotificationsPage>(
+      `/api/notifications${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
+  notificationWsTicket: () => sendJson<NotificationWsTicket>('/api/notifications/ws-ticket', 'POST', {}),
+  markNotificationRead: (id: string | number) =>
+    sendJson<NotificationReadResponse>(`/api/notifications/${id}/read`, 'POST', {}),
+  markAllNotificationsRead: () => sendJson<{ unreadCount: number }>('/api/notifications/read-all', 'POST', {}),
   logout: () => postEmpty('/api/auth/logout'),
   publicProfile: (id: string | number) => getJson<{ profile: PublicUserProfile }>(`/api/users/${id}/profile`),
   userLifePosts: (id: string | number, params: ProfileActivityParams = {}) =>

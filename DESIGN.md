@@ -246,6 +246,33 @@
 - 当前版本不提供积分奖励、排行榜、邀请邮件发送、邀请制注册限制、后台统计或公开邀请人资料页。
 - Referral API 对外只返回当前用户自己的 Referral 摘要，不返回被邀请用户邮箱、token/hash、内部审计字段或被邀请用户明细。
 
+## Notifications
+
+- Notifications 用于让已登录用户接收与自己相关的社区互动和审核结果。
+- 通知持久化存储，用户离线期间产生的通知会在下次登录后继续可见。
+- 通知实时推送可以走 WebSocket；WebSocket 连接使用短期一次性 ticket，不把 session token 放入 WebSocket URL。
+- 通知范围：
+  - Life Post 收到审核通过后的顶层评论时，通知 Life Post 作者。
+  - Life Comment 收到审核通过后的回复时，通知父评论作者。
+  - 实体讨论评论收到审核通过后的回复时，通知父评论作者。
+  - Life Post 收到 Reaction 时，通知 Life Post 作者；同一用户对同一 Life Post 的 Reaction 通知合并更新。
+  - Life Post、Life Comment、实体讨论评论的 AI 审核完成为 `approved`、`rejected` 或 `failed` 时，通知内容作者。
+- 用户自己的操作不通知自己。
+- 顶层实体讨论评论当前没有单一明确内容所有者，不默认通知 Wiki 实体创建者或最后编辑者；讨论回复仍通知父评论作者。
+- 普通用户只能读取、标记自己收到的通知。
+- 通知 API 返回字段只包含展示所需内容：
+  - `id`
+  - `type`
+  - 触发用户必要署名 `actor`：只包含 `id` 和 `displayName`，系统审核结果可为 `null`
+  - 目标跳转信息 `target`：只包含目标类型、ID、路径和必要业务引用
+  - `reactionType`
+  - `moderationStatus`
+  - `readAt`
+  - `createdAt`
+  - `updatedAt`
+- 通知 API 不返回邮箱、角色、权限、session、token/hash、AI prompt、模型响应、内部审核错误、调试字段或内部审计 payload。
+- 前端在主导航登录区展示通知入口、未读数量和通知列表；点击通知后标记已读并跳转到对应 Life Post 或 Wiki 详情页。
+
 ## 滥用防护与限流
 
 - 后端使用 `@fastify/rate-limit` 和应用内用户级计数在应用层执行限流；默认内存存储适用于当前单实例运行，后续多实例部署需要切换到共享存储或反向代理层限流。
@@ -986,6 +1013,11 @@ API 暴露边界：
 - `PATCH /api/auth/me`：更新当前用户显示名；需要登录；只接收并返回当前用户必要字段。
 - `GET /api/auth/referral`：读取当前用户 Referral 摘要；需要登录；返回 `referral`，其中只包含 `code`、`url`、`verifiedReferralCount`。
 - `POST /api/auth/logout`
+- `GET /api/notifications`：读取当前用户通知分页列表和未读数量；需要登录。
+- `POST /api/notifications/ws-ticket`：创建短期一次性通知 WebSocket ticket；需要登录。
+- `POST /api/notifications/:id/read`：标记当前用户自己的单条通知为已读；需要登录。
+- `POST /api/notifications/read-all`：标记当前用户全部通知为已读；需要登录。
+- `GET /api/notifications/ws?ticket=...`：通知 WebSocket 连接；只接收短期一次性 ticket。
 
 权限管理 API：
 

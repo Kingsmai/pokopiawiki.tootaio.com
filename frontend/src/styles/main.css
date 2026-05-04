@@ -369,6 +369,287 @@ svg {
   position: relative;
 }
 
+.notification-menu {
+  position: relative;
+}
+
+.site-sidebar .notification-menu__trigger {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+}
+
+.notification-menu__trigger {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    color 0.14s ease;
+}
+
+.notification-menu__trigger:hover,
+.notification-menu__trigger[aria-expanded="true"] {
+  border-color: var(--pokemon-blue);
+  background: rgba(255, 203, 5, 0.22);
+  color: var(--pokemon-blue-deep);
+}
+
+.notification-menu__trigger:focus-visible {
+  outline: none;
+  border-color: var(--pokemon-blue);
+  box-shadow: 0 0 0 4px rgba(42, 117, 187, 0.16);
+}
+
+.notification-menu__icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.notification-menu__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.notification-menu__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-menu__badge {
+  position: absolute;
+  top: -9px;
+  right: -11px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--pokemon-red);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.notification-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 62;
+  width: min(370px, calc(100vw - 40px));
+  max-height: min(560px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.site-sidebar .notification-menu__dropdown {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 6px);
+  left: 0;
+}
+
+.notification-menu__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.notification-menu__header h2,
+.notification-menu__empty h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.notification-menu__header p,
+.notification-menu__empty p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.notification-menu__mark-all,
+.notification-menu__load-more,
+.notification-item__read-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--pokemon-blue-deep);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.notification-menu__mark-all {
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.notification-menu__mark-all:hover,
+.notification-menu__load-more:hover,
+.notification-item__read-button:hover {
+  background: rgba(255, 203, 5, 0.24);
+}
+
+.notification-list {
+  display: grid;
+  align-content: start;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.notification-item:last-child {
+  border-bottom: 0;
+}
+
+.notification-item--unread {
+  background: rgba(42, 117, 187, 0.06);
+}
+
+.notification-item--skeleton {
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+}
+
+.notification-item__main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-item__main:hover {
+  background: rgba(255, 203, 5, 0.16);
+}
+
+.notification-item__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--pokemon-blue-deep);
+}
+
+.notification-item--unread .notification-item__icon {
+  border-color: var(--pokemon-blue);
+  background: rgba(255, 203, 5, 0.28);
+}
+
+.notification-item__icon .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.notification-item__copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.notification-item__copy strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.notification-item__copy time {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.notification-item__read-button {
+  width: 38px;
+  min-height: 100%;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.notification-item__read-button .ui-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.notification-menu__empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.notification-menu__empty-icon {
+  width: 30px;
+  height: 30px;
+  color: var(--pokemon-blue);
+}
+
+.notification-menu__load-more {
+  width: 100%;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
 .site-sidebar .language-menu__trigger {
   width: 100%;
   min-height: 44px;
@@ -579,6 +860,7 @@ svg {
   .app-shell--sidebar-collapsed .side-nav__label,
   .app-shell--sidebar-collapsed .auth-user__name,
   .app-shell--sidebar-collapsed .auth-actions__label,
+  .app-shell--sidebar-collapsed .notification-menu__label,
   .app-shell--sidebar-collapsed .language-menu__glyph {
     width: 0;
     min-width: 0;
@@ -590,6 +872,7 @@ svg {
   .app-shell--sidebar-collapsed .side-nav__link,
   .app-shell--sidebar-collapsed .auth-actions .ui-button,
   .app-shell--sidebar-collapsed .auth-user,
+  .app-shell--sidebar-collapsed .site-sidebar .notification-menu__trigger,
   .app-shell--sidebar-collapsed .site-sidebar .language-menu__trigger {
     justify-content: center;
     gap: 0;
@@ -623,6 +906,11 @@ svg {
   }
 
   .app-shell--sidebar-collapsed .site-sidebar .language-menu__dropdown {
+    bottom: 0;
+    left: calc(100% + 8px);
+  }
+
+  .app-shell--sidebar-collapsed .site-sidebar .notification-menu__dropdown {
     bottom: 0;
     left: calc(100% + 8px);
   }

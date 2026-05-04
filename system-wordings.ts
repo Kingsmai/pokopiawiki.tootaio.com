@@ -76,6 +76,27 @@ export const systemWordingMessages = {
       logout: 'Log out',
       register: 'Register'
     },
+    notifications: {
+      title: 'Notifications',
+      open: 'Open notifications',
+      unreadCount: '{count} unread',
+      markAllRead: 'Mark all read',
+      markRead: 'Mark as read',
+      loadMore: 'Load more',
+      emptyTitle: 'No notifications',
+      emptyBody: 'Comments, reactions, and review results will appear here.',
+      systemActor: 'Pokopia Wiki',
+      targetLifePost: 'Life post',
+      targetLifeComment: 'Life comment',
+      targetDiscussionComment: 'discussion comment',
+      lifePostComment: '{actor} commented on your Life post',
+      lifeCommentReply: '{actor} replied to your Life comment',
+      discussionCommentReply: '{actor} replied to your discussion comment',
+      lifePostReaction: '{actor} reacted {reaction} to your Life post',
+      moderationApproved: 'Your {target} passed review',
+      moderationRejected: 'Your {target} did not pass review',
+      moderationFailed: 'Review failed for your {target}'
+    },
     legal: {
       footer: {
         copyright: 'Copyright {year} Tootaio Studio. All rights reserved.',
@@ -1338,6 +1359,27 @@ export const systemWordingMessages = {
       login: '登录',
       logout: '退出',
       register: '注册'
+    },
+    notifications: {
+      title: '通知',
+      open: '打开通知',
+      unreadCount: '{count} 条未读',
+      markAllRead: '全部已读',
+      markRead: '标为已读',
+      loadMore: '加载更多',
+      emptyTitle: '暂无通知',
+      emptyBody: '评论、Reaction 和审核结果会显示在这里。',
+      systemActor: 'Pokopia Wiki',
+      targetLifePost: 'Life 动态',
+      targetLifeComment: 'Life 评论',
+      targetDiscussionComment: '讨论评论',
+      lifePostComment: '{actor} 评论了你的 Life 动态',
+      lifeCommentReply: '{actor} 回复了你的 Life 评论',
+      discussionCommentReply: '{actor} 回复了你的讨论评论',
+      lifePostReaction: '{actor} 用 {reaction} Reaction 了你的 Life 动态',
+      moderationApproved: '你的{target}已审核通过',
+      moderationRejected: '你的{target}未通过审核',
+      moderationFailed: '你的{target}审核失败'
     },
     legal: {
       footer: {

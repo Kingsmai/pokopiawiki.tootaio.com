@@ -36,7 +36,8 @@ const groupLabels: Record<GlobalSearchGroupType, string> = {
   'ancient-artifacts': 'search.groups.ancientArtifacts',
   recipes: 'search.groups.recipes',
   'daily-checklist': 'search.groups.dailyChecklist',
-  life: 'search.groups.life'
+  life: 'search.groups.life',
+  users: 'search.groups.users'
 };
 
 function clearSearchTimeout() {

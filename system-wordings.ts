@@ -90,7 +90,8 @@ export const systemWordingMessages = {
         ancientArtifacts: 'Ancient Artifacts',
         recipes: 'Recipes',
         dailyChecklist: 'Daily CheckList',
-        life: 'Life'
+        life: 'Life',
+        users: 'Users'
       }
     },
     notifications: {
@@ -1409,7 +1410,8 @@ export const systemWordingMessages = {
         ancientArtifacts: 'Ancient Artifacts',
         recipes: '材料单',
         dailyChecklist: '每日 CheckList',
-        life: 'Life'
+        life: 'Life',
+        users: '用户'
       }
     },
     notifications: {

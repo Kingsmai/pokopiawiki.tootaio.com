@@ -43,7 +43,8 @@ type GlobalSearchGroupType =
   | 'ancient-artifacts'
   | 'recipes'
   | 'daily-checklist'
-  | 'life';
+  | 'life'
+  | 'users';
 type GlobalSearchItem = {
   id: number;
   type: GlobalSearchGroupType;
@@ -2466,7 +2467,7 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
   const checklistTitle = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
   const lifeCategoryName = localizedName('life-tags', 'lc', locale);
 
-  const [pokemon, habitats, items, artifacts, recipes, checklist, life] = await Promise.all([
+  const [pokemon, habitats, items, artifacts, recipes, checklist, life, users] = await Promise.all([
     query<GlobalSearchItem>(
       `
         SELECT
@@ -2604,6 +2605,23 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
         LIMIT $2
       `,
       [pattern, limit]
+    ),
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          u.id,
+          'users' AS type,
+          u.display_name AS title,
+          '/profile/' || u.id AS url,
+          NULL AS summary,
+          NULL AS meta,
+          NULL AS image
+        FROM users u
+        WHERE u.display_name ILIKE $1
+        ORDER BY lower(u.display_name), u.id
+        LIMIT $2
+      `,
+      [pattern, limit]
     )
   ]);
 
@@ -2614,7 +2632,8 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
     { type: 'ancient-artifacts', items: artifacts },
     { type: 'recipes', items: recipes },
     { type: 'daily-checklist', items: checklist },
-    { type: 'life', items: life }
+    { type: 'life', items: life },
+    { type: 'users', items: users }
   ];
 
   return { query: search, groups: groups.filter((group) => group.items.length > 0) };

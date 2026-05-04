@@ -9,7 +9,7 @@
 - Home 首页路径为 `/`，用于聚合公开 Wiki 入口；Logo 导航回到 Home，用户可从 Home 进入核心资料、每日 CheckList、Life 和正在准备中的分区。
 - 桌面端使用侧边栏导航，侧边栏可折叠为图标栏；移动端继续使用抽屉式侧边栏。
 - 全局顶部导航栏承载语言切换、通知、User Profile 和登录 / 退出等账号操作；除 User Profile 可展示用户名外，顶部操作以图标按钮呈现。
-- 全局顶部导航栏提供全站搜索。搜索结果按内容类型分组展示，覆盖 Pokemon、Habitats、Items、Ancient Artifacts、Recipes、Daily CheckList 和公开可见的 Life Post；结果跳转到对应公开详情页或页面锚点。
+- 全局顶部导航栏提供全站搜索。搜索结果按内容类型分组展示，覆盖 Pokemon、Habitats、Items、Ancient Artifacts、Recipes、Daily CheckList、公开可见的 Life Post 和公开用户 Profile；结果跳转到对应公开详情页、页面锚点或 `/profile/:id`。
 - 管理入口用于维护全局配置、语言、系统文案、列表排序和每日 CheckList。
 
 ## 技术栈
@@ -24,7 +24,7 @@
 
 - `DESIGN.md` 是产品行为、数据结构和 API 暴露边界的单一事实来源。
 - API 只返回业务需要的字段，不返回密码、token hash、验证 token、内部调试字段或不必要的元数据。
-- 全局搜索 API 只返回公开浏览所需的最小结果字段：结果类型、ID、展示标题、目标 URL、可选摘要和可选图片；不返回编辑审计、权限、审核原因、内部字段或调试信息。
+- 全局搜索 API 只返回公开浏览所需的最小结果字段：结果类型、ID、展示标题、目标 URL、可选摘要和可选图片；用户搜索结果只使用公开 Profile 所需的 `id`、`displayName` 和目标 URL，不返回邮箱、角色、权限、Referral、编辑审计、审核原因、token/hash、内部字段或调试信息。
 - 用户界面只展示业务数据和设计内的文案，不展示提示词、计划、调试信息、字段内部名或修改说明。
 - 可编辑 Wiki 内容必须记录创建者、最后编辑者、创建时间、最后编辑时间和编辑历史。
 - 列表顺序由 `sort_order` 控制，默认按创建时间旧到新初始化，排序值按 10 递增以便后续插入和拖拽排序。

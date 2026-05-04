@@ -325,7 +325,8 @@ export type GlobalSearchGroupType =
   | 'ancient-artifacts'
   | 'recipes'
   | 'daily-checklist'
-  | 'life';
+  | 'life'
+  | 'users';
 
 export interface GlobalSearchItem {
   id: number;

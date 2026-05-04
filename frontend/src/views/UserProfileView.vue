@@ -11,6 +11,7 @@ import Tabs, { type TabOption } from '../components/Tabs.vue';
 import {
   iconComment,
   iconCopy,
+  iconExternal,
   iconKey,
   iconLife,
   iconProfile,
@@ -609,7 +610,7 @@ function discussionTargetRoute(type: DiscussionEntityType, id: number): string {
 }
 
 function commentTargetRoute(comment: UserCommentActivity): string {
-  return comment.target.type === 'life-post' ? '/life' : discussionTargetRoute(comment.target.type, comment.target.id);
+  return comment.target.type === 'life-post' ? `/life/${comment.target.id}` : discussionTargetRoute(comment.target.type, comment.target.id);
 }
 
 function commentTargetTitle(comment: UserCommentActivity): string {
@@ -740,6 +741,10 @@ onMounted(() => {
                 <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
                 {{ t('pages.life.commentsCount', { count: commentTotal(post) }) }}
               </span>
+              <RouterLink class="profile-feed-card__detail-link" :to="`/life/${post.id}`">
+                <Icon :icon="iconExternal" class="ui-icon" aria-hidden="true" />
+                {{ t('pages.life.viewPost') }}
+              </RouterLink>
             </div>
           </article>
 
@@ -871,6 +876,10 @@ onMounted(() => {
                 <span>{{ formatDateTime(activity.post.createdAt) }}</span>
               </div>
               <p>{{ postExcerpt(activity.post) }}</p>
+              <RouterLink class="profile-post-preview__detail" :to="`/life/${activity.post.id}`">
+                <Icon :icon="iconExternal" class="ui-icon" aria-hidden="true" />
+                {{ t('pages.life.viewPost') }}
+              </RouterLink>
             </div>
           </article>
 

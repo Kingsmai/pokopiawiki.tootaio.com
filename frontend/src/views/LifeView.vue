@@ -18,6 +18,7 @@ import {
   iconComment,
   iconDelete,
   iconEdit,
+  iconExternal,
   iconLife,
   iconReactionFun,
   iconReactionHelpful,
@@ -1222,7 +1223,11 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <div v-if="canManage(post) || canDeletePost(post)" class="life-post__actions">
+              <div class="life-post__actions">
+                <RouterLink class="life-icon-button" :to="`/life/${post.id}`" :aria-label="t('pages.life.viewPost')">
+                  <Icon :icon="iconExternal" class="ui-icon" aria-hidden="true" />
+                  <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.viewPost') }}</span>
+                </RouterLink>
                 <button v-if="canManage(post)" class="life-icon-button" type="button" :aria-label="t('pages.life.editPost')" @click="startEdit(post)">
                   <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
                   <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.editPost') }}</span>

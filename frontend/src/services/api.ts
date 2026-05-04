@@ -1030,6 +1030,7 @@ export const api = {
         sort: params.sort
       })}`
     ),
+  lifePost: (id: string | number) => getJson<LifePost>(`/api/life-posts/${id}`),
   createLifePost: (payload: LifePostPayload) => sendJson<LifePost>('/api/life-posts', 'POST', payload),
   updateLifePost: (id: string | number, payload: LifePostPayload) =>
     sendJson<LifePost>(`/api/life-posts/${id}`, 'PUT', payload),

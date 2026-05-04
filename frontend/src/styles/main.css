@@ -2150,6 +2150,17 @@ button:disabled,
   min-width: 0;
 }
 
+.life-detail-page {
+  display: grid;
+  gap: 18px;
+}
+
+.life-detail-layout {
+  width: min(100%, 880px);
+  display: grid;
+  gap: 14px;
+}
+
 .life-feed__list {
   width: 100%;
   justify-self: stretch;
@@ -2487,6 +2498,10 @@ button:disabled,
   padding: 7px 10px;
 }
 
+.life-metric-button--static {
+  cursor: default;
+}
+
 .life-icon-button:hover,
 .life-icon-button[aria-expanded="true"],
 .life-icon-button.is-active,
@@ -2495,6 +2510,12 @@ button:disabled,
   border-color: color-mix(in srgb, var(--pokemon-blue) 45%, var(--line));
   background: color-mix(in srgb, var(--pokemon-blue) 10%, var(--surface-soft));
   color: var(--pokemon-blue-deep);
+}
+
+.life-metric-button--static:hover {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
 }
 
 .life-icon-button--flat {
@@ -5849,10 +5870,28 @@ button:disabled,
   gap: 6px;
 }
 
-.profile-feed-card__metrics .ui-icon {
+.profile-feed-card__detail-link,
+.profile-post-preview__detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pokemon-blue-deep);
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.profile-feed-card__metrics .ui-icon,
+.profile-post-preview__detail .ui-icon {
   width: 18px;
   height: 18px;
   color: var(--pokemon-blue);
+}
+
+.profile-feed-card__detail-link:hover,
+.profile-post-preview__detail:hover {
+  color: var(--pokemon-blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .profile-load-more {

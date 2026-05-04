@@ -3626,25 +3626,47 @@ export async function listUserCommentActivities(
   };
 }
 
-async function getLifePostById(id: number, userId: number | null = null, locale = defaultLocale): Promise<LifePost | null> {
+async function getLifePostById(
+  id: number,
+  userId: number | null = null,
+  locale = defaultLocale,
+  options: { enforceVisibility?: boolean; canViewAll?: boolean } = {}
+): Promise<LifePost | null> {
+  const params: unknown[] = [id];
+  const conditions = ['lp.id = $1', 'lp.deleted_at IS NULL'];
+
+  if (options.enforceVisibility) {
+    addModerationVisibilityCondition(conditions, params, 'lp', 'lp.created_by_user_id', userId, options.canViewAll === true);
+  }
+
   const post = await queryOne<LifePostRow>(
     `
       ${lifePostProjection(locale)}
-      WHERE lp.id = $1
-        AND lp.deleted_at IS NULL
+      WHERE ${conditions.join(' AND ')}
     `,
-    [id]
+    params
   );
 
   if (!post) {
     return null;
   }
 
-  const commentPreviewByPost = await lifeCommentPreviewForPosts([post.id], userId, false);
-  const commentCountsByPost = await lifeCommentCountsForPosts([post.id], userId, false);
+  const canViewAll = options.canViewAll === true;
+  const commentPreviewByPost = await lifeCommentPreviewForPosts([post.id], userId, canViewAll);
+  const commentCountsByPost = await lifeCommentCountsForPosts([post.id], userId, canViewAll);
   const { countsByPost, myReactionsByPost } = await lifeReactionsForPosts([post.id], userId);
   const myRatingsByPost = await lifeRatingsForPosts([post.id], userId);
   return hydrateLifePost(post, commentPreviewByPost, commentCountsByPost, countsByPost, myReactionsByPost, myRatingsByPost);
+}
+
+export async function getLifePost(
+  idValue: number,
+  userId: number | null = null,
+  locale = defaultLocale,
+  canViewAll = false
+): Promise<LifePost | null> {
+  const id = requirePositiveInteger(idValue, 'server.validation.recordInvalid');
+  return getLifePostById(id, userId, locale, { enforceVisibility: true, canViewAll });
 }
 
 async function ensureLifeCategory(client: DbClient, categoryId: number): Promise<void> {

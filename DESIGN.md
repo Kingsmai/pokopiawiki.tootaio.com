@@ -775,6 +775,7 @@ Life Post 可配置：
 
 - 所有人都可以浏览 Life 信息流。
 - 信息流按创建时间倒序展示。
+- Life Post 有独立详情页 `/life/:id`；用户可从 Life 信息流、User Profile 的 Feeds、Reactions 和 Comments 进入。
 - 已注册并完成邮箱验证且拥有 `life.posts.create` 权限的用户可以发布 Life Post。
 - 作者本人拥有 `life.posts.update` / `life.posts.delete` 权限时可以编辑、删除自己的 Life Post；删除 Life Post 使用软删除。
 - 拥有 `life.posts.update-any` / `life.posts.delete-any` 权限的用户可以管理其他用户的 Life Post。
@@ -782,7 +783,9 @@ Life Post 可配置：
 - 已注册并完成邮箱验证且拥有 `life.comments.create` 权限的用户可以评论 Life Post，并回复顶层评论。
 - 评论作者拥有 `life.comments.delete` 权限时可以删除自己的评论；拥有 `life.comments.delete-any` 权限的用户可以删除其他用户评论；删除评论后正文不再展示，已有回复保留在原位置。
 - 已软删除的 Life Post 不出现在信息流、搜索或 Category 筛选结果中，也不能继续编辑、评论或设置 Reaction。
+- 已软删除的 Life Post 详情页返回未找到，不公开软删除字段。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
+- Life Post 详情页默认展示该 Post 的评论区，并使用独立分页接口继续加载完整评论列表。
 - Life Feed 只随每条 Life Post 返回评论总数和最近少量评论预览；完整评论列表在展开评论区后通过独立分页接口按顶层评论正序读取，每页顶层评论携带其一层回复。
 - 已注册并完成邮箱验证且拥有 `life.reactions.set` 权限的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
@@ -798,6 +801,7 @@ Life Post 可配置：
 - 当前没有图片上传、转发或置顶。
 - Life Post 和 Life Comment 必须进入 AI 审核；未审核通过的内容不向普通访客公开。
 - 作者本人和拥有对应 `*-any` 管理权限的用户可以看到相关内容的审核状态，并可触发重新审核。
+- 未审核通过的 Life Post 详情只对作者本人和拥有对应管理权限的用户可见；普通访客访问时返回未找到。
 - Life Post 必须展示审核状态：审核中、未审核、审核失败、审核不通过；审核通过也可作为状态展示。
 - 新增或更新 Life Post 后先进入不可公开状态，AI 审核通过后才出现在普通公开 Feed。
 - Life Comment 和回复审核通过后才出现在普通公开评论列表、评论数量和评论预览中。
@@ -814,6 +818,7 @@ API 暴露边界：
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
 - Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
 - Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。每个 Life Post 的评论字段只包含已公开或当前用户可见评论的 `commentCount` 和 `commentPreview`，不内嵌完整评论列表。
+- Life Post 详情 API 返回单条 Life Post，字段边界与列表项一致；评论字段仍只包含 `commentCount` 和少量 `commentPreview`，完整评论通过评论分页接口读取。
 - Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌；普通访客只读取审核通过评论。
 - API 不返回邮箱、token/hash、内部调试字段、AI prompt、模型原始响应、内部审核错误或不必要的审计 payload。
 - API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
@@ -922,8 +927,9 @@ API 暴露边界：
   - `/recipes`
   - `/checklist`
   - `/life`
+  - `/life/:id`
   - `/project-updates`
-- `sitemap.xml` 当前只包含稳定的公开顶层浏览入口；实体详情页和公开 Profile 依赖运行时数据与站内链接可达性，当前不静态写入 sitemap。
+- `sitemap.xml` 当前只包含稳定的公开顶层浏览入口；实体详情页、Life Post 详情页和公开 Profile 依赖运行时数据与站内链接可达性，当前不静态写入 sitemap。
 - Pokemon、物品、材料单和栖息地详情页在公开详情数据加载完成后，用实体名称、公开展示图片和本地化 SEO 文案更新 title、description、canonical、Open Graph 和 Twitter card。
 - 认证、管理、新建、编辑和开发中入口必须设置 `noindex`，避免搜索引擎索引受保护、低价值或临时流程页面。
 - 新建页面 canonical 指向对应列表页；编辑 Modal 路由 canonical 指向对应实体详情页。
@@ -957,6 +963,7 @@ API 暴露边界：
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区；支持 `gameVersionId` 按 Game Version 筛选；支持 `rateable` 按可评分 Category 筛选；支持 `sort` 为 `latest`、`oldest` 或 `top-rated`。
+- `GET /api/life-posts/:id`：读取单条 Life Post 详情，遵守软删除和审核可见性规则。
 - `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。

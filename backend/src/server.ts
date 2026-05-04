@@ -68,6 +68,7 @@ import {
   getAncientArtifact,
   getHabitat,
   getItem,
+  getLifePost,
   getOptions,
   getPokemon,
   getPublicUserProfile,
@@ -1196,6 +1197,16 @@ app.get('/api/life-posts', async (request) => {
     requestLocale(request),
     canViewAll
   );
+});
+
+app.get('/api/life-posts/:id', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const user = await optionalUser(request);
+  const canViewAll = user
+    ? userHasPermission(user, 'life.posts.update-any') || userHasPermission(user, 'life.posts.delete-any')
+    : false;
+  const post = await getLifePost(Number(id), user?.id ?? null, requestLocale(request), canViewAll);
+  return post ? post : notFound(reply, request);
 });
 
 app.get('/api/life-posts/:postId/comments', async (request, reply) => {

@@ -36,6 +36,31 @@ type DataToolsBundle = {
   scopes: DataToolScope[];
   data: Partial<Record<DataToolScope, DataToolScopeData>>;
 };
+type GlobalSearchGroupType =
+  | 'pokemon'
+  | 'habitats'
+  | 'items'
+  | 'ancient-artifacts'
+  | 'recipes'
+  | 'daily-checklist'
+  | 'life';
+type GlobalSearchItem = {
+  id: number;
+  type: GlobalSearchGroupType;
+  title: string;
+  url: string;
+  summary: string | null;
+  meta: string | null;
+  image: EntityImageValue | PokemonImage | null;
+};
+type GlobalSearchGroup = {
+  type: GlobalSearchGroupType;
+  items: GlobalSearchItem[];
+};
+type GlobalSearchResults = {
+  query: string;
+  groups: GlobalSearchGroup[];
+};
 
 type TranslationField = 'name' | 'title' | 'details' | 'genus';
 type TranslationInput = Record<string, Partial<Record<TranslationField, unknown>>>;
@@ -2409,6 +2434,179 @@ export async function listDailyChecklistItems(locale = defaultLocale) {
       ORDER BY c.sort_order, c.id
     `
   );
+}
+
+export async function globalSearch(paramsQuery: QueryParams = {}, locale = defaultLocale): Promise<GlobalSearchResults> {
+  const search = asString(paramsQuery.query)?.trim() ?? asString(paramsQuery.search)?.trim() ?? '';
+  if (!search) {
+    return { query: '', groups: [] };
+  }
+
+  const pattern = `%${search}%`;
+  const limit = 5;
+  const pokemonName = localizedName('pokemon', 'p', locale);
+  const habitatName = localizedName('habitats', 'h', locale);
+  const itemName = localizedName('items', 'i', locale);
+  const itemCategoryName = systemListJsonSql('i.category_key', itemCategoryOptions, locale);
+  const artifactName = localizedName('ancient-artifacts', 'a', locale);
+  const artifactCategoryName = systemListJsonSql('a.category_key', ancientArtifactCategoryOptions, locale);
+  const recipeItemName = localizedName('items', 'result_item', locale);
+  const recipeMaterialName = localizedName('items', 'material_item', locale);
+  const checklistTitle = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
+  const lifeCategoryName = localizedName('life-tags', 'lc', locale);
+
+  const [pokemon, habitats, items, artifacts, recipes, checklist, life] = await Promise.all([
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          p.id,
+          'pokemon' AS type,
+          ${pokemonName} AS title,
+          '/pokemon/' || p.id AS url,
+          NULLIF(p.genus, '') AS summary,
+          '#' || p.display_id::text AS meta,
+          ${pokemonImageJson('p')} AS image
+        FROM pokemon p
+        WHERE ${pokemonName} ILIKE $1
+        ORDER BY ${orderByEntity('p')}
+        LIMIT $2
+      `,
+      [pattern, limit]
+    ),
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          h.id,
+          'habitats' AS type,
+          ${habitatName} AS title,
+          '/habitats/' || h.id AS url,
+          NULL AS summary,
+          NULL AS meta,
+          ${uploadedImageJson('h.image_path')} AS image
+        FROM habitats h
+        WHERE ${habitatName} ILIKE $1
+        ORDER BY ${orderByEntity('h')}
+        LIMIT $2
+      `,
+      [pattern, limit]
+    ),
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          i.id,
+          'items' AS type,
+          ${itemName} AS title,
+          '/items/' || i.id AS url,
+          NULLIF(i.details, '') AS summary,
+          (${itemCategoryName}->>'name') AS meta,
+          ${uploadedImageJson('i.image_path')} AS image
+        FROM items i
+        WHERE ${itemName} ILIKE $1
+        ORDER BY i.display_id, ${orderByEntity('i')}
+        LIMIT $2
+      `,
+      [pattern, limit]
+    ),
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          a.id,
+          'ancient-artifacts' AS type,
+          ${artifactName} AS title,
+          '/ancient-artifacts/' || a.id AS url,
+          NULLIF(a.details, '') AS summary,
+          (${artifactCategoryName}->>'name') AS meta,
+          ${uploadedImageJson('a.image_path')} AS image
+        FROM ancient_artifacts a
+        WHERE ${artifactName} ILIKE $1
+        ORDER BY a.display_id, ${orderByEntity('a')}
+        LIMIT $2
+      `,
+      [pattern, limit]
+    ),
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          r.id,
+          'recipes' AS type,
+          ${recipeItemName} AS title,
+          '/recipes/' || r.id AS url,
+          (
+            SELECT string_agg(material_rows.name, ' / ' ORDER BY material_rows.name)
+            FROM (
+              SELECT DISTINCT ${recipeMaterialName} AS name
+              FROM recipe_materials rm
+              JOIN items material_item ON material_item.id = rm.item_id
+              WHERE rm.recipe_id = r.id
+            ) material_rows
+          ) AS summary,
+          NULL AS meta,
+          ${uploadedImageJson('result_item.image_path')} AS image
+        FROM recipes r
+        JOIN items result_item ON result_item.id = r.item_id
+        WHERE ${recipeItemName} ILIKE $1
+          OR EXISTS (
+            SELECT 1
+            FROM recipe_materials rm
+            JOIN items material_item ON material_item.id = rm.item_id
+            WHERE rm.recipe_id = r.id
+              AND ${recipeMaterialName} ILIKE $1
+          )
+        ORDER BY ${orderByEntity('r')}
+        LIMIT $2
+      `,
+      [pattern, limit]
+    ),
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          c.id,
+          'daily-checklist' AS type,
+          ${checklistTitle} AS title,
+          '/checklist' AS url,
+          NULL AS summary,
+          NULL AS meta,
+          NULL AS image
+        FROM daily_checklist_items c
+        WHERE ${checklistTitle} ILIKE $1
+        ORDER BY ${orderByEntity('c')}
+        LIMIT $2
+      `,
+      [pattern, limit]
+    ),
+    query<GlobalSearchItem>(
+      `
+        SELECT
+          lp.id,
+          'life' AS type,
+          LEFT(lp.body, 120) AS title,
+          '/life/' || lp.id AS url,
+          NULL AS summary,
+          ${lifeCategoryName} AS meta,
+          NULL AS image
+        FROM life_posts lp
+        LEFT JOIN life_tags lc ON lc.id = lp.category_id
+        WHERE lp.deleted_at IS NULL
+          AND lp.ai_moderation_status = 'approved'
+          AND lp.body ILIKE $1
+        ORDER BY lp.created_at DESC, lp.id DESC
+        LIMIT $2
+      `,
+      [pattern, limit]
+    )
+  ]);
+
+  const groups: GlobalSearchGroup[] = [
+    { type: 'pokemon', items: pokemon },
+    { type: 'habitats', items: habitats },
+    { type: 'items', items: items },
+    { type: 'ancient-artifacts', items: artifacts },
+    { type: 'recipes', items: recipes },
+    { type: 'daily-checklist', items: checklist },
+    { type: 'life', items: life }
+  ];
+
+  return { query: search, groups: groups.filter((group) => group.items.length > 0) };
 }
 
 async function getDailyChecklistItemById(id: number, locale = defaultLocale) {

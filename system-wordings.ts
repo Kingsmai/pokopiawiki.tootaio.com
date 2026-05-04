@@ -76,6 +76,23 @@ export const systemWordingMessages = {
       logout: 'Log out',
       register: 'Register'
     },
+    search: {
+      label: 'Search Pokopia Wiki',
+      placeholder: 'Search wiki',
+      open: 'Open search',
+      clear: 'Clear search',
+      empty: 'No matching results',
+      failed: 'Search is unavailable',
+      groups: {
+        pokemon: 'Pokemon',
+        habitats: 'Habitats',
+        items: 'Items',
+        ancientArtifacts: 'Ancient Artifacts',
+        recipes: 'Recipes',
+        dailyChecklist: 'Daily CheckList',
+        life: 'Life'
+      }
+    },
     notifications: {
       title: 'Notifications',
       open: 'Open notifications',
@@ -1361,6 +1378,23 @@ export const systemWordingMessages = {
       login: '登录',
       logout: '退出',
       register: '注册'
+    },
+    search: {
+      label: '搜索 Pokopia Wiki',
+      placeholder: '搜索 Wiki',
+      open: '打开搜索',
+      clear: '清空搜索',
+      empty: '没有匹配结果',
+      failed: '搜索暂不可用',
+      groups: {
+        pokemon: 'Pokemon',
+        habitats: '栖息地',
+        items: '物品',
+        ancientArtifacts: 'Ancient Artifacts',
+        recipes: '材料单',
+        dailyChecklist: '每日 CheckList',
+        life: 'Life'
+      }
     },
     notifications: {
       title: '通知',

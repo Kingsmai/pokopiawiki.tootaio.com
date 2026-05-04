@@ -73,6 +73,7 @@ import {
   getPokemon,
   getPublicUserProfile,
   getRecipe,
+  globalSearch,
   importAdminData,
   isConfigType,
   listAncientArtifacts,
@@ -218,6 +219,10 @@ app.setErrorHandler(async (error, _request, reply) => {
 });
 
 app.get('/health', async () => ({ ok: true }));
+
+app.get('/api/search', async (request) =>
+  globalSearch(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
+);
 
 function getBearerToken(authorization: string | undefined): string | null {
   const [scheme, token] = authorization?.split(' ') ?? [];

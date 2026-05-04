@@ -16,6 +16,7 @@ import {
   type AppIcon
 } from '../icons';
 import type { AuthUser, Language } from '../services/api';
+import GlobalSearch from './GlobalSearch.vue';
 import NotificationBell from './NotificationBell.vue';
 import PokeBallMark from './PokeBallMark.vue';
 import StatusBadge from './StatusBadge.vue';
@@ -270,6 +271,8 @@ onBeforeUnmount(() => {
             </span>
           </RouterLink>
         </div>
+
+        <GlobalSearch class="site-topbar__search" @navigate="closeSidebar" />
 
         <div class="site-topbar__spacer" aria-hidden="true"></div>
 

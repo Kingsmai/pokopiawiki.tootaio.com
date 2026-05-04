@@ -318,6 +318,35 @@ export interface DailyChecklistItem {
   translations?: TranslationMap;
 }
 
+export type GlobalSearchGroupType =
+  | 'pokemon'
+  | 'habitats'
+  | 'items'
+  | 'ancient-artifacts'
+  | 'recipes'
+  | 'daily-checklist'
+  | 'life';
+
+export interface GlobalSearchItem {
+  id: number;
+  type: GlobalSearchGroupType;
+  title: string;
+  url: string;
+  summary: string | null;
+  meta: string | null;
+  image: EntityImage | PokemonImage | null;
+}
+
+export interface GlobalSearchGroup {
+  type: GlobalSearchGroupType;
+  items: GlobalSearchItem[];
+}
+
+export interface GlobalSearchResults {
+  query: string;
+  groups: GlobalSearchGroup[];
+}
+
 export type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'artifacts' | 'recipes' | 'checklist';
 
 export interface DataToolScopeSummary {
@@ -1033,6 +1062,8 @@ async function deleteAndGetJson<T>(path: string): Promise<T> {
 }
 
 export const api = {
+  globalSearch: (query: string, signal?: AbortSignal) =>
+    getJson<GlobalSearchResults>(`/api/search${buildQuery({ query: query.trim() })}`, signal),
   languages: () => getJson<Language[]>('/api/languages'),
   projectUpdates: (params: ProjectUpdatesParams = {}) =>
     getJson<ProjectUpdates>(

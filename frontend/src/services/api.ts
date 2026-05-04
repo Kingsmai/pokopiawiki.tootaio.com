@@ -4,7 +4,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 const authTokenKey = 'pokopia_auth_token';
 const authChangeEvent = 'pokopia-auth-change';
 
-export type TranslationField = 'name' | 'title' | 'details' | 'genus';
+export type TranslationField = 'name' | 'title' | 'details' | 'genus' | 'effect' | 'mosslaxEffect';
 export type TranslationMap = Record<string, Partial<Record<TranslationField, string>>>;
 
 export interface Language {
@@ -311,6 +311,37 @@ export interface Recipe extends EditInfo {
   materials: Array<NamedEntity & { image?: EntityImage | null; quantity: number }>;
 }
 
+export interface ItemLink extends NamedEntity {
+  displayId: number;
+  image?: EntityImage | null;
+  category?: NamedEntity;
+}
+
+export interface Dish extends EditInfo {
+  id: number;
+  flavor: NamedEntity;
+  mosslaxEffect: string;
+  baseMosslaxEffect?: string;
+  translations?: TranslationMap;
+  category: NamedEntity;
+  item: ItemLink;
+  secondaryMaterials: ItemLink[];
+  pokemonSkill: Skill | null;
+}
+
+export interface DishCategory extends EditInfo {
+  id: number;
+  name: string;
+  baseName?: string;
+  effect: string;
+  baseEffect?: string;
+  translations?: TranslationMap;
+  cookware: ItemLink;
+  mainMaterial: ItemLink;
+  totalMaterialQuantity: number;
+  dishes: Dish[];
+}
+
 export interface DailyChecklistItem {
   id: number;
   title: string;
@@ -552,6 +583,7 @@ export interface Options {
   maps: NamedEntity[];
   lifeCategories: LifeCategory[];
   gameVersions: GameVersion[];
+  dishFlavors: NamedEntity[];
 }
 
 export interface AuthUser {
@@ -711,7 +743,8 @@ export type ConfigType =
   | 'acquisition-methods'
   | 'maps'
   | 'life-tags'
-  | 'game-versions';
+  | 'game-versions'
+  | 'dish-flavors';
 
 export interface PokemonPayload {
   dataId?: number | null;
@@ -788,6 +821,25 @@ export interface RecipePayload {
   itemId: number;
   acquisitionMethodIds: number[];
   materials: Array<{ itemId: number; quantity: number }>;
+}
+
+export interface DishCategoryPayload {
+  name: string;
+  effect: string;
+  translations?: TranslationMap;
+  cookwareItemId: number;
+  mainMaterialItemId: number;
+  totalMaterialQuantity: number;
+}
+
+export interface DishPayload {
+  categoryId: number;
+  itemId: number;
+  flavorId: number;
+  secondaryMaterialItemIds: number[];
+  pokemonSkillId: number | null;
+  mosslaxEffect: string;
+  translations?: TranslationMap;
 }
 
 export interface HabitatPayload {
@@ -1359,5 +1411,16 @@ export const api = {
   updateRecipe: (id: string | number, payload: RecipePayload) =>
     sendJson<RecipeDetail>(`/api/recipes/${id}`, 'PUT', payload),
   deleteRecipe: (id: string | number) => deleteJson(`/api/recipes/${id}`),
-  reorderRecipes: (ids: number[]) => sendJson<Recipe[]>('/api/admin/recipes/order', 'PUT', { ids })
+  reorderRecipes: (ids: number[]) => sendJson<Recipe[]>('/api/admin/recipes/order', 'PUT', { ids }),
+  dish: () => getJson<DishCategory[]>('/api/dish'),
+  createDishCategory: (payload: DishCategoryPayload) => sendJson<DishCategory>('/api/admin/dish/categories', 'POST', payload),
+  updateDishCategory: (id: string | number, payload: DishCategoryPayload) =>
+    sendJson<DishCategory>(`/api/admin/dish/categories/${id}`, 'PUT', payload),
+  deleteDishCategory: (id: string | number) => deleteJson(`/api/admin/dish/categories/${id}`),
+  reorderDishCategories: (ids: number[]) => sendJson<DishCategory[]>('/api/admin/dish/categories/order', 'PUT', { ids }),
+  createDish: (payload: DishPayload) => sendJson<Dish>('/api/admin/dish/dishes', 'POST', payload),
+  updateDish: (id: string | number, payload: DishPayload) =>
+    sendJson<Dish>(`/api/admin/dish/dishes/${id}`, 'PUT', payload),
+  deleteDish: (id: string | number) => deleteJson(`/api/admin/dish/dishes/${id}`),
+  reorderDishes: (ids: number[]) => sendJson<DishCategory[]>('/api/admin/dish/dishes/order', 'PUT', { ids })
 };

@@ -38,6 +38,8 @@ import {
   createAncientArtifact,
   createConfig,
   createDailyChecklistItem,
+  createDish,
+  createDishCategory,
   createEntityDiscussionComment,
   createEntityDiscussionReply,
   createHabitat,
@@ -51,6 +53,8 @@ import {
   deleteConfig,
   deleteAncientArtifact,
   deleteDailyChecklistItem,
+  deleteDish,
+  deleteDishCategory,
   deleteEntityDiscussionComment,
   deleteHabitat,
   deleteItem,
@@ -71,6 +75,7 @@ import {
   getAncientArtifact,
   getHabitat,
   getItem,
+  listDish,
   getLifePost,
   getOptions,
   getPokemon,
@@ -99,6 +104,8 @@ import {
   reorderConfig,
   reorderAncientArtifacts,
   reorderDailyChecklistItems,
+  reorderDishCategories,
+  reorderDishes,
   reorderHabitats,
   reorderItems,
   reorderLanguages,
@@ -115,6 +122,8 @@ import {
   updateConfig,
   updateAncientArtifact,
   updateDailyChecklistItem,
+  updateDish,
+  updateDishCategory,
   updateHabitat,
   updateItem,
   updateLanguage,
@@ -1908,6 +1917,72 @@ app.delete('/api/recipes/:id', async (request, reply) => {
   }
   const { id } = request.params as { id: string };
   const deleted = await deleteRecipe(Number(id), user.id);
+  return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
+app.get('/api/dish', async (request) => listDish(requestLocale(request)));
+
+app.post('/api/admin/dish/categories', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.create', 'wikiWrite');
+  return user
+    ? reply.code(201).send(await createDishCategory(request.body as Record<string, unknown>, user.id, requestLocale(request)))
+    : undefined;
+});
+
+app.put('/api/admin/dish/categories/order', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.order', 'wikiWrite');
+  return user ? reorderDishCategories(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
+});
+
+app.put('/api/admin/dish/categories/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.update', 'wikiWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const category = await updateDishCategory(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
+  return category ? category : notFound(reply, request);
+});
+
+app.delete('/api/admin/dish/categories/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.delete', 'wikiWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteDishCategory(Number(id), user.id);
+  return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
+app.post('/api/admin/dish/dishes', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.create', 'wikiWrite');
+  return user
+    ? reply.code(201).send(await createDish(request.body as Record<string, unknown>, user.id, requestLocale(request)))
+    : undefined;
+});
+
+app.put('/api/admin/dish/dishes/order', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.order', 'wikiWrite');
+  return user ? reorderDishes(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
+});
+
+app.put('/api/admin/dish/dishes/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.update', 'wikiWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const dish = await updateDish(Number(id), request.body as Record<string, unknown>, user.id, requestLocale(request));
+  return dish ? dish : notFound(reply, request);
+});
+
+app.delete('/api/admin/dish/dishes/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'dish.delete', 'wikiWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteDish(Number(id), user.id);
   return deleted ? reply.code(204).send() : notFound(reply, request);
 });
 

@@ -16,6 +16,7 @@ import {
   iconCancel,
   iconChecklist,
   iconDelete,
+  iconDish,
   iconEdit,
   iconHabitat,
   iconItem,
@@ -43,6 +44,8 @@ import {
   type DataToolsBundle,
   type DataToolsSummary,
   type DailyChecklistItem,
+  type Dish,
+  type DishCategory,
   type GameVersion,
   type Habitat,
   type Item,
@@ -80,6 +83,7 @@ type AdminTab =
   | 'items'
   | 'ancientArtifacts'
   | 'recipes'
+  | 'dish'
   | 'habitats';
 type AdminGroup = 'content' | 'configuration' | 'localization' | 'access';
 type AdminNavItem = { key: AdminTab; label: string; permission: string | string[] };
@@ -131,6 +135,7 @@ const adminTabIcons: Record<AdminTab, AppIcon> = {
   items: iconItem,
   ancientArtifacts: iconArtifact,
   recipes: iconRecipe,
+  dish: iconDish,
   habitats: iconHabitat
 };
 
@@ -156,6 +161,7 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
           permission: ['ancient-artifacts.order', 'ancient-artifacts.delete']
         },
         { key: 'recipes', label: t('pages.admin.recipeList'), permission: ['recipes.order', 'recipes.delete'] },
+        { key: 'dish', label: t('pages.admin.dishList'), permission: ['dish.create', 'dish.update', 'dish.delete', 'dish.order'] },
         { key: 'habitats', label: t('pages.admin.habitatList'), permission: ['habitats.order', 'habitats.delete'] },
         { key: 'dataTools', label: t('pages.admin.dataTools'), permission: ['admin.data.export', 'admin.data.import'] }
       ]
@@ -197,7 +203,8 @@ const configTypes = computed<
   { key: 'acquisition-methods', label: t('config.acquisitionMethods') },
   { key: 'maps', label: t('config.maps') },
   { key: 'life-tags', label: t('config.lifeCategories'), supportsDefault: true, supportsRateable: true },
-  { key: 'game-versions', label: t('config.gameVersions'), supportsChangeLog: true }
+  { key: 'game-versions', label: t('config.gameVersions'), supportsChangeLog: true },
+  { key: 'dish-flavors', label: t('config.dishFlavors') }
 ]);
 
 const activeTab = ref<AdminTab>('config');
@@ -212,6 +219,10 @@ const pokemonRows = ref<Pokemon[]>([]);
 const itemRows = ref<Item[]>([]);
 const ancientArtifactRows = ref<AncientArtifact[]>([]);
 const recipeRows = ref<Recipe[]>([]);
+const dishCategoryRows = ref<DishCategory[]>([]);
+const dishItemRows = ref<Item[]>([]);
+const dishSkillRows = ref<Skill[]>([]);
+const dishFlavorRows = ref<NamedEntity[]>([]);
 const habitatRows = ref<Habitat[]>([]);
 const wordingRows = ref<SystemWording[]>([]);
 const aiModerationSettings = ref<AiModerationSettings | null>(null);
@@ -231,6 +242,25 @@ const configForm = ref({
   changeLog: ''
 });
 const checklistForm = ref({ id: 0, title: '', translations: {} as TranslationMap });
+const dishCategoryForm = ref({
+  id: 0,
+  name: '',
+  effect: '',
+  translations: {} as TranslationMap,
+  cookwareItemId: '',
+  mainMaterialItemId: '',
+  totalMaterialQuantity: 2
+});
+const dishForm = ref({
+  id: 0,
+  categoryId: '',
+  itemId: '',
+  flavorId: '',
+  translations: {} as TranslationMap,
+  secondaryMaterialItemIds: ['', ''],
+  pokemonSkillId: '',
+  mosslaxEffect: ''
+});
 const languageForm = ref({ code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 });
 const wordingForm = ref({ key: '', locale: defaultLocale, value: '', defaultValue: '', placeholders: [] as string[] });
 const aiModerationForm = ref({
@@ -262,6 +292,8 @@ const permissionForm = ref({ id: 0, key: '', name: '', description: '', category
 const editingLanguageCode = ref('');
 const configModalOpen = ref(false);
 const checklistModalOpen = ref(false);
+const dishCategoryModalOpen = ref(false);
+const dishModalOpen = ref(false);
 const languageModalOpen = ref(false);
 const wordingModalOpen = ref(false);
 const userRoleModalOpen = ref(false);
@@ -320,6 +352,13 @@ const configModalTitle = computed(() =>
   configForm.value.id ? t('pages.admin.editConfig', { name: selectedConfig.value.label }) : t('pages.admin.newConfig', { name: selectedConfig.value.label })
 );
 const checklistModalTitle = computed(() => (checklistForm.value.id ? t('pages.checklist.editTask') : t('pages.checklist.newTask')));
+const dishCategoryModalTitle = computed(() =>
+  dishCategoryForm.value.id ? t('pages.dish.editCategory') : t('pages.dish.newCategory')
+);
+const dishModalTitle = computed(() => (dishForm.value.id ? t('pages.dish.editDish') : t('pages.dish.newDish')));
+const dishRows = computed(() => dishCategoryRows.value.flatMap((category) => category.dishes));
+const selectedDishFormCategory = computed(() => dishCategoryRows.value.find((category) => String(category.id) === dishForm.value.categoryId) ?? null);
+const dishAllowsSecondSecondaryMaterial = computed(() => (selectedDishFormCategory.value?.totalMaterialQuantity ?? 0) > 2);
 const languageModalTitle = computed(() => (editingLanguageCode.value ? t('pages.admin.editLanguage') : t('pages.admin.newLanguage')));
 const wordingModalTitle = computed(() => t('pages.admin.editWording'));
 const roleModalTitle = computed(() => (roleForm.value.id ? t('pages.admin.editRole') : t('pages.admin.newRole')));
@@ -414,6 +453,10 @@ const ancientArtifactKey = (item: AncientArtifact) => item.id;
 const ancientArtifactLabel = (item: AncientArtifact) => `#${item.displayId} ${item.name}`;
 const recipeKey = (item: Recipe) => item.id;
 const recipeLabel = (item: Recipe) => item.name;
+const dishCategoryKey = (item: DishCategory) => item.id;
+const dishCategoryLabel = (item: DishCategory) => item.name;
+const dishKey = (item: Dish) => item.id;
+const dishLabel = (item: Dish) => `#${item.item.displayId} ${item.item.name}`;
 const habitatKey = (item: Habitat) => item.id;
 const habitatLabel = (item: Habitat) => item.name;
 
@@ -525,6 +568,31 @@ function resetChecklistForm() {
   checklistForm.value = { id: 0, title: '', translations: {} };
 }
 
+function resetDishCategoryForm() {
+  dishCategoryForm.value = {
+    id: 0,
+    name: '',
+    effect: '',
+    translations: {},
+    cookwareItemId: '',
+    mainMaterialItemId: '',
+    totalMaterialQuantity: 2
+  };
+}
+
+function resetDishForm() {
+  dishForm.value = {
+    id: 0,
+    categoryId: dishCategoryRows.value[0] ? String(dishCategoryRows.value[0].id) : '',
+    itemId: '',
+    flavorId: '',
+    translations: {},
+    secondaryMaterialItemIds: ['', ''],
+    pokemonSkillId: '',
+    mosslaxEffect: ''
+  };
+}
+
 function resetLanguageForm() {
   languageForm.value = { code: '', name: '', enabled: true, isDefault: false, sortOrder: 0 };
   editingLanguageCode.value = '';
@@ -619,6 +687,53 @@ function closeChecklistModal() {
 function editChecklistItem(item: DailyChecklistItem) {
   checklistForm.value = { id: item.id, title: item.baseTitle ?? item.title, translations: item.translations ?? {} };
   checklistModalOpen.value = true;
+}
+
+function openNewDishCategory() {
+  resetDishCategoryForm();
+  dishCategoryModalOpen.value = true;
+}
+
+function closeDishCategoryModal() {
+  dishCategoryModalOpen.value = false;
+  resetDishCategoryForm();
+}
+
+function editDishCategory(item: DishCategory) {
+  dishCategoryForm.value = {
+    id: item.id,
+    name: item.baseName ?? item.name,
+    effect: item.baseEffect ?? item.effect,
+    translations: item.translations ?? {},
+    cookwareItemId: String(item.cookware.id),
+    mainMaterialItemId: String(item.mainMaterial.id),
+    totalMaterialQuantity: item.totalMaterialQuantity
+  };
+  dishCategoryModalOpen.value = true;
+}
+
+function openNewDish() {
+  resetDishForm();
+  dishModalOpen.value = true;
+}
+
+function closeDishModal() {
+  dishModalOpen.value = false;
+  resetDishForm();
+}
+
+function editDish(item: Dish) {
+  dishForm.value = {
+    id: item.id,
+    categoryId: String(item.category.id),
+    itemId: String(item.item.id),
+    flavorId: String(item.flavor.id),
+    translations: item.translations ?? {},
+    secondaryMaterialItemIds: [String(item.secondaryMaterials[0]?.id ?? ''), String(item.secondaryMaterials[1]?.id ?? '')],
+    pokemonSkillId: String(item.pokemonSkill?.id ?? ''),
+    mosslaxEffect: item.baseMosslaxEffect ?? item.mosslaxEffect
+  };
+  dishModalOpen.value = true;
 }
 
 function openNewLanguage() {
@@ -786,6 +901,21 @@ function previewRecipeOrder(rows: Recipe[]) {
   recipeRows.value = rows;
 }
 
+function previewDishCategoryOrder(rows: DishCategory[]) {
+  dishCategoryRows.value = rows;
+}
+
+function previewDishOrder(rows: Dish[]) {
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const orderById = new Map(rows.map((row, index) => [row.id, index]));
+  dishCategoryRows.value = dishCategoryRows.value.map((category) => ({
+    ...category,
+    dishes: category.dishes
+      .map((dish) => rowsById.get(dish.id) ?? dish)
+      .sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0))
+  }));
+}
+
 function previewHabitatOrder(rows: Habitat[]) {
   habitatRows.value = rows;
 }
@@ -875,6 +1005,30 @@ async function persistRecipeOrder(nextRows: Recipe[], fallbackRows: Recipe[]) {
   });
 }
 
+async function persistDishCategoryOrder(nextRows: DishCategory[], fallbackRows: DishCategory[]) {
+  dishCategoryRows.value = nextRows;
+  await run(async () => {
+    try {
+      dishCategoryRows.value = await api.reorderDishCategories(nextRows.map((item) => item.id));
+    } catch (error) {
+      dishCategoryRows.value = fallbackRows;
+      throw error;
+    }
+  });
+}
+
+async function persistDishOrder(nextRows: Dish[], fallbackRows: Dish[]) {
+  previewDishOrder(nextRows);
+  await run(async () => {
+    try {
+      dishCategoryRows.value = await api.reorderDishes(nextRows.map((item) => item.id));
+    } catch (error) {
+      previewDishOrder(fallbackRows);
+      throw error;
+    }
+  });
+}
+
 async function persistHabitatOrder(nextRows: Habitat[], fallbackRows: Habitat[]) {
   habitatRows.value = nextRows;
   await run(async () => {
@@ -935,6 +1089,59 @@ async function saveChecklistItem() {
   });
 }
 
+function dishCategoryPayloadForSave() {
+  return {
+    name: dishCategoryForm.value.name,
+    effect: dishCategoryForm.value.effect,
+    translations: dishCategoryForm.value.translations,
+    cookwareItemId: Number(dishCategoryForm.value.cookwareItemId),
+    mainMaterialItemId: Number(dishCategoryForm.value.mainMaterialItemId),
+    totalMaterialQuantity: Number(dishCategoryForm.value.totalMaterialQuantity)
+  };
+}
+
+function dishPayloadForSave() {
+  const secondaryMaterialItemIds = dishForm.value.secondaryMaterialItemIds
+    .map((itemId) => Number(itemId))
+    .filter((itemId) => Number.isInteger(itemId) && itemId > 0);
+
+  return {
+    categoryId: Number(dishForm.value.categoryId),
+    itemId: Number(dishForm.value.itemId),
+    flavorId: Number(dishForm.value.flavorId),
+    translations: dishForm.value.translations,
+    secondaryMaterialItemIds: dishAllowsSecondSecondaryMaterial.value ? secondaryMaterialItemIds : secondaryMaterialItemIds.slice(0, 1),
+    pokemonSkillId: dishForm.value.pokemonSkillId ? Number(dishForm.value.pokemonSkillId) : null,
+    mosslaxEffect: dishForm.value.mosslaxEffect
+  };
+}
+
+async function saveDishCategory() {
+  await run(async () => {
+    const payload = dishCategoryPayloadForSave();
+    if (dishCategoryForm.value.id) {
+      await api.updateDishCategory(dishCategoryForm.value.id, payload);
+    } else {
+      await api.createDishCategory(payload);
+    }
+    await loadDishAdmin();
+    closeDishCategoryModal();
+  });
+}
+
+async function saveDish() {
+  await run(async () => {
+    const payload = dishPayloadForSave();
+    if (dishForm.value.id) {
+      await api.updateDish(dishForm.value.id, payload);
+    } else {
+      await api.createDish(payload);
+    }
+    await loadDishAdmin();
+    closeDishModal();
+  });
+}
+
 async function saveLanguage() {
   await run(async () => {
     const payload = {
@@ -976,6 +1183,18 @@ async function loadAncientArtifacts() {
 
 async function loadRecipes() {
   recipeRows.value = await api.recipes();
+}
+
+async function loadDishAdmin() {
+  await loadLanguages();
+  const [dishCategories, items, options] = await Promise.all([api.dish(), api.items({}), api.options()]);
+  dishCategoryRows.value = dishCategories;
+  dishItemRows.value = items;
+  dishSkillRows.value = options.skills;
+  dishFlavorRows.value = options.dishFlavors;
+  if (!dishForm.value.id && !dishForm.value.categoryId) {
+    resetDishForm();
+  }
 }
 
 async function loadHabitats() {
@@ -1153,6 +1372,7 @@ async function loadCurrentTab(showSkeleton = false) {
     if (activeTab.value === 'items') await loadItems();
     if (activeTab.value === 'ancientArtifacts') await loadAncientArtifacts();
     if (activeTab.value === 'recipes') await loadRecipes();
+    if (activeTab.value === 'dish') await loadDishAdmin();
     if (activeTab.value === 'habitats') await loadHabitats();
   } finally {
     if (showSkeleton) {
@@ -1250,6 +1470,26 @@ async function removeRecipe(id: number) {
   await run(async () => {
     await api.deleteRecipe(id);
     await loadRecipes();
+  });
+}
+
+async function removeDishCategory(id: number) {
+  await run(async () => {
+    await api.deleteDishCategory(id);
+    if (dishCategoryForm.value.id === id) {
+      closeDishCategoryModal();
+    }
+    await loadDishAdmin();
+  });
+}
+
+async function removeDish(id: number) {
+  await run(async () => {
+    await api.deleteDish(id);
+    if (dishForm.value.id === id) {
+      closeDishModal();
+    }
+    await loadDishAdmin();
   });
 }
 
@@ -2088,6 +2328,84 @@ onMounted(() => {
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
+    <section v-else-if="canEdit && activeTab === 'dish'" class="detail-section">
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.dishList') }}</h2>
+        <span class="row-actions">
+          <button v-if="can('dish.create')" type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewDishCategory">
+            <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.dish.newCategory') }}
+          </button>
+          <button v-if="can('dish.create')" type="button" class="ui-button ui-button--blue ui-button--small" :disabled="busy || !dishCategoryRows.length" @click="openNewDish">
+            <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.dish.newDish') }}
+          </button>
+        </span>
+      </div>
+
+      <h3 class="section-subtitle">{{ t('pages.dish.categories') }}</h3>
+      <ReorderableList
+        v-if="dishCategoryRows.length"
+        :items="dishCategoryRows"
+        :item-key="dishCategoryKey"
+        :item-label="dishCategoryLabel"
+        list-key-prefix="dish-categories"
+        :disabled="busy || !can('dish.order')"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewDishCategoryOrder"
+        @cancel="previewDishCategoryOrder"
+        @reorder="persistDishCategoryOrder"
+      >
+        <template #default="{ item }">
+          <span class="reorderable-row-title">{{ item.name }}</span>
+          <span class="meta-line">{{ item.cookware.name }} / {{ item.mainMaterial.name }} / {{ item.totalMaterialQuantity }}</span>
+          <span class="row-actions">
+            <button v-if="can('dish.update')" type="button" :disabled="busy" @click="editDishCategory(item)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button v-if="can('dish.delete')" type="button" :disabled="busy" @click="removeDishCategory(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
+          </span>
+        </template>
+      </ReorderableList>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+
+      <h3 class="section-subtitle">{{ t('pages.dish.dishes') }}</h3>
+      <ReorderableList
+        v-if="dishRows.length"
+        :items="dishRows"
+        :item-key="dishKey"
+        :item-label="dishLabel"
+        list-key-prefix="dishes"
+        :disabled="busy || !can('dish.order')"
+        :handle-label="dragSortLabel"
+        :handle-title="t('pages.admin.dragSortTitle')"
+        @preview="previewDishOrder"
+        @cancel="previewDishOrder"
+        @reorder="persistDishOrder"
+      >
+        <template #default="{ item }">
+          <RouterLink :to="`/items/${item.item.id}`">#{{ item.item.displayId }} {{ item.item.name }}</RouterLink>
+          <span class="meta-line">{{ item.category.name }} / {{ item.flavor.name }}</span>
+          <span class="row-actions">
+            <button v-if="can('dish.update')" type="button" :disabled="busy" @click="editDish(item)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button v-if="can('dish.delete')" type="button" :disabled="busy" @click="removeDish(item.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
+          </span>
+        </template>
+      </ReorderableList>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
+    </section>
+
     <section v-else-if="canEdit && activeTab === 'habitats'" class="detail-section">
       <h2>{{ t('pages.admin.habitatList') }}</h2>
       <ReorderableList
@@ -2318,6 +2636,131 @@ onMounted(() => {
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>
         <button type="button" class="plain-button" :disabled="busy" @click="closeChecklistModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="dishCategoryModalOpen" :title="dishCategoryModalTitle" :close-label="t('common.close')" size="wide" @close="closeDishCategoryModal">
+      <form id="admin-dish-category-form" class="modal-edit-form dish-form-stack" @submit.prevent="saveDishCategory">
+        <div class="dish-form-row dish-form-row--4">
+          <TranslationFields
+            id-prefix="dish-category-name"
+            v-model:base-value="dishCategoryForm.name"
+            v-model:translations="dishCategoryForm.translations"
+            field="name"
+            :label="t('common.name')"
+            :languages="languageRows"
+            required
+          />
+          <div class="field">
+            <label for="dish-category-cookware">{{ t('pages.dish.cookware') }}</label>
+            <select id="dish-category-cookware" v-model="dishCategoryForm.cookwareItemId" required>
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="item in dishItemRows" :key="`cookware-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dish-category-total-material-quantity">{{ t('pages.dish.totalMaterialQuantity') }}</label>
+            <input id="dish-category-total-material-quantity" v-model.number="dishCategoryForm.totalMaterialQuantity" type="number" min="2" required />
+          </div>
+          <div class="field">
+            <label for="dish-category-main-material">{{ t('pages.dish.mainMaterial') }}</label>
+            <select id="dish-category-main-material" v-model="dishCategoryForm.mainMaterialItemId" required>
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="item in dishItemRows" :key="`category-main-material-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+            </select>
+          </div>
+        </div>
+        <TranslationFields
+          id-prefix="dish-category-effect"
+          v-model:base-value="dishCategoryForm.effect"
+          v-model:translations="dishCategoryForm.translations"
+          field="effect"
+          :label="t('pages.dish.effect')"
+          :languages="languageRows"
+          required
+        />
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-dish-category-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeDishCategoryModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="dishModalOpen" :title="dishModalTitle" :close-label="t('common.close')" size="wide" @close="closeDishModal">
+      <form id="admin-dish-form" class="modal-edit-form dish-form-stack" @submit.prevent="saveDish">
+        <div class="dish-form-row dish-form-row--3">
+          <div class="field">
+            <label for="dish-category">{{ t('pages.dish.category') }}</label>
+            <select id="dish-category" v-model="dishForm.categoryId" required>
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="category in dishCategoryRows" :key="`dish-category-option-${category.id}`" :value="String(category.id)">{{ category.name }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dish-item">{{ t('pages.dish.dishItem') }}</label>
+            <select id="dish-item" v-model="dishForm.itemId" required>
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="item in dishItemRows" :key="`dish-item-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dish-flavor">{{ t('pages.dish.flavor') }}</label>
+            <select id="dish-flavor" v-model="dishForm.flavorId" required>
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="flavor in dishFlavorRows" :key="`dish-flavor-${flavor.id}`" :value="String(flavor.id)">{{ flavor.name }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="dish-form-row dish-form-row--3">
+          <div class="field">
+            <label for="dish-secondary-material-1">{{ t('pages.dish.secondaryMaterial') }}</label>
+            <select id="dish-secondary-material-1" v-model="dishForm.secondaryMaterialItemIds[0]">
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="item in dishItemRows" :key="`dish-secondary-material-1-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+            </select>
+          </div>
+          <div v-if="dishAllowsSecondSecondaryMaterial" class="field">
+            <label for="dish-secondary-material-2">{{ t('pages.dish.secondSecondaryMaterial') }}</label>
+            <select id="dish-secondary-material-2" v-model="dishForm.secondaryMaterialItemIds[1]">
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="item in dishItemRows" :key="`dish-secondary-material-2-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dish-pokemon-skill">{{ t('pages.dish.pokemonSkill') }}</label>
+            <select id="dish-pokemon-skill" v-model="dishForm.pokemonSkillId">
+              <option value="">{{ t('common.none') }}</option>
+              <option v-for="skill in dishSkillRows" :key="`dish-skill-${skill.id}`" :value="String(skill.id)">{{ skill.name }}</option>
+            </select>
+          </div>
+        </div>
+        <TranslationFields
+          id-prefix="dish-mosslax-effect"
+          v-model:base-value="dishForm.mosslaxEffect"
+          v-model:translations="dishForm.translations"
+          field="mosslaxEffect"
+          :label="t('pages.dish.mosslaxEffect')"
+          :languages="languageRows"
+          required
+        />
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-dish-form" class="link-button" :disabled="busy">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeDishModal">
           <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
           {{ t('common.cancel') }}
         </button>

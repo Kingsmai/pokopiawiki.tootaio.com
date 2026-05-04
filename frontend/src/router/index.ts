@@ -13,6 +13,7 @@ import RecipeDetail from '../views/RecipeDetail.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
 import LifePostDetail from '../views/LifePostDetail.vue';
 import LifeView from '../views/LifeView.vue';
+import DishView from '../views/DishView.vue';
 import ProjectUpdatesView from '../views/ProjectUpdatesView.vue';
 import LegalView from '../views/LegalView.vue';
 import ComingSoonView from '../views/ComingSoonView.vue';
@@ -267,9 +268,8 @@ export const router = createRouter({
     {
       path: '/dish',
       name: 'dish',
-      component: ComingSoonView,
-      props: { page: 'dish' },
-      meta: { seo: seo({ titleKey: 'pages.comingSoon.sections.dish.title', descriptionKey: 'pages.comingSoon.sections.dish.subtitle', noindex: true }) }
+      component: DishView,
+      meta: { seo: seo({ titleKey: 'pages.dish.title', descriptionKey: 'pages.dish.subtitle' }) }
     },
     {
       path: '/events',

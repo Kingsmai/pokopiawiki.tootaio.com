@@ -269,7 +269,7 @@ export const systemWordingMessages = {
           },
           dish: {
             title: 'Dish',
-            description: 'Cooked dish and food discovery records are being prepared.'
+            description: 'Browse cooked dishes by cookware, ingredients, flavor, and Mosslax effects.'
           },
           events: {
             title: 'Events',
@@ -755,6 +755,30 @@ export const systemWordingMessages = {
         materials: 'Materials',
         addMaterial: 'Add material'
       },
+      dish: {
+        kicker: 'Dish',
+        title: 'Dish',
+        subtitle: 'Browse cooked dishes by category, cookware, ingredients, flavor, and Mosslax effects.',
+        loading: 'Loading Dish records',
+        category: 'Category',
+        categories: 'Categories',
+        dishes: 'Dishes',
+        cookware: 'Cookware',
+        effect: 'Effect',
+        totalMaterialQuantity: 'Total material count',
+        dishItem: 'Dish item',
+        flavor: 'Flavor',
+        mainMaterial: 'Main material',
+        secondaryMaterial: 'Secondary material',
+        secondaryMaterials: 'Secondary materials',
+        secondSecondaryMaterial: 'Second secondary material',
+        pokemonSkill: 'Pokemon speciality',
+        mosslaxEffect: 'Mosslax effect',
+        newCategory: 'New category',
+        editCategory: 'Edit category',
+        newDish: 'New dish',
+        editDish: 'Edit dish'
+      },
       comingSoon: {
         status: 'In development',
         heading: 'This wiki section is being prepared.',
@@ -987,6 +1011,7 @@ export const systemWordingMessages = {
         itemList: 'Item list',
         ancientArtifactList: 'Ancient Artifact list',
         recipeList: 'Recipe list',
+        dishList: 'Dish list',
         habitatList: 'Habitat list',
         dataTools: 'Data tools',
         dataToolRefresh: 'Refresh',
@@ -1101,7 +1126,8 @@ export const systemWordingMessages = {
       acquisitionMethods: 'Acquisition methods',
       maps: 'Maps',
       lifeCategories: 'Life categories',
-      gameVersions: 'Game versions'
+      gameVersions: 'Game versions',
+      dishFlavors: 'Dish flavors'
     },
     appearance: {
       time: 'Time',
@@ -1598,7 +1624,7 @@ export const systemWordingMessages = {
           },
           dish: {
             title: 'Dish',
-            description: '料理和食物发现记录正在准备中。'
+            description: '按厨具、材料、口味和苔藓卡比兽效果浏览料理。'
           },
           events: {
             title: 'Events',
@@ -2064,6 +2090,30 @@ export const systemWordingMessages = {
         materials: '需要材料',
         addMaterial: '添加材料'
       },
+      dish: {
+        kicker: 'Dish',
+        title: '料理',
+        subtitle: '按分类、厨具、材料、口味和苔藓卡比兽效果浏览料理。',
+        loading: '正在加载料理记录',
+        category: '分类',
+        categories: '分类',
+        dishes: '菜肴',
+        cookware: '厨具',
+        effect: '吃后效果',
+        totalMaterialQuantity: '总数所需材料数量',
+        dishItem: '菜肴物品',
+        flavor: '口味',
+        mainMaterial: '主材料',
+        secondaryMaterial: '副材料',
+        secondaryMaterials: '副材料',
+        secondSecondaryMaterial: '第二副材料',
+        pokemonSkill: 'Pokemon 特长',
+        mosslaxEffect: 'Mosslax 效果',
+        newCategory: '新增分类',
+        editCategory: '编辑分类',
+        newDish: '新增菜肴',
+        editDish: '编辑菜肴'
+      },
       comingSoon: {
         status: '正在开发中',
         heading: '这个 Wiki 分区正在准备中。',
@@ -2296,6 +2346,7 @@ export const systemWordingMessages = {
         itemList: '物品列表',
         ancientArtifactList: 'Ancient Artifact 列表',
         recipeList: '材料单列表',
+        dishList: '料理列表',
         habitatList: '栖息地列表',
         dataTools: '数据工具',
         dataToolRefresh: '刷新',
@@ -2410,7 +2461,8 @@ export const systemWordingMessages = {
       acquisitionMethods: '入手方式',
       maps: '地图',
       lifeCategories: 'Life Categories',
-      gameVersions: '游戏版本'
+      gameVersions: '游戏版本',
+      dishFlavors: '料理味道'
     },
     appearance: {
       time: '时段',

@@ -63,7 +63,7 @@ type GlobalSearchResults = {
   groups: GlobalSearchGroup[];
 };
 
-type TranslationField = 'name' | 'title' | 'details' | 'genus';
+type TranslationField = 'name' | 'title' | 'details' | 'genus' | 'effect' | 'mosslaxEffect';
 type TranslationInput = Record<string, Partial<Record<TranslationField, unknown>>>;
 type EntityType =
   | 'pokemon'
@@ -80,7 +80,10 @@ type EntityType =
   | 'habitats'
   | 'daily-checklist-items'
   | 'life-tags'
-  | 'game-versions';
+  | 'game-versions'
+  | 'dish-categories'
+  | 'dish-flavors'
+  | 'dishes';
 
 type ConfigType =
   | 'pokemon-types'
@@ -90,7 +93,8 @@ type ConfigType =
   | 'acquisition-methods'
   | 'maps'
   | 'life-tags'
-  | 'game-versions';
+  | 'game-versions'
+  | 'dish-flavors';
 
 type ConfigDefinition = {
   table: string;
@@ -230,6 +234,25 @@ type RecipePayload = {
   itemId: number;
   acquisitionMethodIds: number[];
   materials: IdQuantity[];
+};
+
+type DishCategoryPayload = {
+  name: string;
+  effect: string;
+  translations: TranslationInput;
+  cookwareItemId: number;
+  mainMaterialItemId: number;
+  totalMaterialQuantity: number;
+};
+
+type DishPayload = {
+  categoryId: number;
+  itemId: number;
+  flavorId: number;
+  secondaryMaterialItemIds: number[];
+  pokemonSkillId: number | null;
+  mosslaxEffect: string;
+  translations: TranslationInput;
 };
 
 type DailyChecklistPayload = {
@@ -550,6 +573,25 @@ type RecipeChangeSource = {
   acquisition_methods: Array<{ name: string }>;
   materials: Array<{ name: string; quantity: number }>;
 };
+
+type DishCategoryChangeSource = {
+  name: string;
+  effect: string;
+  translations?: TranslationInput;
+  cookware: { name: string };
+  mainMaterial: { name: string };
+  totalMaterialQuantity: number;
+};
+
+type DishChangeSource = {
+  category: { name: string };
+  item: { name: string };
+  flavor: { name: string };
+  secondaryMaterials: Array<{ name: string }>;
+  pokemonSkill: { name: string } | null;
+  mosslaxEffect: string;
+  translations?: TranslationInput;
+};
 type DailyChecklistChangeSource = {
   title: string;
 } & TranslationChangeSource;
@@ -625,7 +667,8 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
   maps: { table: 'maps', entityType: 'maps' },
   'life-tags': { table: 'life_tags', entityType: 'life-tags', hasDefault: true, hasRateable: true },
-  'game-versions': { table: 'game_versions', entityType: 'game-versions', hasChangeLog: true }
+  'game-versions': { table: 'game_versions', entityType: 'game-versions', hasChangeLog: true },
+  'dish-flavors': { table: 'dish_flavors', entityType: 'dish-flavors' }
 };
 
 const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
@@ -2008,7 +2051,9 @@ const translationChangeLabels: Record<TranslationField, string> = {
   name: 'Name',
   title: 'Title',
   details: 'Details',
-  genus: 'Genus'
+  genus: 'Genus',
+  effect: 'Effect',
+  mosslaxEffect: 'Mosslax effect'
 };
 
 function translationFieldValue(
@@ -2414,7 +2459,8 @@ export async function getOptions(locale = defaultLocale) {
     acquisitionMethods,
     maps,
     lifeCategories,
-    gameVersions
+    gameVersions,
+    dishFlavors
   ] = await Promise.all([
     optionSelect('pokemon_types', 'pokemon-types', locale),
     skillOptions(locale),
@@ -2423,7 +2469,8 @@ export async function getOptions(locale = defaultLocale) {
     optionSelect('acquisition_methods', 'acquisition-methods', locale),
     optionSelect('maps', 'maps', locale),
     lifeCategoryOptions(locale),
-    gameVersionOptions(locale)
+    gameVersionOptions(locale),
+    optionSelect('dish_flavors', 'dish-flavors', locale)
   ]);
 
   return {
@@ -2438,7 +2485,8 @@ export async function getOptions(locale = defaultLocale) {
     itemTags: favoriteThings,
     maps,
     lifeCategories,
-    gameVersions
+    gameVersions,
+    dishFlavors
   };
 }
 
@@ -6987,6 +7035,488 @@ export async function deleteRecipe(id: number, userId: number) {
     await recordEditLog(client, 'recipes', id, 'delete', userId);
     return true;
   });
+}
+
+function dishCategoryProjection(locale: string): string {
+  const categoryName = localizedName('dish-categories', 'dc', locale);
+  const categoryEffect = localizedField('dish-categories', 'dc.id', 'dc.effect', 'effect', locale);
+  const cookwareName = localizedName('items', 'cookware_item', locale);
+  const mainMaterialName = localizedName('items', 'main_material_item', locale);
+  const dishItemName = localizedName('items', 'dish_item', locale);
+  const flavorName = localizedName('dish-flavors', 'dish_flavor', locale);
+  const secondaryMaterialName = localizedName('items', 'secondary_material_item', locale);
+  const skillName = localizedName('skills', 'dish_skill', locale);
+  const mosslaxEffect = localizedField('dishes', 'd.id', 'd.mosslax_effect', 'mosslaxEffect', locale);
+
+  return `
+    SELECT
+      dc.id,
+      ${categoryName} AS name,
+      dc.name AS "baseName",
+      ${categoryEffect} AS effect,
+      dc.effect AS "baseEffect",
+      dc.total_material_quantity AS "totalMaterialQuantity",
+      ${translationsSelect('dish-categories', 'dc.id')} AS translations,
+      ${auditSelect('dc', 'category_created_user', 'category_updated_user')},
+      json_build_object(
+        'id', cookware_item.id,
+        'displayId', cookware_item.display_id,
+        'name', ${cookwareName},
+        'image', ${uploadedImageJson('cookware_item.image_path')},
+        'category', ${systemListJsonSql('cookware_item.category_key', itemCategoryOptions, locale)}
+      ) AS cookware,
+      json_build_object(
+        'id', main_material_item.id,
+        'displayId', main_material_item.display_id,
+        'name', ${mainMaterialName},
+        'image', ${uploadedImageJson('main_material_item.image_path')},
+        'category', ${systemListJsonSql('main_material_item.category_key', itemCategoryOptions, locale)}
+      ) AS "mainMaterial",
+      COALESCE((
+        SELECT json_agg(
+          json_build_object(
+            'id', d.id,
+            'flavor', json_build_object('id', dish_flavor.id, 'name', ${flavorName}),
+            'mosslaxEffect', ${mosslaxEffect},
+            'baseMosslaxEffect', d.mosslax_effect,
+            'translations', ${translationsSelect('dishes', 'd.id')},
+            'createdAt', d.created_at,
+            'updatedAt', d.updated_at,
+            'createdBy', CASE
+              WHEN dish_created_user.id IS NULL THEN NULL
+              ELSE json_build_object('id', dish_created_user.id, 'displayName', dish_created_user.display_name)
+            END,
+            'updatedBy', CASE
+              WHEN dish_updated_user.id IS NULL THEN NULL
+              ELSE json_build_object('id', dish_updated_user.id, 'displayName', dish_updated_user.display_name)
+            END,
+            'category', json_build_object('id', dc.id, 'name', ${categoryName}),
+            'item', json_build_object(
+              'id', dish_item.id,
+              'displayId', dish_item.display_id,
+              'name', ${dishItemName},
+              'image', ${uploadedImageJson('dish_item.image_path')},
+              'category', ${systemListJsonSql('dish_item.category_key', itemCategoryOptions, locale)}
+            ),
+            'secondaryMaterials', COALESCE((
+              SELECT json_agg(
+                json_build_object(
+                  'id', secondary_material_item.id,
+                  'displayId', secondary_material_item.display_id,
+                  'name', ${secondaryMaterialName},
+                  'image', ${uploadedImageJson('secondary_material_item.image_path')},
+                  'category', ${systemListJsonSql('secondary_material_item.category_key', itemCategoryOptions, locale)}
+                )
+                ORDER BY secondary_slots.slot
+              )
+              FROM (VALUES (d.secondary_material_1_item_id, 1), (d.secondary_material_2_item_id, 2)) AS secondary_slots(item_id, slot)
+              JOIN items secondary_material_item ON secondary_material_item.id = secondary_slots.item_id
+            ), '[]'::json),
+            'pokemonSkill', CASE
+              WHEN dish_skill.id IS NULL THEN NULL
+              ELSE json_build_object('id', dish_skill.id, 'name', ${skillName}, 'hasItemDrop', dish_skill.has_item_drop)
+            END
+          )
+          ORDER BY d.sort_order, d.id
+        )
+        FROM dishes d
+        JOIN items dish_item ON dish_item.id = d.item_id
+        JOIN dish_flavors dish_flavor ON dish_flavor.id = d.flavor_id
+        LEFT JOIN skills dish_skill ON dish_skill.id = d.pokemon_skill_id
+        LEFT JOIN users dish_created_user ON dish_created_user.id = d.created_by_user_id
+        LEFT JOIN users dish_updated_user ON dish_updated_user.id = d.updated_by_user_id
+        WHERE d.category_id = dc.id
+      ), '[]'::json) AS dishes
+    FROM dish_categories dc
+    JOIN items cookware_item ON cookware_item.id = dc.cookware_item_id
+    JOIN items main_material_item ON main_material_item.id = dc.main_material_item_id
+    ${auditJoins('dc', 'category_created_user', 'category_updated_user')}
+  `;
+}
+
+function dishProjection(locale: string): string {
+  const categoryName = localizedName('dish-categories', 'dc', locale);
+  const dishItemName = localizedName('items', 'dish_item', locale);
+  const flavorName = localizedName('dish-flavors', 'dish_flavor', locale);
+  const secondaryMaterialName = localizedName('items', 'secondary_material_item', locale);
+  const skillName = localizedName('skills', 'dish_skill', locale);
+  const mosslaxEffect = localizedField('dishes', 'd.id', 'd.mosslax_effect', 'mosslaxEffect', locale);
+
+  return `
+    SELECT
+      d.id,
+      json_build_object('id', dish_flavor.id, 'name', ${flavorName}) AS flavor,
+      ${mosslaxEffect} AS "mosslaxEffect",
+      d.mosslax_effect AS "baseMosslaxEffect",
+      ${translationsSelect('dishes', 'd.id')} AS translations,
+      ${auditSelect('d', 'dish_created_user', 'dish_updated_user')},
+      json_build_object('id', dc.id, 'name', ${categoryName}) AS category,
+      json_build_object(
+        'id', dish_item.id,
+        'displayId', dish_item.display_id,
+        'name', ${dishItemName},
+        'image', ${uploadedImageJson('dish_item.image_path')},
+        'category', ${systemListJsonSql('dish_item.category_key', itemCategoryOptions, locale)}
+      ) AS item,
+      COALESCE((
+        SELECT json_agg(
+          json_build_object(
+            'id', secondary_material_item.id,
+            'displayId', secondary_material_item.display_id,
+            'name', ${secondaryMaterialName},
+            'image', ${uploadedImageJson('secondary_material_item.image_path')},
+            'category', ${systemListJsonSql('secondary_material_item.category_key', itemCategoryOptions, locale)}
+          )
+          ORDER BY secondary_slots.slot
+        )
+        FROM (VALUES (d.secondary_material_1_item_id, 1), (d.secondary_material_2_item_id, 2)) AS secondary_slots(item_id, slot)
+        JOIN items secondary_material_item ON secondary_material_item.id = secondary_slots.item_id
+      ), '[]'::json) AS "secondaryMaterials",
+      CASE
+        WHEN dish_skill.id IS NULL THEN NULL
+        ELSE json_build_object('id', dish_skill.id, 'name', ${skillName}, 'hasItemDrop', dish_skill.has_item_drop)
+      END AS "pokemonSkill"
+    FROM dishes d
+    JOIN dish_categories dc ON dc.id = d.category_id
+    JOIN items dish_item ON dish_item.id = d.item_id
+    JOIN dish_flavors dish_flavor ON dish_flavor.id = d.flavor_id
+    LEFT JOIN skills dish_skill ON dish_skill.id = d.pokemon_skill_id
+    ${auditJoins('d', 'dish_created_user', 'dish_updated_user')}
+  `;
+}
+
+export async function listDish(locale = defaultLocale) {
+  return query(`${dishCategoryProjection(locale)} ORDER BY ${orderByEntity('dc')}`);
+}
+
+async function getDishCategory(id: number, locale = defaultLocale) {
+  return queryOne(`${dishCategoryProjection(locale)} WHERE dc.id = $1`, [id]);
+}
+
+async function getDish(id: number, locale = defaultLocale) {
+  return queryOne(`${dishProjection(locale)} WHERE d.id = $1`, [id]);
+}
+
+function cleanDishCategoryPayload(payload: Record<string, unknown>): DishCategoryPayload {
+  const totalMaterialQuantity = requirePositiveInteger(payload.totalMaterialQuantity, 'server.validation.invalidField');
+  if (totalMaterialQuantity < 2) {
+    throw validationError('server.validation.invalidField');
+  }
+
+  return {
+    name: cleanName(payload.name),
+    effect: cleanName(payload.effect, 'server.validation.invalidField'),
+    translations: cleanTranslations(payload.translations, ['name', 'effect']),
+    cookwareItemId: requirePositiveInteger(payload.cookwareItemId, 'server.validation.itemRequired'),
+    mainMaterialItemId: requirePositiveInteger(payload.mainMaterialItemId, 'server.validation.itemRequired'),
+    totalMaterialQuantity
+  };
+}
+
+function cleanDishPayload(payload: Record<string, unknown>): DishPayload {
+  const secondaryMaterialItemIds = cleanIds(payload.secondaryMaterialItemIds).slice(0, 2);
+
+  return {
+    categoryId: requirePositiveInteger(payload.categoryId, 'server.validation.categoryRequired'),
+    itemId: requirePositiveInteger(payload.itemId, 'server.validation.itemRequired'),
+    flavorId: requirePositiveInteger(payload.flavorId, 'server.validation.invalidField'),
+    secondaryMaterialItemIds,
+    pokemonSkillId: optionalPositiveInteger(payload.pokemonSkillId, 'server.validation.invalidField'),
+    mosslaxEffect: cleanName(payload.mosslaxEffect, 'server.validation.invalidField'),
+    translations: cleanTranslations(payload.translations, ['mosslaxEffect'])
+  };
+}
+
+async function ensureDishMaterialSlots(client: DbClient, payload: DishPayload): Promise<void> {
+  const result = await client.query<{ totalMaterialQuantity: number; mainMaterialItemId: number }>(
+    `
+      SELECT
+        total_material_quantity AS "totalMaterialQuantity",
+        main_material_item_id AS "mainMaterialItemId"
+      FROM dish_categories
+      WHERE id = $1
+    `,
+    [payload.categoryId]
+  );
+  if (result.rowCount === 0) {
+    throw validationError('server.validation.categoryRequired');
+  }
+
+  if (payload.secondaryMaterialItemIds.length > 1 && result.rows[0].totalMaterialQuantity <= 2) {
+    throw validationError('server.validation.invalidField');
+  }
+
+  if (payload.secondaryMaterialItemIds.includes(result.rows[0].mainMaterialItemId)) {
+    throw validationError('server.validation.invalidField');
+  }
+}
+
+async function ensureDishCategoryMaterialSlots(client: DbClient, id: number, payload: DishCategoryPayload): Promise<void> {
+  const result = await client.query<{ id: number }>(
+    `
+      SELECT id
+      FROM dishes
+      WHERE category_id = $1
+        AND (
+          ($2::integer <= 2 AND secondary_material_2_item_id IS NOT NULL)
+          OR secondary_material_1_item_id = $3
+          OR secondary_material_2_item_id = $3
+        )
+      LIMIT 1
+    `,
+    [id, payload.totalMaterialQuantity, payload.mainMaterialItemId]
+  );
+  if ((result.rowCount ?? 0) > 0) {
+    throw validationError('server.validation.invalidField');
+  }
+}
+
+async function dishCategoryEditChanges(
+  client: DbClient,
+  before: DishCategoryChangeSource,
+  after: DishCategoryPayload
+): Promise<EditChange[]> {
+  const changes: EditChange[] = [];
+  const itemNames = await entityNameMap(client, 'items', [after.cookwareItemId, after.mainMaterialItemId]);
+  pushChange(changes, 'Name', before.name, after.name);
+  pushTranslationChanges(changes, before.translations, after.translations, ['name', 'effect']);
+  pushChange(changes, 'Cookware', before.cookware.name, itemNames.get(after.cookwareItemId));
+  pushChange(changes, 'Main material', before.mainMaterial.name, itemNames.get(after.mainMaterialItemId));
+  pushChange(changes, 'Total material quantity', String(before.totalMaterialQuantity), String(after.totalMaterialQuantity));
+  pushChange(changes, 'Effect', before.effect, after.effect);
+  return changes;
+}
+
+async function dishEditChanges(client: DbClient, before: DishChangeSource, after: DishPayload): Promise<EditChange[]> {
+  const changes: EditChange[] = [];
+  const categoryNames = await entityNameMap(client, 'dish_categories', [after.categoryId]);
+  const itemNames = await entityNameMap(client, 'items', [after.itemId, ...after.secondaryMaterialItemIds]);
+  const flavorNames = await entityNameMap(client, 'dish_flavors', [after.flavorId]);
+  const skillNames = await entityNameMap(client, 'skills', after.pokemonSkillId ? [after.pokemonSkillId] : []);
+
+  pushChange(changes, 'Category', before.category.name, categoryNames.get(after.categoryId));
+  pushChange(changes, 'Dish item', before.item.name, itemNames.get(after.itemId));
+  pushChange(changes, 'Flavor', before.flavor.name, flavorNames.get(after.flavorId));
+  pushTranslationChanges(changes, before.translations, after.translations, ['mosslaxEffect']);
+  pushChange(changes, 'Secondary materials', namedListValue(before.secondaryMaterials), namesFromIds(after.secondaryMaterialItemIds, itemNames));
+  pushChange(changes, 'Pokemon speciality', before.pokemonSkill?.name, after.pokemonSkillId ? skillNames.get(after.pokemonSkillId) : null);
+  pushChange(changes, 'Mosslax effect', before.mosslaxEffect, after.mosslaxEffect);
+  return changes;
+}
+
+export async function createDishCategory(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const cleanPayload = cleanDishCategoryPayload(payload);
+  const id = await withTransaction(async (client) => {
+    const sortOrder = await nextSortOrder(client, 'dish_categories');
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO dish_categories (
+          name,
+          cookware_item_id,
+          main_material_item_id,
+          total_material_quantity,
+          effect,
+          sort_order,
+          created_by_user_id,
+          updated_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+        RETURNING id
+      `,
+      [
+        cleanPayload.name,
+        cleanPayload.cookwareItemId,
+        cleanPayload.mainMaterialItemId,
+        cleanPayload.totalMaterialQuantity,
+        cleanPayload.effect,
+        sortOrder,
+        userId
+      ]
+    );
+    const categoryId = result.rows[0].id;
+    await replaceEntityTranslations(client, 'dish-categories', categoryId, cleanPayload.translations, ['name', 'effect']);
+    await recordEditLog(client, 'dish-categories', categoryId, 'create', userId);
+    return categoryId;
+  });
+  return getDishCategory(id, locale);
+}
+
+export async function updateDishCategory(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const cleanPayload = cleanDishCategoryPayload(payload);
+  const before = await getDishCategory(id, defaultLocale);
+  const updated = await withTransaction(async (client) => {
+    await ensureDishCategoryMaterialSlots(client, id, cleanPayload);
+    const result = await client.query(
+      `
+        UPDATE dish_categories
+        SET name = $1,
+            cookware_item_id = $2,
+            main_material_item_id = $3,
+            total_material_quantity = $4,
+            effect = $5,
+            updated_by_user_id = $6,
+            updated_at = now()
+        WHERE id = $7
+      `,
+      [
+        cleanPayload.name,
+        cleanPayload.cookwareItemId,
+        cleanPayload.mainMaterialItemId,
+        cleanPayload.totalMaterialQuantity,
+        cleanPayload.effect,
+        userId,
+        id
+      ]
+    );
+    if (result.rowCount === 0) {
+      return false;
+    }
+    await replaceEntityTranslations(client, 'dish-categories', id, cleanPayload.translations, ['name', 'effect']);
+    const changes = before ? await dishCategoryEditChanges(client, before as unknown as DishCategoryChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'dish-categories', id, 'update', userId, changes);
+    return true;
+  });
+  return updated ? getDishCategory(id, locale) : null;
+}
+
+export async function deleteDishCategory(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const childRows = await client.query<{ id: number }>('SELECT id FROM dishes WHERE category_id = $1', [id]);
+    const result = await client.query<{ id: number }>('DELETE FROM dish_categories WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await client.query('DELETE FROM entity_translations WHERE entity_type = $1 AND entity_id = $2', ['dish-categories', id]);
+    const childIds = childRows.rows.map((row) => row.id);
+    if (childIds.length) {
+      await client.query('DELETE FROM entity_translations WHERE entity_type = $1 AND entity_id = ANY($2::integer[])', [
+        'dishes',
+        childIds
+      ]);
+    }
+    await recordEditLog(client, 'dish-categories', id, 'delete', userId);
+    return true;
+  });
+}
+
+export async function createDish(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const cleanPayload = cleanDishPayload(payload);
+  const id = await withTransaction(async (client) => {
+    await ensureDishMaterialSlots(client, cleanPayload);
+    const sortOrder = await nextSortOrder(client, 'dishes');
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO dishes (
+          category_id,
+          item_id,
+          flavor_id,
+          secondary_material_1_item_id,
+          secondary_material_2_item_id,
+          pokemon_skill_id,
+          mosslax_effect,
+          sort_order,
+          created_by_user_id,
+          updated_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+        RETURNING id
+      `,
+      [
+        cleanPayload.categoryId,
+        cleanPayload.itemId,
+        cleanPayload.flavorId,
+        cleanPayload.secondaryMaterialItemIds[0] ?? null,
+        cleanPayload.secondaryMaterialItemIds[1] ?? null,
+        cleanPayload.pokemonSkillId,
+        cleanPayload.mosslaxEffect,
+        sortOrder,
+        userId
+      ]
+    );
+    const dishId = result.rows[0].id;
+    await replaceEntityTranslations(client, 'dishes', dishId, cleanPayload.translations, ['mosslaxEffect']);
+    await recordEditLog(client, 'dishes', dishId, 'create', userId);
+    return dishId;
+  });
+  return getDish(id, locale);
+}
+
+export async function updateDish(id: number, payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const cleanPayload = cleanDishPayload(payload);
+  const before = await getDish(id, defaultLocale);
+  const updated = await withTransaction(async (client) => {
+    await ensureDishMaterialSlots(client, cleanPayload);
+    const result = await client.query(
+      `
+        UPDATE dishes
+        SET category_id = $1,
+            item_id = $2,
+            flavor_id = $3,
+            secondary_material_1_item_id = $4,
+            secondary_material_2_item_id = $5,
+            pokemon_skill_id = $6,
+            mosslax_effect = $7,
+            updated_by_user_id = $8,
+            updated_at = now()
+        WHERE id = $9
+      `,
+      [
+        cleanPayload.categoryId,
+        cleanPayload.itemId,
+        cleanPayload.flavorId,
+        cleanPayload.secondaryMaterialItemIds[0] ?? null,
+        cleanPayload.secondaryMaterialItemIds[1] ?? null,
+        cleanPayload.pokemonSkillId,
+        cleanPayload.mosslaxEffect,
+        userId,
+        id
+      ]
+    );
+    if (result.rowCount === 0) {
+      return false;
+    }
+    await replaceEntityTranslations(client, 'dishes', id, cleanPayload.translations, ['mosslaxEffect']);
+    const changes = before ? await dishEditChanges(client, before as unknown as DishChangeSource, cleanPayload) : [];
+    await recordEditLog(client, 'dishes', id, 'update', userId, changes);
+    return true;
+  });
+  return updated ? getDish(id, locale) : null;
+}
+
+export async function deleteDish(id: number, userId: number) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{ id: number }>('DELETE FROM dishes WHERE id = $1 RETURNING id', [id]);
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await deleteEntityTranslations(client, 'dishes', id);
+    await recordEditLog(client, 'dishes', id, 'delete', userId);
+    return true;
+  });
+}
+
+export async function reorderDishCategories(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const ids = cleanIds(payload.ids);
+  if (ids.length === 0) {
+    throw validationError('server.validation.selectRecord');
+  }
+  await withTransaction(async (client) => {
+    await reorderTableRows(client, 'dish_categories', 'dish-categories', ids, userId);
+  });
+  return listDish(locale);
+}
+
+export async function reorderDishes(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
+  const ids = cleanIds(payload.ids);
+  if (ids.length === 0) {
+    throw validationError('server.validation.selectRecord');
+  }
+  await withTransaction(async (client) => {
+    await reorderTableRows(client, 'dishes', 'dishes', ids, userId);
+  });
+  return listDish(locale);
 }
 
 const dataToolScopes = ['pokemon', 'habitats', 'items', 'artifacts', 'recipes', 'checklist'] as const satisfies readonly DataToolScope[];

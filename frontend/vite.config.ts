@@ -12,6 +12,7 @@ const sitemapPaths = [
   '/event-items',
   '/ancient-artifacts',
   '/recipes',
+  '/dish',
   '/checklist',
   '/life'
 ];
@@ -36,7 +37,6 @@ const robotsDisallowPaths = [
   '/recipes/new',
   '/recipes/*/edit',
   '/automation',
-  '/dish',
   '/events',
   '/actions',
   '/dream-island',

@@ -65,11 +65,16 @@
   - 每日 CheckList Task
   - Life Category
   - Game Version
+  - Dish Category
+  - Dish Flavor
+  - Dish
 - 支持翻译的字段：
   - `name`
   - `title`
   - `details`：Pokemon、物品和 Ancient Artifacts 的介绍 / 说明
   - `genus`：仅 Pokemon Genus 使用
+  - `effect`：Dish Category 的吃后效果
+  - `mosslaxEffect`：Dish 给 Mosslax 吃之后的效果
 - 实体仍保留基础 `name`、`title`、`details` 或 `genus` 字段，默认语言内容以基础字段为准。
 - API 返回展示名称时按当前语言解析，回退顺序为：请求语言翻译 -> 默认语言翻译 -> 基础字段。
 - 编辑表单必须避免本地化 UI 覆盖基础名称；翻译字段只展示当前需要编辑的语言。
@@ -729,6 +734,43 @@ Ancient Artifacts 详情页展示：
 - 讨论
 - 编辑历史
 
+## Dish
+
+Dish 是公开浏览的料理资料入口，按可配置分类组织。
+
+Dish Category 可配置：
+
+- 名称
+- 厨具：关联 Items
+- 主材料：关联 Items，必填
+- 吃了之后的效果
+- 总数所需材料数量：最小值为 2
+- 翻译
+- 排序
+
+Dish 可配置：
+
+- 所属 Dish Category
+- 菜肴：关联 Items
+- 味道：使用 System Config 中可配置的 Dish Flavor
+- 副材料：关联 Items，可选
+- 第二副材料：关联 Items，仅当所属分类的总数所需材料数量大于 2 时可配置
+- Pokemon 特征：可选，复用现有特长配置
+- 给苔藓卡比兽（Mosslax）吃之后的效果
+- 翻译
+- 排序
+
+Dish 页面功能：
+
+- `/dish` 是公开浏览入口。
+- 分类使用 Tabs 展示。
+- `/dish` 可直接添加、编辑和删除 Dish Category 与 Dish；写入入口按 `dish.*` 权限展示，后端仍做权限校验。
+- 每个分类第一行展示分类名、厨具、主材料和总数所需材料数量；第二行展示吃后效果。
+- 每个菜肴展示菜肴物品、味道、可选副材料、可选第二副材料、可选 Pokemon 特征和 Mosslax 效果。
+- Item、特长和 Dish Flavor 名称按当前语言解析；Dish Category 名称、吃后效果和 Dish Mosslax 效果按当前语言解析。
+- Dish 公开 API 只返回浏览需要的 Item、特长、材料、效果和审计字段，不返回内部字段、权限、token/hash 或调试信息。
+- Dish 分类和菜肴的创建、更新、删除、排序必须记录编辑历史和编辑者信息。
+
 ## 栖息地
 
 栖息地可配置：
@@ -881,7 +923,6 @@ API 暴露边界：
 以下前台公开入口当前仅展示“正在开发中”占位页，不提供数据模型、后端 API、编辑表单、管理入口或排序能力：
 
 - Automation：未来用于分享自动化基地（亦称工厂）创建方案、材料产出、所需 Pokemon、生产顺序和共同喜好物品。
-- Dish
 - Events
 - Actions：游戏内快捷动作，例如挥手、跳舞等。
 - Dream Island
@@ -1014,6 +1055,7 @@ API 暴露边界：
 - `GET /api/ancient-artifacts/:id`
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
+- `GET /api/dish`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区；支持 `gameVersionId` 按 Game Version 筛选；支持 `rateable` 按可评分 Category 筛选；支持 `sort` 为 `latest`、`oldest` 或 `top-rated`。
 - `GET /api/life-posts/following`：需要登录；分页读取当前用户已 Follow 用户发布的 Life Post 动态，支持与 Life Feed 相同的 `cursor` / `limit`、搜索、Category、语言、Game Version、Rateable 和排序筛选。
 - `GET /api/life-posts/:id`：读取单条 Life Post 详情，遵守软删除和审核可见性规则。

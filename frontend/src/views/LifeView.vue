@@ -28,6 +28,7 @@ import {
   iconReply,
   iconSave,
   iconSearch,
+  iconUndo,
   iconVersion,
   iconWarning
 } from '../icons';
@@ -478,6 +479,10 @@ function canManageComment(comment: LifeComment) {
   return !comment.deleted && ((currentUser.value?.id === comment.author?.id && can('life.comments.delete')) || can('life.comments.delete-any'));
 }
 
+function canRestoreComment(comment: LifeComment) {
+  return comment.deleted && currentUser.value?.id === comment.author?.id && can('life.comments.delete');
+}
+
 function canSeeCommentModeration(comment: LifeComment) {
   return moderationStatusVisible(comment.moderationStatus) && (currentUser.value?.id === comment.author?.id || can('life.comments.delete-any'));
 }
@@ -718,6 +723,25 @@ function mergeComments(existing: LifeComment[], incoming: LifeComment[]) {
   return [...existing, ...incoming.filter((comment) => !ids.has(comment.id))];
 }
 
+function replaceCommentInTree(comments: LifeComment[], updated: LifeComment): boolean {
+  for (let index = 0; index < comments.length; index += 1) {
+    const comment = comments[index];
+    if (!comment) {
+      continue;
+    }
+    if (comment.id === updated.id) {
+      comments[index] = { ...updated, replies: comment.replies };
+      return true;
+    }
+
+    if (replaceCommentInTree(comment.replies, updated)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function loadComments(post: LifePost, reset = false) {
   const existing = commentPage(post);
   if (existing.loading || existing.loadingMore || (!reset && existing.loaded && !existing.hasMore)) {
@@ -778,7 +802,7 @@ function isRatingBusy(postId: number) {
 }
 
 function commentAuthorName(comment: LifeComment) {
-  return comment.deleted ? t('pages.life.commentDeleted') : comment.author?.displayName ?? t('pages.life.byUnknown');
+  return comment.author?.displayName ?? t('pages.life.byUnknown');
 }
 
 function commentInitial(comment: LifeComment) {
@@ -1048,6 +1072,21 @@ function removeCommentFromTree(comments: LifeComment[], id: number): number {
   return 0;
 }
 
+function markOwnCommentDeleted(comments: LifeComment[], id: number): boolean {
+  for (const comment of comments) {
+    if (comment.id === id) {
+      comment.deleted = true;
+      return true;
+    }
+
+    if (markOwnCommentDeleted(comment.replies, id)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function deleteComment(post: LifePost, comment: LifeComment) {
   if (!window.confirm(t('pages.life.deleteCommentConfirm'))) {
     return;
@@ -1058,21 +1097,48 @@ async function deleteComment(post: LifePost, comment: LifeComment) {
 
   try {
     await api.deleteLifeComment(comment.id);
-    const removedCount = removeCommentFromTree(commentsForPost(post), comment.id);
-    if (removedCount > 0) {
-      const nextTotal = Math.max(0, commentCount(post) - removedCount);
-      post.commentCount = nextTotal;
+    if (currentUser.value?.id === comment.author?.id) {
+      markOwnCommentDeleted(commentsForPost(post), comment.id);
       updateCommentPage(post, (page) => ({
         ...page,
-        items: [...page.items],
-        total: nextTotal
+        items: [...page.items]
       }));
+    } else {
+      const removedCount = removeCommentFromTree(commentsForPost(post), comment.id);
+      if (removedCount > 0) {
+        const nextTotal = Math.max(0, commentCount(post) - removedCount);
+        post.commentCount = nextTotal;
+        updateCommentPage(post, (page) => ({
+          ...page,
+          items: [...page.items],
+          total: nextTotal
+        }));
+      }
     }
     if (replyTargetId.value === comment.id) {
       cancelReply(comment.id);
     }
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.deleteCommentFailed'));
+  }
+}
+
+async function restoreComment(post: LifePost, comment: LifeComment) {
+  const key = replyKey(comment.id);
+  commentBusyKey.value = key;
+  clearCommentError(key);
+
+  try {
+    const restored = await api.restoreLifeComment(comment.id);
+    replaceCommentInTree(commentsForPost(post), restored);
+    updateCommentPage(post, (page) => ({
+      ...page,
+      items: [...page.items]
+    }));
+  } catch (error) {
+    setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.restoreCommentFailed'));
+  } finally {
+    commentBusyKey.value = '';
   }
 }
 
@@ -1599,7 +1665,7 @@ onUnmounted(() => {
                     <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(comment) }}</div>
                     <div class="life-comment__content">
                       <div class="life-comment__meta">
-                        <RouterLink v-if="!comment.deleted && comment.author" class="user-profile-link" :to="`/profile/${comment.author.id}`">
+                        <RouterLink v-if="comment.author" class="user-profile-link" :to="`/profile/${comment.author.id}`">
                           {{ comment.author.displayName }}
                         </RouterLink>
                         <strong v-else>{{ commentAuthorName(comment) }}</strong>
@@ -1611,7 +1677,7 @@ onUnmounted(() => {
                           compact
                         />
                       </div>
-                      <p v-if="!comment.deleted" class="life-comment__body">{{ comment.body }}</p>
+                      <p class="life-comment__body">{{ comment.body }}</p>
                       <p
                         v-if="canSeeCommentModeration(comment) && moderationReasonVisible(comment.moderationStatus, comment.moderationReason)"
                         class="life-moderation-detail life-moderation-detail--comment"
@@ -1620,9 +1686,9 @@ onUnmounted(() => {
                         <span>{{ comment.moderationReason }}</span>
                       </p>
 
-                      <div v-if="!comment.deleted" class="life-comment__actions">
+                      <div v-if="!comment.deleted || canRestoreComment(comment)" class="life-comment__actions">
                         <button
-                          v-if="canComment"
+                          v-if="!comment.deleted && canComment"
                           class="life-icon-button life-icon-button--flat"
                           type="button"
                           :aria-label="t('pages.life.reply')"
@@ -1640,6 +1706,17 @@ onUnmounted(() => {
                         >
                           <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                           <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
+                        </button>
+                        <button
+                          v-if="canRestoreComment(comment)"
+                          class="life-icon-button life-icon-button--flat"
+                          type="button"
+                          :aria-label="t('pages.life.restoreComment')"
+                          :disabled="isCommentBusy(replyKey(comment.id))"
+                          @click="restoreComment(post, comment)"
+                        >
+                          <Icon :icon="iconUndo" class="ui-icon" aria-hidden="true" />
+                          <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.restoreComment') }}</span>
                         </button>
                       </div>
 
@@ -1687,7 +1764,7 @@ onUnmounted(() => {
                           <div class="life-comment__avatar" aria-hidden="true">{{ commentInitial(reply) }}</div>
                           <div class="life-comment__content">
                             <div class="life-comment__meta">
-                              <RouterLink v-if="!reply.deleted && reply.author" class="user-profile-link" :to="`/profile/${reply.author.id}`">
+                              <RouterLink v-if="reply.author" class="user-profile-link" :to="`/profile/${reply.author.id}`">
                                 {{ reply.author.displayName }}
                               </RouterLink>
                               <strong v-else>{{ commentAuthorName(reply) }}</strong>
@@ -1699,7 +1776,7 @@ onUnmounted(() => {
                                 compact
                               />
                             </div>
-                            <p v-if="!reply.deleted" class="life-comment__body">{{ reply.body }}</p>
+                            <p class="life-comment__body">{{ reply.body }}</p>
                             <p
                               v-if="canSeeCommentModeration(reply) && moderationReasonVisible(reply.moderationStatus, reply.moderationReason)"
                               class="life-moderation-detail life-moderation-detail--comment"
@@ -1707,8 +1784,9 @@ onUnmounted(() => {
                               <strong>{{ t('pages.life.moderationReason') }}</strong>
                               <span>{{ reply.moderationReason }}</span>
                             </p>
-                            <div v-if="canManageComment(reply)" class="life-comment__actions">
+                            <div v-if="canManageComment(reply) || canRestoreComment(reply)" class="life-comment__actions">
                               <button
+                                v-if="canManageComment(reply)"
                                 class="life-icon-button life-icon-button--flat life-icon-button--danger"
                                 type="button"
                                 :aria-label="t('pages.life.deleteComment')"
@@ -1716,6 +1794,17 @@ onUnmounted(() => {
                               >
                                 <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                                 <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
+                              </button>
+                              <button
+                                v-if="canRestoreComment(reply)"
+                                class="life-icon-button life-icon-button--flat"
+                                type="button"
+                                :aria-label="t('pages.life.restoreComment')"
+                                :disabled="isCommentBusy(replyKey(reply.id))"
+                                @click="restoreComment(post, reply)"
+                              >
+                                <Icon :icon="iconUndo" class="ui-icon" aria-hidden="true" />
+                                <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.restoreComment') }}</span>
                               </button>
                             </div>
                             <p v-if="commentErrors[replyKey(reply.id)]" class="life-form__error" role="alert">

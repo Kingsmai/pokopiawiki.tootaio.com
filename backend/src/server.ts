@@ -103,6 +103,7 @@ import {
   retryEntityDiscussionCommentModeration,
   retryLifeCommentModeration,
   retryLifePostModeration,
+  restoreLifeComment,
   setLifePostRating,
   setLifePostReaction,
   updateConfig,
@@ -1417,6 +1418,16 @@ app.delete('/api/life-comments/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
   const deleted = await deleteLifeComment(Number(id), user.id, userHasPermission(user, 'life.comments.delete-any'));
   return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
+app.post('/api/life-comments/:id/restore', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'life.comments.delete', 'communityWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const comment = await restoreLifeComment(Number(id), user.id);
+  return comment ? comment : notFound(reply, request);
 });
 
 app.post('/api/life-comments/:id/moderation/retry', async (request, reply) => {

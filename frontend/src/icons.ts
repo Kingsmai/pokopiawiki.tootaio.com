@@ -54,6 +54,7 @@ export const iconStar: AppIcon = 'mdi:star';
 export const iconStarOutline: AppIcon = 'mdi:star-outline';
 export const iconSuccess: AppIcon = 'mdi:check-circle-outline';
 export const iconTranslate: AppIcon = 'mdi:translate';
+export const iconUndo: AppIcon = 'mdi:undo';
 export const iconUpload: AppIcon = 'mdi:upload-outline';
 export const iconVersion: AppIcon = 'mdi:tag-outline';
 export const iconWarning: AppIcon = 'mdi:alert-outline';

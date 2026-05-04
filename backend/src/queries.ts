@@ -3077,7 +3077,7 @@ function lifeCommentProjection(whereClause: string): string {
       lc.id,
       lc.post_id AS "postId",
       lc.parent_comment_id AS "parentCommentId",
-      CASE WHEN lc.deleted_at IS NULL THEN lc.body ELSE '' END AS body,
+      lc.body,
       lc.deleted_at IS NOT NULL AS deleted,
       lc.ai_moderation_status AS "moderationStatus",
       lc.ai_moderation_language_code AS "moderationLanguageCode",
@@ -3085,18 +3085,23 @@ function lifeCommentProjection(whereClause: string): string {
       lc.created_at AS "createdAt",
       lc.created_at::text AS "createdAtCursor",
       lc.updated_at AS "updatedAt",
-      CASE
-        WHEN lc.deleted_at IS NOT NULL OR comment_user.id IS NULL THEN NULL
-        ELSE json_build_object('id', comment_user.id, 'displayName', comment_user.display_name)
-      END AS author
+      CASE WHEN comment_user.id IS NULL THEN NULL ELSE json_build_object('id', comment_user.id, 'displayName', comment_user.display_name) END AS author
     FROM life_post_comments lc
     LEFT JOIN users comment_user ON comment_user.id = lc.created_by_user_id
     ${whereClause}
   `;
 }
 
-function addVisibleLifeCommentCondition(conditions: string[]): void {
-  conditions.push('lc.deleted_at IS NULL');
+function visibleLifeCommentExpression(alias: string, ownerColumn: string, userParamIndex: number | null): string {
+  return userParamIndex !== null ? `(${alias}.deleted_at IS NULL OR ${ownerColumn} = $${userParamIndex})` : `${alias}.deleted_at IS NULL`;
+}
+
+function addVisibleLifeCommentCondition(conditions: string[], params: unknown[], userId: number | null): void {
+  const userParamIndex = params.length + 1;
+  if (userId !== null) {
+    params.push(userId);
+  }
+  conditions.push(visibleLifeCommentExpression('lc', 'lc.created_by_user_id', userId === null ? null : userParamIndex));
   conditions.push(`
     (
       lc.parent_comment_id IS NULL
@@ -3104,7 +3109,7 @@ function addVisibleLifeCommentCondition(conditions: string[]): void {
         SELECT 1
         FROM life_post_comments parent_comment
         WHERE parent_comment.id = lc.parent_comment_id
-          AND parent_comment.deleted_at IS NULL
+          AND ${visibleLifeCommentExpression('parent_comment', 'parent_comment.created_by_user_id', userId === null ? null : userParamIndex)}
       )
     )
   `);
@@ -3152,7 +3157,7 @@ async function lifeCommentCountsForPosts(
 
   const params: unknown[] = [postIds];
   const conditions = ['lc.post_id = ANY($1::integer[])'];
-  addVisibleLifeCommentCondition(conditions);
+  addVisibleLifeCommentCondition(conditions, params, userId);
   addModerationVisibilityCondition(conditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
 
   const rows = await query<{ postId: number; total: number }>(
@@ -3184,7 +3189,7 @@ async function lifeCommentPreviewForPosts(
 
   const params: unknown[] = [postIds];
   const previewConditions = ['lc.post_id = ANY($1::integer[])', 'lc.parent_comment_id IS NULL'];
-  addVisibleLifeCommentCondition(previewConditions);
+  addVisibleLifeCommentCondition(previewConditions, params, userId);
   addModerationVisibilityCondition(previewConditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
   params.push(lifeCommentPreviewLimit);
 
@@ -3244,7 +3249,7 @@ export async function listLifeComments(
 
   const params: unknown[] = [postId];
   const topLevelConditions = ['lc.post_id = $1', 'lc.parent_comment_id IS NULL'];
-  addVisibleLifeCommentCondition(topLevelConditions);
+  addVisibleLifeCommentCondition(topLevelConditions, params, userId);
   addModerationVisibilityCondition(topLevelConditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
   addModerationLanguageCondition(topLevelConditions, params, 'lc', languageCode);
 
@@ -3269,7 +3274,7 @@ export async function listLifeComments(
     ? await (async () => {
         const replyParams: unknown[] = [topLevelIds];
         const replyConditions = ['lc.parent_comment_id = ANY($1::integer[])'];
-        addVisibleLifeCommentCondition(replyConditions);
+        addVisibleLifeCommentCondition(replyConditions, replyParams, userId);
         addModerationVisibilityCondition(replyConditions, replyParams, 'lc', 'lc.created_by_user_id', userId, canViewAll);
         addModerationLanguageCondition(replyConditions, replyParams, 'lc', languageCode);
         return query<LifeCommentRow>(
@@ -3283,7 +3288,7 @@ export async function listLifeComments(
     : [];
   const totalParams: unknown[] = [postId];
   const totalConditions = ['lc.post_id = $1'];
-  addVisibleLifeCommentCondition(totalConditions);
+  addVisibleLifeCommentCondition(totalConditions, totalParams, userId);
   addModerationVisibilityCondition(totalConditions, totalParams, 'lc', 'lc.created_by_user_id', userId, canViewAll);
   addModerationLanguageCondition(totalConditions, totalParams, 'lc', languageCode);
   const total = await queryOne<{ total: number }>(
@@ -4379,6 +4384,29 @@ export async function deleteLifeComment(id: number, userId: number, allowAny = f
   );
 
   return Boolean(result);
+}
+
+export async function restoreLifeComment(id: number, userId: number) {
+  const commentId = requirePositiveInteger(id, 'server.validation.commentInvalid');
+  const result = await queryOne<{ id: number }>(
+    `
+      UPDATE life_post_comments
+      SET deleted_at = NULL, deleted_by_user_id = NULL, updated_at = now()
+      WHERE id = $1
+        AND created_by_user_id = $2
+        AND deleted_at IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM life_posts lp
+          WHERE lp.id = life_post_comments.post_id
+            AND lp.deleted_at IS NULL
+        )
+      RETURNING id
+    `,
+    [commentId, userId]
+  );
+
+  return result ? getLifeCommentById(result.id) : null;
 }
 
 export async function retryLifeCommentModeration(id: number, userId: number, allowAny = false) {

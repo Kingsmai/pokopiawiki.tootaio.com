@@ -1208,6 +1208,7 @@ export const api = {
     sendJson<LifeComment>(`/api/life-posts/${postId}/comments/${commentId}/replies`, 'POST', payload),
   retryLifeCommentModeration: (id: string | number) =>
     sendJson<LifeComment>(`/api/life-comments/${id}/moderation/retry`, 'POST', {}),
+  restoreLifeComment: (id: string | number) => sendJson<LifeComment>(`/api/life-comments/${id}/restore`, 'POST', {}),
   deleteLifeComment: (id: string | number) => deleteJson(`/api/life-comments/${id}`),
   entityDiscussion: (entityType: DiscussionEntityType, entityId: string | number, params: CommentPageParams = {}) =>
     getJson<EntityDiscussionCommentsPage>(

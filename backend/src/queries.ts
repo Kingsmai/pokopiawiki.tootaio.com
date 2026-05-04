@@ -3095,6 +3095,21 @@ function lifeCommentProjection(whereClause: string): string {
   `;
 }
 
+function addVisibleLifeCommentCondition(conditions: string[]): void {
+  conditions.push('lc.deleted_at IS NULL');
+  conditions.push(`
+    (
+      lc.parent_comment_id IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM life_post_comments parent_comment
+        WHERE parent_comment.id = lc.parent_comment_id
+          AND parent_comment.deleted_at IS NULL
+      )
+    )
+  `);
+}
+
 function buildLifeCommentTree(rows: LifeCommentRow[]): LifeComment[] {
   const comments = new Map<number, LifeComment>();
   const topLevelComments: LifeComment[] = [];
@@ -3137,6 +3152,7 @@ async function lifeCommentCountsForPosts(
 
   const params: unknown[] = [postIds];
   const conditions = ['lc.post_id = ANY($1::integer[])'];
+  addVisibleLifeCommentCondition(conditions);
   addModerationVisibilityCondition(conditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
 
   const rows = await query<{ postId: number; total: number }>(
@@ -3168,6 +3184,7 @@ async function lifeCommentPreviewForPosts(
 
   const params: unknown[] = [postIds];
   const previewConditions = ['lc.post_id = ANY($1::integer[])', 'lc.parent_comment_id IS NULL'];
+  addVisibleLifeCommentCondition(previewConditions);
   addModerationVisibilityCondition(previewConditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
   params.push(lifeCommentPreviewLimit);
 
@@ -3227,6 +3244,7 @@ export async function listLifeComments(
 
   const params: unknown[] = [postId];
   const topLevelConditions = ['lc.post_id = $1', 'lc.parent_comment_id IS NULL'];
+  addVisibleLifeCommentCondition(topLevelConditions);
   addModerationVisibilityCondition(topLevelConditions, params, 'lc', 'lc.created_by_user_id', userId, canViewAll);
   addModerationLanguageCondition(topLevelConditions, params, 'lc', languageCode);
 
@@ -3251,6 +3269,7 @@ export async function listLifeComments(
     ? await (async () => {
         const replyParams: unknown[] = [topLevelIds];
         const replyConditions = ['lc.parent_comment_id = ANY($1::integer[])'];
+        addVisibleLifeCommentCondition(replyConditions);
         addModerationVisibilityCondition(replyConditions, replyParams, 'lc', 'lc.created_by_user_id', userId, canViewAll);
         addModerationLanguageCondition(replyConditions, replyParams, 'lc', languageCode);
         return query<LifeCommentRow>(
@@ -3264,6 +3283,7 @@ export async function listLifeComments(
     : [];
   const totalParams: unknown[] = [postId];
   const totalConditions = ['lc.post_id = $1'];
+  addVisibleLifeCommentCondition(totalConditions);
   addModerationVisibilityCondition(totalConditions, totalParams, 'lc', 'lc.created_by_user_id', userId, canViewAll);
   addModerationLanguageCondition(totalConditions, totalParams, 'lc', languageCode);
   const total = await queryOne<{ total: number }>(

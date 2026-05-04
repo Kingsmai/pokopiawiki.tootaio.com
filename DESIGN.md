@@ -817,7 +817,7 @@ Life Post 可配置：
 - 拥有 `life.posts.update-any` / `life.posts.delete-any` 权限的用户可以管理其他用户的 Life Post。
 - 已注册并完成邮箱验证且拥有 `life.posts.create` 或 `life.posts.update` 权限的用户发布或编辑 Life Post 时必须选择 1 个 Life Category。
 - 已注册并完成邮箱验证且拥有 `life.comments.create` 权限的用户可以评论 Life Post，并回复顶层评论。
-- 评论作者拥有 `life.comments.delete` 权限时可以删除自己的评论；拥有 `life.comments.delete-any` 权限的用户可以删除其他用户评论；删除评论后正文不再展示，已有回复保留在原位置。
+- 评论作者拥有 `life.comments.delete` 权限时可以删除自己的评论；拥有 `life.comments.delete-any` 权限的用户可以删除其他用户评论；删除后的 Life Comment 不再出现在评论列表、评论预览或评论数量中。
 - 已软删除的 Life Post 不出现在信息流、搜索或 Category 筛选结果中，也不能继续编辑、评论或设置 Reaction。
 - 已软删除的 Life Post 详情页返回未找到，不公开软删除字段。
 - 每条 Life Post 默认只展示评论入口与评论数量；评论列表、回复和评论输入默认折叠，用户点击后展开。
@@ -839,9 +839,9 @@ Life Post 可配置：
 - Life Post 和 Life Comment 必须进入 AI 审核；未审核通过的内容不向普通访客公开。
 - 作者本人和拥有对应 `*-any` 管理权限的用户可以看到相关内容的审核状态，并可触发重新审核。
 - 未审核通过的 Life Post 详情只对作者本人和拥有对应管理权限的用户可见；普通访客访问时返回未找到。
-- Life Post 必须展示审核状态：审核中、未审核、审核失败、审核不通过；审核通过也可作为状态展示。
+- Life Post 必须展示未通过或未完成的审核状态：审核中、未审核、审核失败、审核不通过；审核通过不显示状态标签。
 - 新增或更新 Life Post 后先进入不可公开状态，AI 审核通过后才出现在普通公开 Feed。
-- Life Comment 和回复审核通过后才出现在普通公开评论列表、评论数量和评论预览中。
+- Life Comment 和回复审核通过且未删除后才出现在普通公开评论列表、评论数量和评论预览中。
 - 审核失败不等于审核通过；失败内容保持不可公开，用户可重新审核。
 - `reviewing` 表示审核正在进行中，前端不展示重新审核入口；只有 `unreviewed`、`rejected` 和 `failed` 这类非进行中且未通过状态可触发重新审核。
 - Life Post 是用户生成内容，正文按作者输入展示，不进入 `entity_translations`。

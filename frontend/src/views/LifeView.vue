@@ -479,7 +479,7 @@ function canManageComment(comment: LifeComment) {
 }
 
 function canSeeCommentModeration(comment: LifeComment) {
-  return currentUser.value?.id === comment.author?.id || can('life.comments.delete-any');
+  return moderationStatusVisible(comment.moderationStatus) && (currentUser.value?.id === comment.author?.id || can('life.comments.delete-any'));
 }
 
 function commentKey(postId: number) {
@@ -577,6 +577,10 @@ function moderationTone(status: AiModerationStatus) {
     failed: 'warning'
   };
   return tones[status];
+}
+
+function moderationStatusVisible(status: AiModerationStatus) {
+  return status !== 'approved';
 }
 
 function canRetryModeration(post: LifePost) {
@@ -1019,21 +1023,29 @@ async function submitReply(post: LifePost, comment: LifeComment) {
   }
 }
 
-function markCommentDeleted(comments: LifeComment[], id: number): boolean {
-  for (const comment of comments) {
+function countCommentTree(comment: LifeComment): number {
+  return 1 + comment.replies.reduce((total, reply) => total + countCommentTree(reply), 0);
+}
+
+function removeCommentFromTree(comments: LifeComment[], id: number): number {
+  for (let index = 0; index < comments.length; index += 1) {
+    const comment = comments[index];
+    if (!comment) {
+      continue;
+    }
     if (comment.id === id) {
-      comment.deleted = true;
-      comment.body = '';
-      comment.author = null;
-      return true;
+      const removedCount = countCommentTree(comment);
+      comments.splice(index, 1);
+      return removedCount;
     }
 
-    if (markCommentDeleted(comment.replies, id)) {
-      return true;
+    const removedCount = removeCommentFromTree(comment.replies, id);
+    if (removedCount > 0) {
+      return removedCount;
     }
   }
 
-  return false;
+  return 0;
 }
 
 async function deleteComment(post: LifePost, comment: LifeComment) {
@@ -1046,7 +1058,16 @@ async function deleteComment(post: LifePost, comment: LifeComment) {
 
   try {
     await api.deleteLifeComment(comment.id);
-    markCommentDeleted(commentsForPost(post), comment.id);
+    const removedCount = removeCommentFromTree(commentsForPost(post), comment.id);
+    if (removedCount > 0) {
+      const nextTotal = Math.max(0, commentCount(post) - removedCount);
+      post.commentCount = nextTotal;
+      updateCommentPage(post, (page) => ({
+        ...page,
+        items: [...page.items],
+        total: nextTotal
+      }));
+    }
     if (replyTargetId.value === comment.id) {
       cancelReply(comment.id);
     }
@@ -1451,7 +1472,12 @@ onUnmounted(() => {
                 </button>
 
                 <div class="life-post__review-actions">
-                  <StatusBadge :label="moderationLabel(post.moderationStatus)" :tone="moderationTone(post.moderationStatus)" compact />
+                  <StatusBadge
+                    v-if="moderationStatusVisible(post.moderationStatus)"
+                    :label="moderationLabel(post.moderationStatus)"
+                    :tone="moderationTone(post.moderationStatus)"
+                    compact
+                  />
                   <button
                     v-if="canRetryModeration(post)"
                     class="life-icon-button life-review-button"

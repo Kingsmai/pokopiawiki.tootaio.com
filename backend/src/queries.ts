@@ -201,7 +201,6 @@ type PokemonCsvData = {
 };
 
 type ItemPayload = {
-  displayId: number;
   name: string;
   details: string;
   translations: TranslationInput;
@@ -220,7 +219,6 @@ type ItemPayload = {
 };
 
 type AncientArtifactPayload = {
-  displayId: number;
   name: string;
   details: string;
   translations: TranslationInput;
@@ -541,7 +539,6 @@ type PokemonChangeSource = {
   favorite_things: Array<{ name: string }>;
 } & TranslationChangeSource;
 type ItemChangeSource = {
-  displayId: number;
   name: string;
   details: string;
   isEventItem: boolean;
@@ -554,7 +551,6 @@ type ItemChangeSource = {
   tags: Array<{ name: string }>;
 } & TranslationChangeSource;
 type AncientArtifactChangeSource = {
-  displayId: number;
   name: string;
   details: string;
   image: EntityImageValue | null;
@@ -2251,7 +2247,6 @@ async function itemEditChanges(
   const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
 
   pushChange(changes, 'Name', before.name, after.name);
-  pushChange(changes, 'Display ID', String(before.displayId), String(after.displayId));
   pushChange(changes, 'Description', before.details, after.details);
   pushTranslationChanges(changes, before.translations, after.translations, ['name', 'details']);
   pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
@@ -2277,7 +2272,6 @@ async function ancientArtifactEditChanges(
   const tagNames = await entityNameMap(client, 'favorite_things', after.tagIds);
 
   pushChange(changes, 'Name', before.name, after.name);
-  pushChange(changes, 'Display ID', String(before.displayId), String(after.displayId));
   pushChange(changes, 'Description', before.details, after.details);
   pushTranslationChanges(changes, before.translations, after.translations, ['name', 'details']);
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
@@ -2574,7 +2568,7 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
           ${uploadedImageJson('i.image_path')} AS image
         FROM items i
         WHERE ${itemName} ILIKE $1
-        ORDER BY i.display_id, ${orderByEntity('i')}
+        ORDER BY ${orderByEntity('i')}
         LIMIT $2
       `,
       [pattern, limit]
@@ -2591,7 +2585,7 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
           ${uploadedImageJson('a.image_path')} AS image
         FROM ancient_artifacts a
         WHERE ${artifactName} ILIKE $1
-        ORDER BY a.display_id, ${orderByEntity('a')}
+        ORDER BY ${orderByEntity('a')}
         LIMIT $2
       `,
       [pattern, limit]
@@ -6223,7 +6217,6 @@ function itemProjection(locale: string): string {
   return `
     SELECT
       i.id,
-      i.display_id AS "displayId",
       ${itemName} AS name,
       i.name AS "baseName",
       ${itemDetails} AS details,
@@ -6324,8 +6317,8 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const orderClause = recipeOrder
-    ? `ORDER BY CASE WHEN item_recipe.id IS NULL THEN 1 ELSE 0 END, item_recipe.sort_order, item_recipe.id, i.display_id, ${orderByEntity('i')}`
-    : `ORDER BY i.display_id, ${orderByEntity('i')}`;
+    ? `ORDER BY CASE WHEN item_recipe.id IS NULL THEN 1 ELSE 0 END, item_recipe.sort_order, item_recipe.id, ${orderByEntity('i')}`
+    : `ORDER BY ${orderByEntity('i')}`;
   return query(`${itemProjection(locale)} ${whereClause} ${orderClause}`, params);
 }
 
@@ -6382,7 +6375,6 @@ export async function getItem(id: number, locale = defaultLocale) {
           ), '[]'::json) AS materials,
           json_build_object(
             'id', result_item.id,
-            'displayId', result_item.display_id,
             'name', ${resultItemName},
             'image', ${uploadedImageJson('result_item.image_path')},
             'category', ${systemListJsonSql('result_item.category_key', itemCategoryOptions, locale)},
@@ -6489,7 +6481,6 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
   const usage = usageId === null ? null : systemListOptionById(itemUsageOptions, usageId, 'server.validation.usageRequired');
 
   return {
-    displayId: requirePositiveInteger(payload.displayId, 'server.validation.itemDisplayIdRequired'),
     name: cleanName(payload.name, 'server.validation.itemNameRequired'),
     details: cleanOptionalText(payload.details),
     translations: cleanTranslations(payload.translations, ['name', 'details']),
@@ -6546,7 +6537,6 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
     const result = await client.query<{ id: number }>(
       `
         INSERT INTO items (
-          display_id,
           name,
           details,
           category_key,
@@ -6561,11 +6551,10 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
         RETURNING id
       `,
       [
-        cleanPayload.displayId,
         cleanPayload.name,
         cleanPayload.details,
         cleanPayload.categoryKey,
@@ -6599,23 +6588,21 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
     const result = await client.query(
       `
         UPDATE items
-        SET display_id = $1,
-            name = $2,
-            details = $3,
-            category_key = $4,
-            usage_key = $5,
-            dyeable = $6,
-            dual_dyeable = $7,
-            pattern_editable = $8,
-            no_recipe = $9,
-            is_event_item = $10,
-            image_path = $11,
-            updated_by_user_id = $12,
+        SET name = $1,
+            details = $2,
+            category_key = $3,
+            usage_key = $4,
+            dyeable = $5,
+            dual_dyeable = $6,
+            pattern_editable = $7,
+            no_recipe = $8,
+            is_event_item = $9,
+            image_path = $10,
+            updated_by_user_id = $11,
             updated_at = now()
-        WHERE id = $13
+        WHERE id = $12
       `,
       [
-        cleanPayload.displayId,
         cleanPayload.name,
         cleanPayload.details,
         cleanPayload.categoryKey,
@@ -6665,7 +6652,6 @@ function ancientArtifactProjection(locale: string): string {
   return `
     SELECT
       a.id,
-      a.display_id AS "displayId",
       ${artifactName} AS name,
       a.name AS "baseName",
       ${artifactDetails} AS details,
@@ -6719,7 +6705,7 @@ export async function listAncientArtifacts(paramsQuery: QueryParams = {}, locale
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${ancientArtifactProjection(locale)} ${whereClause} ORDER BY a.display_id, ${orderByEntity('a')}`, params);
+  return query(`${ancientArtifactProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('a')}`, params);
 }
 
 export async function getAncientArtifact(id: number, locale = defaultLocale) {
@@ -6738,7 +6724,6 @@ function cleanAncientArtifactPayload(payload: Record<string, unknown>): AncientA
   const category = systemListOptionById(ancientArtifactCategoryOptions, categoryId, 'server.validation.categoryRequired');
 
   return {
-    displayId: requirePositiveInteger(payload.displayId, 'server.validation.artifactDisplayIdRequired'),
     name: cleanName(payload.name, 'server.validation.artifactNameRequired'),
     details: cleanOptionalText(payload.details),
     translations: cleanTranslations(payload.translations, ['name', 'details']),
@@ -6768,7 +6753,6 @@ export async function createAncientArtifact(payload: Record<string, unknown>, us
     const result = await client.query<{ id: number }>(
       `
         INSERT INTO ancient_artifacts (
-          display_id,
           name,
           details,
           category_key,
@@ -6777,11 +6761,10 @@ export async function createAncientArtifact(payload: Record<string, unknown>, us
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $6)
         RETURNING id
       `,
       [
-        cleanPayload.displayId,
         cleanPayload.name,
         cleanPayload.details,
         cleanPayload.categoryKey,
@@ -6809,16 +6792,15 @@ export async function updateAncientArtifact(id: number, payload: Record<string, 
     const result = await client.query(
       `
         UPDATE ancient_artifacts
-        SET display_id = $1,
-            name = $2,
-            details = $3,
-            category_key = $4,
-            image_path = $5,
-            updated_by_user_id = $6,
+        SET name = $1,
+            details = $2,
+            category_key = $3,
+            image_path = $4,
+            updated_by_user_id = $5,
             updated_at = now()
-        WHERE id = $7
+        WHERE id = $6
       `,
-      [cleanPayload.displayId, cleanPayload.name, cleanPayload.details, cleanPayload.categoryKey, cleanPayload.imagePath, userId, id]
+      [cleanPayload.name, cleanPayload.details, cleanPayload.categoryKey, cleanPayload.imagePath, userId, id]
     );
     if (result.rowCount === 0) {
       return false;
@@ -6917,7 +6899,6 @@ export async function getRecipe(id: number, locale = defaultLocale) {
         ), '[]'::json) AS materials,
         json_build_object(
           'id', result_item.id,
-          'displayId', result_item.display_id,
           'name', ${resultItemName},
           'image', ${uploadedImageJson('result_item.image_path')},
           'category', ${systemListJsonSql('result_item.category_key', itemCategoryOptions, locale)},
@@ -7060,14 +7041,12 @@ function dishCategoryProjection(locale: string): string {
       ${auditSelect('dc', 'category_created_user', 'category_updated_user')},
       json_build_object(
         'id', cookware_item.id,
-        'displayId', cookware_item.display_id,
         'name', ${cookwareName},
         'image', ${uploadedImageJson('cookware_item.image_path')},
         'category', ${systemListJsonSql('cookware_item.category_key', itemCategoryOptions, locale)}
       ) AS cookware,
       json_build_object(
         'id', main_material_item.id,
-        'displayId', main_material_item.display_id,
         'name', ${mainMaterialName},
         'image', ${uploadedImageJson('main_material_item.image_path')},
         'category', ${systemListJsonSql('main_material_item.category_key', itemCategoryOptions, locale)}
@@ -7093,7 +7072,6 @@ function dishCategoryProjection(locale: string): string {
             'category', json_build_object('id', dc.id, 'name', ${categoryName}),
             'item', json_build_object(
               'id', dish_item.id,
-              'displayId', dish_item.display_id,
               'name', ${dishItemName},
               'image', ${uploadedImageJson('dish_item.image_path')},
               'category', ${systemListJsonSql('dish_item.category_key', itemCategoryOptions, locale)}
@@ -7102,7 +7080,6 @@ function dishCategoryProjection(locale: string): string {
               SELECT json_agg(
                 json_build_object(
                   'id', secondary_material_item.id,
-                  'displayId', secondary_material_item.display_id,
                   'name', ${secondaryMaterialName},
                   'image', ${uploadedImageJson('secondary_material_item.image_path')},
                   'category', ${systemListJsonSql('secondary_material_item.category_key', itemCategoryOptions, locale)}
@@ -7153,7 +7130,6 @@ function dishProjection(locale: string): string {
       json_build_object('id', dc.id, 'name', ${categoryName}) AS category,
       json_build_object(
         'id', dish_item.id,
-        'displayId', dish_item.display_id,
         'name', ${dishItemName},
         'image', ${uploadedImageJson('dish_item.image_path')},
         'category', ${systemListJsonSql('dish_item.category_key', itemCategoryOptions, locale)}
@@ -7162,7 +7138,6 @@ function dishProjection(locale: string): string {
         SELECT json_agg(
           json_build_object(
             'id', secondary_material_item.id,
-            'displayId', secondary_material_item.display_id,
             'name', ${secondaryMaterialName},
             'image', ${uploadedImageJson('secondary_material_item.image_path')},
             'category', ${systemListJsonSql('secondary_material_item.category_key', itemCategoryOptions, locale)}
@@ -7568,7 +7543,6 @@ const dataToolColumns = {
   habitatPokemon: ['habitat_id', 'pokemon_id', 'map_id', 'time_of_day', 'weather', 'rarity'],
   items: [
     'id',
-    'display_id',
     'name',
     'details',
     'category_key',
@@ -7590,7 +7564,6 @@ const dataToolColumns = {
   artifactFavoriteThings: ['ancient_artifact_id', 'favorite_thing_id'],
   artifacts: [
     'id',
-    'display_id',
     'name',
     'details',
     'category_key',
@@ -7901,7 +7874,7 @@ async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<
 
   if (scope === 'items') {
     return {
-      items: await tableRows(client, 'SELECT * FROM items ORDER BY display_id, sort_order, id'),
+      items: await tableRows(client, 'SELECT * FROM items ORDER BY sort_order, id'),
       itemAcquisitionMethods: await tableRows(client, 'SELECT * FROM item_acquisition_methods ORDER BY item_id, acquisition_method_id'),
       itemFavoriteThings: await tableRows(client, 'SELECT * FROM item_favorite_things ORDER BY item_id, favorite_thing_id'),
       pokemonSkillItemDrops: await tableRows(client, 'SELECT * FROM pokemon_skill_item_drops ORDER BY pokemon_id, skill_id'),
@@ -7912,7 +7885,7 @@ async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<
 
   if (scope === 'artifacts') {
     return {
-      artifacts: await tableRows(client, 'SELECT * FROM ancient_artifacts ORDER BY display_id, sort_order, id'),
+      artifacts: await tableRows(client, 'SELECT * FROM ancient_artifacts ORDER BY sort_order, id'),
       artifactFavoriteThings: await tableRows(
         client,
         'SELECT * FROM ancient_artifact_favorite_things ORDER BY ancient_artifact_id, favorite_thing_id'

@@ -36,7 +36,6 @@ const busy = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
 const artifactForm = ref({
-  displayId: 1,
   name: '',
   details: '',
   translations: {} as TranslationMap,
@@ -98,7 +97,6 @@ async function loadEditor() {
     if (isEditing.value) {
       const artifact = await api.ancientArtifactDetail(routeId.value);
       artifactForm.value = {
-        displayId: artifact.displayId,
         name: artifact.baseName ?? artifact.name,
         details: artifact.baseDetails ?? artifact.details,
         translations: artifact.translations ?? {},
@@ -142,7 +140,6 @@ async function saveArtifact() {
 
   try {
     const payload: AncientArtifactPayload = {
-      displayId: artifactForm.value.displayId,
       name: artifactNameForSave(),
       details: artifactForm.value.details,
       translations: artifactForm.value.translations,
@@ -189,11 +186,6 @@ onMounted(() => {
         :languages="languages"
         required
       />
-
-      <div class="field">
-        <label for="artifact-display-id">{{ t('pages.ancientArtifacts.displayId') }}</label>
-        <input id="artifact-display-id" v-model.number="artifactForm.displayId" type="number" min="1" required />
-      </div>
 
       <TranslationFields
         id-prefix="artifact-details"

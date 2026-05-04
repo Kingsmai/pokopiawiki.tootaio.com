@@ -74,7 +74,7 @@ const dishCategoryModalTitle = computed(() =>
 );
 const dishModalTitle = computed(() => (dishForm.value.id ? t('pages.dish.editDish') : t('pages.dish.newDish')));
 const itemSelectOptions = computed<TagsSelectOption[]>(() =>
-  items.value.map((item) => ({ id: item.id, name: item.name, label: `#${item.displayId} ${item.name}` }))
+  items.value.map((item) => ({ id: item.id, name: item.name }))
 );
 const optionalItemSelectOptions = computed<TagsSelectOption[]>(() => [{ id: '', name: t('common.none') }, ...itemSelectOptions.value]);
 const categorySelectOptions = computed<TagsSelectOption[]>(() => categories.value.map((category) => ({ id: category.id, name: category.name })));
@@ -373,7 +373,7 @@ onMounted(loadPage);
             <div>
               <dt>{{ t('pages.dish.cookware') }}</dt>
               <dd>
-                <RouterLink :to="`/items/${activeCategory.cookware.id}`">#{{ activeCategory.cookware.displayId }} {{ activeCategory.cookware.name }}</RouterLink>
+                <RouterLink :to="`/items/${activeCategory.cookware.id}`">{{ activeCategory.cookware.name }}</RouterLink>
               </dd>
             </div>
             <div>
@@ -383,7 +383,7 @@ onMounted(loadPage);
             <div>
               <dt>{{ t('pages.dish.mainMaterial') }}</dt>
               <dd>
-                <RouterLink :to="`/items/${activeCategory.mainMaterial.id}`">#{{ activeCategory.mainMaterial.displayId }} {{ activeCategory.mainMaterial.name }}</RouterLink>
+                <RouterLink :to="`/items/${activeCategory.mainMaterial.id}`">{{ activeCategory.mainMaterial.name }}</RouterLink>
               </dd>
             </div>
           </dl>
@@ -411,7 +411,7 @@ onMounted(loadPage);
             <Icon v-else :icon="iconItem" class="entity-card__icon" aria-hidden="true" />
           </RouterLink>
           <div class="dish-card__content">
-            <RouterLink class="dish-card__title" :to="`/items/${dish.item.id}`">#{{ dish.item.displayId }} {{ dish.item.name }}</RouterLink>
+            <RouterLink class="dish-card__title" :to="`/items/${dish.item.id}`">{{ dish.item.name }}</RouterLink>
             <div class="dish-card__meta">
               <span>{{ dish.flavor.name }}</span>
               <span v-if="dish.pokemonSkill">{{ dish.pokemonSkill.name }}</span>

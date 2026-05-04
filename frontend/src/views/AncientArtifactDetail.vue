@@ -96,7 +96,7 @@ watch(
     </section>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="`#${artifact.displayId} ${artifact.name}`" :subtitle="artifact.category.name">
+    <PageHeader :title="artifact.name" :subtitle="artifact.category.name">
       <template #kicker>{{ t('pages.ancientArtifacts.detailKicker') }}</template>
       <template #actions>
         <RouterLink v-if="canUpdateArtifact" class="ui-button ui-button--primary ui-button--small" :to="`/ancient-artifacts/${artifact.id}/edit`">
@@ -116,10 +116,6 @@ watch(
       <div v-if="detailTab === 'details'" class="detail-grid">
         <DetailSection :title="t('common.details')">
           <dl class="entity-profile-facts">
-            <div>
-              <dt>{{ t('pages.ancientArtifacts.displayId') }}</dt>
-              <dd>#{{ artifact.displayId }}</dd>
-            </div>
             <div>
               <dt>{{ t('pages.ancientArtifacts.category') }}</dt>
               <dd>{{ artifact.category.name }}</dd>

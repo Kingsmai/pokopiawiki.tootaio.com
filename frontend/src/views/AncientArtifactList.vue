@@ -126,7 +126,7 @@ watch(artifactQuery, loadArtifacts);
       <EntityCard
         v-for="artifact in artifacts"
         :key="artifact.id"
-        :title="`#${artifact.displayId} ${artifact.name}`"
+        :title="artifact.name"
         :subtitle="artifact.category.name"
         :to="`/ancient-artifacts/${artifact.id}`"
         :icon="iconArtifact"

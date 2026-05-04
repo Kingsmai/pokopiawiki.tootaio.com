@@ -448,15 +448,15 @@ const configLabel = (item: EditableConfig) => item.name;
 const pokemonKey = (item: Pokemon) => item.id;
 const pokemonLabel = (item: Pokemon) => `#${item.displayId} ${item.name}`;
 const itemKey = (item: Item) => item.id;
-const itemLabel = (item: Item) => `#${item.displayId} ${item.name}`;
+const itemLabel = (item: Item) => item.name;
 const ancientArtifactKey = (item: AncientArtifact) => item.id;
-const ancientArtifactLabel = (item: AncientArtifact) => `#${item.displayId} ${item.name}`;
+const ancientArtifactLabel = (item: AncientArtifact) => item.name;
 const recipeKey = (item: Recipe) => item.id;
 const recipeLabel = (item: Recipe) => item.name;
 const dishCategoryKey = (item: DishCategory) => item.id;
 const dishCategoryLabel = (item: DishCategory) => item.name;
 const dishKey = (item: Dish) => item.id;
-const dishLabel = (item: Dish) => `#${item.item.displayId} ${item.item.name}`;
+const dishLabel = (item: Dish) => item.item.name;
 const habitatKey = (item: Habitat) => item.id;
 const habitatLabel = (item: Habitat) => item.name;
 
@@ -2260,7 +2260,7 @@ onMounted(() => {
         @reorder="persistItemOrder"
       >
         <template #default="{ item }">
-          <RouterLink :to="`/items/${item.id}`">#{{ item.displayId }} {{ item.name }}</RouterLink>
+          <RouterLink :to="`/items/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
             <button v-if="can('items.delete')" type="button" :disabled="busy" @click="removeItem(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
@@ -2288,7 +2288,7 @@ onMounted(() => {
         @reorder="persistAncientArtifactOrder"
       >
         <template #default="{ item }">
-          <RouterLink :to="`/ancient-artifacts/${item.id}`">#{{ item.displayId }} {{ item.name }}</RouterLink>
+          <RouterLink :to="`/ancient-artifacts/${item.id}`">{{ item.name }}</RouterLink>
           <span class="row-actions">
             <button v-if="can('ancient-artifacts.delete')" type="button" :disabled="busy" @click="removeAncientArtifact(item.id)">
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
@@ -2389,7 +2389,7 @@ onMounted(() => {
         @reorder="persistDishOrder"
       >
         <template #default="{ item }">
-          <RouterLink :to="`/items/${item.item.id}`">#{{ item.item.displayId }} {{ item.item.name }}</RouterLink>
+          <RouterLink :to="`/items/${item.item.id}`">{{ item.item.name }}</RouterLink>
           <span class="meta-line">{{ item.category.name }} / {{ item.flavor.name }}</span>
           <span class="row-actions">
             <button v-if="can('dish.update')" type="button" :disabled="busy" @click="editDish(item)">
@@ -2658,7 +2658,7 @@ onMounted(() => {
             <label for="dish-category-cookware">{{ t('pages.dish.cookware') }}</label>
             <select id="dish-category-cookware" v-model="dishCategoryForm.cookwareItemId" required>
               <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`cookware-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+              <option v-for="item in dishItemRows" :key="`cookware-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
             </select>
           </div>
           <div class="field">
@@ -2669,7 +2669,7 @@ onMounted(() => {
             <label for="dish-category-main-material">{{ t('pages.dish.mainMaterial') }}</label>
             <select id="dish-category-main-material" v-model="dishCategoryForm.mainMaterialItemId" required>
               <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`category-main-material-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+              <option v-for="item in dishItemRows" :key="`category-main-material-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
             </select>
           </div>
         </div>
@@ -2710,7 +2710,7 @@ onMounted(() => {
             <label for="dish-item">{{ t('pages.dish.dishItem') }}</label>
             <select id="dish-item" v-model="dishForm.itemId" required>
               <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`dish-item-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+              <option v-for="item in dishItemRows" :key="`dish-item-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
             </select>
           </div>
           <div class="field">
@@ -2726,14 +2726,14 @@ onMounted(() => {
             <label for="dish-secondary-material-1">{{ t('pages.dish.secondaryMaterial') }}</label>
             <select id="dish-secondary-material-1" v-model="dishForm.secondaryMaterialItemIds[0]">
               <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`dish-secondary-material-1-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+              <option v-for="item in dishItemRows" :key="`dish-secondary-material-1-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
             </select>
           </div>
           <div v-if="dishAllowsSecondSecondaryMaterial" class="field">
             <label for="dish-secondary-material-2">{{ t('pages.dish.secondSecondaryMaterial') }}</label>
             <select id="dish-secondary-material-2" v-model="dishForm.secondaryMaterialItemIds[1]">
               <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`dish-secondary-material-2-${item.id}`" :value="String(item.id)">#{{ item.displayId }} {{ item.name }}</option>
+              <option v-for="item in dishItemRows" :key="`dish-secondary-material-2-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
             </select>
           </div>
           <div class="field">

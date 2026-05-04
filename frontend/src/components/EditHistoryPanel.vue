@@ -16,7 +16,6 @@ const changeLabelKeys: Record<string, string> = {
   标题: 'pages.checklist.task',
   'Pokemon ID': 'pages.pokemon.id',
   'Pokopia ID': 'pages.pokemon.id',
-  'Display ID': 'pages.items.displayId',
   'Event item': 'common.eventItem',
   'Event Pokemon': 'pages.pokemon.eventItem',
   'Event Habitat': 'pages.habitats.eventItem',
@@ -118,12 +117,17 @@ function changeValue(value: string): string {
   return values[value] ?? value;
 }
 
+function visibleChanges(entry: EditHistoryEntry) {
+  return entry.changes.filter((change) => change.label !== 'Display ID');
+}
+
 function historySummary(entry: EditHistoryEntry): string {
-  if (!entry.changes.length) {
+  const changes = visibleChanges(entry);
+  if (!changes.length) {
     return actionLabel(entry.action);
   }
 
-  return entry.changes.map((change) => changeLabel(change.label)).join(locale.value === 'zh-CN' ? '、' : ', ');
+  return changes.map((change) => changeLabel(change.label)).join(locale.value === 'zh-CN' ? '、' : ', ');
 }
 
 function formatDateTime(value: string): string {
@@ -175,8 +179,8 @@ function formatDateTime(value: string): string {
               </summary>
 
               <div class="edit-history-entry__content">
-                <dl v-if="entry.changes.length" class="edit-change-list">
-                  <div v-for="change in entry.changes" :key="`${change.label}-${change.before}-${change.after}`">
+                <dl v-if="visibleChanges(entry).length" class="edit-change-list">
+                  <div v-for="change in visibleChanges(entry)" :key="`${change.label}-${change.before}-${change.after}`">
                     <dt>{{ changeLabel(change.label) }}</dt>
                     <dd>
                       <span class="edit-change-list__label">{{ t('history.before') }}</span>

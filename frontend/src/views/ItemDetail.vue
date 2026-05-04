@@ -149,7 +149,7 @@ watch(
     </div>
   </section>
   <section v-else class="page-stack">
-    <PageHeader :title="`#${item.displayId} ${item.name}`" :subtitle="itemSubtitle">
+    <PageHeader :title="item.name" :subtitle="itemSubtitle">
       <template #kicker>{{ detailKicker }}</template>
       <template #actions>
         <RouterLink v-if="canUpdateItem" class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">
@@ -182,10 +182,6 @@ watch(
           <div class="entity-profile-main">
             <section class="detail-section entity-profile-overview" :aria-label="t('common.details')">
               <dl class="entity-profile-facts">
-                <div>
-                  <dt>{{ t('pages.items.displayId') }}</dt>
-                  <dd>#{{ item.displayId }}</dd>
-                </div>
                 <div>
                   <dt>{{ t('pages.items.category') }}</dt>
                   <dd>{{ item.category.name }}</dd>

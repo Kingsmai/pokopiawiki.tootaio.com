@@ -246,7 +246,6 @@ export interface HabitatUsage {
 }
 
 export interface RecipeResultItem extends NamedEntity {
-  displayId: number;
   image?: EntityImage | null;
   category?: NamedEntity;
   usage?: NamedEntity | null;
@@ -254,7 +253,6 @@ export interface RecipeResultItem extends NamedEntity {
 
 export interface Item extends EditInfo {
   id: number;
-  displayId: number;
   name: string;
   baseName?: string;
   details: string;
@@ -276,7 +274,6 @@ export interface Item extends EditInfo {
 
 export interface AncientArtifact extends EditInfo {
   id: number;
-  displayId: number;
   name: string;
   baseName?: string;
   details: string;
@@ -312,7 +309,6 @@ export interface Recipe extends EditInfo {
 }
 
 export interface ItemLink extends NamedEntity {
-  displayId: number;
   image?: EntityImage | null;
   category?: NamedEntity;
 }
@@ -791,7 +787,6 @@ export interface PokemonImageOptionsResult {
 }
 
 export interface ItemPayload {
-  displayId: number;
   name: string;
   details: string;
   translations?: TranslationMap;
@@ -808,7 +803,6 @@ export interface ItemPayload {
 }
 
 export interface AncientArtifactPayload {
-  displayId: number;
   name: string;
   details: string;
   translations?: TranslationMap;

@@ -36,7 +36,6 @@ const busy = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
 const itemForm = ref({
-  displayId: 1,
   name: '',
   details: '',
   translations: {} as TranslationMap,
@@ -117,7 +116,6 @@ async function loadEditor() {
     if (isEditing.value) {
       const item = await api.itemDetail(routeId.value);
       itemForm.value = {
-        displayId: item.displayId,
         name: item.baseName ?? item.name,
         details: item.baseDetails ?? item.details,
         translations: item.translations ?? {},
@@ -173,7 +171,6 @@ async function saveItem() {
 
   try {
     const payload: ItemPayload = {
-      displayId: itemForm.value.displayId,
       name: itemNameForSave(),
       details: itemForm.value.details,
       translations: itemForm.value.translations,
@@ -225,11 +222,6 @@ onMounted(() => {
         :languages="languages"
         required
       />
-
-      <div class="field">
-        <label for="item-display-id">{{ t('pages.items.displayId') }}</label>
-        <input id="item-display-id" v-model.number="itemForm.displayId" type="number" min="1" required />
-      </div>
 
       <TranslationFields
         id-prefix="item-details"

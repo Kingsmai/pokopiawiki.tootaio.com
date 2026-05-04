@@ -145,7 +145,7 @@ watch(itemQuery, loadItems);
       <EntityCard
         v-for="item in items"
         :key="item.id"
-        :title="`#${item.displayId} ${item.name}`"
+        :title="item.name"
         :subtitle="item.category.name"
         :to="`/items/${item.id}`"
         :icon="iconItem"

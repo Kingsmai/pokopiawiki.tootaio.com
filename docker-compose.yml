@@ -44,10 +44,20 @@ services:
         VITE_SITE_URL: ${VITE_SITE_URL:-https://pokopiawiki.tootaio.com}
     environment:
       PORT: 20015
-    ports:
-      - "20015:20015"
+    expose:
+      - "20015"
     depends_on:
       - backend
+
+  frontend_gateway:
+    image: nginx:1.29-alpine
+    ports:
+      - "20015:20015"
+    volumes:
+      - ./frontend/gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/gateway/maintenance.html:/usr/share/nginx/html/maintenance.html:ro
+    depends_on:
+      - frontend
 
 volumes:
   postgres18_data:

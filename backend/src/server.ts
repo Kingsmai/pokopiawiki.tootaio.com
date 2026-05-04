@@ -64,6 +64,7 @@ import {
   exportAdminData,
   fetchPokemonData,
   fetchPokemonImageOptions,
+  followUser,
   getAdminDataToolsSummary,
   getAncientArtifact,
   getHabitat,
@@ -81,6 +82,7 @@ import {
   listConfig,
   listDailyChecklistItems,
   listHabitats,
+  listFollowingLifePosts,
   listItems,
   listLifeComments,
   listLanguages,
@@ -115,6 +117,7 @@ import {
   updateLifePost,
   updatePokemon,
   updateRecipe,
+  unfollowUser,
   wipeAdminData
 } from './queries.ts';
 import {
@@ -1184,7 +1187,30 @@ app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(reque
 
 app.get('/api/users/:id/profile', async (request, reply) => {
   const { id } = request.params as { id: string };
-  const profile = await getPublicUserProfile(Number(id));
+  const user = await optionalUser(request);
+  const profile = await getPublicUserProfile(Number(id), user?.id ?? null);
+  return profile ? { profile } : notFound(reply, request);
+});
+
+app.put('/api/users/:id/follow', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'users.follow', 'communityReaction');
+  if (!user) {
+    return;
+  }
+
+  const { id } = request.params as { id: string };
+  const profile = await followUser(user.id, Number(id));
+  return profile ? { profile } : notFound(reply, request);
+});
+
+app.delete('/api/users/:id/follow', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'users.follow', 'communityReaction');
+  if (!user) {
+    return;
+  }
+
+  const { id } = request.params as { id: string };
+  const profile = await unfollowUser(user.id, Number(id));
   return profile ? { profile } : notFound(reply, request);
 });
 
@@ -1234,6 +1260,20 @@ app.get('/api/life-posts', async (request) => {
   return listLifePosts(
     request.query as Record<string, string | string[] | undefined>,
     user?.id ?? null,
+    requestLocale(request),
+    canViewAll
+  );
+});
+
+app.get('/api/life-posts/following', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  const canViewAll = userHasPermission(user, 'life.posts.update-any') || userHasPermission(user, 'life.posts.delete-any');
+  return listFollowingLifePosts(
+    user.id,
+    request.query as Record<string, string | string[] | undefined>,
     requestLocale(request),
     canViewAll
   );

@@ -373,9 +373,10 @@ export type NotificationType =
   | 'life_comment_reply'
   | 'discussion_comment_reply'
   | 'life_post_reaction'
+  | 'user_follow'
   | 'moderation_result';
 export type NotificationModerationStatus = Extract<AiModerationStatus, 'approved' | 'rejected' | 'failed'>;
-export type NotificationTargetType = 'life-post' | 'life-comment' | 'discussion-comment';
+export type NotificationTargetType = 'life-post' | 'life-comment' | 'discussion-comment' | 'profile-user';
 
 export interface LifePost {
   id: number;
@@ -467,6 +468,7 @@ export interface NotificationTarget {
   id: number;
   path: string;
   lifePostId: number | null;
+  profileUserId: number | null;
   lifeCommentId: number | null;
   discussionCommentId: number | null;
   entityType: DiscussionEntityType | null;
@@ -585,9 +587,19 @@ export interface PublicProfileContribution {
   lastContributedAt: string | null;
 }
 
+export type PublicProfileViewerRelation = 'none' | 'following' | 'followed-by' | 'friends';
+
+export interface PublicProfileSocial {
+  followerCount: number;
+  followingCount: number;
+  friendCount: number;
+  viewerRelation: PublicProfileViewerRelation;
+}
+
 export interface PublicUserProfile {
   user: PublicProfileUser;
   stats: PublicProfileStats;
+  social: PublicProfileSocial;
   contributions: PublicProfileContribution[];
 }
 
@@ -1119,6 +1131,21 @@ export const api = {
   markAllNotificationsRead: () => sendJson<{ unreadCount: number }>('/api/notifications/read-all', 'POST', {}),
   logout: () => postEmpty('/api/auth/logout'),
   publicProfile: (id: string | number) => getJson<{ profile: PublicUserProfile }>(`/api/users/${id}/profile`),
+  followUser: (id: string | number) => sendJson<{ profile: PublicUserProfile }>(`/api/users/${id}/follow`, 'PUT', {}),
+  unfollowUser: (id: string | number) => deleteAndGetJson<{ profile: PublicUserProfile }>(`/api/users/${id}/follow`),
+  followingLifePosts: (params: LifePostsParams = {}) =>
+    getJson<LifePostsPage>(
+      `/api/life-posts/following${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit,
+        search: params.search,
+        categoryId: params.categoryId,
+        language: params.language,
+        gameVersionId: params.gameVersionId,
+        rateable: params.rateable === null ? undefined : params.rateable,
+        sort: params.sort
+      })}`
+    ),
   userLifePosts: (id: string | number, params: ProfileActivityParams = {}) =>
     getJson<LifePostsPage>(
       `/api/users/${id}/life-posts${buildQuery({

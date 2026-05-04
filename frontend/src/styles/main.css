@@ -6387,6 +6387,17 @@ button:disabled,
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.profile-stat-strip--social {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-follow-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .profile-stat-grid {
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
 }

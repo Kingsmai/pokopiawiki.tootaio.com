@@ -13,10 +13,11 @@ type NotificationType =
   | 'life_comment_reply'
   | 'discussion_comment_reply'
   | 'life_post_reaction'
+  | 'user_follow'
   | 'moderation_result';
 type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
 type DiscussionEntityType = 'pokemon' | 'items' | 'recipes' | 'habitats' | 'ancient-artifacts';
-type NotificationTargetType = 'life-post' | 'life-comment' | 'discussion-comment';
+type NotificationTargetType = 'life-post' | 'life-comment' | 'discussion-comment' | 'profile-user';
 type ModerationTargetType = 'life-post' | 'life-comment' | 'discussion-comment';
 
 type NotificationCursor = {
@@ -35,6 +36,7 @@ type NotificationRow = {
   actor: NotificationActor | null;
   type: NotificationType;
   lifePostId: number | null;
+  profileUserId: number | null;
   lifeCommentId: number | null;
   parentLifeCommentId: number | null;
   discussionCommentId: number | null;
@@ -55,6 +57,7 @@ export type NotificationTarget = {
   id: number;
   path: string;
   lifePostId: number | null;
+  profileUserId: number | null;
   lifeCommentId: number | null;
   discussionCommentId: number | null;
   entityType: DiscussionEntityType | null;
@@ -147,6 +150,7 @@ function notificationProjection(): string {
       n.recipient_user_id AS "recipientUserId",
       n.type,
       n.life_post_id AS "lifePostId",
+      n.profile_user_id AS "profileUserId",
       n.life_comment_id AS "lifeCommentId",
       n.parent_life_comment_id AS "parentLifeCommentId",
       n.discussion_comment_id AS "discussionCommentId",
@@ -178,6 +182,9 @@ function discussionEntityPath(entityType: DiscussionEntityType | null, entityId:
 }
 
 function notificationTargetType(row: NotificationRow): NotificationTargetType {
+  if (row.profileUserId !== null) {
+    return 'profile-user';
+  }
   if (row.discussionCommentId !== null) {
     return 'discussion-comment';
   }
@@ -188,6 +195,9 @@ function notificationTargetType(row: NotificationRow): NotificationTargetType {
 }
 
 function notificationPath(row: NotificationRow): string {
+  if (row.profileUserId !== null) {
+    return `/profile/${row.profileUserId}`;
+  }
   if (row.lifePostId !== null) {
     return `/life/${row.lifePostId}`;
   }
@@ -198,7 +208,9 @@ function notificationPath(row: NotificationRow): string {
 function toNotificationItem(row: NotificationRow): NotificationItem {
   const targetType = notificationTargetType(row);
   const targetId =
-    targetType === 'discussion-comment'
+    targetType === 'profile-user'
+      ? row.profileUserId
+      : targetType === 'discussion-comment'
       ? row.discussionCommentId
       : targetType === 'life-comment'
         ? row.lifeCommentId
@@ -213,6 +225,7 @@ function toNotificationItem(row: NotificationRow): NotificationItem {
       id: targetId ?? 0,
       path: notificationPath(row),
       lifePostId: row.lifePostId,
+      profileUserId: row.profileUserId,
       lifeCommentId: row.lifeCommentId,
       discussionCommentId: row.discussionCommentId,
       entityType: row.entityType,
@@ -458,6 +471,43 @@ export async function createLifePostReactionNotification(postId: number, actorUs
   await publishInsertedNotification(row);
 }
 
+export async function createUserFollowNotification(actorUserId: number, followedUserId: number): Promise<void> {
+  const row = await queryOne<{ id: number; recipientUserId: number }>(
+    `
+      INSERT INTO notifications (
+        recipient_user_id,
+        actor_user_id,
+        type,
+        profile_user_id,
+        read_at,
+        created_at,
+        updated_at
+      )
+      SELECT
+        followed_user.id,
+        actor_user.id,
+        'user_follow',
+        actor_user.id,
+        NULL,
+        now(),
+        now()
+      FROM users actor_user
+      JOIN users followed_user ON followed_user.id = $2
+      WHERE actor_user.id = $1
+        AND actor_user.id <> followed_user.id
+      ON CONFLICT (recipient_user_id, actor_user_id, profile_user_id)
+      WHERE type = 'user_follow' AND actor_user_id IS NOT NULL AND profile_user_id IS NOT NULL
+      DO UPDATE SET read_at = NULL,
+                    created_at = now(),
+                    updated_at = now()
+      RETURNING id, recipient_user_id AS "recipientUserId"
+    `,
+    [actorUserId, followedUserId]
+  );
+
+  await publishInsertedNotification(row);
+}
+
 export async function createApprovedCommentNotification(target: {
   type: ModerationTargetType;
   id: number;
@@ -613,6 +663,7 @@ export async function createModerationResultNotification(
           id: row.lifePostId,
           path: `/life/${row.lifePostId}`,
           lifePostId: row.lifePostId,
+          profileUserId: null,
           lifeCommentId: null,
           discussionCommentId: null,
           entityType: null,
@@ -688,6 +739,7 @@ export async function createModerationResultNotification(
           id: row.lifeCommentId,
           path: `/life/${row.lifePostId}`,
           lifePostId: row.lifePostId,
+          profileUserId: null,
           lifeCommentId: row.lifeCommentId,
           discussionCommentId: null,
           entityType: null,
@@ -764,6 +816,7 @@ export async function createModerationResultNotification(
         id: row.discussionCommentId,
         path: discussionEntityPath(row.entityType, row.entityId) ?? '/',
         lifePostId: null,
+        profileUserId: null,
         lifeCommentId: null,
         discussionCommentId: row.discussionCommentId,
         entityType: row.entityType,

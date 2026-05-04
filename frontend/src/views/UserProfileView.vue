@@ -70,10 +70,12 @@ const commentFilter = ref<CommentFilter>('all');
 const loading = ref(true);
 const busy = ref(false);
 const passwordBusy = ref(false);
+const followBusy = ref(false);
 const message = ref('');
 const errorMessage = ref('');
 const passwordMessage = ref('');
 const passwordErrorMessage = ref('');
+const followErrorMessage = ref('');
 const referralSummaryMessage = ref('');
 const referralSummaryErrorMessage = ref('');
 const referralMessage = ref('');
@@ -110,6 +112,18 @@ const hasChanges = computed(() => {
   const user = currentUser.value;
   if (!user || !canShowAccount.value) return false;
   return trimmedDisplayName.value !== user.displayName;
+});
+const canFollowProfile = computed(() => {
+  const user = currentUser.value;
+  const target = profile.value?.user;
+  return Boolean(user && target && user.id !== target.id && user.permissions.includes('users.follow'));
+});
+const followButtonLabel = computed(() => {
+  const relation = profile.value?.social.viewerRelation ?? 'none';
+  if (relation === 'friends') return t('pages.profile.friend');
+  if (relation === 'following') return t('pages.profile.following');
+  if (relation === 'followed-by') return t('pages.profile.followBack');
+  return t('pages.profile.follow');
 });
 const profileInitial = computed(() => {
   const name = profile.value?.user.displayName.trim() || currentUser.value?.displayName.trim() || '';
@@ -174,6 +188,14 @@ const communityStats = computed(() => {
     { label: t('pages.profile.lifeComments'), value: stats?.lifeComments ?? 0 },
     { label: t('pages.profile.lifeReactions'), value: stats?.lifeReactions ?? 0 },
     { label: t('pages.profile.discussionComments'), value: stats?.discussionComments ?? 0 }
+  ];
+});
+const socialStats = computed(() => {
+  const social = profile.value?.social;
+  return [
+    { label: t('pages.profile.followers'), value: social?.followerCount ?? 0 },
+    { label: t('pages.profile.followingCount'), value: social?.followingCount ?? 0 },
+    { label: t('pages.profile.friends'), value: social?.friendCount ?? 0 }
   ];
 });
 const filteredContributions = computed(() => {
@@ -280,6 +302,7 @@ async function loadProfile() {
   errorMessage.value = '';
   passwordMessage.value = '';
   passwordErrorMessage.value = '';
+  followErrorMessage.value = '';
   referralSummaryMessage.value = '';
   referralSummaryErrorMessage.value = '';
   referralMessage.value = '';
@@ -336,6 +359,27 @@ async function loadProfile() {
     if (nextRequestId === profileRequestId) {
       loading.value = false;
     }
+  }
+}
+
+async function toggleFollow() {
+  const target = profile.value?.user;
+  if (!target || !canFollowProfile.value || followBusy.value) {
+    return;
+  }
+
+  followErrorMessage.value = '';
+  followBusy.value = true;
+  try {
+    const relation = profile.value?.social.viewerRelation ?? 'none';
+    const response = relation === 'following' || relation === 'friends'
+      ? await api.unfollowUser(target.id)
+      : await api.followUser(target.id);
+    profile.value = response.profile;
+  } catch (error) {
+    followErrorMessage.value = error instanceof Error && error.message ? error.message : t('pages.profile.followFailed');
+  } finally {
+    followBusy.value = false;
   }
 }
 
@@ -680,8 +724,23 @@ onMounted(() => {
           :tone="currentUser.emailVerified ? 'success' : 'warning'"
         />
 
+        <div v-if="canFollowProfile" class="profile-follow-actions">
+          <button class="ui-button ui-button--blue" type="button" :disabled="followBusy" @click="toggleFollow">
+            <Icon :icon="iconReferral" class="ui-icon" aria-hidden="true" />
+            {{ followButtonLabel }}
+          </button>
+          <StatusMessage v-if="followErrorMessage" variant="danger" :duration="0">{{ followErrorMessage }}</StatusMessage>
+        </div>
+
         <dl class="profile-stat-strip">
           <div v-for="item in headlineStats" :key="item.label">
+            <dt>{{ item.label }}</dt>
+            <dd>{{ item.value }}</dd>
+          </div>
+        </dl>
+
+        <dl class="profile-stat-strip profile-stat-strip--social">
+          <div v-for="item in socialStats" :key="item.label">
             <dt>{{ item.label }}</dt>
             <dd>{{ item.value }}</dd>
           </div>

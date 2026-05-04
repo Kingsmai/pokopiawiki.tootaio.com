@@ -7,6 +7,7 @@ import {
   iconBell,
   iconCheck,
   iconComment,
+  iconProfile,
   iconReactionFun,
   iconReactionHelpful,
   iconReactionLike,
@@ -264,7 +265,8 @@ function targetLabel(type: NotificationTargetType) {
   const labels: Record<NotificationTargetType, string> = {
     'life-post': t('notifications.targetLifePost'),
     'life-comment': t('notifications.targetLifeComment'),
-    'discussion-comment': t('notifications.targetDiscussionComment')
+    'discussion-comment': t('notifications.targetDiscussionComment'),
+    'profile-user': t('notifications.targetProfile')
   };
   return labels[type];
 }
@@ -284,6 +286,9 @@ function notificationText(notification: NotificationItem) {
       actor: actorName(notification),
       reaction: reactionLabel(notification.reactionType)
     });
+  }
+  if (notification.type === 'user_follow') {
+    return t('notifications.userFollow', { actor: actorName(notification) });
   }
 
   const target = targetLabel(notification.target.type);
@@ -314,6 +319,9 @@ function notificationIcon(notification: NotificationItem) {
   }
   if (notification.type === 'life_post_reaction') {
     return reactionIcon(notification.reactionType);
+  }
+  if (notification.type === 'user_follow') {
+    return iconProfile;
   }
   return notification.moderationStatus === 'approved' ? iconCheck : iconWarning;
 }

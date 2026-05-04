@@ -16,7 +16,7 @@ import {
   requestAiModerationReview,
   type AiModerationStatus
 } from './aiModeration.ts';
-import { createLifePostReactionNotification } from './notifications.ts';
+import { createLifePostReactionNotification, createUserFollowNotification } from './notifications.ts';
 
 type QueryValue = string | string[] | undefined;
 
@@ -353,6 +353,7 @@ type LifePostSort = 'latest' | 'oldest' | 'top-rated';
 
 type LifePostFilters = {
   authorId?: number;
+  followedByUserId?: number;
 };
 
 type LifePostsPage = {
@@ -395,9 +396,19 @@ type PublicProfileContribution = {
   lastContributedAt: Date | null;
 };
 
+type PublicProfileViewerRelation = 'none' | 'following' | 'followed-by' | 'friends';
+
+type PublicProfileSocial = {
+  followerCount: number;
+  followingCount: number;
+  friendCount: number;
+  viewerRelation: PublicProfileViewerRelation;
+};
+
 type PublicUserProfile = {
   user: PublicProfileUser;
   stats: PublicProfileStats;
+  social: PublicProfileSocial;
   contributions: PublicProfileContribution[];
 };
 
@@ -3535,6 +3546,18 @@ async function listLifePostsWithFilters(
     conditions.push(`lp.created_by_user_id = $${params.length}`);
   }
 
+  if (filters.followedByUserId !== undefined) {
+    params.push(filters.followedByUserId);
+    conditions.push(`
+      EXISTS (
+        SELECT 1
+        FROM user_follows uf
+        WHERE uf.follower_user_id = $${params.length}
+          AND uf.followed_user_id = lp.created_by_user_id
+      )
+    `);
+  }
+
   addModerationVisibilityCondition(conditions, params, 'lp', 'lp.created_by_user_id', userId, canViewAll);
   addModerationLanguageCondition(conditions, params, 'lp', languageCode);
 
@@ -3616,6 +3639,15 @@ export async function listLifePosts(
   return listLifePostsWithFilters(paramsQuery, userId, locale, {}, canViewAll);
 }
 
+export async function listFollowingLifePosts(
+  userId: number,
+  paramsQuery: QueryParams = {},
+  locale = defaultLocale,
+  canViewAll = false
+): Promise<LifePostsPage> {
+  return listLifePostsWithFilters(paramsQuery, userId, locale, { followedByUserId: userId }, canViewAll);
+}
+
 async function getPublicProfileUser(userIdValue: number): Promise<PublicProfileUser | null> {
   const userId = requirePositiveInteger(userIdValue, 'server.validation.recordInvalid');
   return queryOne<PublicProfileUser>(
@@ -3635,7 +3667,68 @@ function publicContributionType(entityType: string): string {
   return entityType === 'daily-checklist-items' ? 'daily-checklist' : entityType;
 }
 
-export async function getPublicUserProfile(userIdValue: number): Promise<PublicUserProfile | null> {
+async function getPublicProfileSocial(userId: number, viewerUserId: number | null): Promise<PublicProfileSocial> {
+  const social = await queryOne<
+    Omit<PublicProfileSocial, 'viewerRelation'> & {
+      viewerFollows: boolean;
+      targetFollowsViewer: boolean;
+    }
+  >(
+    `
+      SELECT
+        COALESCE((SELECT COUNT(*)::integer FROM user_follows WHERE followed_user_id = $1), 0) AS "followerCount",
+        COALESCE((SELECT COUNT(*)::integer FROM user_follows WHERE follower_user_id = $1), 0) AS "followingCount",
+        COALESCE((
+          SELECT COUNT(*)::integer
+          FROM user_follows outgoing
+          WHERE outgoing.follower_user_id = $1
+            AND EXISTS (
+              SELECT 1
+              FROM user_follows incoming
+              WHERE incoming.follower_user_id = outgoing.followed_user_id
+                AND incoming.followed_user_id = $1
+            )
+        ), 0) AS "friendCount",
+        CASE
+          WHEN $2::integer IS NULL OR $2::integer = $1 THEN false
+          ELSE EXISTS (
+            SELECT 1
+            FROM user_follows
+            WHERE follower_user_id = $2::integer
+              AND followed_user_id = $1
+          )
+        END AS "viewerFollows",
+        CASE
+          WHEN $2::integer IS NULL OR $2::integer = $1 THEN false
+          ELSE EXISTS (
+            SELECT 1
+            FROM user_follows
+            WHERE follower_user_id = $1
+              AND followed_user_id = $2::integer
+          )
+        END AS "targetFollowsViewer"
+    `,
+    [userId, viewerUserId]
+  );
+
+  const viewerRelation =
+    social?.viewerFollows && social.targetFollowsViewer
+      ? 'friends'
+      : social?.viewerFollows
+        ? 'following'
+        : social?.targetFollowsViewer
+          ? 'followed-by'
+          : 'none';
+
+  return {
+    followerCount: social?.followerCount ?? 0,
+    followingCount: social?.followingCount ?? 0,
+    friendCount: social?.friendCount ?? 0,
+    viewerRelation
+  };
+}
+
+export async function getPublicUserProfile(userIdValue: number, viewerUserId: number | null = null): Promise<PublicUserProfile | null> {
   const user = await getPublicProfileUser(userIdValue);
   if (!user) {
     return null;
@@ -3702,6 +3795,8 @@ export async function getPublicUserProfile(userIdValue: number): Promise<PublicU
     [user.id]
   );
 
+  const social = await getPublicProfileSocial(user.id, viewerUserId);
+
   return {
     user,
     stats: stats ?? {
@@ -3715,11 +3810,63 @@ export async function getPublicUserProfile(userIdValue: number): Promise<PublicU
       lifeReactions: 0,
       discussionComments: 0
     },
+    social,
     contributions: contributions.map((item) => ({
       ...item,
       contentType: publicContributionType(item.contentType)
     }))
   };
+}
+
+export async function followUser(followerUserId: number, followedUserIdValue: number): Promise<PublicUserProfile | null> {
+  const followedUserId = requirePositiveInteger(followedUserIdValue, 'server.validation.recordInvalid');
+  if (followerUserId === followedUserId) {
+    throw validationError('server.validation.cannotFollowSelf');
+  }
+
+  const followedUser = await getPublicProfileUser(followedUserId);
+  if (!followedUser) {
+    return null;
+  }
+
+  const inserted = await queryOne<{ inserted: boolean }>(
+    `
+      INSERT INTO user_follows (follower_user_id, followed_user_id)
+      VALUES ($1, $2)
+      ON CONFLICT (follower_user_id, followed_user_id) DO NOTHING
+      RETURNING true AS inserted
+    `,
+    [followerUserId, followedUser.id]
+  );
+
+  if (inserted?.inserted === true) {
+    await createUserFollowNotification(followerUserId, followedUser.id);
+  }
+
+  return getPublicUserProfile(followedUser.id, followerUserId);
+}
+
+export async function unfollowUser(followerUserId: number, followedUserIdValue: number): Promise<PublicUserProfile | null> {
+  const followedUserId = requirePositiveInteger(followedUserIdValue, 'server.validation.recordInvalid');
+  if (followerUserId === followedUserId) {
+    throw validationError('server.validation.cannotFollowSelf');
+  }
+
+  const followedUser = await getPublicProfileUser(followedUserId);
+  if (!followedUser) {
+    return null;
+  }
+
+  await query(
+    `
+      DELETE FROM user_follows
+      WHERE follower_user_id = $1
+        AND followed_user_id = $2
+    `,
+    [followerUserId, followedUser.id]
+  );
+
+  return getPublicUserProfile(followedUser.id, followerUserId);
 }
 
 export async function listUserLifePosts(

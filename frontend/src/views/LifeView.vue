@@ -61,6 +61,7 @@ type LifeCommentPageState = {
 };
 
 type LifePostSort = 'latest' | 'oldest' | 'top-rated';
+type LifeFeedScope = 'all' | 'following';
 
 const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
@@ -79,6 +80,7 @@ const activeLanguageCode = ref('all');
 const activeGameVersionId = ref('all');
 const activeRateableFilter = ref('all');
 const activeSort = ref<LifePostSort>('latest');
+const activeFeedScope = ref<LifeFeedScope>('all');
 const body = ref('');
 const selectedCategoryId = ref('');
 const selectedGameVersionId = ref('');
@@ -181,6 +183,10 @@ const sortOptions = computed<Array<{ value: LifePostSort; label: string }>>(() =
   { value: 'oldest', label: t('pages.life.sortOldest') },
   { value: 'top-rated', label: t('pages.life.sortTopRated') }
 ]);
+const feedScopeOptions = computed<TabOption[]>(() => [
+  { value: 'all', label: t('pages.life.allFeed') },
+  { value: 'following', label: t('pages.life.followingFeed') }
+]);
 const defaultLifeCategoryId = computed(() => {
   const category = lifeCategories.value.find((item) => item.isDefault);
   return category ? String(category.id) : '';
@@ -196,6 +202,7 @@ async function loadCurrentUser() {
 
   if (!getAuthToken()) {
     currentUser.value = null;
+    activeFeedScope.value = 'all';
     authReady.value = true;
     return;
   }
@@ -205,6 +212,7 @@ async function loadCurrentUser() {
     currentUser.value = response.user;
   } catch {
     currentUser.value = null;
+    activeFeedScope.value = 'all';
     setAuthToken(null);
   } finally {
     authReady.value = true;
@@ -265,7 +273,7 @@ async function loadPosts() {
   loadMorePaused.value = false;
 
   try {
-    const page = await api.lifePosts({
+    const params = {
       limit: lifePostPageSize,
       search: searchQuery.value,
       categoryId: selectedFeedCategoryId.value,
@@ -273,7 +281,8 @@ async function loadPosts() {
       gameVersionId: selectedFeedGameVersionId.value,
       rateable: selectedRateableFilter.value,
       sort: activeSort.value
-    });
+    };
+    const page = activeFeedScope.value === 'following' ? await api.followingLifePosts(params) : await api.lifePosts(params);
     if (requestId !== postsRequestId) {
       return;
     }
@@ -309,7 +318,7 @@ async function loadMorePosts() {
   loadError.value = '';
 
   try {
-    const page = await api.lifePosts({
+    const params = {
       cursor,
       limit: lifePostPageSize,
       search: searchQuery.value,
@@ -318,7 +327,8 @@ async function loadMorePosts() {
       gameVersionId: selectedFeedGameVersionId.value,
       rateable: selectedRateableFilter.value,
       sort: activeSort.value
-    });
+    };
+    const page = activeFeedScope.value === 'following' ? await api.followingLifePosts(params) : await api.lifePosts(params);
     if (requestId !== postsRequestId) {
       return;
     }
@@ -447,7 +457,7 @@ async function submitPost() {
       replacePost(updated);
     } else {
       const created = await api.createLifePost(payload());
-      if (activeSort.value !== 'latest') {
+      if (activeSort.value !== 'latest' || activeFeedScope.value === 'following') {
         void loadPosts();
       } else if (matchesCurrentFilters(created)) {
         posts.value = [created, ...posts.value];
@@ -1205,6 +1215,9 @@ watch(activeRateableFilter, () => {
 watch(activeSort, () => {
   void loadPosts();
 });
+watch(activeFeedScope, () => {
+  void loadPosts();
+});
 watch(locale, () => {
   void loadLanguages();
   void loadLifeCategories();
@@ -1220,8 +1233,10 @@ onMounted(() => {
   void loadLifeCategories();
   void loadPosts();
   removeAuthListener = onAuthTokenChange(() => {
-    void loadCurrentUser();
-    void loadPosts();
+    void (async () => {
+      await loadCurrentUser();
+      await loadPosts();
+    })();
   });
 });
 
@@ -1382,6 +1397,13 @@ onUnmounted(() => {
       @close="closeReactionUsersModal"
     />
 
+    <Tabs
+      v-if="currentUser"
+      id="life-feed-scope"
+      v-model="activeFeedScope"
+      :tabs="feedScopeOptions"
+      :label="t('pages.life.feedScope')"
+    />
     <Tabs id="life-language-filter" v-model="activeLanguageCode" :tabs="languageFilterOptions" :label="t('pages.life.languages')" />
     <Tabs id="life-category-filter" v-model="activeCategoryId" :tabs="categoryFilterOptions" :label="t('pages.life.category')" />
 

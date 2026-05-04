@@ -127,6 +127,10 @@
   - 登录用户可通过 `/profile` 查看自己的账号资料、邮箱验证状态、Referral 信息和公开主页内容。
   - 任意用户可通过 `/profile/:id` 访问其他用户的公开 Profile。
   - 公开 Profile 展示用户公开摘要、Life Feeds、Wiki 贡献统计、Like / Reaction 过的 Life Post 和评论过的内容。
+  - 用户可 Follow 其他用户；Follow 是单向关系，双方互相 Follow 时在展示层视为 Friends。
+  - Friend 不单独存储为独立关系，始终由双向 Follow 派生，避免双写不一致。
+  - 公开 Profile 展示 Followers、Following 和 Friends 数量；登录用户查看其他用户 Profile 时可看到自己与对方的关系状态：未关注、已关注、被对方关注或 Friends。
+  - 登录且邮箱已验证并拥有 `users.follow` 权限的用户可以 Follow / Unfollow 其他用户；用户不能 Follow 自己。
   - Profile 的 Feeds 和 Reactions 中可从 Life Post 的 Reaction 汇总或 Reaction 活动打开公开 Reaction 用户列表 Modal。
   - Profile 使用 Tabs 组织：Feeds、Contributions、Reactions、Comments；仅自己的 `/profile` 额外展示 Account。
   - Contributions、Reactions、Comments 在对应 Tab 内提供二级分类：Contributions 可按主要内容类型或配置类查看，Reactions 可按 reaction 类型查看，Comments 可按 Life / Wiki discussion 来源查看。
@@ -256,6 +260,7 @@
 - 通知和审核状态实时更新可以走 WebSocket；WebSocket 连接使用短期一次性 ticket，不把 session token 放入 WebSocket URL。
 - AI 审核从 `reviewing` 变更为 `approved`、`rejected` 或 `failed` 后，前端当前可见的对应 Life Post、Life Comment 或实体讨论评论状态、语言区和可展示的审核原因详情应通过 WebSocket 直接更新，不要求用户刷新页面。
 - 通知范围：
+  - 用户被别人 Follow 时，通知被 Follow 的用户；同一用户重复 Follow 同一目标时合并更新同一通知。
   - Life Post 收到审核通过后的顶层评论时，通知 Life Post 作者。
   - Life Comment 收到审核通过后的回复时，通知父评论作者。
   - 实体讨论评论收到审核通过后的回复时，通知父评论作者。
@@ -277,6 +282,7 @@
   - `updatedAt`
 - 通知 API 不返回邮箱、角色、权限、session、token/hash、AI prompt、模型响应、内部审核错误、错误堆栈、调试字段或内部审计 payload。
 - 前端在主导航登录区展示通知入口、未读数量和通知列表；点击通知后标记已读并跳转到对应 Life Post 或 Wiki 详情页。
+- Follow 对象发布 Life Post 的动态属于 Following Feed，不进入 Notifications，不产生未读数量，也不需要标记已读。
 
 ## 滥用防护与限流
 
@@ -834,6 +840,7 @@ Life Post 可配置：
 - Feed 支持按 Game Version 筛选；All versions 表示不过滤版本。
 - Feed 支持 Rateable 筛选；All 表示不过滤，Rateable only 只展示可评分 Category 下的 Post。
 - Feed 支持排序：Latest 默认按创建时间倒序；Oldest 按创建时间正序；Top rated 按平均评分倒序，同分时按创建时间倒序。
+- 登录用户可切换 All Feed 和 Following Feed；Following Feed 只展示当前用户已 Follow 用户发布且当前用户可见的 Life Post，并继续支持 Life Category、语言、Game Version、Rateable 和排序筛选。
 - 信息流分页加载，初始展示最新一页，滚动到底部自动加载更多。
 - 当前没有图片上传、转发或置顶。
 - Life Post 和 Life Comment 必须进入 AI 审核；未审核通过的内容不向普通访客公开。
@@ -1003,13 +1010,16 @@ API 暴露边界：
 - `GET /api/recipes`
 - `GET /api/recipes/:id`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区；支持 `gameVersionId` 按 Game Version 筛选；支持 `rateable` 按可评分 Category 筛选；支持 `sort` 为 `latest`、`oldest` 或 `top-rated`。
+- `GET /api/life-posts/following`：需要登录；分页读取当前用户已 Follow 用户发布的 Life Post 动态，支持与 Life Feed 相同的 `cursor` / `limit`、搜索、Category、语言、Game Version、Rateable 和排序筛选。
 - `GET /api/life-posts/:id`：读取单条 Life Post 详情，遵守软删除和审核可见性规则。
 - `GET /api/life-posts/:id/reactions`：分页读取该 Life Post 的公开 Reaction 用户列表；支持 `cursor` / `limit` 和 `reactionType` 筛选。
 - `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选。
-- `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
+- `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计、公开社区统计和公开 Follow 统计；登录用户读取时返回自己与目标用户的关系状态。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
 - `GET /api/users/:id/reactions`：分页读取该用户设置过 Reaction 且目标未删除的 Life Post。
 - `GET /api/users/:id/comments`：分页读取该用户未删除的 Life 评论和实体讨论评论。
+- `PUT /api/users/:id/follow`：需要 `users.follow`；Follow 指定用户并返回更新后的公开 Profile。
+- `DELETE /api/users/:id/follow`：需要 `users.follow`；Unfollow 指定用户并返回更新后的公开 Profile。
 - `GET /api/discussions/:entityType/:entityId/comments`：支持 `cursor` / `limit` 分页读取实体讨论；支持 `language` 按审核语言区筛选；`entityType` 支持 `pokemon`、`items`、`recipes`、`habitats`、`ancient-artifacts`。
 
 认证 API：

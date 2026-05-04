@@ -4,6 +4,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import FilterPanel from '../components/FilterPanel.vue';
 import LifeRatingControl from '../components/LifeRatingControl.vue';
+import LifeReactionUsersModal from '../components/LifeReactionUsersModal.vue';
 import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -96,6 +97,7 @@ const ratingBusyPostId = ref<number | null>(null);
 const ratingErrors = ref<Record<number, string>>({});
 const moderationBusyPostId = ref<number | null>(null);
 const moderationErrors = ref<Record<number, string>>({});
+const reactionUsersModal = ref<{ postId: number; reactionType: LifeReactionType | null } | null>(null);
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
 const loadMoreSentinel = ref<HTMLElement | null>(null);
 const lifePostPageSize = 20;
@@ -539,6 +541,14 @@ function reactionCountLabel(post: LifePost, type: LifeReactionType) {
     reaction: reactionLabel(type),
     count: post.reactionCounts[type] ?? 0
   });
+}
+
+function openReactionUsersModal(postId: number, reactionType: LifeReactionType | null = null) {
+  reactionUsersModal.value = { postId, reactionType };
+}
+
+function closeReactionUsersModal() {
+  reactionUsersModal.value = null;
 }
 
 function moderationLabel(status: AiModerationStatus) {
@@ -1189,6 +1199,13 @@ onUnmounted(() => {
       </div>
     </Modal>
 
+    <LifeReactionUsersModal
+      v-if="reactionUsersModal"
+      :post-id="reactionUsersModal.postId"
+      :initial-reaction-type="reactionUsersModal.reactionType"
+      @close="closeReactionUsersModal"
+    />
+
     <Tabs id="life-language-filter" v-model="activeLanguageCode" :tabs="languageFilterOptions" :label="t('pages.life.languages')" />
     <Tabs id="life-category-filter" v-model="activeCategoryId" :tabs="categoryFilterOptions" :label="t('pages.life.category')" />
 
@@ -1363,10 +1380,12 @@ onUnmounted(() => {
               </div>
 
               <div class="life-post__metrics">
-                <div
+                <button
                   v-if="reactionTotal(post) > 0"
-                  class="life-reaction-summary"
+                  class="life-reaction-summary life-reaction-summary--button"
+                  type="button"
                   :aria-label="t('pages.life.reactionsCount', { count: reactionTotal(post) })"
+                  @click="openReactionUsersModal(post.id)"
                 >
                   <template v-for="option in reactionOptions" :key="option.type">
                     <span
@@ -1379,7 +1398,7 @@ onUnmounted(() => {
                       <span class="life-action-tooltip" role="tooltip">{{ reactionCountLabel(post, option.type) }}</span>
                     </span>
                   </template>
-                </div>
+                </button>
 
                 <button
                   class="life-metric-button"

@@ -124,6 +124,7 @@
   - 登录用户可通过 `/profile` 查看自己的账号资料、邮箱验证状态、Referral 信息和公开主页内容。
   - 任意用户可通过 `/profile/:id` 访问其他用户的公开 Profile。
   - 公开 Profile 展示用户公开摘要、Life Feeds、Wiki 贡献统计、Like / Reaction 过的 Life Post 和评论过的内容。
+  - Profile 的 Feeds 和 Reactions 中可从 Life Post 的 Reaction 汇总或 Reaction 活动打开公开 Reaction 用户列表 Modal。
   - Profile 使用 Tabs 组织：Feeds、Contributions、Reactions、Comments；仅自己的 `/profile` 额外展示 Account。
   - Contributions、Reactions、Comments 在对应 Tab 内提供二级分类：Contributions 可按主要内容类型或配置类查看，Reactions 可按 reaction 类型查看，Comments 可按 Life / Wiki discussion 来源查看。
   - 公开用户摘要只包含 `id`、`displayName` 和公开展示需要的加入时间；不公开邮箱、角色、权限、Referral Code、邀请链接、session、token/hash 或内部审计 payload。
@@ -789,6 +790,7 @@ Life Post 可配置：
 - Life Feed 只随每条 Life Post 返回评论总数和最近少量评论预览；完整评论列表在展开评论区后通过独立分页接口按顶层评论正序读取，每页顶层评论携带其一层回复。
 - 已注册并完成邮箱验证且拥有 `life.reactions.set` 权限的用户可以对每条 Life Post 选择一个 Reaction；普通点击默认设置 `like`，再次点击 `like` 会取消，当前为其他 Reaction 时普通点击会替换为 `like`。
 - Life Reaction 的其他类型通过右键 / context menu 或可见展开按钮打开 Popup 选择；再次选择当前 Reaction 会取消，选择其他 Reaction 会替换原 Reaction。
+- 用户可在 Life Post 的 Reaction 汇总处打开 Modal 查看公开 Reaction 用户列表；列表支持按 Reaction 类型筛选并分页加载。
 - 已注册并完成邮箱验证且拥有 `life.ratings.set` 权限的用户可以对 Rateable Life Post 设置或取消 1-5 星评分；非 Rateable Category 下的 Post 不显示评分控件，也不能通过 API 评分。
 - Life Post 展示评分时只展示平均分、评分人数和当前用户自己的评分；不展示其他用户的评分明细。
 - 支持按 Life Post 正文搜索；用户按 Enter 或点击 Search 按钮后提交搜索，不随输入实时请求；搜索结果仍按创建时间倒序展示并分页加载。
@@ -816,7 +818,8 @@ API 暴露边界：
 - Life Post Rating 只返回 `ratingAverage`、`ratingCount` 和当前用户自己的 `myRating`；不返回其他用户的评分明细。
 - Life Post 可返回面向用户展示所需的审核状态、审核语言区和是否可重审；不返回内部错误、AI prompt、模型响应或 retry 细节。
 - Life Comment 作者信息只返回 `id` 和 `displayName`。
-- Life Reaction 对外只返回按类型汇总的数量和当前用户自己的 Reaction，不返回其他用户的 Reaction 明细。
+- Life Post 列表和详情中的 Life Reaction 只返回按类型汇总的数量和当前用户自己的 Reaction，不内嵌其他用户明细。
+- Life Reaction 用户列表 API 只返回公开用户摘要 `id`、`displayName`、`reactionType` 和 `reactedAt`；不返回邮箱、角色、权限、token/hash、内部审计或其他用户隐私字段。
 - Life Post 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`；`cursor` 是不透明分页令牌。每个 Life Post 的评论字段只包含已公开或当前用户可见评论的 `commentCount` 和 `commentPreview`，不内嵌完整评论列表。
 - Life Post 详情 API 返回单条 Life Post，字段边界与列表项一致；评论字段仍只包含 `commentCount` 和少量 `commentPreview`，完整评论通过评论分页接口读取。
 - Life Comment 列表 API 返回分页结果：`items`、`nextCursor`、`hasMore`、`total`；`cursor` 是不透明分页令牌；普通访客只读取审核通过评论。
@@ -964,6 +967,7 @@ API 暴露边界：
 - `GET /api/recipes/:id`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区；支持 `gameVersionId` 按 Game Version 筛选；支持 `rateable` 按可评分 Category 筛选；支持 `sort` 为 `latest`、`oldest` 或 `top-rated`。
 - `GET /api/life-posts/:id`：读取单条 Life Post 详情，遵守软删除和审核可见性规则。
+- `GET /api/life-posts/:id/reactions`：分页读取该 Life Post 的公开 Reaction 用户列表；支持 `cursor` / `limit` 和 `reactionType` 筛选。
 - `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计和公开社区统计。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。

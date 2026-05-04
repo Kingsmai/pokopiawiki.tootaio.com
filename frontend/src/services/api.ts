@@ -404,6 +404,25 @@ export interface LifeCommentsPage {
   total: number;
 }
 
+export interface LifeReactionUser {
+  user: UserSummary;
+  reactionType: LifeReactionType;
+  reactedAt: string;
+}
+
+export interface LifeReactionUsersPage {
+  items: LifeReactionUser[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+}
+
+export interface LifeReactionUsersParams {
+  cursor?: string | null;
+  limit?: number;
+  reactionType?: LifeReactionType;
+}
+
 export interface RecipeDetail extends Recipe {
   acquisition_methods: NamedEntity[];
   editHistory: EditHistoryEntry[];
@@ -1040,6 +1059,14 @@ export const api = {
   setLifeReaction: (id: string | number, reactionType: LifeReactionType) =>
     sendJson<LifePost>(`/api/life-posts/${id}/reaction`, 'PUT', { reactionType }),
   deleteLifeReaction: (id: string | number) => deleteAndGetJson<LifePost>(`/api/life-posts/${id}/reaction`),
+  lifeReactionUsers: (id: string | number, params: LifeReactionUsersParams = {}) =>
+    getJson<LifeReactionUsersPage>(
+      `/api/life-posts/${id}/reactions${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit,
+        reactionType: params.reactionType
+      })}`
+    ),
   setLifeRating: (id: string | number, rating: number) =>
     sendJson<LifePost>(`/api/life-posts/${id}/rating`, 'PUT', { rating }),
   deleteLifeRating: (id: string | number) => deleteAndGetJson<LifePost>(`/api/life-posts/${id}/rating`),

@@ -2670,6 +2670,21 @@ button:disabled,
   color: var(--ink-soft);
 }
 
+.life-reaction-summary--button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.life-reaction-summary--button:hover .life-reaction-summary__item,
+.life-reaction-summary--button:focus-visible .life-reaction-summary__item {
+  border-color: color-mix(in srgb, var(--pokemon-blue) 45%, var(--line));
+  background: color-mix(in srgb, var(--pokemon-blue) 10%, var(--surface-soft));
+  color: var(--pokemon-blue-deep);
+}
+
 .life-action-tooltip {
   position: absolute;
   z-index: 30;
@@ -2866,6 +2881,101 @@ button:disabled,
 
 .life-comments__empty {
   margin: 0;
+}
+
+.life-reaction-users-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.life-reaction-users-modal__count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.life-reaction-user-list {
+  display: grid;
+  gap: 10px;
+}
+
+.life-reaction-user {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.life-reaction-user__avatar {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--pokemon-blue-deep);
+  font-family: var(--font-display);
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.life-reaction-user__avatar:hover {
+  border-color: color-mix(in srgb, var(--pokemon-blue) 45%, var(--line));
+  background: color-mix(in srgb, var(--pokemon-blue) 10%, var(--surface));
+}
+
+.life-reaction-user__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.life-reaction-user__copy > span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.life-reaction-user__copy .ui-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--pokemon-blue);
+}
+
+.life-reaction-users-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 22px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+  text-align: center;
+}
+
+.life-reaction-users-empty h3 {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.life-reaction-users-empty__icon {
+  width: 34px;
+  height: 34px;
+  color: var(--pokemon-blue);
 }
 
 .life-empty {
@@ -5868,6 +5978,26 @@ button:disabled,
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.profile-reaction-open-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.profile-reaction-open-button:hover {
+  color: var(--pokemon-blue-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .profile-feed-card__detail-link,

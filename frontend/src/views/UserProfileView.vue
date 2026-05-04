@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import LifeReactionUsersModal from '../components/LifeReactionUsersModal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -92,6 +93,7 @@ const commentsCursor = ref<string | null>(null);
 const commentsHasMore = ref(false);
 const commentsLoading = ref(false);
 const commentsError = ref('');
+const reactionUsersModal = ref<{ postId: number; reactionType: LifeReactionType | null } | null>(null);
 const activityLimit = 10;
 let profileRequestId = 0;
 
@@ -574,6 +576,14 @@ function reactionLabel(type: LifeReactionType): string {
   return t(`pages.life.reaction${type.charAt(0).toUpperCase()}${type.slice(1)}`);
 }
 
+function openReactionUsersModal(postId: number, reactionType: LifeReactionType | null = null) {
+  reactionUsersModal.value = { postId, reactionType };
+}
+
+function closeReactionUsersModal() {
+  reactionUsersModal.value = null;
+}
+
 function contributionCategory(contentType: string): ContributionFilter {
   return primaryContributionFilters.includes(contentType as PrimaryContributionFilter)
     ? (contentType as PrimaryContributionFilter)
@@ -693,6 +703,13 @@ onMounted(() => {
 
       <Tabs id="profile-tabs" v-model="activeTab" :tabs="tabs" :label="t('pages.profile.tabsLabel')" />
 
+      <LifeReactionUsersModal
+        v-if="reactionUsersModal"
+        :post-id="reactionUsersModal.postId"
+        :initial-reaction-type="reactionUsersModal.reactionType"
+        @close="closeReactionUsersModal"
+      />
+
       <section v-if="activeTab === 'feeds'" class="profile-tab-panel" :aria-label="t('pages.profile.tabFeeds')">
         <StatusMessage v-if="feedsError" variant="danger" :duration="0">{{ feedsError }}</StatusMessage>
 
@@ -733,10 +750,15 @@ onMounted(() => {
             </div>
 
             <div class="profile-feed-card__metrics">
-              <span>
+              <button
+                class="profile-reaction-open-button"
+                type="button"
+                :aria-label="t('pages.life.reactionsCount', { count: reactionTotal(post) })"
+                @click="openReactionUsersModal(post.id)"
+              >
                 <Icon :icon="iconReactionLike" class="ui-icon" aria-hidden="true" />
                 {{ t('pages.life.reactionsCount', { count: reactionTotal(post) }) }}
-              </span>
+              </button>
               <span>
                 <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
                 {{ t('pages.life.commentsCount', { count: commentTotal(post) }) }}
@@ -860,10 +882,15 @@ onMounted(() => {
         <div v-else-if="reactions.length" class="profile-activity-list">
           <article v-for="activity in reactions" :key="`${activity.postId}-${activity.reactedAt}`" class="profile-activity-card">
             <header class="profile-activity-card__header">
-              <span>
+              <button
+                class="profile-reaction-open-button"
+                type="button"
+                :aria-label="reactionLabel(activity.reactionType)"
+                @click="openReactionUsersModal(activity.post.id, activity.reactionType)"
+              >
                 <Icon :icon="reactionIcon(activity.reactionType)" class="ui-icon" aria-hidden="true" />
                 {{ reactionLabel(activity.reactionType) }}
-              </span>
+              </button>
               <time :datetime="activity.reactedAt">{{ formatDateTime(activity.reactedAt) }}</time>
             </header>
 

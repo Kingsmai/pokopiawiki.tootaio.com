@@ -256,6 +256,21 @@ type EntityDiscussionCommentsPage = {
 
 type LifeReactionType = 'like' | 'helpful' | 'fun' | 'thanks';
 type LifeReactionCounts = Record<LifeReactionType, number>;
+type LifeReactionUser = {
+  user: { id: number; displayName: string };
+  reactionType: LifeReactionType;
+  reactedAt: Date;
+};
+type LifeReactionUsersPage = {
+  items: LifeReactionUser[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+};
+type LifeReactionUserCursor = {
+  reactedAt: string;
+  userId: number;
+};
 
 type LifeCommentRow = {
   id: number;
@@ -2760,6 +2775,34 @@ function encodeProfileCursor(cursor: LifePostCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
+function decodeLifeReactionUserCursor(value: QueryValue): LifeReactionUserCursor | null {
+  const rawCursor = asString(value);
+  if (!rawCursor) {
+    return null;
+  }
+
+  try {
+    const cursor = JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8')) as Partial<LifeReactionUserCursor>;
+    const reactedAt = typeof cursor.reactedAt === 'string' ? cursor.reactedAt : '';
+    const userId = Number(cursor.userId);
+
+    if (!reactedAt || Number.isNaN(new Date(reactedAt).getTime()) || !Number.isInteger(userId) || userId <= 0) {
+      throw validationError('server.validation.cursorInvalid');
+    }
+
+    return { reactedAt, userId };
+  } catch (error) {
+    if (error instanceof Error && 'statusCode' in error) {
+      throw error;
+    }
+    throw validationError('server.validation.cursorInvalid');
+  }
+}
+
+function encodeLifeReactionUserCursor(cursor: LifeReactionUserCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
 function decodeUserCommentActivityCursor(value: QueryValue): UserCommentActivityCursor | null {
   const rawCursor = asString(value);
   if (!rawCursor) {
@@ -3100,6 +3143,103 @@ async function lifeReactionsForPosts(
   }
 
   return { countsByPost, myReactionsByPost };
+}
+
+export async function listLifePostReactionUsers(
+  postIdValue: number,
+  paramsQuery: QueryParams = {},
+  userId: number | null = null,
+  canViewAll = false
+): Promise<LifeReactionUsersPage | null> {
+  const postId = requirePositiveInteger(postIdValue, 'server.validation.recordInvalid');
+  const cursor = decodeLifeReactionUserCursor(paramsQuery.cursor);
+  const limit = cleanLifePostLimit(paramsQuery.limit);
+  const reactionType = cleanLifeReactionFilter(paramsQuery.reactionType);
+  const postParams: unknown[] = [postId];
+  const postConditions = ['lp.id = $1', 'lp.deleted_at IS NULL'];
+  addModerationVisibilityCondition(postConditions, postParams, 'lp', 'lp.created_by_user_id', userId, canViewAll);
+  const exists = await queryOne<{ exists: boolean }>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM life_posts lp
+        WHERE ${postConditions.join(' AND ')}
+      ) AS exists
+    `,
+    postParams
+  );
+
+  if (exists?.exists !== true) {
+    return null;
+  }
+
+  const params: unknown[] = [postId];
+  const conditions = ['lpr.post_id = $1'];
+  if (reactionType) {
+    params.push(reactionType);
+    conditions.push(`lpr.reaction_type = $${params.length}`);
+  }
+  if (cursor) {
+    params.push(cursor.reactedAt, cursor.userId);
+    conditions.push(`(lpr.updated_at, lpr.user_id) < ($${params.length - 1}::timestamptz, $${params.length}::integer)`);
+  }
+
+  params.push(limit + 1);
+  const rows = await query<{
+    userId: number;
+    displayName: string;
+    reactionType: LifeReactionType;
+    reactedAt: Date;
+    reactedAtCursor: string;
+  }>(
+    `
+      SELECT
+        u.id AS "userId",
+        u.display_name AS "displayName",
+        lpr.reaction_type AS "reactionType",
+        lpr.updated_at AS "reactedAt",
+        lpr.updated_at::text AS "reactedAtCursor"
+      FROM life_post_reactions lpr
+      JOIN users u ON u.id = lpr.user_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY lpr.updated_at DESC, lpr.user_id DESC
+      LIMIT $${params.length}
+    `,
+    params
+  );
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const totalParams: unknown[] = [postId];
+  const totalConditions = ['post_id = $1'];
+  if (reactionType) {
+    totalParams.push(reactionType);
+    totalConditions.push(`reaction_type = $${totalParams.length}`);
+  }
+  const total = await queryOne<{ total: number }>(
+    `
+      SELECT COUNT(*)::integer AS total
+      FROM life_post_reactions
+      WHERE ${totalConditions.join(' AND ')}
+    `,
+    totalParams
+  );
+
+  return {
+    items: items.map((item) => ({
+      user: { id: item.userId, displayName: item.displayName },
+      reactionType: item.reactionType,
+      reactedAt: item.reactedAt
+    })),
+    nextCursor:
+      hasMore && items.length > 0
+        ? encodeLifeReactionUserCursor({
+            reactedAt: items[items.length - 1].reactedAtCursor,
+            userId: items[items.length - 1].userId
+          })
+        : null,
+    hasMore,
+    total: total?.total ?? 0
+  };
 }
 
 async function lifeRatingsForPosts(postIds: number[], userId: number | null): Promise<Map<number, number>> {

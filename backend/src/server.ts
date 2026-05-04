@@ -84,6 +84,7 @@ import {
   listLifeComments,
   listLanguages,
   listLifePosts,
+  listLifePostReactionUsers,
   listPokemon,
   listPokemonFetchOptions,
   listRecipes,
@@ -1207,6 +1208,21 @@ app.get('/api/life-posts/:id', async (request, reply) => {
     : false;
   const post = await getLifePost(Number(id), user?.id ?? null, requestLocale(request), canViewAll);
   return post ? post : notFound(reply, request);
+});
+
+app.get('/api/life-posts/:id/reactions', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const user = await optionalUser(request);
+  const canViewAll = user
+    ? userHasPermission(user, 'life.posts.update-any') || userHasPermission(user, 'life.posts.delete-any')
+    : false;
+  const reactions = await listLifePostReactionUsers(
+    Number(id),
+    request.query as Record<string, string | string[] | undefined>,
+    user?.id ?? null,
+    canViewAll
+  );
+  return reactions ? reactions : notFound(reply, request);
 });
 
 app.get('/api/life-posts/:postId/comments', async (request, reply) => {

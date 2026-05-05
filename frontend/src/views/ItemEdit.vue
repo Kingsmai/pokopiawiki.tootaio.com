@@ -38,6 +38,7 @@ const creatingSelect = ref('');
 const itemForm = ref({
   name: '',
   details: '',
+  basePrice: '',
   translations: {} as TranslationMap,
   categoryId: '',
   usageId: '',
@@ -53,6 +54,7 @@ const itemForm = ref({
 
 type ItemCreateDefaults = {
   categoryId: string;
+  usageId: string;
   dyeable: boolean;
   dualDyeable: boolean;
   patternEditable: boolean;
@@ -98,6 +100,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
   if (typeof sessionStorage === 'undefined') {
     return {
       categoryId: '',
+      usageId: '',
       dyeable: false,
       dualDyeable: false,
       patternEditable: false,
@@ -111,6 +114,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
     if (!rawValue) {
       return {
         categoryId: '',
+        usageId: '',
         dyeable: false,
         dualDyeable: false,
         patternEditable: false,
@@ -122,6 +126,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
     const parsedValue = JSON.parse(rawValue) as Partial<ItemCreateDefaults>;
     return {
       categoryId: typeof parsedValue.categoryId === 'string' ? parsedValue.categoryId : '',
+      usageId: typeof parsedValue.usageId === 'string' ? parsedValue.usageId : '',
       dyeable: parsedValue.dyeable === true,
       dualDyeable: parsedValue.dualDyeable === true,
       patternEditable: parsedValue.patternEditable === true,
@@ -133,6 +138,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
   } catch {
     return {
       categoryId: '',
+      usageId: '',
       dyeable: false,
       dualDyeable: false,
       patternEditable: false,
@@ -151,10 +157,12 @@ function applyItemCreateDefaults(isEventItem: boolean) {
 
   const defaults = readItemCreateDefaults();
   const categoryIds = new Set(loadedOptions.itemCategories.map((item) => String(item.id)));
+  const usageIds = new Set(loadedOptions.itemUsages.map((item) => String(item.id)));
   const methodIds = new Set(loadedOptions.acquisitionMethods.map((item) => String(item.id)));
   itemForm.value = {
     ...itemForm.value,
     categoryId: categoryIds.has(defaults.categoryId) ? defaults.categoryId : '',
+    usageId: usageIds.has(defaults.usageId) ? defaults.usageId : '',
     dyeable: defaults.dyeable,
     dualDyeable: defaults.dualDyeable,
     patternEditable: defaults.patternEditable,
@@ -207,6 +215,7 @@ async function loadEditor() {
       itemForm.value = {
         name: item.baseName ?? item.name,
         details: item.baseDetails ?? item.details,
+        basePrice: item.basePrice === null || item.basePrice === undefined ? '' : String(item.basePrice),
         translations: item.translations ?? {},
         categoryId: String(item.category.id),
         usageId: item.usage ? String(item.usage.id) : '',
@@ -260,6 +269,7 @@ async function saveItem() {
     const payload: ItemPayload = {
       name: itemNameForSave(),
       details: itemForm.value.details,
+      basePrice: itemForm.value.basePrice.trim() === '' ? null : Number(itemForm.value.basePrice),
       translations: itemForm.value.translations,
       categoryId: Number(itemForm.value.categoryId),
       usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
@@ -343,6 +353,11 @@ onMounted(() => {
       />
 
       <div class="field">
+        <label for="item-base-price">{{ t('pages.items.basePrice') }}</label>
+        <input id="item-base-price" v-model="itemForm.basePrice" type="number" min="0" step="1" inputmode="numeric" />
+      </div>
+
+      <div class="field">
         <label for="item-category">{{ t('pages.items.category') }}</label>
         <TagsSelect
           id="item-category"
@@ -361,6 +376,7 @@ onMounted(() => {
           v-model="itemForm.usageId"
           :options="options.itemUsages"
           :multiple="false"
+          clearable
           :placeholder="t('common.none')"
           :search-placeholder="t('pages.items.searchUsage')"
         />

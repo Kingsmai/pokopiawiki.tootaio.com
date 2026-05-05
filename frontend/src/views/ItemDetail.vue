@@ -17,7 +17,7 @@ import { api, getAuthToken, type AuthUser, type ItemDetail } from '../services/a
 import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 const item = ref<ItemDetail | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
@@ -38,6 +38,10 @@ const itemSubtitle = computed(() => {
 });
 const detailKicker = computed(() => (item.value?.isEventItem ? t('pages.eventItems.detailKicker') : t('pages.items.detailKicker')));
 const listTarget = computed(() => (item.value?.isEventItem ? '/event-items' : '/items'));
+const basePriceDisplay = computed(() => {
+  const price = item.value?.basePrice;
+  return price === null || price === undefined ? t('common.none') : new Intl.NumberFormat(locale.value).format(price);
+});
 
 const customization = computed(() => {
   if (!item.value) {
@@ -189,6 +193,10 @@ watch(
                 <div>
                   <dt>{{ t('pages.items.usage') }}</dt>
                   <dd>{{ item.usage?.name ?? t('common.none') }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('pages.items.basePrice') }}</dt>
+                  <dd>{{ basePriceDisplay }}</dd>
                 </div>
                 <div>
                   <dt>{{ t('pages.items.recipeInfo') }}</dt>

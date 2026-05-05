@@ -33,12 +33,14 @@ const props = withDefaults(
     creating?: boolean;
     createLabel?: string;
     dropdownStrategy?: DropdownStrategy;
+    clearable?: boolean;
   }>(),
   {
     multiple: true,
     max: 0,
     allowCreate: false,
-    creating: false
+    creating: false,
+    clearable: false
   }
 );
 
@@ -167,6 +169,12 @@ function updateValue(values: string[]) {
 
 function selectOption(value: string) {
   if (!props.multiple) {
+    if (props.clearable && selectedValues.value.has(value)) {
+      updateValue([]);
+      closeDropdown();
+      return;
+    }
+
     updateValue([value]);
     closeDropdown();
     return;

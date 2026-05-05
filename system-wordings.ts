@@ -134,7 +134,7 @@ export const systemWordingMessages = {
       pokemonDetailDescription:
         'Read {name} details in Pokopia Wiki, including habitat, types, specialities, favourites, stats, related items, discussions, and edit history.',
       itemDetailDescription:
-        'Browse {name} item details in Pokopia Wiki, including category, usage, acquisition methods, customization, related recipes, habitats, and Pokemon drops.',
+        'Browse {name} item details in Pokopia Wiki, including base price, category, usage, acquisition methods, customization, related recipes, habitats, and Pokemon drops.',
       ancientArtifactDetailDescription:
         'Browse {name} Ancient Artifact details in Pokopia Wiki, including category, tags, description, discussions, and edit history.',
       habitatDetailDescription:
@@ -680,7 +680,7 @@ export const systemWordingMessages = {
         detailKicker: 'Item Detail',
         detailSubtitle: 'Item detail',
         editKicker: 'Item Edit',
-        editSubtitle: 'Maintain item category, usage, acquisition methods, customization, and tags.',
+        editSubtitle: 'Maintain item base price, category, usage, acquisition methods, customization, and tags.',
         newTitle: 'New item',
         editTitle: 'Edit {name}',
         fallbackName: 'Item',
@@ -688,6 +688,7 @@ export const systemWordingMessages = {
         loadingDetail: 'Loading item detail',
         loadingEdit: 'Loading item editor',
         description: 'Description',
+        basePrice: 'Base Price',
         category: 'Category',
         usage: 'Usage',
         tags: 'Tags',
@@ -720,7 +721,7 @@ export const systemWordingMessages = {
         subtitle: 'Browse event items by category, usage, and tags.',
         kicker: 'Event Items',
         detailKicker: 'Event Item Detail',
-        editSubtitle: 'Maintain event item category, usage, acquisition methods, customization, and tags.',
+        editSubtitle: 'Maintain event item base price, category, usage, acquisition methods, customization, and tags.',
         newTitle: 'New event item'
       },
       ancientArtifacts: {
@@ -1495,7 +1496,7 @@ export const systemWordingMessages = {
     seo: {
       siteDescription: '浏览 Pokopia Wiki 的 Pokemon、Event Pokemon、栖息地、Event Habitats、物品、Event Items、Ancient Artifacts、材料单、每日清单和 Life 社区动态。',
       pokemonDetailDescription: '查看 {name} 在 Pokopia Wiki 中的栖息地、属性、特长、喜欢的东西、六维、相关物品、讨论和编辑历史。',
-      itemDetailDescription: '查看 {name} 在 Pokopia Wiki 中的分类、用途、入手方式、自定义、相关材料单、栖息地和 Pokemon 掉落。',
+      itemDetailDescription: '查看 {name} 在 Pokopia Wiki 中的基础价格、分类、用途、入手方式、自定义、相关材料单、栖息地和 Pokemon 掉落。',
       ancientArtifactDetailDescription: '查看 {name} 在 Pokopia Wiki 中的分类、标签、介绍、讨论和编辑历史。',
       habitatDetailDescription: '查看 {name} 在 Pokopia Wiki 中的配方、可能出现的 Pokemon、地图、时间、天气、讨论和编辑历史。',
       recipeDetailDescription: '查看 {name} 材料单在 Pokopia Wiki 中的结果物品、入手方式、需要材料、讨论和编辑历史。'
@@ -2018,7 +2019,7 @@ export const systemWordingMessages = {
         detailKicker: 'Item Detail',
         detailSubtitle: '物品详情',
         editKicker: 'Item Edit',
-        editSubtitle: '维护物品分类、用途、入手方式、自定义和标签。',
+        editSubtitle: '维护物品基础价格、分类、用途、入手方式、自定义和标签。',
         newTitle: '新增物品',
         editTitle: '编辑 {name}',
         fallbackName: '物品',
@@ -2026,6 +2027,7 @@ export const systemWordingMessages = {
         loadingDetail: '正在加载物品详情',
         loadingEdit: '正在加载物品编辑内容',
         description: '介绍',
+        basePrice: '基础价格',
         category: '分类',
         usage: '用途',
         tags: '标签',
@@ -2058,7 +2060,7 @@ export const systemWordingMessages = {
         subtitle: '按分类、用途、标签查看活动物品。',
         kicker: 'Event Items',
         detailKicker: 'Event Item Detail',
-        editSubtitle: '维护 Event Item 分类、用途、入手方式、自定义和标签。',
+        editSubtitle: '维护 Event Item 基础价格、分类、用途、入手方式、自定义和标签。',
         newTitle: '新增 Event Item'
       },
       ancientArtifacts: {

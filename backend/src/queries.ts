@@ -203,6 +203,7 @@ type PokemonCsvData = {
 type ItemPayload = {
   name: string;
   details: string;
+  basePrice: number | null;
   translations: TranslationInput;
   categoryId: number;
   categoryKey: string;
@@ -543,6 +544,7 @@ type PokemonChangeSource = {
 type ItemChangeSource = {
   name: string;
   details: string;
+  basePrice: number | null;
   isEventItem: boolean;
   image: EntityImageValue | null;
   category: { name: string };
@@ -1074,6 +1076,20 @@ function cleanNonNegativeNumber(value: unknown, message: string): number {
   if (!Number.isFinite(numberValue) || numberValue < 0) {
     throw validationError(message);
   }
+  return numberValue;
+}
+
+function cleanOptionalNonNegativeInteger(value: unknown, message: string): number | null {
+  const rawValue = typeof value === 'string' ? value.trim() : value;
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return null;
+  }
+
+  const numberValue = Number(rawValue);
+  if (!Number.isInteger(numberValue) || numberValue < 0) {
+    throw validationError(message);
+  }
+
   return numberValue;
 }
 
@@ -2246,6 +2262,12 @@ async function itemEditChanges(
 
   pushChange(changes, 'Name', before.name, after.name);
   pushChange(changes, 'Description', before.details, after.details);
+  pushChange(
+    changes,
+    'Base Price',
+    before.basePrice === null ? null : String(before.basePrice),
+    after.basePrice === null ? null : String(after.basePrice)
+  );
   pushTranslationChanges(changes, before.translations, after.translations, ['name', 'details']);
   pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
@@ -6216,6 +6238,7 @@ function itemProjection(locale: string): string {
       i.name AS "baseName",
       ${itemDetails} AS details,
       i.details AS "baseDetails",
+      i.base_price AS "basePrice",
       i.is_event_item AS "isEventItem",
       ${translationsSelect('items', 'i.id')} AS translations,
       ${auditSelect('i', 'item_created_user', 'item_updated_user')},
@@ -6484,6 +6507,7 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
   return {
     name: cleanName(payload.name, 'server.validation.itemNameRequired'),
     details: cleanOptionalText(payload.details),
+    basePrice: cleanOptionalNonNegativeInteger(payload.basePrice, 'server.validation.invalidField'),
     translations: cleanTranslations(payload.translations, ['name', 'details']),
     categoryId,
     categoryKey: category.key,
@@ -6558,6 +6582,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
         INSERT INTO items (
           name,
           details,
+          base_price,
           category_key,
           usage_key,
           dyeable,
@@ -6570,12 +6595,13 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
         RETURNING id
       `,
       [
         cleanPayload.name,
         cleanPayload.details,
+        cleanPayload.basePrice,
         cleanPayload.categoryKey,
         cleanPayload.usageKey,
         cleanPayload.dyeable,
@@ -6631,21 +6657,23 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
         UPDATE items
         SET name = $1,
             details = $2,
-            category_key = $3,
-            usage_key = $4,
-            dyeable = $5,
-            dual_dyeable = $6,
-            pattern_editable = $7,
-            no_recipe = $8,
-            is_event_item = $9,
-            image_path = $10,
-            updated_by_user_id = $11,
+            base_price = $3,
+            category_key = $4,
+            usage_key = $5,
+            dyeable = $6,
+            dual_dyeable = $7,
+            pattern_editable = $8,
+            no_recipe = $9,
+            is_event_item = $10,
+            image_path = $11,
+            updated_by_user_id = $12,
             updated_at = now()
-        WHERE id = $12
+        WHERE id = $13
       `,
       [
         cleanPayload.name,
         cleanPayload.details,
+        cleanPayload.basePrice,
         cleanPayload.categoryKey,
         cleanPayload.usageKey,
         cleanPayload.dyeable,
@@ -7586,6 +7614,7 @@ const dataToolColumns = {
     'id',
     'name',
     'details',
+    'base_price',
     'category_key',
     'usage_key',
     'dyeable',

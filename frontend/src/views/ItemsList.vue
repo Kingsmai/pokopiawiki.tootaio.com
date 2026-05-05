@@ -46,6 +46,7 @@ const dropCommitted = ref(false);
 
 type ItemCreateDefaults = {
   categoryId: string;
+  usageId: string;
   dyeable: boolean;
   dualDyeable: boolean;
   patternEditable: boolean;
@@ -57,6 +58,7 @@ const itemCreateDefaultsStorageKey = 'pokopia_item_create_defaults';
 
 const emptyItemCreateDefaults = (): ItemCreateDefaults => ({
   categoryId: '',
+  usageId: '',
   dyeable: false,
   dualDyeable: false,
   patternEditable: false,
@@ -101,6 +103,7 @@ const canCreateItem = computed(() => currentUser.value?.permissions.includes('it
 const hasItemCreateDefaults = computed(
   () =>
     itemCreateDefaults.value.categoryId !== '' ||
+    itemCreateDefaults.value.usageId !== '' ||
     itemCreateDefaults.value.dyeable ||
     itemCreateDefaults.value.dualDyeable ||
     itemCreateDefaults.value.patternEditable ||
@@ -177,6 +180,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
     const parsedValue = JSON.parse(rawValue) as Partial<ItemCreateDefaults>;
     return {
       categoryId: typeof parsedValue.categoryId === 'string' ? parsedValue.categoryId : '',
+      usageId: typeof parsedValue.usageId === 'string' ? parsedValue.usageId : '',
       dyeable: parsedValue.dyeable === true,
       dualDyeable: parsedValue.dualDyeable === true,
       patternEditable: parsedValue.patternEditable === true,
@@ -209,10 +213,12 @@ function sanitizeItemCreateDefaults() {
   }
 
   const categoryIds = new Set(options.value.itemCategories.map((item) => String(item.id)));
+  const usageIds = new Set(options.value.itemUsages.map((item) => String(item.id)));
   const methodIds = new Set(options.value.acquisitionMethods.map((item) => String(item.id)));
   const nextDefaults = {
     ...itemCreateDefaults.value,
     categoryId: categoryIds.has(itemCreateDefaults.value.categoryId) ? itemCreateDefaults.value.categoryId : '',
+    usageId: usageIds.has(itemCreateDefaults.value.usageId) ? itemCreateDefaults.value.usageId : '',
     acquisitionMethodIds: itemCreateDefaults.value.acquisitionMethodIds.filter((item) => methodIds.has(item))
   };
 
@@ -509,6 +515,19 @@ watch(itemSortingAllowed, (allowed) => {
               />
             </div>
 
+            <div class="field">
+              <label for="item-default-usage">{{ t('pages.items.usage') }}</label>
+              <TagsSelect
+                id="item-default-usage"
+                v-model="itemCreateDefaults.usageId"
+                :options="options.itemUsages"
+                :multiple="false"
+                clearable
+                :placeholder="t('common.none')"
+                :search-placeholder="t('pages.items.searchUsage')"
+              />
+            </div>
+
             <div class="check-row item-create-defaults-menu__checks">
               <label><input v-model="itemCreateDefaults.dyeable" type="checkbox" /> {{ t('pages.items.dyeable') }}</label>
               <label><input v-model="itemCreateDefaults.dualDyeable" type="checkbox" /> {{ t('pages.items.dualDyeable') }}</label>
@@ -557,6 +576,7 @@ watch(itemSortingAllowed, (allowed) => {
           v-model="usageId"
           :options="options.itemUsages"
           :multiple="false"
+          clearable
           :placeholder="t('common.all')"
           :search-placeholder="t('pages.items.searchUsage')"
         />

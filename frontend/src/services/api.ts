@@ -257,6 +257,7 @@ export interface Item extends EditInfo {
   baseName?: string;
   details: string;
   baseDetails?: string;
+  basePrice: number | null;
   isEventItem: boolean;
   translations?: TranslationMap;
   image: EntityImage | null;
@@ -789,6 +790,7 @@ export interface PokemonImageOptionsResult {
 export interface ItemPayload {
   name: string;
   details: string;
+  basePrice: number | null;
   translations?: TranslationMap;
   categoryId: number;
   usageId: number | null;

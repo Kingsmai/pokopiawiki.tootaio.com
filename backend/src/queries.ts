@@ -71,8 +71,6 @@ type EntityType =
   | 'skills'
   | 'environments'
   | 'favorite-things'
-  | 'item-categories'
-  | 'item-usages'
   | 'acquisition-methods'
   | 'items'
   | 'ancient-artifacts'
@@ -7693,7 +7691,6 @@ const dataToolColumns = {
   ],
   itemAcquisitionMethods: ['item_id', 'acquisition_method_id'],
   itemFavoriteThings: ['item_id', 'favorite_thing_id'],
-  artifacts: [] as string[],
   recipes: ['id', 'item_id', 'sort_order', 'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'],
   recipeAcquisitionMethods: ['recipe_id', 'acquisition_method_id'],
   recipeMaterials: ['recipe_id', 'item_id', 'quantity'],
@@ -7800,67 +7797,19 @@ function dataToolDataWithRows(key: string, ...sources: Array<DataToolScopeData |
   return sources.find((source) => source?.[key] !== undefined);
 }
 
-function dataToolArtifactRows(data: DataToolScopeData | undefined): DataToolRows {
-  return dataToolTableRows(data, 'artifacts').map((row) => {
-    if (row.ancient_artifact_category_key !== undefined) {
-      return row;
-    }
-
-    return {
-      ...row,
-      base_price: null,
-      ancient_artifact_category_key: row.category_key,
-      category_key: 'other',
-      usage_key: null,
-      dyeable: false,
-      dual_dyeable: false,
-      pattern_editable: false,
-      no_recipe: false,
-      is_event_item: false
-    };
-  });
-}
-
-function dataToolArtifactFavoriteThingRows(data: DataToolScopeData | undefined): DataToolRows {
-  const itemRows = dataToolTableRows(data, 'itemFavoriteThings');
-  const artifactRows = dataToolTableRows(data, 'artifactFavoriteThings').map((row) => ({
-    item_id: row.ancient_artifact_id,
-    favorite_thing_id: row.favorite_thing_id
-  }));
-  return [...itemRows, ...artifactRows];
-}
-
 async function tableRows(client: DbClient, sql: string, params: unknown[] = []): Promise<DataToolRows> {
   const result = await client.query<Record<string, unknown>>(sql, params);
   return result.rows;
 }
 
-function normalizeImportValue(column: string, value: unknown, row: Record<string, unknown>): unknown {
-  if (value === undefined) {
-    if (column === 'display_id' && typeof row.id === 'number') {
-      return row.id;
-    }
-    if (column === 'details') {
-      return '';
-    }
-    if (column === 'image_path') {
-      return '';
-    }
-    if (column === 'category_key') {
-      return 'other';
-    }
-    return null;
-  }
-  if (column === 'changes' && typeof value !== 'string') {
-    return JSON.stringify(value ?? []);
-  }
-  return value;
+function normalizeImportValue(value: unknown): unknown {
+  return value === undefined ? null : value;
 }
 
 async function insertRows(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
   for (const row of rows) {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
-    const values = columns.map((column) => normalizeImportValue(column, row[column], row));
+    const values = columns.map((column) => normalizeImportValue(row[column]));
     await client.query(`INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`, values);
   }
 }
@@ -7870,7 +7819,7 @@ async function upsertRowsById(client: DbClient, tableName: string, columns: read
   for (const row of rows) {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
     const assignments = updateColumns.map((column) => `${column} = EXCLUDED.${column}`).join(', ');
-    const values = columns.map((column) => normalizeImportValue(column, row[column], row));
+    const values = columns.map((column) => normalizeImportValue(row[column]));
     await client.query(
       `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT (id) DO UPDATE SET ${assignments}`,
       values
@@ -7881,7 +7830,7 @@ async function upsertRowsById(client: DbClient, tableName: string, columns: read
 async function insertRowsIgnoreConflicts(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
   for (const row of rows) {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
-    const values = columns.map((column) => normalizeImportValue(column, row[column], row));
+    const values = columns.map((column) => normalizeImportValue(row[column]));
     await client.query(`INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`, values);
   }
 }
@@ -8163,7 +8112,7 @@ async function importScopeMainRows(client: DbClient, bundle: DataToolsBundle): P
   const recipeData = bundle.data.recipes;
 
   await insertRows(client, 'items', dataToolColumns.items, dataToolTableRows(itemData, 'items'));
-  await upsertRowsById(client, 'items', dataToolColumns.items, dataToolArtifactRows(artifactData));
+  await upsertRowsById(client, 'items', dataToolColumns.items, dataToolTableRows(artifactData, 'artifacts'));
   await insertRows(client, 'pokemon', dataToolColumns.pokemon, dataToolTableRows(pokemonData, 'pokemon'));
   await insertRows(client, 'habitats', dataToolColumns.habitats, dataToolTableRows(habitatData, 'habitats'));
   await insertRows(client, 'daily_checklist_items', dataToolColumns.checklist, dataToolTableRows(checklistData, 'checklist'));
@@ -8182,7 +8131,7 @@ async function importScopeRelationRows(client: DbClient, bundle: DataToolsBundle
 
   await insertRows(client, 'item_acquisition_methods', dataToolColumns.itemAcquisitionMethods, dataToolTableRows(itemData, 'itemAcquisitionMethods'));
   await insertRows(client, 'item_favorite_things', dataToolColumns.itemFavoriteThings, dataToolTableRows(itemData, 'itemFavoriteThings'));
-  await insertRowsIgnoreConflicts(client, 'item_favorite_things', dataToolColumns.itemFavoriteThings, dataToolArtifactFavoriteThingRows(artifactData));
+  await insertRowsIgnoreConflicts(client, 'item_favorite_things', dataToolColumns.itemFavoriteThings, dataToolTableRows(artifactData, 'itemFavoriteThings'));
   await insertRows(client, 'pokemon_pokemon_types', dataToolColumns.pokemonTypeLinks, dataToolTableRows(pokemonData, 'pokemonTypeLinks'));
   await insertRows(client, 'pokemon_skills', dataToolColumns.pokemonSkills, dataToolTableRows(pokemonData, 'pokemonSkills'));
   await insertRows(client, 'pokemon_favorite_things', dataToolColumns.pokemonFavoriteThings, dataToolTableRows(pokemonData, 'pokemonFavoriteThings'));

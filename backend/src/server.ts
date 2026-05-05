@@ -83,6 +83,7 @@ import {
   getRecipe,
   globalSearch,
   importAdminData,
+  importAdminItemsCsv,
   isConfigType,
   listAncientArtifacts,
   listEntityDiscussionComments,
@@ -2149,6 +2150,11 @@ app.post('/api/admin/data-tools/export', async (request, reply) => {
 app.post('/api/admin/data-tools/import', async (request, reply) => {
   const user = await requirePermissionWithRateLimits(request, reply, 'admin.data.import', 'adminWrite');
   return user ? importAdminData(request.body as Record<string, unknown>) : undefined;
+});
+
+app.post('/api/admin/data-tools/import-items-csv', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.data.import', 'adminWrite');
+  return user ? importAdminItemsCsv(request.body as Record<string, unknown>, user.id) : undefined;
 });
 
 app.post('/api/admin/data-tools/wipe', async (request, reply) => {

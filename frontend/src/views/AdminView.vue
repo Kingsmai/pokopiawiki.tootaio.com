@@ -1594,6 +1594,23 @@ async function selectImportDataToolsFile(event: Event) {
   }
 }
 
+async function selectImportItemsCsvFile(event: Event) {
+  const input = event.target instanceof HTMLInputElement ? event.target : null;
+  const file = input?.files?.[0];
+  if (input) {
+    input.value = '';
+  }
+  if (!file) {
+    return;
+  }
+
+  await run(async () => {
+    const csv = await file.text();
+    dataToolsSummary.value = await api.importItemsCsvDataTools(csv);
+    message.value = t('pages.admin.dataToolItemsCsvImported');
+  });
+}
+
 function closeImportDataToolsModal() {
   dataToolImportModalOpen.value = false;
   pendingImportBundle.value = null;
@@ -1925,6 +1942,11 @@ onMounted(() => {
           </div>
           <p class="meta-line">{{ t('pages.admin.dataToolDependencyNote') }}</p>
           <p class="meta-line">{{ t('pages.admin.dataToolImportMode') }}</p>
+          <div class="field">
+            <label for="data-tools-items-csv-file">{{ t('pages.admin.dataToolItemsCsvFile') }}</label>
+            <input id="data-tools-items-csv-file" type="file" accept="text/csv,.csv" :disabled="busy || !can('admin.data.import')" @change="selectImportItemsCsvFile" />
+          </div>
+          <p class="meta-line">{{ t('pages.admin.dataToolItemsCsvMode') }}</p>
         </section>
 
         <section class="data-tool-panel data-tool-panel--danger" :aria-label="t('pages.admin.dataToolWipe')">

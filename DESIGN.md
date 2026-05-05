@@ -232,7 +232,12 @@
   - Import 不自动覆盖系统配置、语言、用户、角色、权限、系统文案或 Life 内容。
   - 导入数据引用的 System config、Languages、Users 或上传文件路径必须已存在；缺失依赖会导致导入失败并回滚。
   - Import 完成后重置相关 identity sequence 到当前最大 ID 之后。
-  - 前端导入和 Wipe 必须使用确认 Modal，并要求输入固定确认词后才能执行。
+  - Data Tools 额外支持 Items CSV 导入，用于在 Wipe Items 后按 CSV 顺序批量新增普通 Items；CSV 导入只新增 Items，不自动 Wipe，不创建 Recipes、入手方式、标签或翻译。
+  - Items CSV 必须包含 `name`、`category`、`description`、`image_file_name`、`not_registered_in_collection`、`cannot_grow_again_today` 列。
+  - Items CSV 的 `category` 必须匹配系统固定物品分类；支持 `Misc.` 匹配内置 `Misc`，其他值按固定分类英文名匹配。
+  - Items CSV 导入时，`description` 写入物品介绍；若 `not_registered_in_collection` 为 true，追加 `Note: Not registered in collection`；若 `cannot_grow_again_today` 为 true，追加 `Note: Cannot have Grow used on it again today`；原介绍非空时 Note 前使用换行分隔。
+  - Items CSV 导入时，图片路径保存为 `/pokopia/items/{image_file_name}`，API 对外图片 URL 解析为 `https://pokesprite.tootaio.com/pokopia/items/{image_file_name}`。
+  - 前端 JSON bundle Import 和 Wipe 必须使用确认 Modal，并要求输入固定确认词后才能执行；Items CSV 导入只新增物品，不执行删除，可直接从 CSV 文件选择触发。
 
 ## Referral
 
@@ -627,6 +632,7 @@ Pokemon 详情页展示：
 - 无材料单：`no_recipe`
 - 标签：使用喜欢的东西配置，可多选
 - 图标图片：通过通用 Wiki 图片上传维护当前图标和历史上传记录
+- Data Tools 的 Items CSV 导入可为物品写入静态图标路径 `/pokopia/items/{image_file_name}`；静态图标展示 URL 为 `https://pokesprite.tootaio.com/pokopia/items/{image_file_name}`，用户后续仍可在编辑页切换为社区上传图片
 - 翻译
 - 排序
 

@@ -616,6 +616,7 @@ const lifeCommentPreviewLimit = 2;
 const lifeReactionTypes = ['like', 'helpful', 'fun', 'thanks'] as const;
 const pokemonTypeIconIds = new Set(Array.from({ length: 19 }, (_value, index) => index + 1));
 const pokemonSpriteBaseUrl = 'https://pokesprite.tootaio.com';
+const itemStaticImagePathPrefix = '/pokopia/items/';
 const pokemonSpriteRequestTimeoutMs = 2500;
 const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
   { key: 'hp', label: 'HP' },
@@ -718,10 +719,17 @@ function sqlLiteral(value: string): string {
 
 function uploadedImageJson(pathExpression: string): string {
   return `
-    CASE WHEN ${pathExpression} <> '' THEN json_build_object(
-      'path', ${pathExpression},
-      'url', ${sqlLiteral(uploadPublicBaseUrl)} || ${pathExpression}
-    ) ELSE NULL END
+    CASE
+      WHEN ${pathExpression} LIKE ${sqlLiteral(`${itemStaticImagePathPrefix}%`)} THEN json_build_object(
+        'path', ${pathExpression},
+        'url', ${sqlLiteral(pokemonSpriteBaseUrl)} || ${pathExpression}
+      )
+      WHEN ${pathExpression} <> '' THEN json_build_object(
+        'path', ${pathExpression},
+        'url', ${sqlLiteral(uploadPublicBaseUrl)} || ${pathExpression}
+      )
+      ELSE NULL
+    END
   `;
 }
 
@@ -1037,6 +1045,11 @@ function cleanOptionalText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function isItemStaticImagePath(value: string): boolean {
+  const fileName = value.startsWith(itemStaticImagePathPrefix) ? value.slice(itemStaticImagePathPrefix.length) : '';
+  return Boolean(fileName) && !fileName.includes('/') && !fileName.includes('\\') && !fileName.includes('..') && /^[A-Za-z0-9._()-]+$/.test(fileName);
+}
+
 function cleanUploadImagePath(value: unknown, entityType: 'items' | 'habitats' | 'ancient-artifacts'): string {
   const imagePath = cleanOptionalText(value);
   if (imagePath === '') {
@@ -1052,6 +1065,9 @@ function cleanItemOrArtifactImagePath(value: unknown): string {
   const imagePath = cleanOptionalText(value);
   if (imagePath === '') {
     return '';
+  }
+  if (isItemStaticImagePath(imagePath)) {
+    return imagePath;
   }
   if (!isUploadImagePath(imagePath) || (!imagePath.startsWith('items/') && !imagePath.startsWith('ancient-artifacts/'))) {
     throw validationError('server.validation.imagePathInvalid');
@@ -7729,6 +7745,93 @@ const dataToolColumns = {
   ],
   discussionCommentLikes: ['comment_id', 'user_id', 'created_at']
 } as const;
+const itemsCsvColumns = [
+  'name',
+  'category',
+  'description',
+  'image_file_name',
+  'not_registered_in_collection',
+  'cannot_grow_again_today'
+] as const;
+const itemsCsvCategoryAliases = new Map<string, string>(
+  itemCategoryOptions.flatMap((option) => [
+    [option.key, option.key],
+    [option.labels.en.toLowerCase(), option.key],
+    [option.labels.en.toLowerCase().replaceAll(' ', '-'), option.key],
+    [option.labels.en.toLowerCase().replace(/\.$/, ''), option.key]
+  ])
+);
+
+itemsCsvCategoryAliases.set('misc.', 'misc');
+
+function normalizeItemsCsvCategory(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function itemsCsvCategoryKey(value: string): string {
+  const categoryKey = itemsCsvCategoryAliases.get(normalizeItemsCsvCategory(value));
+  if (!categoryKey) {
+    throw validationError('server.validation.dataToolItemsCsvInvalid');
+  }
+  return categoryKey;
+}
+
+function itemsCsvBoolean(row: CsvRow, fieldName: string): boolean {
+  const value = csvText(row, fieldName).toLowerCase();
+  if (value === '' || value === 'false' || value === '0' || value === 'no') {
+    return false;
+  }
+  if (value === 'true' || value === '1' || value === 'yes') {
+    return true;
+  }
+  throw validationError('server.validation.dataToolItemsCsvInvalid');
+}
+
+function appendItemsCsvNote(details: string, note: string): string {
+  return details ? `${details}\n${note}` : note;
+}
+
+function itemsCsvDetails(row: CsvRow): string {
+  let details = csvText(row, 'description');
+  if (itemsCsvBoolean(row, 'not_registered_in_collection')) {
+    details = appendItemsCsvNote(details, 'Note: Not registered in collection');
+  }
+  if (itemsCsvBoolean(row, 'cannot_grow_again_today')) {
+    details = appendItemsCsvNote(details, 'Note: Cannot have Grow used on it again today');
+  }
+  return details;
+}
+
+function itemsCsvImagePath(value: string): string {
+  const fileName = value.trim();
+  const imagePath = `${itemStaticImagePathPrefix}${fileName}`;
+  if (!isItemStaticImagePath(imagePath)) {
+    throw validationError('server.validation.dataToolItemsCsvInvalid');
+  }
+  return imagePath;
+}
+
+function cleanItemsCsvRows(value: unknown): CsvRow[] {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw validationError('server.validation.dataToolItemsCsvInvalid');
+  }
+
+  const rows = parseCsv(value, 'items.csv');
+  if (!rows.length || rows.some((row) => itemsCsvColumns.some((column) => !(column in row)))) {
+    throw validationError('server.validation.dataToolItemsCsvInvalid');
+  }
+
+  const names = new Set<string>();
+  for (const row of rows) {
+    const name = csvText(row, 'name');
+    if (!name || names.has(name)) {
+      throw validationError('server.validation.dataToolItemsCsvInvalid');
+    }
+    names.add(name);
+  }
+
+  return rows;
+}
 
 function isDataToolScope(value: unknown): value is DataToolScope {
   return typeof value === 'string' && dataToolScopes.includes(value as DataToolScope);
@@ -8195,6 +8298,50 @@ export async function importAdminData(payload: Record<string, unknown>): Promise
     await wipeDataToolScopes(client, bundle.scopes, false);
     await importDataToolsBundle(client, bundle);
   });
+  return getAdminDataToolsSummary();
+}
+
+export async function importAdminItemsCsv(payload: Record<string, unknown>, userId: number): Promise<{ scopes: DataToolScopeSummary[] }> {
+  const rows = cleanItemsCsvRows(payload.csv);
+  const names = rows.map((row) => csvText(row, 'name'));
+
+  await withTransaction(async (client) => {
+    const existing = await client.query<{ name: string }>('SELECT name FROM items WHERE name = ANY($1::text[])', [names]);
+    if (existing.rowCount && existing.rowCount > 0) {
+      throw validationError('server.validation.dataToolItemsCsvInvalid');
+    }
+
+    const firstSortOrder = await nextSortOrder(client, 'items');
+    for (const [index, row] of rows.entries()) {
+      const result = await client.query<{ id: number }>(
+        `
+          INSERT INTO items (
+            name,
+            details,
+            category_key,
+            image_path,
+            sort_order,
+            created_by_user_id,
+            updated_by_user_id
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $6)
+          RETURNING id
+        `,
+        [
+          csvText(row, 'name'),
+          itemsCsvDetails(row),
+          itemsCsvCategoryKey(csvText(row, 'category')),
+          itemsCsvImagePath(csvText(row, 'image_file_name')),
+          firstSortOrder + index * 10,
+          userId
+        ]
+      );
+      await recordEditLog(client, 'items', result.rows[0].id, 'create', userId);
+    }
+
+    await resetIdentity(client, 'items');
+  });
+
   return getAdminDataToolsSummary();
 }
 

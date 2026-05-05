@@ -316,15 +316,22 @@ onMounted(() => {
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
     <form v-if="!loading && options" id="item-edit-form" class="modal-edit-form" @submit.prevent="saveItem">
-      <TranslationFields
-        id-prefix="item-name"
-        v-model:base-value="itemForm.name"
-        v-model:translations="itemForm.translations"
-        field="name"
-        :label="t('common.name')"
-        :languages="languages"
-        required
-      />
+      <div class="item-edit-row item-edit-row--name-price">
+        <TranslationFields
+          id-prefix="item-name"
+          v-model:base-value="itemForm.name"
+          v-model:translations="itemForm.translations"
+          field="name"
+          :label="t('common.name')"
+          :languages="languages"
+          required
+        />
+
+        <div class="field">
+          <label for="item-base-price">{{ t('pages.items.basePrice') }}</label>
+          <input id="item-base-price" v-model="itemForm.basePrice" type="number" min="0" step="1" inputmode="numeric" />
+        </div>
+      </div>
 
       <TranslationFields
         id-prefix="item-details"
@@ -352,34 +359,31 @@ onMounted(() => {
         @error="message = $event"
       />
 
-      <div class="field">
-        <label for="item-base-price">{{ t('pages.items.basePrice') }}</label>
-        <input id="item-base-price" v-model="itemForm.basePrice" type="number" min="0" step="1" inputmode="numeric" />
-      </div>
+      <div class="item-edit-row item-edit-row--category-usage">
+        <div class="field">
+          <label for="item-category">{{ t('pages.items.category') }}</label>
+          <TagsSelect
+            id="item-category"
+            v-model="itemForm.categoryId"
+            :options="options.itemCategories"
+            :multiple="false"
+            :placeholder="t('common.select')"
+            :search-placeholder="t('pages.items.searchCategory')"
+          />
+        </div>
 
-      <div class="field">
-        <label for="item-category">{{ t('pages.items.category') }}</label>
-        <TagsSelect
-          id="item-category"
-          v-model="itemForm.categoryId"
-          :options="options.itemCategories"
-          :multiple="false"
-          :placeholder="t('common.select')"
-          :search-placeholder="t('pages.items.searchCategory')"
-        />
-      </div>
-
-      <div class="field">
-        <label for="item-usage">{{ t('pages.items.usage') }}</label>
-        <TagsSelect
-          id="item-usage"
-          v-model="itemForm.usageId"
-          :options="options.itemUsages"
-          :multiple="false"
-          clearable
-          :placeholder="t('common.none')"
-          :search-placeholder="t('pages.items.searchUsage')"
-        />
+        <div class="field">
+          <label for="item-usage">{{ t('pages.items.usage') }}</label>
+          <TagsSelect
+            id="item-usage"
+            v-model="itemForm.usageId"
+            :options="options.itemUsages"
+            :multiple="false"
+            clearable
+            :placeholder="t('common.none')"
+            :search-placeholder="t('pages.items.searchUsage')"
+          />
+        </div>
       </div>
 
       <div class="check-row">
@@ -436,3 +440,30 @@ onMounted(() => {
     </template>
   </Modal>
 </template>
+
+<style scoped>
+.item-edit-row {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+.item-edit-row--name-price {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+}
+
+.item-edit-row--category-usage {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.item-edit-row > * {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .item-edit-row--name-price,
+  .item-edit-row--category-usage {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

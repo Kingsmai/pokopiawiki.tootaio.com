@@ -1,3 +1,7 @@
+<script lang="ts">
+let openModalCount = 0;
+</script>
+
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
 import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue';
@@ -54,11 +58,15 @@ const bodyFallbackSelector = [
 ].join(',');
 
 function lockPage() {
+  openModalCount += 1;
   document.body.classList.add('lock-scroll');
 }
 
 function unlockPage() {
-  document.body.classList.remove('lock-scroll');
+  openModalCount = Math.max(0, openModalCount - 1);
+  if (openModalCount === 0) {
+    document.body.classList.remove('lock-scroll');
+  }
 }
 
 function restoreFocus() {

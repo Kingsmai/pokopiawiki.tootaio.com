@@ -214,9 +214,9 @@
 - Items 与 Recipes 存在依赖关系；选择 Items 进行导出、导入或 Wipe 时，系统必须自动同时纳入 Recipes，前端确认内容也必须显示 Recipes。
 - Wipe 行为：
   - 删除所选范围的主数据、关联数据、实体翻译、编辑历史、图片上传记录和实体讨论评论。
-  - Wipe Pokemon 会删除 Pokemon 及其属性 / 特长 / 喜欢的东西 / 掉落关联，并移除栖息地中的 Pokemon 出现配置，但不删除栖息地本身。
+  - Wipe Pokemon 会删除 Pokemon 及其属性 / 特长 / 喜欢的东西 / 掉落关联 / Trading 观察，并移除栖息地中的 Pokemon 出现配置，但不删除栖息地本身。
   - Wipe Habitats 会删除栖息地、栖息地配方项和 Pokemon 出现配置，但不删除 Pokemon、Items 或 Maps。
-  - Wipe Items 会先删除 Recipes，再删除物品、物品入手方式 / 喜欢的东西关联、栖息地配方项和 Pokemon 掉落关联。
+  - Wipe Items 会先删除 Recipes，再删除物品、物品入手方式 / 喜欢的东西关联、栖息地配方项、Pokemon 掉落关联和 Trading 观察。
   - Wipe Ancient Artifacts 会清空物品上的 Ancient Artifact 分类并删除对应 Ancient Artifact 讨论；物品本身仍保留在 Items / Event Items 中。
   - Wipe Recipes 会删除材料单、材料项和入手方式关联，但不删除 Items。
   - Wipe Daily CheckList 会删除清单任务和任务翻译 / 编辑历史。
@@ -225,7 +225,7 @@
   - 导出为版本化 JSON bundle，包含 `version`、`exportedAt`、`scopes` 和对应范围数据。
   - JSON bundle 用于系统导入，不作为前台展示内容。
   - 导出包含所选范围的主数据、关联数据、实体翻译、编辑历史、图片上传记录和实体讨论评论。
-  - 导出必须包含对应 Wipe 会移除的跨范围关联行，例如 Pokemon 出现配置、Pokemon 掉落和栖息地配方项；导入这些关联时，引用的另一侧实体必须已存在。
+  - 导出必须包含对应 Wipe 会移除的跨范围关联行，例如 Pokemon 出现配置、Pokemon 掉落、Trading 观察和栖息地配方项；导入这些关联时，引用的另一侧实体必须已存在。
   - JSON 不包含上传文件本身；`backend_uploads` volume 需要单独备份。
 - Import 行为：
   - 当前只支持 Replace selected scopes：导入前先 Wipe bundle 中包含的范围，再在同一事务中还原 bundle 数据。
@@ -440,8 +440,10 @@
 
 - 名称
 - 是否有掉落物：`has_item_drop`
+- 是否支持 Trading：`has_trading`
 - 已移除 `subcategory` 字段。
 - 当特长允许掉落物时，Pokemon 编辑中可为该 Pokemon + 特长配置一个掉落物品。
+- 当 Pokemon 选择了至少一个支持 Trading 的特长时，Pokemon 详情页可直接维护该 Pokemon 对物品的 Trading 偏好观察。
 
 ### Pokemon Types
 
@@ -504,6 +506,10 @@ Pokemon 可配置：
 - 特长：可多选，最多 2 个
 - 特长掉落物品：按 Pokemon + 特长配置，单选物品
 - 喜欢的东西：可多选，最多 6 个
+- Trading：由所选特长是否支持 Trading 决定；当至少一个所选特长支持 Trading 时，可维护该 Pokemon 对物品的 Trading 偏好观察，分为 Likes 与 Neutral
+  - Likes：该 Pokemon 喜欢交易该物品，交易价格触发 1.5x 加成；用于物品隐藏标签推断的正向证据
+  - Neutral：该 Pokemon 对交易该物品无加成；用于物品隐藏标签推断的硬排除证据
+  - 每个物品在同一个 Pokemon 的 Trading 列表中只能出现一次，只能属于 Likes 或 Neutral 其中一组
 - 六维：
   - HP
   - Attack
@@ -551,6 +557,7 @@ Pokemon 编辑表单使用标签页组织字段：
   - 第二行：喜欢的环境、特长
   - 第三行：喜欢的东西
   - 特长掉落物品随已选择且支持掉落物的特长显示
+  - 编辑表单不直接维护 Trading 观察；Trading 由详情页的 Manage Trading 入口维护
   - Pokemon 图片选择区
 - Advance 标签页：
   - 第一行：Genus
@@ -584,7 +591,9 @@ Pokemon 详情页展示：
   - 右侧：六维 Stats；图片或默认占位符展示在 Stats 右侧
 - 六维使用 ProgressBar 展示，最大值按 150 计算。
 - 特长
-- 特长掉落物品：展示掉落物品图标；未配置图标时显示默认物品标记占位符
+- 特长掉落物品：当该 Pokemon 拥有支持掉落物的已选特长时默认展示；已配置时展示掉落物品图标，未配置时展示空状态
+- Trading：当该 Pokemon 拥有支持 Trading 的已选特长时默认展示；分 Likes 与 Neutral 两组展示物品，Likes 表示交易价格 1.5x，Neutral 表示无加成，未配置观察时展示空状态
+- Trading 可在详情页通过 Manage Trading Modal 维护；Modal 左侧顶部为同一行搜索框和分类下拉筛选，下面提供 Likes / Neutral 默认加入目标切换；从左侧选择物品会加入当前默认目标组，右侧按 Likes / Neutral 分组展示已选物品，并可切换分组或移除；列表区域高度稳定，过滤结果减少时 Modal 不应抖动
 - 喜欢的环境
 - 喜欢的东西
 - 相关 Pokemon：与关联喜欢的东西的物品在桌面端左右并排展示；按相同喜欢的环境优先，其次按共同喜欢的东西数量从多到少排序；支持按喜欢的环境筛选，默认筛选当前 Pokemon 的喜欢的环境，也可切换到其他喜欢的环境或全部；每个筛选视图最多展示 6 个；每项左侧展示 Pokemon 图片或默认 Poké Ball 占位符，原列表项信息布局保持不变，第一行左侧展示名称，右侧展示特长和喜欢的环境，第二行展示喜欢的东西，并高亮共同喜欢的东西
@@ -670,6 +679,13 @@ Items 与 Event Items 使用相同数据模型：
 - 入手方式
 - 客制化
 - 标签
+- Possible Tags：根据所有拥有支持 Trading 特长的 Pokemon Trading 观察推断该物品可能包含的隐藏标签
+  - 每个 Pokemon 的“喜欢的东西”视为该 Pokemon 已知的 6 个隐藏标签集合；不完整数据仍参与展示，但不会强行补足缺失标签
+  - 若物品被 Pokemon 标记为 Likes，则该物品至少包含该 Pokemon 标签集合中的一个标签，属于 OR 正向证据
+  - 若物品被 Pokemon 标记为 Neutral，则该物品不包含该 Pokemon 标签集合中的任何标签，属于硬排除证据；Neutral 排除优先于 Likes 正向证据
+  - 推断流程必须确定性执行：从所有“喜欢的东西 / 标签”开始，先移除所有 Neutral Pokemon 提供的标签，再用 Likes Pokemon 的标签集合收窄候选；多个 Likes 观察的共同候选归为 Highly likely，其余正向候选归为 Possible，被排除或被约束移出的标签归为 Excluded
+  - 没有可用 Likes 观察时，未被 Neutral 排除的标签保持 Possible；没有任何观察时，所有标签保持 Possible
+  - Possible Tags 区块必须展示 Likes 与 Neutral 证据来源，包含贡献 Pokemon 及其已知标签，不展示内部字段、调试信息或推断中间状态
 - 关联材料单：展示结果物品图标和材料物品图标；未配置图标时显示默认物品标记占位符
 - 作为材料出现的材料单：展示结果物品图标和材料物品图标；未配置图标时显示默认物品标记占位符
 - 相关栖息地：展示栖息地图片或默认栖息地标记占位符，并展示配方材料物品图标

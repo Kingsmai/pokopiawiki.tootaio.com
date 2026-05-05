@@ -27,6 +27,7 @@ import {
   type PokemonImage,
   type PokemonPayload,
   type PokemonStats,
+  type TradingPreference,
   type TranslationMap
 } from '../services/api';
 
@@ -95,6 +96,7 @@ const pokemonForm = ref({
   skillIds: [] as string[],
   favoriteThingIds: [] as string[],
   skillItemDrops: [] as SkillItemDropForm[],
+  tradingItems: [] as Array<{ itemId: string; preference: TradingPreference }>,
   imagePath: ''
 });
 
@@ -145,6 +147,7 @@ const selectedUploadImage = computed(() => (selectedPokemonImage.value?.source =
 const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
 const canFetchPokemon = computed(() => currentUser.value?.permissions.includes('pokemon.fetch') === true);
 const canUploadImage = computed(() => currentUser.value?.permissions.includes('pokemon.upload') === true);
+const hasTradingSkill = computed(() => pokemonForm.value.skillIds.some((skillId) => skillSupportsTrading(skillId)));
 
 function toIds(values: string[]): number[] {
   return values.map(Number).filter((item) => Number.isInteger(item) && item > 0);
@@ -223,6 +226,17 @@ function skillName(skillId: string) {
 
 function skillSupportsItemDrop(skillId: string) {
   return options.value?.skills.some((skill) => String(skill.id) === skillId && skill.hasItemDrop) === true;
+}
+
+function skillSupportsTrading(skillId: string) {
+  return options.value?.skills.some((skill) => String(skill.id) === skillId && skill.hasTrading) === true;
+}
+
+function syncSkillFeatures() {
+  syncSkillItemDrops();
+  if (!hasTradingSkill.value) {
+    pokemonForm.value.tradingItems = [];
+  }
 }
 
 function skillDropLabel(skillId: string) {
@@ -334,12 +348,16 @@ async function loadEditor() {
           skillId: String(skill.id),
           itemId: skill.itemDrop ? String(skill.itemDrop.id) : ''
         })),
+        tradingItems: pokemon.tradingItems.map((item) => ({
+          itemId: String(item.itemId),
+          preference: item.preference
+        })),
         imagePath: pokemon.image?.path ?? ''
       };
       currentPokemonImage.value = pokemon.image;
       imageOptions.value = pokemon.image ? [pokemon.image] : [];
       imageHistory.value = pokemon.imageHistory;
-      syncSkillItemDrops();
+      syncSkillFeatures();
     } else {
       pokemonForm.value.isEventItem = isEventCreate.value;
     }
@@ -720,6 +738,11 @@ async function savePokemon() {
       skillItemDrops: selectedSkillDropRows.value
         .map((row) => ({ skillId: Number(row.skillId), itemId: Number(row.itemId) }))
         .filter((row) => Number.isInteger(row.skillId) && row.skillId > 0 && Number.isInteger(row.itemId) && row.itemId > 0),
+      tradingItems: hasTradingSkill.value
+        ? pokemonForm.value.tradingItems
+            .map((item) => ({ itemId: Number(item.itemId), preference: item.preference }))
+            .filter((item) => Number.isInteger(item.itemId) && item.itemId > 0)
+        : [],
       imagePath: pokemonForm.value.imagePath
     };
     const saved = isEditing.value ? await api.updatePokemon(routeId.value, payload) : await api.createPokemon(payload);
@@ -740,7 +763,7 @@ onBeforeUnmount(() => {
   removeFetchPositionListeners();
 });
 
-watch(() => pokemonForm.value.skillIds.slice(), syncSkillItemDrops);
+watch(() => pokemonForm.value.skillIds.slice(), syncSkillFeatures);
 watch(fetchIdentifier, refreshFetchOptions);
 watch(locale, () => {
   resetFetchOptionsCache();
@@ -749,7 +772,13 @@ watch(locale, () => {
 </script>
 
 <template>
-  <Modal :title="pageTitle" :subtitle="editSubtitle" :close-label="t('common.close')" size="wide" @close="closeEditor">
+  <Modal
+    :title="pageTitle"
+    :subtitle="editSubtitle"
+    :close-label="t('common.close')"
+    size="wide"
+    @close="closeEditor"
+  >
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
     <form v-if="!loading && options" id="pokemon-edit-form" class="modal-edit-form modal-edit-form--tabbed pokemon-edit-form" @submit.prevent="savePokemon">
@@ -1068,4 +1097,5 @@ watch(locale, () => {
       </button>
     </template>
   </Modal>
+
 </template>

@@ -63,6 +63,15 @@ const basePriceDisplay = computed(() => {
   const price = item.value?.basePrice;
   return price === null || price === undefined ? t('common.none') : new Intl.NumberFormat(locale.value).format(price);
 });
+const possibleTagSections = computed(() => [
+  { key: 'highlyLikely', title: t('pages.items.highlyLikelyTags'), tags: item.value?.possibleTags?.highlyLikely ?? [] },
+  { key: 'possible', title: t('pages.items.possibleTagsPossible'), tags: item.value?.possibleTags?.possible ?? [] },
+  { key: 'excluded', title: t('pages.items.excludedTags'), tags: item.value?.possibleTags?.excluded ?? [] }
+]);
+const possibleTagEvidenceSections = computed(() => [
+  { key: 'likes', title: t('pages.pokemon.tradingLikes'), rows: item.value?.possibleTags?.evidence.likes ?? [] },
+  { key: 'neutral', title: t('pages.pokemon.tradingNeutral'), rows: item.value?.possibleTags?.evidence.neutral ?? [] }
+]);
 
 const customization = computed(() => {
   if (!item.value) {
@@ -268,6 +277,39 @@ watch(
             </section>
           </div>
         </div>
+
+        <DetailSection :title="t('pages.items.possibleTags')">
+          <div class="possible-tags-grid">
+            <div v-for="section in possibleTagSections" :key="section.key" class="possible-tags-group">
+              <h3 class="section-subtitle">{{ section.title }}</h3>
+              <EntityChips v-if="section.tags.length" :items="section.tags" />
+              <p v-else class="meta-line">{{ t('common.none') }}</p>
+            </div>
+          </div>
+
+          <div class="possible-tags-evidence">
+            <h3 class="section-subtitle">{{ t('pages.items.possibleTagsEvidence') }}</h3>
+            <div class="possible-tags-evidence__grid">
+              <div v-for="section in possibleTagEvidenceSections" :key="section.key" class="possible-tags-evidence__group">
+                <h4>{{ section.title }}</h4>
+                <ul v-if="section.rows.length" class="row-list possible-tags-evidence__list">
+                  <li v-for="entry in section.rows" :key="`${section.key}-${entry.pokemon.id}`">
+                    <RouterLink class="related-entity-link related-entity-link--compact" :to="`/pokemon/${entry.pokemon.id}`">
+                      <span class="related-entity-media related-entity-media--inline related-entity-media--pokemon" aria-hidden="true">
+                        <img v-if="entry.pokemon.image" :src="entry.pokemon.image.url" alt="" loading="lazy" />
+                        <PokeBallMark v-else size="22px" />
+                      </span>
+                      <span>#{{ entry.pokemon.displayId }} {{ entry.pokemon.name }}</span>
+                    </RouterLink>
+                    <EntityChips v-if="entry.tags.length" :items="entry.tags" />
+                    <p v-else class="meta-line">{{ t('common.none') }}</p>
+                  </li>
+                </ul>
+                <p v-else class="meta-line">{{ t('common.none') }}</p>
+              </div>
+            </div>
+          </div>
+        </DetailSection>
 
         <div class="detail-grid">
           <DetailSection :title="t('pages.items.recipeInfo')">

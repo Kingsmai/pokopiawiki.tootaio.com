@@ -48,7 +48,10 @@ export interface GameVersion extends NamedEntity {
 
 export interface Skill extends NamedEntity {
   hasItemDrop: boolean;
+  hasTrading: boolean;
 }
+
+export type TradingPreference = 'like' | 'neutral';
 
 export interface PokemonStats {
   hp: number;
@@ -174,6 +177,12 @@ export interface Pokemon extends EditInfo {
   favorite_things: NamedEntity[];
 }
 
+export interface PokemonTradingItem extends NamedEntity {
+  itemId: number;
+  preference: TradingPreference;
+  image?: EntityImage | null;
+}
+
 export interface RelatedPokemon {
   id: number;
   displayId: number;
@@ -188,6 +197,7 @@ export interface RelatedPokemon {
 export interface PokemonDetail extends Pokemon {
   skills: Array<Skill & { itemDrop: (NamedEntity & { image?: EntityImage | null }) | null }>;
   favoriteThingItems: Array<NamedEntity & { image?: EntityImage | null; category: NamedEntity; tags: NamedEntity[] }>;
+  tradingItems: PokemonTradingItem[];
   relatedPokemon: RelatedPokemon[];
   editHistory: EditHistoryEntry[];
   imageHistory: EntityImageUpload[];
@@ -296,12 +306,29 @@ export interface ItemDetail extends Item {
   recipe: RecipeDetail | null;
   relatedRecipes: RecipeUsage[];
   relatedHabitats: HabitatUsage[];
+  possibleTags: ItemPossibleTags;
   editHistory: EditHistoryEntry[];
   imageHistory: EntityImageUpload[];
   droppedByPokemon: Array<{
     pokemon: NamedEntity & { displayId: number; isEventItem: boolean; image?: PokemonImage | null };
     skill: NamedEntity;
   }>;
+}
+
+export interface ItemPossibleTags {
+  highlyLikely: NamedEntity[];
+  possible: NamedEntity[];
+  excluded: NamedEntity[];
+  evidence: {
+    likes: ItemPossibleTagEvidence[];
+    neutral: ItemPossibleTagEvidence[];
+  };
+}
+
+export interface ItemPossibleTagEvidence {
+  pokemon: NamedEntity & { displayId: number; isEventItem: boolean; image?: PokemonImage | null };
+  preference: TradingPreference;
+  tags: NamedEntity[];
 }
 
 export interface Recipe extends EditInfo {
@@ -761,6 +788,7 @@ export interface PokemonPayload {
   skillIds: number[];
   favoriteThingIds: number[];
   skillItemDrops: Array<{ skillId: number; itemId: number }>;
+  tradingItems: Array<{ itemId: number; preference: TradingPreference }>;
   imagePath: string;
 }
 
@@ -1352,7 +1380,7 @@ export const api = {
   config: (type: ConfigType) => getJson<Array<Skill | LifeCategory | GameVersion | NamedEntity>>(`/api/admin/config/${type}`),
   createConfig: (
     type: ConfigType,
-    payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean; isDefault?: boolean; isRateable?: boolean; changeLog?: string }
+    payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean; hasTrading?: boolean; isDefault?: boolean; isRateable?: boolean; changeLog?: string }
   ) =>
     sendJson<Skill | LifeCategory | GameVersion | NamedEntity>(`/api/admin/config/${type}`, 'POST', payload),
   reorderConfig: (type: ConfigType, ids: number[]) =>
@@ -1360,7 +1388,7 @@ export const api = {
   updateConfig: (
     type: ConfigType,
     id: number,
-    payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean; isDefault?: boolean; isRateable?: boolean; changeLog?: string }
+    payload: { name: string; translations?: TranslationMap; hasItemDrop?: boolean; hasTrading?: boolean; isDefault?: boolean; isRateable?: boolean; changeLog?: string }
   ) =>
     sendJson<Skill | LifeCategory | GameVersion | NamedEntity>(`/api/admin/config/${type}/${id}`, 'PUT', payload),
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),

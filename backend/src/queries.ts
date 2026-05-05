@@ -98,6 +98,7 @@ type ConfigDefinition = {
   table: string;
   entityType: EntityType;
   hasItemDrop?: boolean;
+  hasTrading?: boolean;
   hasDefault?: boolean;
   hasRateable?: boolean;
   hasChangeLog?: boolean;
@@ -150,6 +151,13 @@ type PokemonImageOptionsResult = {
   images: PokemonImage[];
 };
 
+type TradingPreference = 'like' | 'neutral';
+
+type PokemonTradingItemPayload = {
+  itemId: number;
+  preference: TradingPreference;
+};
+
 type PokemonPayload = {
   dataId: number | null;
   dataIdentifier: string;
@@ -167,6 +175,7 @@ type PokemonPayload = {
   skillIds: number[];
   favoriteThingIds: number[];
   skillItemDrops: SkillItemDrop[];
+  tradingItems: PokemonTradingItemPayload[];
   image: PokemonImage | null;
 };
 
@@ -540,6 +549,7 @@ type PokemonChangeSource = {
   environment: { name: string };
   skills: Array<{ name: string; itemDrop?: { name: string } | null }>;
   favorite_things: Array<{ name: string }>;
+  tradingItems: Array<{ name: string; preference: TradingPreference }>;
 } & TranslationChangeSource;
 type ItemChangeSource = {
   name: string;
@@ -599,6 +609,7 @@ type DailyChecklistChangeSource = {
 type ConfigChangeSource = {
   name: string;
   hasItemDrop?: boolean;
+  hasTrading?: boolean;
   isDefault?: boolean;
   isRateable?: boolean;
   changeLog?: string;
@@ -663,7 +674,7 @@ const ancientArtifactCategoryOptions = [
 
 const configDefinitions: Record<ConfigType, ConfigDefinition> = {
   'pokemon-types': { table: 'pokemon_types', entityType: 'pokemon-types' },
-  skills: { table: 'skills', entityType: 'skills', hasItemDrop: true },
+  skills: { table: 'skills', entityType: 'skills', hasItemDrop: true, hasTrading: true },
   environments: { table: 'environments', entityType: 'environments' },
   'favorite-things': { table: 'favorite_things', entityType: 'favorite-things' },
   'acquisition-methods': { table: 'acquisition_methods', entityType: 'acquisition-methods' },
@@ -962,9 +973,11 @@ function gameVersionOptions(locale: string): Promise<Array<{ id: number; name: s
   return query(`SELECT gv.id, ${name} AS name, gv.change_log AS "changeLog" FROM game_versions gv ORDER BY ${orderByEntity('gv')}`);
 }
 
-function skillOptions(locale: string): Promise<Array<{ id: number; name: string; hasItemDrop: boolean }>> {
+function skillOptions(locale: string): Promise<Array<{ id: number; name: string; hasItemDrop: boolean; hasTrading: boolean }>> {
   const name = localizedName('skills', 's', locale);
-  return query(`SELECT s.id, ${name} AS name, s.has_item_drop AS "hasItemDrop" FROM skills s ORDER BY ${orderByEntity('s')}`);
+  return query(
+    `SELECT s.id, ${name} AS name, s.has_item_drop AS "hasItemDrop", s.has_trading AS "hasTrading" FROM skills s ORDER BY ${orderByEntity('s')}`
+  );
 }
 
 function auditSelect(entityAlias: string, createdAlias = 'created_user', updatedAlias = 'updated_user'): string {
@@ -999,6 +1012,9 @@ function configSelect(definition: ConfigDefinition, locale: string): string {
   const columns = [`c.id`, `${name} AS name`, `c.name AS "baseName"`, `${translations} AS translations`];
   if (definition.hasItemDrop) {
     columns.push(`c.has_item_drop AS "hasItemDrop"`);
+  }
+  if (definition.hasTrading) {
+    columns.push(`c.has_trading AS "hasTrading"`);
   }
   if (definition.hasDefault) {
     columns.push(`c.is_default AS "isDefault"`);
@@ -1944,7 +1960,7 @@ async function ensurePokemonTypeCatalog(
       const changes = configEditChanges(
         { table: 'pokemon_types', entityType: 'pokemon-types' },
         existing.rows[0],
-        { name, translations, hasItemDrop: false, isDefault: false, isRateable: false, changeLog: '' }
+        { name, translations, hasItemDrop: false, hasTrading: false, isDefault: false, isRateable: false, changeLog: '' }
       );
       if (changes.length) {
         await client.query(
@@ -2239,6 +2255,19 @@ function namesFromIds(ids: number[], namesById: Map<number, string>): string {
   return names.length ? names.join(' / ') : 'None';
 }
 
+function namedTradingListValue(
+  rows: Array<{ name: string; preference: TradingPreference }> | null | undefined
+): string {
+  if (!rows?.length) {
+    return 'None';
+  }
+
+  return rows
+    .map((row) => `${row.preference === 'like' ? 'Likes' : 'Neutral'}: ${row.name}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join(' / ');
+}
+
 async function quantityPayloadValue(client: DbClient, rows: IdQuantity[]): Promise<string> {
   const namesById = await entityNameMap(client, 'items', rows.map((row) => row.itemId));
   return quantityListValue(
@@ -2263,6 +2292,15 @@ async function pokemonEditChanges(
   const favoriteThingNames = await entityNameMap(client, 'favorite_things', after.favoriteThingIds);
   const dropSkillNames = await entityNameMap(client, 'skills', after.skillItemDrops.map((drop) => drop.skillId));
   const dropItemNames = await entityNameMap(client, 'items', after.skillItemDrops.map((drop) => drop.itemId));
+  const tradingItemNames = await entityNameMap(client, 'items', after.tradingItems.map((item) => item.itemId));
+  const afterTradingItems = after.tradingItems
+    .map((item) => {
+      const itemName = tradingItemNames.get(item.itemId);
+      return itemName ? `${item.preference === 'like' ? 'Likes' : 'Neutral'}: ${itemName}` : null;
+    })
+    .filter((value): value is string => value !== null)
+    .sort((a, b) => a.localeCompare(b));
+  const afterTradingItemsValue = afterTradingItems.length ? afterTradingItems.join(' / ') : 'None';
   const afterDrops = after.skillItemDrops
     .map((drop) => {
       const skillName = dropSkillNames.get(drop.skillId);
@@ -2287,6 +2325,7 @@ async function pokemonEditChanges(
   pushChange(changes, 'Ideal Habitat', before.environment.name, environmentNames.get(after.environmentId));
   pushChange(changes, 'Specialities', namedListValue(before.skills), namesFromIds(after.skillIds, skillNames));
   pushChange(changes, 'Favourites', namedListValue(before.favorite_things), namesFromIds(after.favoriteThingIds, favoriteThingNames));
+  pushChange(changes, 'Trading items', namedTradingListValue(before.tradingItems), afterTradingItemsValue);
   pushChange(changes, 'Speciality drops', skillDropListValue(before.skills), afterDrops);
 
   return changes;
@@ -2328,6 +2367,91 @@ async function itemEditChanges(
   pushChange(changes, 'Tags', namedListValue(before.tags), namesFromIds(after.tagIds, tagNames));
 
   return changes;
+}
+
+type ItemPossibleTagEntity = {
+  id: number;
+  name: string;
+};
+
+type ItemPossibleTagPokemon = {
+  id: number;
+  displayId: number;
+  name: string;
+  isEventItem: boolean;
+  image: EntityImageValue | null;
+};
+
+type ItemPossibleTagObservation = {
+  pokemon: ItemPossibleTagPokemon;
+  preference: TradingPreference;
+  tags: ItemPossibleTagEntity[];
+};
+
+type ItemPossibleTags = {
+  highlyLikely: ItemPossibleTagEntity[];
+  possible: ItemPossibleTagEntity[];
+  excluded: ItemPossibleTagEntity[];
+  evidence: {
+    likes: ItemPossibleTagObservation[];
+    neutral: ItemPossibleTagObservation[];
+  };
+};
+
+function inferItemPossibleTags(
+  allTags: ItemPossibleTagEntity[],
+  observations: ItemPossibleTagObservation[]
+): ItemPossibleTags {
+  const allTagIds = new Set(allTags.map((tag) => tag.id));
+  const neutralExcludedTagIds = new Set<number>();
+  const filteredLikeSets: number[][] = [];
+  const likes: ItemPossibleTagObservation[] = [];
+  const neutral: ItemPossibleTagObservation[] = [];
+
+  for (const observation of observations) {
+    const filteredTagIds = [...new Set(observation.tags.map((tag) => tag.id).filter((id) => allTagIds.has(id)))];
+    const filteredObservation = {
+      ...observation,
+      tags: observation.tags.filter((tag) => allTagIds.has(tag.id))
+    };
+
+    if (observation.preference === 'neutral') {
+      neutral.push(filteredObservation);
+      filteredTagIds.forEach((id) => neutralExcludedTagIds.add(id));
+      continue;
+    }
+
+    likes.push(filteredObservation);
+    if (filteredTagIds.length > 0) {
+      filteredLikeSets.push(filteredTagIds);
+    }
+  }
+
+  const allowedTagIds = allTags.map((tag) => tag.id).filter((id) => !neutralExcludedTagIds.has(id));
+  const conflicts = likes.some((observation) => observation.tags.length > 0 && observation.tags.every((tag) => neutralExcludedTagIds.has(tag.id)));
+  const unionLikeIds = new Set(filteredLikeSets.flat());
+  const intersectionLikeIds =
+    filteredLikeSets.length >= 2
+      ? filteredLikeSets.reduce((result, current) => result.filter((id) => current.includes(id)))
+      : [];
+  const candidateTagIds = conflicts
+    ? []
+    : filteredLikeSets.length > 0
+      ? allowedTagIds.filter((id) => unionLikeIds.has(id))
+      : allowedTagIds;
+  const highlyLikelyTagIds = filteredLikeSets.length >= 2
+    ? intersectionLikeIds.filter((id) => candidateTagIds.includes(id))
+    : [];
+  const possibleTagIds = candidateTagIds.filter((id) => !highlyLikelyTagIds.includes(id));
+  const excludedTagIds = allTags.map((tag) => tag.id).filter((id) => !candidateTagIds.includes(id));
+
+  const tagsById = new Map(allTags.map((tag) => [tag.id, tag]));
+  return {
+    highlyLikely: highlyLikelyTagIds.map((id) => tagsById.get(id)).filter((tag): tag is ItemPossibleTagEntity => Boolean(tag)),
+    possible: possibleTagIds.map((id) => tagsById.get(id)).filter((tag): tag is ItemPossibleTagEntity => Boolean(tag)),
+    excluded: excludedTagIds.map((id) => tagsById.get(id)).filter((tag): tag is ItemPossibleTagEntity => Boolean(tag)),
+    evidence: { likes, neutral }
+  };
 }
 
 async function ancientArtifactEditChanges(
@@ -2405,6 +2529,7 @@ function configEditChanges(
     name: string;
     translations: TranslationInput;
     hasItemDrop: boolean;
+    hasTrading: boolean;
     isDefault: boolean;
     isRateable: boolean;
     changeLog: string;
@@ -2415,6 +2540,9 @@ function configEditChanges(
   pushTranslationChanges(changes, before.translations, after.translations, ['name']);
   if (definition.hasItemDrop) {
     pushChange(changes, 'Has item drop', boolValue(Boolean(before.hasItemDrop)), boolValue(after.hasItemDrop));
+  }
+  if (definition.hasTrading) {
+    pushChange(changes, 'Has trading', boolValue(Boolean(before.hasTrading)), boolValue(after.hasTrading));
   }
   if (definition.hasDefault) {
     pushChange(changes, 'Default category', boolValue(Boolean(before.isDefault)), boolValue(after.isDefault));
@@ -2494,7 +2622,7 @@ function pokemonProjection(locale: string): string {
         WHERE ppt.pokemon_id = p.id
       ), '[]'::json) AS types,
       COALESCE((
-        SELECT json_agg(json_build_object('id', s.id, 'name', ${skillName}, 'hasItemDrop', s.has_item_drop) ORDER BY ${orderByEntity('s')})
+        SELECT json_agg(json_build_object('id', s.id, 'name', ${skillName}, 'hasItemDrop', s.has_item_drop, 'hasTrading', s.has_trading) ORDER BY ${orderByEntity('s')})
         FROM pokemon_skills ps
         JOIN skills s ON s.id = ps.skill_id
         WHERE ps.pokemon_id = p.id
@@ -5343,6 +5471,7 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
   const name = cleanName(payload.name);
   const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
+  const hasTrading = definition.hasTrading ? Boolean(payload.hasTrading) : false;
   const isDefault = definition.hasDefault ? Boolean(payload.isDefault) : false;
   const isRateable = definition.hasRateable ? Boolean(payload.isRateable) : false;
   const changeLog = definition.hasChangeLog ? cleanOptionalText(payload.changeLog) : '';
@@ -5360,6 +5489,10 @@ export async function createConfig(type: ConfigType, payload: Record<string, unk
     if (definition.hasItemDrop) {
       columns.push('has_item_drop');
       values.push(hasItemDrop);
+    }
+    if (definition.hasTrading) {
+      columns.push('has_trading');
+      values.push(hasTrading);
     }
     if (definition.hasDefault) {
       columns.push('is_default');
@@ -5419,6 +5552,7 @@ export async function updateConfig(
   const name = cleanName(payload.name);
   const translations = cleanTranslations(payload.translations, ['name']);
   const hasItemDrop = definition.hasItemDrop ? Boolean(payload.hasItemDrop) : false;
+  const hasTrading = definition.hasTrading ? Boolean(payload.hasTrading) : false;
   const isDefault = definition.hasDefault ? Boolean(payload.isDefault) : false;
   const isRateable = definition.hasRateable ? Boolean(payload.isRateable) : false;
   const changeLog = definition.hasChangeLog ? cleanOptionalText(payload.changeLog) : '';
@@ -5437,6 +5571,10 @@ export async function updateConfig(
     if (definition.hasItemDrop) {
       values.push(hasItemDrop);
       assignments.push(`has_item_drop = $${values.length}`);
+    }
+    if (definition.hasTrading) {
+      values.push(hasTrading);
+      assignments.push(`has_trading = $${values.length}`);
     }
     if (definition.hasDefault) {
       values.push(isDefault);
@@ -5469,10 +5607,31 @@ export async function updateConfig(
     if (definition.hasItemDrop && !hasItemDrop) {
       await client.query('DELETE FROM pokemon_skill_item_drops WHERE skill_id = $1', [id]);
     }
+    if (definition.hasTrading && !hasTrading) {
+      await client.query(
+        `
+          DELETE FROM pokemon_trading_items pti
+          WHERE EXISTS (
+            SELECT 1
+            FROM pokemon_skills ps
+            WHERE ps.pokemon_id = pti.pokemon_id
+              AND ps.skill_id = $1
+          )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pokemon_skills ps
+              JOIN skills s ON s.id = ps.skill_id
+              WHERE ps.pokemon_id = pti.pokemon_id
+                AND s.has_trading = true
+            )
+        `,
+        [id]
+      );
+    }
 
     await replaceEntityTranslations(client, definition.entityType, id, translations, ['name']);
     const changes = before
-      ? configEditChanges(definition, before as ConfigChangeSource, { name, translations, hasItemDrop, isDefault, isRateable, changeLog })
+      ? configEditChanges(definition, before as ConfigChangeSource, { name, translations, hasItemDrop, hasTrading, isDefault, isRateable, changeLog })
       : [];
     await recordEditLog(client, type, id, 'update', userId, changes);
     return true;
@@ -5600,8 +5759,9 @@ export async function getPokemon(id: number, locale = defaultLocale) {
   const relatedEnvironmentName = localizedName('environments', 'related_environment', locale);
   const relatedSkillName = localizedName('skills', 'related_skill', locale);
   const relatedFavoriteThingName = localizedName('favorite-things', 'related_favorite_thing', locale);
+  const tradingItemName = localizedName('items', 'trading_item', locale);
 
-  const [habitats, itemDrops, favoriteThingItems, relatedPokemon, editHistory, imageHistory] = await Promise.all([
+  const [habitats, itemDrops, favoriteThingItems, tradingItems, relatedPokemon, editHistory, imageHistory] = await Promise.all([
     query(
       `
         SELECT
@@ -5652,6 +5812,28 @@ export async function getPokemon(id: number, locale = defaultLocale) {
     ),
     query(
       `
+        SELECT
+          ti.item_id AS "itemId",
+          ti.preference,
+          trading_item.id,
+          ${tradingItemName} AS name,
+          ${uploadedImageJson('trading_item.image_path')} AS image
+        FROM pokemon_trading_items ti
+        JOIN items trading_item ON trading_item.id = ti.item_id
+        WHERE ti.pokemon_id = $1
+          AND EXISTS (
+            SELECT 1
+            FROM pokemon_skills ps
+            JOIN skills trading_skill ON trading_skill.id = ps.skill_id
+            WHERE ps.pokemon_id = ti.pokemon_id
+              AND trading_skill.has_trading = true
+          )
+        ORDER BY ti.preference DESC, ${orderByEntity('trading_item')}
+      `,
+      [id]
+    ),
+    query(
+      `
         WITH current_pokemon AS (
           SELECT p.id, p.environment_id
           FROM pokemon p
@@ -5690,7 +5872,8 @@ export async function getPokemon(id: number, locale = defaultLocale) {
               json_build_object(
                 'id', related_skill.id,
                 'name', ${relatedSkillName},
-                'hasItemDrop', related_skill.has_item_drop
+                'hasItemDrop', related_skill.has_item_drop,
+                'hasTrading', related_skill.has_trading
               )
               ORDER BY ${orderByEntity('related_skill')}
             )
@@ -5731,6 +5914,14 @@ export async function getPokemon(id: number, locale = defaultLocale) {
     return itemsBySkill;
   }, new Map<number, { id: number; name: string; image: EntityImageValue | null }>());
 
+  const tradingItemsByPreference = tradingItems.map((item) => ({
+    itemId: item.itemId,
+    preference: item.preference,
+    id: item.id,
+    name: item.name,
+    image: item.image
+  }));
+
   const skills = Array.isArray(pokemon.skills)
     ? pokemon.skills.map((skill: { id: number; name: string }) => ({
         ...skill,
@@ -5738,7 +5929,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
       }))
     : [];
 
-  return { ...pokemon, skills, habitats, favoriteThingItems, relatedPokemon, editHistory, imageHistory };
+  return { ...pokemon, skills, habitats, favoriteThingItems, tradingItems: tradingItemsByPreference, relatedPokemon, editHistory, imageHistory };
 }
 
 function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
@@ -5748,6 +5939,7 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   const favoriteThingIds = cleanIds(payload.favoriteThingIds);
   const selectedSkillIds = new Set(skillIds);
   const skillItemDrops = new Map<string, SkillItemDrop>();
+  const tradingItems = new Map<string, PokemonTradingItemPayload>();
 
   if (typeIds.length === 0) {
     throw validationError('server.validation.typeMin');
@@ -5760,6 +5952,20 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
   }
   if (favoriteThingIds.length > 6) {
     throw validationError('server.validation.favoriteMax');
+  }
+
+  if (Array.isArray(payload.tradingItems)) {
+    for (const item of payload.tradingItems) {
+      const row = item as Record<string, unknown>;
+      const itemId = Number(row.itemId);
+      const preference = row.preference;
+
+      if (!Number.isInteger(itemId) || itemId <= 0 || (preference !== 'like' && preference !== 'neutral')) {
+        throw validationError('server.validation.invalidField');
+      }
+
+      tradingItems.set(String(itemId), { itemId, preference });
+    }
   }
 
   if (Array.isArray(payload.skillItemDrops)) {
@@ -5799,6 +6005,7 @@ function cleanPokemonPayload(payload: Record<string, unknown>): PokemonPayload {
     skillIds,
     favoriteThingIds,
     skillItemDrops: [...skillItemDrops.values()],
+    tradingItems: [...tradingItems.values()],
     image: cleanPokemonImage(payload.imagePath, displayId)
   };
 }
@@ -5823,6 +6030,7 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
   await client.query('DELETE FROM pokemon_pokemon_types WHERE pokemon_id = $1', [pokemonId]);
   await client.query('DELETE FROM pokemon_skills WHERE pokemon_id = $1', [pokemonId]);
   await client.query('DELETE FROM pokemon_favorite_things WHERE pokemon_id = $1', [pokemonId]);
+  await client.query('DELETE FROM pokemon_trading_items WHERE pokemon_id = $1', [pokemonId]);
 
   for (const [index, typeId] of payload.typeIds.entries()) {
     await client.query('INSERT INTO pokemon_pokemon_types (pokemon_id, type_id, slot_order) VALUES ($1, $2, $3)', [
@@ -5841,6 +6049,21 @@ async function replacePokemonRelations(client: DbClient, pokemonId: number, payl
       pokemonId,
       favoriteThingId
     ]);
+  }
+
+  const tradingSkillResult = payload.skillIds.length
+    ? await client.query<{ id: number }>('SELECT id FROM skills WHERE id = ANY($1::integer[]) AND has_trading = true', [payload.skillIds])
+    : { rows: [] };
+  const hasTradingSkill = tradingSkillResult.rows.length > 0;
+
+  if (hasTradingSkill) {
+    for (const tradingItem of payload.tradingItems) {
+      await client.query('INSERT INTO pokemon_trading_items (pokemon_id, item_id, preference) VALUES ($1, $2, $3)', [
+        pokemonId,
+        tradingItem.itemId,
+        tradingItem.preference
+      ]);
+    }
   }
 
   if (payload.skillItemDrops.length > 0) {
@@ -6414,8 +6637,20 @@ export async function getItem(id: number, locale = defaultLocale) {
   const recipeItemName = localizedName('items', 'recipe_item', locale);
   const pokemonName = localizedName('pokemon', 'p', locale);
   const skillName = localizedName('skills', 's', locale);
+  const possibleTagName = localizedName('favorite-things', 'possible_tag', locale);
+  const evidenceTagName = localizedName('favorite-things', 'evidence_tag', locale);
 
-  const [acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory, imageHistory] = await Promise.all([
+  const [
+    acquisitionMethods,
+    recipe,
+    relatedRecipes,
+    relatedHabitats,
+    droppedByPokemon,
+    allPossibleTags,
+    possibleTagObservations,
+    editHistory,
+    imageHistory
+  ] = await Promise.all([
     query(
       `
         SELECT am.id, ${acquisitionMethodName} AS name
@@ -6544,11 +6779,50 @@ export async function getItem(id: number, locale = defaultLocale) {
       `,
       [id]
     ),
+    query<ItemPossibleTagEntity>(
+      `
+        SELECT possible_tag.id, ${possibleTagName} AS name
+        FROM favorite_things possible_tag
+        ORDER BY ${orderByEntity('possible_tag')}
+      `
+    ),
+    query<ItemPossibleTagObservation>(
+      `
+        SELECT
+          json_build_object(
+            'id', p.id,
+            'displayId', p.display_id,
+            'name', ${pokemonName},
+            'isEventItem', p.is_event_item,
+            'image', ${pokemonImageJson('p')}
+          ) AS pokemon,
+          pti.preference,
+          COALESCE((
+            SELECT json_agg(json_build_object('id', evidence_tag.id, 'name', ${evidenceTagName}) ORDER BY ${orderByEntity('evidence_tag')})
+            FROM pokemon_favorite_things pft
+            JOIN favorite_things evidence_tag ON evidence_tag.id = pft.favorite_thing_id
+            WHERE pft.pokemon_id = p.id
+          ), '[]'::json) AS tags
+        FROM pokemon_trading_items pti
+        JOIN pokemon p ON p.id = pti.pokemon_id
+        WHERE pti.item_id = $1
+          AND EXISTS (
+            SELECT 1
+            FROM pokemon_skills ps
+            JOIN skills trading_skill ON trading_skill.id = ps.skill_id
+            WHERE ps.pokemon_id = p.id
+              AND trading_skill.has_trading = true
+          )
+        ORDER BY pti.preference DESC, ${orderByEntity('p')}
+      `,
+      [id]
+    ),
     getEditHistory('items', id),
     listEntityImageUploads('items', id)
   ]);
 
-  return { ...item, acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, editHistory, imageHistory };
+  const possibleTags = inferItemPossibleTags(allPossibleTags, possibleTagObservations);
+  return { ...item, acquisitionMethods, recipe, relatedRecipes, relatedHabitats, droppedByPokemon, possibleTags, editHistory, imageHistory };
 }
 
 function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
@@ -7236,7 +7510,7 @@ function dishCategoryProjection(locale: string): string {
             ), '[]'::json),
             'pokemonSkill', CASE
               WHEN dish_skill.id IS NULL THEN NULL
-              ELSE json_build_object('id', dish_skill.id, 'name', ${skillName}, 'hasItemDrop', dish_skill.has_item_drop)
+              ELSE json_build_object('id', dish_skill.id, 'name', ${skillName}, 'hasItemDrop', dish_skill.has_item_drop, 'hasTrading', dish_skill.has_trading)
             END
           )
           ORDER BY d.sort_order, d.id
@@ -7294,7 +7568,7 @@ function dishProjection(locale: string): string {
       ), '[]'::json) AS "secondaryMaterials",
       CASE
         WHEN dish_skill.id IS NULL THEN NULL
-        ELSE json_build_object('id', dish_skill.id, 'name', ${skillName}, 'hasItemDrop', dish_skill.has_item_drop)
+        ELSE json_build_object('id', dish_skill.id, 'name', ${skillName}, 'hasItemDrop', dish_skill.has_item_drop, 'hasTrading', dish_skill.has_trading)
       END AS "pokemonSkill"
     FROM dishes d
     JOIN dish_categories dc ON dc.id = d.category_id
@@ -7682,6 +7956,7 @@ const dataToolColumns = {
   pokemonSkills: ['pokemon_id', 'skill_id'],
   pokemonFavoriteThings: ['pokemon_id', 'favorite_thing_id'],
   pokemonSkillItemDrops: ['pokemon_id', 'skill_id', 'item_id'],
+  pokemonTradingItems: ['pokemon_id', 'item_id', 'preference'],
   habitats: ['id', 'name', 'is_event_item', 'image_path', 'sort_order', 'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'],
   habitatRecipeItems: ['habitat_id', 'item_id', 'quantity'],
   habitatPokemon: ['habitat_id', 'pokemon_id', 'map_id', 'time_of_day', 'weather', 'rarity'],
@@ -7909,10 +8184,14 @@ function normalizeImportValue(value: unknown): unknown {
   return value === undefined ? null : value;
 }
 
+function normalizeImportColumnValue(row: Record<string, unknown>, column: string): unknown {
+  return normalizeImportValue(row[column]);
+}
+
 async function insertRows(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
   for (const row of rows) {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
-    const values = columns.map((column) => normalizeImportValue(row[column]));
+    const values = columns.map((column) => normalizeImportColumnValue(row, column));
     await client.query(`INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`, values);
   }
 }
@@ -7922,7 +8201,7 @@ async function upsertRowsById(client: DbClient, tableName: string, columns: read
   for (const row of rows) {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
     const assignments = updateColumns.map((column) => `${column} = EXCLUDED.${column}`).join(', ');
-    const values = columns.map((column) => normalizeImportValue(row[column]));
+    const values = columns.map((column) => normalizeImportColumnValue(row, column));
     await client.query(
       `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT (id) DO UPDATE SET ${assignments}`,
       values
@@ -7933,7 +8212,7 @@ async function upsertRowsById(client: DbClient, tableName: string, columns: read
 async function insertRowsIgnoreConflicts(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
   for (const row of rows) {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
-    const values = columns.map((column) => normalizeImportValue(row[column]));
+    const values = columns.map((column) => normalizeImportColumnValue(row, column));
     await client.query(`INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`, values);
   }
 }
@@ -7984,6 +8263,7 @@ async function wipeItemsData(client: DbClient): Promise<void> {
   await client.query('DELETE FROM item_favorite_things');
   await client.query('DELETE FROM habitat_recipe_items');
   await client.query('DELETE FROM pokemon_skill_item_drops');
+  await client.query('DELETE FROM pokemon_trading_items');
   await client.query('DELETE FROM items');
 }
 
@@ -8008,6 +8288,7 @@ async function wipePokemonData(client: DbClient): Promise<void> {
   await client.query('DELETE FROM pokemon_pokemon_types');
   await client.query('DELETE FROM pokemon_skills');
   await client.query('DELETE FROM pokemon_favorite_things');
+  await client.query('DELETE FROM pokemon_trading_items');
   await client.query('DELETE FROM pokemon');
 }
 
@@ -8089,6 +8370,7 @@ async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<
       pokemonSkills: await tableRows(client, 'SELECT * FROM pokemon_skills ORDER BY pokemon_id, skill_id'),
       pokemonFavoriteThings: await tableRows(client, 'SELECT * FROM pokemon_favorite_things ORDER BY pokemon_id, favorite_thing_id'),
       pokemonSkillItemDrops: await tableRows(client, 'SELECT * FROM pokemon_skill_item_drops ORDER BY pokemon_id, skill_id'),
+      pokemonTradingItems: await tableRows(client, 'SELECT * FROM pokemon_trading_items ORDER BY pokemon_id, preference, item_id'),
       habitatPokemon: await tableRows(client, 'SELECT * FROM habitat_pokemon ORDER BY habitat_id, pokemon_id, map_id, time_of_day, weather'),
       ...(await exportGenericScopeData(client, 'pokemon', true))
     };
@@ -8109,6 +8391,7 @@ async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<
       itemAcquisitionMethods: await tableRows(client, 'SELECT * FROM item_acquisition_methods ORDER BY item_id, acquisition_method_id'),
       itemFavoriteThings: await tableRows(client, 'SELECT * FROM item_favorite_things ORDER BY item_id, favorite_thing_id'),
       pokemonSkillItemDrops: await tableRows(client, 'SELECT * FROM pokemon_skill_item_drops ORDER BY pokemon_id, skill_id'),
+      pokemonTradingItems: await tableRows(client, 'SELECT * FROM pokemon_trading_items ORDER BY pokemon_id, preference, item_id'),
       habitatRecipeItems: await tableRows(client, 'SELECT * FROM habitat_recipe_items ORDER BY habitat_id, item_id'),
       ...(await exportGenericScopeData(client, 'items', true))
     };
@@ -8229,6 +8512,7 @@ async function importScopeRelationRows(client: DbClient, bundle: DataToolsBundle
   const habitatData = bundle.data.habitats;
   const recipeData = bundle.data.recipes;
   const pokemonDropData = dataToolDataWithRows('pokemonSkillItemDrops', pokemonData, itemData);
+  const pokemonTradingData = dataToolDataWithRows('pokemonTradingItems', pokemonData, itemData);
   const habitatRecipeData = dataToolDataWithRows('habitatRecipeItems', habitatData, itemData);
   const habitatPokemonData = dataToolDataWithRows('habitatPokemon', habitatData, pokemonData);
 
@@ -8239,6 +8523,7 @@ async function importScopeRelationRows(client: DbClient, bundle: DataToolsBundle
   await insertRows(client, 'pokemon_skills', dataToolColumns.pokemonSkills, dataToolTableRows(pokemonData, 'pokemonSkills'));
   await insertRows(client, 'pokemon_favorite_things', dataToolColumns.pokemonFavoriteThings, dataToolTableRows(pokemonData, 'pokemonFavoriteThings'));
   await insertRows(client, 'pokemon_skill_item_drops', dataToolColumns.pokemonSkillItemDrops, dataToolTableRows(pokemonDropData, 'pokemonSkillItemDrops'));
+  await insertRows(client, 'pokemon_trading_items', dataToolColumns.pokemonTradingItems, dataToolTableRows(pokemonTradingData, 'pokemonTradingItems'));
   await insertRows(client, 'recipe_acquisition_methods', dataToolColumns.recipeAcquisitionMethods, dataToolTableRows(recipeData, 'recipeAcquisitionMethods'));
   await insertRows(client, 'recipe_materials', dataToolColumns.recipeMaterials, dataToolTableRows(recipeData, 'recipeMaterials'));
   await insertRows(client, 'habitat_recipe_items', dataToolColumns.habitatRecipeItems, dataToolTableRows(habitatRecipeData, 'habitatRecipeItems'));

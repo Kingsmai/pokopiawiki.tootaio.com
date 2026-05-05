@@ -90,6 +90,7 @@ type AdminNavItem = { key: AdminTab; label: string; permission: string | string[
 type AdminNavGroup = { key: AdminGroup; label: string; items: AdminNavItem[] };
 type EditableConfig = (NamedEntity | Skill | LifeCategory | GameVersion) & {
   hasItemDrop?: boolean;
+  hasTrading?: boolean;
   isDefault?: boolean;
   isRateable?: boolean;
   changeLog?: string;
@@ -194,10 +195,18 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
 const tabs = computed<AdminNavItem[]>(() => adminNavigationGroups.value.flatMap((group) => group.items));
 
 const configTypes = computed<
-  Array<{ key: ConfigType; label: string; supportsItemDrop?: boolean; supportsDefault?: boolean; supportsRateable?: boolean; supportsChangeLog?: boolean }>
+  Array<{
+    key: ConfigType;
+    label: string;
+    supportsItemDrop?: boolean;
+    supportsTrading?: boolean;
+    supportsDefault?: boolean;
+    supportsRateable?: boolean;
+    supportsChangeLog?: boolean;
+  }>
 >(() => [
   { key: 'pokemon-types', label: t('config.pokemonTypes') },
-  { key: 'skills', label: t('config.skills'), supportsItemDrop: true },
+  { key: 'skills', label: t('config.skills'), supportsItemDrop: true, supportsTrading: true },
   { key: 'environments', label: t('config.environments') },
   { key: 'favorite-things', label: t('config.favoriteThings') },
   { key: 'acquisition-methods', label: t('config.acquisitionMethods') },
@@ -237,6 +246,7 @@ const configForm = ref({
   name: '',
   translations: {} as TranslationMap,
   hasItemDrop: false,
+  hasTrading: false,
   isDefault: false,
   isRateable: false,
   changeLog: ''
@@ -561,7 +571,7 @@ async function loadLanguages() {
 }
 
 function resetConfigForm() {
-  configForm.value = { id: 0, name: '', translations: {}, hasItemDrop: false, isDefault: false, isRateable: false, changeLog: '' };
+  configForm.value = { id: 0, name: '', translations: {}, hasItemDrop: false, hasTrading: false, isDefault: false, isRateable: false, changeLog: '' };
 }
 
 function resetChecklistForm() {
@@ -667,6 +677,7 @@ function editConfig(item: EditableConfig) {
     name: item.baseName ?? item.name,
     translations: item.translations ?? {},
     hasItemDrop: item.hasItemDrop === true,
+    hasTrading: item.hasTrading === true,
     isDefault: item.isDefault === true,
     isRateable: item.isRateable === true,
     changeLog: item.changeLog ?? ''
@@ -1047,6 +1058,7 @@ async function saveConfig() {
       name: configBaseNameForSave(),
       translations: configForm.value.translations,
       hasItemDrop: selectedConfig.value.supportsItemDrop ? configForm.value.hasItemDrop : undefined,
+      hasTrading: selectedConfig.value.supportsTrading ? configForm.value.hasTrading : undefined,
       isDefault: selectedConfig.value.supportsDefault ? configForm.value.isDefault : undefined,
       isRateable: selectedConfig.value.supportsRateable ? configForm.value.isRateable : undefined,
       changeLog: selectedConfig.value.supportsChangeLog ? configForm.value.changeLog : undefined
@@ -2002,6 +2014,7 @@ onMounted(() => {
           <span class="reorderable-row-title">
             {{ item.name }}
             <span v-if="item.hasItemDrop" class="config-flag">{{ t('pages.admin.hasItemDrop') }}</span>
+            <span v-if="item.hasTrading" class="config-flag">{{ t('pages.admin.hasTrading') }}</span>
             <span v-if="item.isDefault" class="config-flag">{{ t('pages.admin.defaultCategory') }}</span>
             <span v-if="item.isRateable" class="config-flag">{{ t('pages.admin.rateableCategory') }}</span>
           </span>
@@ -2799,6 +2812,12 @@ onMounted(() => {
           <label>
             <input v-model="configForm.hasItemDrop" type="checkbox" />
             {{ t('pages.admin.hasItemDrop') }}
+          </label>
+        </div>
+        <div v-if="selectedConfig.supportsTrading" class="check-row">
+          <label>
+            <input v-model="configForm.hasTrading" type="checkbox" />
+            {{ t('pages.admin.hasTrading') }}
           </label>
         </div>
         <div v-if="selectedConfig.supportsDefault" class="check-row">

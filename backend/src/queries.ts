@@ -204,6 +204,8 @@ type ItemPayload = {
   name: string;
   details: string;
   basePrice: number | null;
+  ancientArtifactCategoryId: number | null;
+  ancientArtifactCategoryKey: string | null;
   translations: TranslationInput;
   categoryId: number;
   categoryKey: string;
@@ -545,6 +547,7 @@ type ItemChangeSource = {
   name: string;
   details: string;
   basePrice: number | null;
+  ancientArtifactCategory: { name: string } | null;
   isEventItem: boolean;
   image: EntityImageValue | null;
   category: { name: string };
@@ -674,7 +677,7 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
 const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
   pokemon: { table: 'pokemon', entityType: 'pokemon' },
   items: { table: 'items', entityType: 'items' },
-  'ancient-artifacts': { table: 'ancient_artifacts', entityType: 'ancient-artifacts' },
+  'ancient-artifacts': { table: 'items', entityType: 'ancient-artifacts' },
   recipes: { table: 'recipes', entityType: 'recipes' },
   habitats: { table: 'habitats', entityType: 'habitats' }
 };
@@ -684,7 +687,7 @@ const discussionEntityDefinitions: Record<DiscussionEntityType, DiscussionEntity
   items: { table: 'items' },
   recipes: { table: 'recipes' },
   habitats: { table: 'habitats' },
-  'ancient-artifacts': { table: 'ancient_artifacts' }
+  'ancient-artifacts': { table: 'items' }
 };
 
 let pokemonCsvDataCache: Promise<PokemonCsvData> | null = null;
@@ -1047,6 +1050,17 @@ function cleanUploadImagePath(value: unknown, entityType: 'items' | 'habitats' |
   return imagePath;
 }
 
+function cleanItemOrArtifactImagePath(value: unknown): string {
+  const imagePath = cleanOptionalText(value);
+  if (imagePath === '') {
+    return '';
+  }
+  if (!isUploadImagePath(imagePath) || (!imagePath.startsWith('items/') && !imagePath.startsWith('ancient-artifacts/'))) {
+    throw validationError('server.validation.imagePathInvalid');
+  }
+  return imagePath;
+}
+
 function cleanIds(value: unknown): number[] {
   if (!Array.isArray(value)) {
     return [];
@@ -1091,6 +1105,19 @@ function cleanOptionalNonNegativeInteger(value: unknown, message: string): numbe
   }
 
   return numberValue;
+}
+
+function cleanOptionalSystemListOption(
+  value: unknown,
+  options: readonly SystemListOption[],
+  message: string
+): SystemListOption | null {
+  const optionId = cleanOptionalNonNegativeInteger(value, message);
+  if (optionId === null) {
+    return null;
+  }
+
+  return systemListOptionById(options, optionId, message);
 }
 
 function cleanQuantities(value: unknown): IdQuantity[] {
@@ -2268,6 +2295,12 @@ async function itemEditChanges(
     before.basePrice === null ? null : String(before.basePrice),
     after.basePrice === null ? null : String(after.basePrice)
   );
+  pushChange(
+    changes,
+    'Ancient Artifact',
+    before.ancientArtifactCategory?.name ?? 'None',
+    systemListNameByKey(ancientArtifactCategoryOptions, after.ancientArtifactCategoryKey) ?? 'None'
+  );
   pushTranslationChanges(changes, before.translations, after.translations, ['name', 'details']);
   pushChange(changes, 'Event item', boolValue(before.isEventItem), boolValue(after.isEventItem));
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
@@ -2534,8 +2567,8 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
   const habitatName = localizedName('habitats', 'h', locale);
   const itemName = localizedName('items', 'i', locale);
   const itemCategoryName = systemListJsonSql('i.category_key', itemCategoryOptions, locale);
-  const artifactName = localizedName('ancient-artifacts', 'a', locale);
-  const artifactCategoryName = systemListJsonSql('a.category_key', ancientArtifactCategoryOptions, locale);
+  const artifactName = localizedName('items', 'artifact_item', locale);
+  const artifactCategoryName = systemListJsonSql('artifact_item.ancient_artifact_category_key', ancientArtifactCategoryOptions, locale);
   const recipeItemName = localizedName('items', 'result_item', locale);
   const recipeMaterialName = localizedName('items', 'material_item', locale);
   const checklistTitle = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
@@ -2596,16 +2629,17 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
     query<GlobalSearchItem>(
       `
         SELECT
-          a.id,
+          artifact_item.id,
           'ancient-artifacts' AS type,
           ${artifactName} AS title,
-          '/ancient-artifacts/' || a.id AS url,
-          NULLIF(a.details, '') AS summary,
+          '/ancient-artifacts/' || artifact_item.id AS url,
+          NULLIF(artifact_item.details, '') AS summary,
           (${artifactCategoryName}->>'name') AS meta,
-          ${uploadedImageJson('a.image_path')} AS image
-        FROM ancient_artifacts a
+          ${uploadedImageJson('artifact_item.image_path')} AS image
+        FROM items artifact_item
         WHERE ${artifactName} ILIKE $1
-        ORDER BY ${orderByEntity('a')}
+          AND artifact_item.ancient_artifact_category_key IS NOT NULL
+        ORDER BY ${orderByEntity('artifact_item')}
         LIMIT $2
       `,
       [pattern, limit]
@@ -4223,7 +4257,7 @@ export async function listUserCommentActivities(
   const itemName = localizedName('items', 'i', locale);
   const recipeItemName = localizedName('items', 'recipe_item', locale);
   const habitatName = localizedName('habitats', 'h', locale);
-  const artifactName = localizedName('ancient-artifacts', 'a', locale);
+  const artifactName = localizedName('items', 'artifact_item', locale);
   const params: unknown[] = [user.id];
   const outerConditions: string[] = [];
 
@@ -4301,7 +4335,7 @@ export async function listUserCommentActivities(
         LEFT JOIN recipes r ON edc.entity_type = 'recipes' AND r.id = edc.entity_id
         LEFT JOIN items recipe_item ON recipe_item.id = r.item_id
         LEFT JOIN habitats h ON edc.entity_type = 'habitats' AND h.id = edc.entity_id
-        LEFT JOIN ancient_artifacts a ON edc.entity_type = 'ancient-artifacts' AND a.id = edc.entity_id
+        LEFT JOIN items artifact_item ON edc.entity_type = 'ancient-artifacts' AND artifact_item.id = edc.entity_id
         WHERE edc.created_by_user_id = $1
           AND edc.deleted_at IS NULL
           AND edc.ai_moderation_status = 'approved'
@@ -6239,6 +6273,10 @@ function itemProjection(locale: string): string {
       ${itemDetails} AS details,
       i.details AS "baseDetails",
       i.base_price AS "basePrice",
+      CASE
+        WHEN i.ancient_artifact_category_key IS NULL THEN NULL
+        ELSE ${systemListJsonSql('i.ancient_artifact_category_key', ancientArtifactCategoryOptions, locale)}
+      END AS "ancientArtifactCategory",
       i.is_event_item AS "isEventItem",
       ${translationsSelect('items', 'i.id')} AS translations,
       ${auditSelect('i', 'item_created_user', 'item_updated_user')},
@@ -6289,6 +6327,7 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
   const conditions: string[] = [];
   const categoryId = Number(asString(paramsQuery.categoryId));
   const usageId = Number(asString(paramsQuery.usageId));
+  const ancientArtifactCategoryId = Number(asString(paramsQuery.ancientArtifactCategoryId));
   const isEventItem = asString(paramsQuery.isEventItem);
   const tagIds = parseIdList(asString(paramsQuery.tagIds));
   const search = asString(paramsQuery.search)?.trim();
@@ -6298,6 +6337,9 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
     : null;
   const usageOption = Number.isInteger(usageId) && usageId > 0
     ? systemListOptionById(itemUsageOptions, usageId, 'server.validation.usageRequired')
+    : null;
+  const ancientArtifactCategoryOption = Number.isInteger(ancientArtifactCategoryId) && ancientArtifactCategoryId > 0
+    ? systemListOptionById(ancientArtifactCategoryOptions, ancientArtifactCategoryId, 'server.validation.invalidField')
     : null;
 
   if (search) {
@@ -6318,6 +6360,11 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
   if (usageOption) {
     params.push(usageOption.key);
     conditions.push(`i.usage_key = $${params.length}`);
+  }
+
+  if (ancientArtifactCategoryOption) {
+    params.push(ancientArtifactCategoryOption.key);
+    conditions.push(`i.ancient_artifact_category_key = $${params.length}`);
   }
 
   const tagFilter = sqlForRelationFilter(
@@ -6495,6 +6542,11 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
   const usageId = payload.usageId === null || payload.usageId === '' || payload.usageId === undefined
     ? null
     : requirePositiveInteger(payload.usageId, 'server.validation.usageRequired');
+  const ancientArtifactCategory = cleanOptionalSystemListOption(
+    payload.ancientArtifactCategoryId,
+    ancientArtifactCategoryOptions,
+    'server.validation.invalidField'
+  );
   const insertBeforeItemId = cleanOptionalPositiveInteger(payload.insertBeforeItemId);
   const insertAfterItemId = cleanOptionalPositiveInteger(payload.insertAfterItemId);
   const category = systemListOptionById(itemCategoryOptions, categoryId, 'server.validation.categoryRequired');
@@ -6508,6 +6560,8 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     name: cleanName(payload.name, 'server.validation.itemNameRequired'),
     details: cleanOptionalText(payload.details),
     basePrice: cleanOptionalNonNegativeInteger(payload.basePrice, 'server.validation.invalidField'),
+    ancientArtifactCategoryId: ancientArtifactCategory?.id ?? null,
+    ancientArtifactCategoryKey: ancientArtifactCategory?.key ?? null,
     translations: cleanTranslations(payload.translations, ['name', 'details']),
     categoryId,
     categoryKey: category.key,
@@ -6520,7 +6574,7 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     isEventItem: Boolean(payload.isEventItem),
     acquisitionMethodIds: cleanIds(payload.acquisitionMethodIds),
     tagIds: cleanIds(payload.tagIds),
-    imagePath: cleanUploadImagePath(payload.imagePath, 'items'),
+    imagePath: cleanItemOrArtifactImagePath(payload.imagePath),
     insertBeforeItemId,
     insertAfterItemId
   };
@@ -6582,6 +6636,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
         INSERT INTO items (
           name,
           details,
+          ancient_artifact_category_key,
           base_price,
           category_key,
           usage_key,
@@ -6595,12 +6650,13 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
         RETURNING id
       `,
       [
         cleanPayload.name,
         cleanPayload.details,
+        cleanPayload.ancientArtifactCategoryKey,
         cleanPayload.basePrice,
         cleanPayload.categoryKey,
         cleanPayload.usageKey,
@@ -6657,22 +6713,24 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
         UPDATE items
         SET name = $1,
             details = $2,
-            base_price = $3,
-            category_key = $4,
-            usage_key = $5,
-            dyeable = $6,
-            dual_dyeable = $7,
-            pattern_editable = $8,
-            no_recipe = $9,
-            is_event_item = $10,
-            image_path = $11,
-            updated_by_user_id = $12,
+            ancient_artifact_category_key = $3,
+            base_price = $4,
+            category_key = $5,
+            usage_key = $6,
+            dyeable = $7,
+            dual_dyeable = $8,
+            pattern_editable = $9,
+            no_recipe = $10,
+            is_event_item = $11,
+            image_path = $12,
+            updated_by_user_id = $13,
             updated_at = now()
-        WHERE id = $13
+        WHERE id = $14
       `,
       [
         cleanPayload.name,
         cleanPayload.details,
+        cleanPayload.ancientArtifactCategoryKey,
         cleanPayload.basePrice,
         cleanPayload.categoryKey,
         cleanPayload.usageKey,
@@ -6707,6 +6765,7 @@ export async function deleteItem(id: number, userId: number) {
     }
 
     await deleteEntityDiscussionCommentsForEntity(client, 'items', id);
+    await deleteEntityDiscussionCommentsForEntity(client, 'ancient-artifacts', id);
     await deleteEntityTranslations(client, 'items', id);
     await recordEditLog(client, 'items', id, 'delete', userId);
     return true;
@@ -6714,29 +6773,29 @@ export async function deleteItem(id: number, userId: number) {
 }
 
 function ancientArtifactProjection(locale: string): string {
-  const artifactName = localizedName('ancient-artifacts', 'a', locale);
-  const artifactDetails = localizedField('ancient-artifacts', 'a.id', 'a.details', 'details', locale);
+  const artifactName = localizedName('items', 'i', locale);
+  const artifactDetails = localizedField('items', 'i.id', 'i.details', 'details', locale);
   const tagName = localizedName('favorite-things', 't', locale);
 
   return `
     SELECT
-      a.id,
+      i.id,
       ${artifactName} AS name,
-      a.name AS "baseName",
+      i.name AS "baseName",
       ${artifactDetails} AS details,
-      a.details AS "baseDetails",
-      ${translationsSelect('ancient-artifacts', 'a.id')} AS translations,
-      ${systemListJsonSql('a.category_key', ancientArtifactCategoryOptions, locale)} AS category,
-      ${uploadedImageJson('a.image_path')} AS image,
+      i.details AS "baseDetails",
+      ${translationsSelect('items', 'i.id')} AS translations,
+      ${systemListJsonSql('i.ancient_artifact_category_key', ancientArtifactCategoryOptions, locale)} AS category,
+      ${uploadedImageJson('i.image_path')} AS image,
       COALESCE((
         SELECT json_agg(json_build_object('id', t.id, 'name', ${tagName}) ORDER BY ${orderByEntity('t')})
-        FROM ancient_artifact_favorite_things aaft
-        JOIN favorite_things t ON t.id = aaft.favorite_thing_id
-        WHERE aaft.ancient_artifact_id = a.id
+        FROM item_favorite_things ift
+        JOIN favorite_things t ON t.id = ift.favorite_thing_id
+        WHERE ift.item_id = i.id
       ), '[]'::json) AS tags,
-      ${auditSelect('a', 'artifact_created_user', 'artifact_updated_user')}
-    FROM ancient_artifacts a
-    ${auditJoins('a', 'artifact_created_user', 'artifact_updated_user')}
+      ${auditSelect('i', 'item_created_user', 'item_updated_user')}
+    FROM items i
+    ${auditJoins('i', 'item_created_user', 'item_updated_user')}
   `;
 }
 
@@ -6750,23 +6809,25 @@ export async function listAncientArtifacts(paramsQuery: QueryParams = {}, locale
     ? systemListOptionById(ancientArtifactCategoryOptions, categoryId, 'server.validation.categoryRequired')
     : null;
 
+  conditions.push('i.ancient_artifact_category_key IS NOT NULL');
+
   if (search) {
     params.push(`%${search}%`);
-    conditions.push(`${localizedName('ancient-artifacts', 'a', locale)} ILIKE $${params.length}`);
+    conditions.push(`${localizedName('items', 'i', locale)} ILIKE $${params.length}`);
   }
 
   if (categoryOption) {
     params.push(categoryOption.key);
-    conditions.push(`a.category_key = $${params.length}`);
+    conditions.push(`i.ancient_artifact_category_key = $${params.length}`);
   }
 
   const tagFilter = sqlForRelationFilter(
     tagIds,
     'any',
-    'ancient_artifact_favorite_things',
-    'ancient_artifact_id',
+    'item_favorite_things',
+    'item_id',
     'favorite_thing_id',
-    'a.id',
+    'i.id',
     params
   );
   if (tagFilter) {
@@ -6774,17 +6835,17 @@ export async function listAncientArtifacts(paramsQuery: QueryParams = {}, locale
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${ancientArtifactProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('a')}`, params);
+  return query(`${ancientArtifactProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('i')}`, params);
 }
 
 export async function getAncientArtifact(id: number, locale = defaultLocale) {
-  const artifact = await queryOne(`${ancientArtifactProjection(locale)} WHERE a.id = $1`, [id]);
+  const artifact = await queryOne(`${ancientArtifactProjection(locale)} WHERE i.id = $1 AND i.ancient_artifact_category_key IS NOT NULL`, [id]);
   if (!artifact) {
     return null;
   }
 
-  const editHistory = await getEditHistory('ancient-artifacts', id);
-  const imageHistory = await listEntityImageUploads('ancient-artifacts', id);
+  const editHistory = await getEditHistory('items', id);
+  const imageHistory = await listEntityImageUploads('items', id);
   return { ...artifact, editHistory, imageHistory };
 }
 
@@ -6799,16 +6860,16 @@ function cleanAncientArtifactPayload(payload: Record<string, unknown>): AncientA
     categoryId,
     categoryKey: category.key,
     tagIds: cleanIds(payload.tagIds),
-    imagePath: cleanUploadImagePath(payload.imagePath, 'ancient-artifacts')
+    imagePath: cleanItemOrArtifactImagePath(payload.imagePath)
   };
 }
 
 async function replaceAncientArtifactRelations(client: DbClient, artifactId: number, payload: AncientArtifactPayload): Promise<void> {
-  await client.query('DELETE FROM ancient_artifact_favorite_things WHERE ancient_artifact_id = $1', [artifactId]);
+  await client.query('DELETE FROM item_favorite_things WHERE item_id = $1', [artifactId]);
 
   for (const tagId of payload.tagIds) {
     await client.query(
-      'INSERT INTO ancient_artifact_favorite_things (ancient_artifact_id, favorite_thing_id) VALUES ($1, $2)',
+      'INSERT INTO item_favorite_things (item_id, favorite_thing_id) VALUES ($1, $2)',
       [artifactId, tagId]
     );
   }
@@ -6818,13 +6879,13 @@ export async function createAncientArtifact(payload: Record<string, unknown>, us
   const cleanPayload = cleanAncientArtifactPayload(payload);
 
   const id = await withTransaction(async (client) => {
-    const sortOrder = await nextSortOrder(client, 'ancient_artifacts');
+    const sortOrder = await nextSortOrder(client, 'items');
     const result = await client.query<{ id: number }>(
       `
-        INSERT INTO ancient_artifacts (
+        INSERT INTO items (
           name,
           details,
-          category_key,
+          ancient_artifact_category_key,
           image_path,
           sort_order,
           created_by_user_id,
@@ -6843,10 +6904,10 @@ export async function createAncientArtifact(payload: Record<string, unknown>, us
       ]
     );
     const artifactId = result.rows[0].id;
-    await linkEntityImageUpload(client, 'ancient-artifacts', artifactId, cleanPayload.imagePath, cleanPayload.name);
+    await linkEntityImageUpload(client, 'items', artifactId, cleanPayload.imagePath, cleanPayload.name);
     await replaceAncientArtifactRelations(client, artifactId, cleanPayload);
-    await replaceEntityTranslations(client, 'ancient-artifacts', artifactId, cleanPayload.translations, ['name', 'details']);
-    await recordEditLog(client, 'ancient-artifacts', artifactId, 'create', userId);
+    await replaceEntityTranslations(client, 'items', artifactId, cleanPayload.translations, ['name', 'details']);
+    await recordEditLog(client, 'items', artifactId, 'create', userId);
     return artifactId;
   });
 
@@ -6860,14 +6921,15 @@ export async function updateAncientArtifact(id: number, payload: Record<string, 
   const updated = await withTransaction(async (client) => {
     const result = await client.query(
       `
-        UPDATE ancient_artifacts
+        UPDATE items
         SET name = $1,
             details = $2,
-            category_key = $3,
+            ancient_artifact_category_key = $3,
             image_path = $4,
             updated_by_user_id = $5,
             updated_at = now()
         WHERE id = $6
+          AND ancient_artifact_category_key IS NOT NULL
       `,
       [cleanPayload.name, cleanPayload.details, cleanPayload.categoryKey, cleanPayload.imagePath, userId, id]
     );
@@ -6875,11 +6937,11 @@ export async function updateAncientArtifact(id: number, payload: Record<string, 
       return false;
     }
 
-    await linkEntityImageUpload(client, 'ancient-artifacts', id, cleanPayload.imagePath, cleanPayload.name);
+    await linkEntityImageUpload(client, 'items', id, cleanPayload.imagePath, cleanPayload.name);
     await replaceAncientArtifactRelations(client, id, cleanPayload);
-    await replaceEntityTranslations(client, 'ancient-artifacts', id, cleanPayload.translations, ['name', 'details']);
+    await replaceEntityTranslations(client, 'items', id, cleanPayload.translations, ['name', 'details']);
     const changes = before ? await ancientArtifactEditChanges(client, before as unknown as AncientArtifactChangeSource, cleanPayload) : [];
-    await recordEditLog(client, 'ancient-artifacts', id, 'update', userId, changes);
+    await recordEditLog(client, 'items', id, 'update', userId, changes);
     return true;
   });
 
@@ -6888,14 +6950,14 @@ export async function updateAncientArtifact(id: number, payload: Record<string, 
 
 export async function deleteAncientArtifact(id: number, userId: number) {
   return withTransaction(async (client) => {
-    const result = await client.query<{ id: number }>('DELETE FROM ancient_artifacts WHERE id = $1 RETURNING id', [id]);
+    const result = await client.query<{ id: number }>('DELETE FROM items WHERE id = $1 AND ancient_artifact_category_key IS NOT NULL RETURNING id', [id]);
     if (result.rowCount === 0) {
       return false;
     }
 
     await deleteEntityDiscussionCommentsForEntity(client, 'ancient-artifacts', id);
-    await deleteEntityTranslations(client, 'ancient-artifacts', id);
-    await recordEditLog(client, 'ancient-artifacts', id, 'delete', userId);
+    await deleteEntityTranslations(client, 'items', id);
+    await recordEditLog(client, 'items', id, 'delete', userId);
     return true;
   });
 }
@@ -7564,11 +7626,10 @@ export async function reorderDishes(payload: Record<string, unknown>, userId: nu
 }
 
 const dataToolScopes = ['pokemon', 'habitats', 'items', 'artifacts', 'recipes', 'checklist'] as const satisfies readonly DataToolScope[];
-const dataToolMainTables: Record<DataToolScope, string> = {
+const dataToolMainTables: Record<Exclude<DataToolScope, 'artifacts'>, string> = {
   pokemon: 'pokemon',
   habitats: 'habitats',
   items: 'items',
-  artifacts: 'ancient_artifacts',
   recipes: 'recipes',
   checklist: 'daily_checklist_items'
 };
@@ -7615,6 +7676,7 @@ const dataToolColumns = {
     'name',
     'details',
     'base_price',
+    'ancient_artifact_category_key',
     'category_key',
     'usage_key',
     'dyeable',
@@ -7631,19 +7693,7 @@ const dataToolColumns = {
   ],
   itemAcquisitionMethods: ['item_id', 'acquisition_method_id'],
   itemFavoriteThings: ['item_id', 'favorite_thing_id'],
-  artifactFavoriteThings: ['ancient_artifact_id', 'favorite_thing_id'],
-  artifacts: [
-    'id',
-    'name',
-    'details',
-    'category_key',
-    'image_path',
-    'sort_order',
-    'created_by_user_id',
-    'updated_by_user_id',
-    'created_at',
-    'updated_at'
-  ],
+  artifacts: [] as string[],
   recipes: ['id', 'item_id', 'sort_order', 'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'],
   recipeAcquisitionMethods: ['recipe_id', 'acquisition_method_id'],
   recipeMaterials: ['recipe_id', 'item_id', 'quantity'],
@@ -7691,6 +7741,7 @@ function normalizeDataToolScopes(scopes: DataToolScope[]): DataToolScope[] {
   const scopeSet = new Set(scopes);
   if (scopeSet.has('items')) {
     scopeSet.add('recipes');
+    scopeSet.delete('artifacts');
   }
   return dataToolScopes.filter((scope) => scopeSet.has(scope));
 }
@@ -7749,6 +7800,36 @@ function dataToolDataWithRows(key: string, ...sources: Array<DataToolScopeData |
   return sources.find((source) => source?.[key] !== undefined);
 }
 
+function dataToolArtifactRows(data: DataToolScopeData | undefined): DataToolRows {
+  return dataToolTableRows(data, 'artifacts').map((row) => {
+    if (row.ancient_artifact_category_key !== undefined) {
+      return row;
+    }
+
+    return {
+      ...row,
+      base_price: null,
+      ancient_artifact_category_key: row.category_key,
+      category_key: 'other',
+      usage_key: null,
+      dyeable: false,
+      dual_dyeable: false,
+      pattern_editable: false,
+      no_recipe: false,
+      is_event_item: false
+    };
+  });
+}
+
+function dataToolArtifactFavoriteThingRows(data: DataToolScopeData | undefined): DataToolRows {
+  const itemRows = dataToolTableRows(data, 'itemFavoriteThings');
+  const artifactRows = dataToolTableRows(data, 'artifactFavoriteThings').map((row) => ({
+    item_id: row.ancient_artifact_id,
+    favorite_thing_id: row.favorite_thing_id
+  }));
+  return [...itemRows, ...artifactRows];
+}
+
 async function tableRows(client: DbClient, sql: string, params: unknown[] = []): Promise<DataToolRows> {
   const result = await client.query<Record<string, unknown>>(sql, params);
   return result.rows;
@@ -7784,6 +7865,27 @@ async function insertRows(client: DbClient, tableName: string, columns: readonly
   }
 }
 
+async function upsertRowsById(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
+  const updateColumns = columns.filter((column) => column !== 'id');
+  for (const row of rows) {
+    const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
+    const assignments = updateColumns.map((column) => `${column} = EXCLUDED.${column}`).join(', ');
+    const values = columns.map((column) => normalizeImportValue(column, row[column], row));
+    await client.query(
+      `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT (id) DO UPDATE SET ${assignments}`,
+      values
+    );
+  }
+}
+
+async function insertRowsIgnoreConflicts(client: DbClient, tableName: string, columns: readonly string[], rows: DataToolRows): Promise<void> {
+  for (const row of rows) {
+    const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
+    const values = columns.map((column) => normalizeImportValue(column, row[column], row));
+    await client.query(`INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`, values);
+  }
+}
+
 async function resetIdentity(client: DbClient, tableName: string): Promise<void> {
   const result = await client.query<{ maxId: number | null }>(`SELECT MAX(id)::integer AS "maxId" FROM ${tableName}`);
   const maxId = result.rows[0]?.maxId ?? null;
@@ -7799,7 +7901,6 @@ async function resetDataToolIdentities(client: DbClient): Promise<void> {
   for (const tableName of [
     'daily_checklist_items',
     'items',
-    'ancient_artifacts',
     'recipes',
     'habitats',
     'wiki_edit_logs',
@@ -7835,9 +7936,17 @@ async function wipeItemsData(client: DbClient): Promise<void> {
 }
 
 async function wipeAncientArtifactsData(client: DbClient): Promise<void> {
-  await deleteGenericEntityRows(client, ['ancient-artifacts']);
-  await client.query('DELETE FROM ancient_artifact_favorite_things');
-  await client.query('DELETE FROM ancient_artifacts');
+  await client.query(`
+    DELETE FROM entity_discussion_comments
+    WHERE entity_type = 'ancient-artifacts'
+      AND entity_id IN (SELECT id FROM items WHERE ancient_artifact_category_key IS NOT NULL)
+  `);
+  await client.query(`
+    UPDATE items
+    SET ancient_artifact_category_key = NULL,
+        updated_at = now()
+    WHERE ancient_artifact_category_key IS NOT NULL
+  `);
 }
 
 async function wipePokemonData(client: DbClient): Promise<void> {
@@ -7955,12 +8064,73 @@ async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<
 
   if (scope === 'artifacts') {
     return {
-      artifacts: await tableRows(client, 'SELECT * FROM ancient_artifacts ORDER BY sort_order, id'),
-      artifactFavoriteThings: await tableRows(
+      artifacts: await tableRows(client, 'SELECT * FROM items WHERE ancient_artifact_category_key IS NOT NULL ORDER BY sort_order, id'),
+      itemFavoriteThings: await tableRows(
         client,
-        'SELECT * FROM ancient_artifact_favorite_things ORDER BY ancient_artifact_id, favorite_thing_id'
+        `
+          SELECT ift.*
+          FROM item_favorite_things ift
+          JOIN items i ON i.id = ift.item_id
+          WHERE i.ancient_artifact_category_key IS NOT NULL
+          ORDER BY ift.item_id, ift.favorite_thing_id
+        `
       ),
-      ...(await exportGenericScopeData(client, 'ancient-artifacts', true))
+      translations: await tableRows(
+        client,
+        `
+          SELECT et.*
+          FROM entity_translations et
+          JOIN items i ON i.id = et.entity_id
+          WHERE et.entity_type = 'items'
+            AND i.ancient_artifact_category_key IS NOT NULL
+          ORDER BY et.entity_id, et.locale, et.field_name
+        `
+      ),
+      editLogs: await tableRows(
+        client,
+        `
+          SELECT wel.*
+          FROM wiki_edit_logs wel
+          JOIN items i ON i.id = wel.entity_id
+          WHERE wel.entity_type = 'items'
+            AND i.ancient_artifact_category_key IS NOT NULL
+          ORDER BY wel.id
+        `
+      ),
+      imageUploads: await tableRows(
+        client,
+        `
+          SELECT eiu.*
+          FROM entity_image_uploads eiu
+          JOIN items i ON i.id = eiu.entity_id
+          WHERE eiu.entity_type = 'items'
+            AND i.ancient_artifact_category_key IS NOT NULL
+          ORDER BY eiu.id
+        `
+      ),
+      discussionComments: await tableRows(
+        client,
+        `
+          SELECT edc.*
+          FROM entity_discussion_comments edc
+          JOIN items i ON i.id = edc.entity_id
+          WHERE edc.entity_type = 'ancient-artifacts'
+            AND i.ancient_artifact_category_key IS NOT NULL
+          ORDER BY edc.parent_comment_id NULLS FIRST, edc.id
+        `
+      ),
+      discussionCommentLikes: await tableRows(
+        client,
+        `
+          SELECT edcl.*
+          FROM entity_discussion_comment_likes edcl
+          JOIN entity_discussion_comments edc ON edc.id = edcl.comment_id
+          JOIN items i ON i.id = edc.entity_id
+          WHERE edc.entity_type = 'ancient-artifacts'
+            AND i.ancient_artifact_category_key IS NOT NULL
+          ORDER BY edcl.comment_id, edcl.user_id
+        `
+      )
     };
   }
 
@@ -7993,7 +8163,7 @@ async function importScopeMainRows(client: DbClient, bundle: DataToolsBundle): P
   const recipeData = bundle.data.recipes;
 
   await insertRows(client, 'items', dataToolColumns.items, dataToolTableRows(itemData, 'items'));
-  await insertRows(client, 'ancient_artifacts', dataToolColumns.artifacts, dataToolTableRows(artifactData, 'artifacts'));
+  await upsertRowsById(client, 'items', dataToolColumns.items, dataToolArtifactRows(artifactData));
   await insertRows(client, 'pokemon', dataToolColumns.pokemon, dataToolTableRows(pokemonData, 'pokemon'));
   await insertRows(client, 'habitats', dataToolColumns.habitats, dataToolTableRows(habitatData, 'habitats'));
   await insertRows(client, 'daily_checklist_items', dataToolColumns.checklist, dataToolTableRows(checklistData, 'checklist'));
@@ -8012,12 +8182,7 @@ async function importScopeRelationRows(client: DbClient, bundle: DataToolsBundle
 
   await insertRows(client, 'item_acquisition_methods', dataToolColumns.itemAcquisitionMethods, dataToolTableRows(itemData, 'itemAcquisitionMethods'));
   await insertRows(client, 'item_favorite_things', dataToolColumns.itemFavoriteThings, dataToolTableRows(itemData, 'itemFavoriteThings'));
-  await insertRows(
-    client,
-    'ancient_artifact_favorite_things',
-    dataToolColumns.artifactFavoriteThings,
-    dataToolTableRows(artifactData, 'artifactFavoriteThings')
-  );
+  await insertRowsIgnoreConflicts(client, 'item_favorite_things', dataToolColumns.itemFavoriteThings, dataToolArtifactFavoriteThingRows(artifactData));
   await insertRows(client, 'pokemon_pokemon_types', dataToolColumns.pokemonTypeLinks, dataToolTableRows(pokemonData, 'pokemonTypeLinks'));
   await insertRows(client, 'pokemon_skills', dataToolColumns.pokemonSkills, dataToolTableRows(pokemonData, 'pokemonSkills'));
   await insertRows(client, 'pokemon_favorite_things', dataToolColumns.pokemonFavoriteThings, dataToolTableRows(pokemonData, 'pokemonFavoriteThings'));
@@ -8054,7 +8219,11 @@ async function importDataToolsBundle(client: DbClient, bundle: DataToolsBundle):
 export async function getAdminDataToolsSummary(): Promise<{ scopes: DataToolScopeSummary[] }> {
   const scopes: DataToolScopeSummary[] = [];
   for (const scope of dataToolScopes) {
-    const result = await queryOne<{ count: number }>(`SELECT COUNT(*)::integer AS count FROM ${dataToolMainTables[scope]}`);
+    const result = await queryOne<{ count: number }>(
+      scope === 'artifacts'
+        ? 'SELECT COUNT(*)::integer AS count FROM items WHERE ancient_artifact_category_key IS NOT NULL'
+        : `SELECT COUNT(*)::integer AS count FROM ${dataToolMainTables[scope]}`
+    );
     scopes.push({ scope, count: result?.count ?? 0 });
   }
   return { scopes };

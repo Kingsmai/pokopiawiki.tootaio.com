@@ -39,6 +39,7 @@ const itemForm = ref({
   name: '',
   details: '',
   basePrice: '',
+  ancientArtifactCategoryId: '',
   translations: {} as TranslationMap,
   categoryId: '',
   usageId: '',
@@ -67,18 +68,39 @@ const itemCreateDefaultsStorageKey = 'pokopia_item_create_defaults';
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
 const isEventCreate = computed(() => route.name === 'event-item-new');
+const isAncientArtifactRoute = computed(() => route.name === 'ancient-artifact-new' || route.name === 'ancient-artifact-edit');
+const isAncientArtifactCreate = computed(() => route.name === 'ancient-artifact-new');
 const insertBeforeItemId = computed(() => queryItemId(route.query.insertBeforeItemId));
 const insertAfterItemId = computed(() => queryItemId(route.query.insertAfterItemId));
 const pageTitle = computed(() =>
   isEditing.value
-    ? t('pages.items.editTitle', { name: itemForm.value.name || t('pages.items.fallbackName') })
+    ? isAncientArtifactRoute.value
+      ? t('pages.ancientArtifacts.editTitle', { name: itemForm.value.name || t('pages.ancientArtifacts.fallbackName') })
+      : t('pages.items.editTitle', { name: itemForm.value.name || t('pages.items.fallbackName') })
+    : isAncientArtifactCreate.value
+      ? t('pages.ancientArtifacts.newTitle')
     : isEventCreate.value
       ? t('pages.eventItems.newTitle')
       : t('pages.items.newTitle')
 );
-const cancelTo = computed(() => (isEditing.value ? `/items/${routeId.value}` : isEventCreate.value ? '/event-items' : '/items'));
+const pageSubtitle = computed(() => (isAncientArtifactRoute.value ? t('pages.ancientArtifacts.editSubtitle') : t('pages.items.editSubtitle')));
+const cancelTo = computed(() =>
+  isEditing.value
+    ? isAncientArtifactRoute.value
+      ? `/ancient-artifacts/${routeId.value}`
+      : `/items/${routeId.value}`
+    : isAncientArtifactCreate.value
+      ? '/ancient-artifacts'
+      : isEventCreate.value
+        ? '/event-items'
+        : '/items'
+);
 const hasRecipe = ref(false);
 const imageEntityName = computed(() => itemNameForSave().trim());
+const ancientArtifactOptions = computed(() => [
+  { value: '', label: t('common.no') },
+  ...(options.value?.ancientArtifactCategories.map((item) => ({ value: String(item.id), label: item.name })) ?? [])
+]);
 const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
 const canUploadImage = computed(() => currentUser.value?.permissions.includes('items.upload') === true);
 
@@ -163,6 +185,7 @@ function applyItemCreateDefaults(isEventItem: boolean) {
     ...itemForm.value,
     categoryId: categoryIds.has(defaults.categoryId) ? defaults.categoryId : '',
     usageId: usageIds.has(defaults.usageId) ? defaults.usageId : '',
+    ancientArtifactCategoryId: isAncientArtifactCreate.value ? String(loadedOptions.ancientArtifactCategories[0]?.id ?? '') : '',
     dyeable: defaults.dyeable,
     dualDyeable: defaults.dualDyeable,
     patternEditable: defaults.patternEditable,
@@ -216,6 +239,7 @@ async function loadEditor() {
         name: item.baseName ?? item.name,
         details: item.baseDetails ?? item.details,
         basePrice: item.basePrice === null || item.basePrice === undefined ? '' : String(item.basePrice),
+        ancientArtifactCategoryId: item.ancientArtifactCategory ? String(item.ancientArtifactCategory.id) : '',
         translations: item.translations ?? {},
         categoryId: String(item.category.id),
         usageId: item.usage ? String(item.usage.id) : '',
@@ -270,6 +294,8 @@ async function saveItem() {
       name: itemNameForSave(),
       details: itemForm.value.details,
       basePrice: itemForm.value.basePrice.trim() === '' ? null : Number(itemForm.value.basePrice),
+      ancientArtifactCategoryId:
+        itemForm.value.ancientArtifactCategoryId.trim() === '' ? null : Number(itemForm.value.ancientArtifactCategoryId),
       translations: itemForm.value.translations,
       categoryId: Number(itemForm.value.categoryId),
       usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
@@ -289,7 +315,7 @@ async function saveItem() {
       payload.insertAfterItemId = insertAfterItemId.value;
     }
     const saved = isEditing.value ? await api.updateItem(routeId.value, payload) : await api.createItem(payload);
-    await router.push(`/items/${saved.id}`);
+    await router.push(isAncientArtifactRoute.value ? `/ancient-artifacts/${saved.id}` : `/items/${saved.id}`);
   } catch (error) {
     message.value = errorText(error, t('errors.saveFailed'));
   } finally {
@@ -312,7 +338,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <Modal :title="pageTitle" :subtitle="t('pages.items.editSubtitle')" :close-label="t('common.close')" size="wide" @close="closeEditor">
+  <Modal :title="pageTitle" :subtitle="pageSubtitle" :close-label="t('common.close')" size="wide" @close="closeEditor">
     <StatusMessage v-if="message" variant="danger">{{ message }}</StatusMessage>
 
     <form v-if="!loading && options" id="item-edit-form" class="modal-edit-form" @submit.prevent="saveItem">
@@ -386,6 +412,18 @@ onMounted(() => {
         </div>
       </div>
 
+      <div class="field">
+        <fieldset class="radio-group">
+          <legend>{{ t('pages.items.ancientArtifact') }}</legend>
+          <div class="radio-group__options">
+            <label v-for="option in ancientArtifactOptions" :key="option.value" class="radio-group__option">
+              <input v-model="itemForm.ancientArtifactCategoryId" type="radio" name="item-ancient-artifact" :value="option.value" />
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
+        </fieldset>
+      </div>
+
       <div class="check-row">
         <label><input v-model="itemForm.dyeable" type="checkbox" /> {{ t('pages.items.dyeable') }}</label>
         <label><input v-model="itemForm.dualDyeable" type="checkbox" /> {{ t('pages.items.dualDyeable') }}</label>
@@ -422,7 +460,7 @@ onMounted(() => {
     </form>
 
     <section v-else class="modal-edit-form skeleton-detail-section" aria-busy="true" :aria-label="t('pages.items.loadingEdit')">
-      <div v-for="index in 6" :key="index" class="field">
+      <div v-for="index in 7" :key="index" class="field">
         <Skeleton :width="index === 1 ? '52px' : '88px'" />
         <Skeleton variant="box" height="44px" />
       </div>
@@ -458,6 +496,46 @@ onMounted(() => {
 
 .item-edit-row > * {
   min-width: 0;
+}
+
+.radio-group {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.radio-group legend {
+  padding: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.radio-group__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.radio-group__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  color: var(--ink-soft);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.radio-group__option input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pokemon-blue);
 }
 
 @media (max-width: 720px) {

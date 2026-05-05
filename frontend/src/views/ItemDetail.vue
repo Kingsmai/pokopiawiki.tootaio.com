@@ -2,7 +2,7 @@
 import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
 import EditHistoryPanel from '../components/EditHistoryPanel.vue';
 import EntityDiscussionPanel from '../components/EntityDiscussionPanel.vue';
@@ -17,11 +17,14 @@ import { api, getAuthToken, type AuthUser, type ItemDetail } from '../services/a
 import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
+const router = useRouter();
 const { locale, t } = useI18n();
 const item = ref<ItemDetail | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
-const showEditor = computed(() => route.name === 'item-edit');
+const itemDetailRouteNames = new Set(['item-detail', 'item-edit', 'ancient-artifact-detail', 'ancient-artifact-edit']);
+const isAncientArtifactRoute = computed(() => route.name === 'ancient-artifact-detail' || route.name === 'ancient-artifact-edit');
+const showEditor = computed(() => route.name === 'item-edit' || route.name === 'ancient-artifact-edit');
 const canUpdateItem = computed(() => currentUser.value?.permissions.includes('items.update') === true);
 const canCreateRecipe = computed(() => currentUser.value?.permissions.includes('recipes.create') === true);
 const detailTabs = computed<TabOption[]>(() => [
@@ -36,8 +39,26 @@ const itemSubtitle = computed(() => {
 
   return item.value.usage ? `${item.value.category.name} · ${item.value.usage.name}` : item.value.category.name;
 });
-const detailKicker = computed(() => (item.value?.isEventItem ? t('pages.eventItems.detailKicker') : t('pages.items.detailKicker')));
-const listTarget = computed(() => (item.value?.isEventItem ? '/event-items' : '/items'));
+const detailKicker = computed(() =>
+  isAncientArtifactRoute.value
+    ? t('pages.ancientArtifacts.detailKicker')
+    : item.value?.isEventItem
+      ? t('pages.eventItems.detailKicker')
+      : t('pages.items.detailKicker')
+);
+const listTarget = computed(() => (isAncientArtifactRoute.value ? '/ancient-artifacts' : item.value?.isEventItem ? '/event-items' : '/items'));
+const editTarget = computed(() =>
+  item.value ? (isAncientArtifactRoute.value ? `/ancient-artifacts/${item.value.id}/edit` : `/items/${item.value.id}/edit`) : ''
+);
+const detailCanonicalPath = computed(() =>
+  item.value ? (isAncientArtifactRoute.value ? `/ancient-artifacts/${item.value.id}` : `/items/${item.value.id}`) : ''
+);
+const detailTitleKey = computed(() =>
+  isAncientArtifactRoute.value ? 'pages.ancientArtifacts.title' : item.value?.isEventItem ? 'pages.eventItems.title' : 'pages.items.title'
+);
+const detailDescriptionKey = computed(() =>
+  isAncientArtifactRoute.value ? 'seo.ancientArtifactDetailDescription' : 'seo.itemDetailDescription'
+);
 const basePriceDisplay = computed(() => {
   const price = item.value?.basePrice;
   return price === null || price === undefined ? t('common.none') : new Intl.NumberFormat(locale.value).format(price);
@@ -57,16 +78,26 @@ const customization = computed(() => {
 
 async function loadItemDetail() {
   const nextItem = await api.itemDetail(String(route.params.id));
+
+  if (isAncientArtifactRoute.value && !nextItem.ancientArtifactCategory) {
+    await router.replace(route.name === 'ancient-artifact-edit' ? `/items/${nextItem.id}/edit` : `/items/${nextItem.id}`);
+    return;
+  }
+
   item.value = nextItem;
 
   if (route.meta.editorModal !== true) {
     applySeo({
-      title: `${nextItem.name} - ${t(nextItem.isEventItem ? 'pages.eventItems.title' : 'pages.items.title')}`,
-      description: t('seo.itemDetailDescription', { name: nextItem.name }),
-      canonicalPath: `/items/${nextItem.id}`,
+      title: `${nextItem.name} - ${t(detailTitleKey.value)}`,
+      description: t(detailDescriptionKey.value, { name: nextItem.name }),
+      canonicalPath: detailCanonicalPath.value,
       image: nextItem.image?.url
     });
   }
+}
+
+function isItemDetailRouteName(value: unknown) {
+  return typeof value === 'string' && itemDetailRouteNames.has(value);
 }
 
 onMounted(async () => {
@@ -83,7 +114,9 @@ onMounted(async () => {
 watch(
   () => route.name,
   (name, oldName) => {
-    if (oldName === 'item-edit' && name === 'item-detail') {
+    if (name !== oldName && isItemDetailRouteName(name) && isItemDetailRouteName(oldName)) {
+      item.value = null;
+      detailTab.value = 'details';
       void loadItemDetail();
     }
   }
@@ -156,7 +189,7 @@ watch(
     <PageHeader :title="item.name" :subtitle="itemSubtitle">
       <template #kicker>{{ detailKicker }}</template>
       <template #actions>
-        <RouterLink v-if="canUpdateItem" class="ui-button ui-button--primary ui-button--small" :to="`/items/${item.id}/edit`">
+        <RouterLink v-if="canUpdateItem" class="ui-button ui-button--primary ui-button--small" :to="editTarget">
           <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
           {{ t('common.edit') }}
         </RouterLink>
@@ -197,6 +230,10 @@ watch(
                 <div>
                   <dt>{{ t('pages.items.basePrice') }}</dt>
                   <dd>{{ basePriceDisplay }}</dd>
+                </div>
+                <div v-if="item.ancientArtifactCategory">
+                  <dt>{{ t('pages.items.ancientArtifact') }}</dt>
+                  <dd>{{ item.ancientArtifactCategory.name }}</dd>
                 </div>
                 <div>
                   <dt>{{ t('pages.items.recipeInfo') }}</dt>

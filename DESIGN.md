@@ -58,8 +58,7 @@
   - 喜欢的环境
   - 喜欢的东西 / 标签
   - 入手方式
-  - 物品
-  - Ancient Artifacts
+  - 物品（包含 Ancient Artifacts 视图中的物品）
   - 地图
   - 栖息地
   - 每日 CheckList Task
@@ -71,7 +70,7 @@
 - 支持翻译的字段：
   - `name`
   - `title`
-  - `details`：Pokemon、物品和 Ancient Artifacts 的介绍 / 说明
+  - `details`：Pokemon 和物品的介绍 / 说明
   - `genus`：仅 Pokemon Genus 使用
   - `effect`：Dish Category 的吃后效果
   - `mosslaxEffect`：Dish 给 Mosslax 吃之后的效果
@@ -218,7 +217,7 @@
   - Wipe Pokemon 会删除 Pokemon 及其属性 / 特长 / 喜欢的东西 / 掉落关联，并移除栖息地中的 Pokemon 出现配置，但不删除栖息地本身。
   - Wipe Habitats 会删除栖息地、栖息地配方项和 Pokemon 出现配置，但不删除 Pokemon、Items 或 Maps。
   - Wipe Items 会先删除 Recipes，再删除物品、物品入手方式 / 喜欢的东西关联、栖息地配方项和 Pokemon 掉落关联。
-  - Wipe Ancient Artifacts 会删除 Ancient Artifacts、标签关联、实体翻译、编辑历史和实体讨论评论。
+  - Wipe Ancient Artifacts 会清空物品上的 Ancient Artifact 分类并删除对应 Ancient Artifact 讨论；物品本身仍保留在 Items / Event Items 中。
   - Wipe Recipes 会删除材料单、材料项和入手方式关联，但不删除 Items。
   - Wipe Daily CheckList 会删除清单任务和任务翻译 / 编辑历史。
   - 对被清空的 identity 主表重置自增 ID；Pokemon 内部 ID 不是 identity，未关联官方 data 的自定义 Pokemon 系统分配区间仍按当前数据库最大值继续。
@@ -597,6 +596,10 @@ Pokemon 详情页展示：
 - 名称
 - 介绍
 - Base Price：可为空
+- Ancient Artifact：可为空，Items Edit 使用单选框维护；`No` 表示普通物品，其他值使用系统固定列表：
+  - Lost Relics (L)
+  - Lost Relics (S)
+  - Fossils
 - 是否为 Event Item：`is_event_item`
 - 分类：必填，使用系统固定列表，不在管理端配置：
   - Furniture
@@ -632,6 +635,7 @@ Items 与 Event Items 使用相同数据模型：
 - Items 列表只展示 `is_event_item = false` 的物品。
 - Event Items 列表只展示 `is_event_item = true` 的物品。
 - Event Items 与 Items 共用物品分类、用途、入手方式、标签、图片、翻译和材料单逻辑。
+- 已选择 Ancient Artifact 分类的物品仍显示在 Items / Event Items 列表中，并额外进入 Ancient Artifacts 对应分类列表。
 
 物品列表功能：
 
@@ -654,6 +658,7 @@ Items 与 Event Items 使用相同数据模型：
 - 顶部按图标 / 占位符与核心信息概览并排展示，移动端改为单列；顶部概览卡片不显示 `Image` / `Details` 通用区块标题，也不展示图片历史缩略图
 - 介绍
 - Base Price
+- Ancient Artifact 分类：仅在物品已配置 Ancient Artifact 分类时展示
 - 分类
 - 用途
 - 入手方式
@@ -669,12 +674,12 @@ Items 与 Event Items 使用相同数据模型：
 
 ## Ancient Artifacts
 
-Ancient Artifacts 是独立 Wiki 内容类型，可配置：
+Ancient Artifacts 是 Items 的可选分类视图，不再维护独立主数据结构或独立表；列表、详情和排序从 `items.ancient_artifact_category_key IS NOT NULL` 的物品获取。已配置 Ancient Artifact 分类的物品仍保留在 Items / Event Items 列表中，并额外出现在 Ancient Artifacts 对应分类列表。Ancient Artifact 路由继续保留，用于浏览、编辑和导航对应的物品记录。
 
 - 名称
 - 介绍
-- 图片：使用 Ancient Artifacts 上传目录，支持图片历史
-- 分类：必填，使用系统固定列表，不在管理端配置：
+- 图片：使用 Items 编辑器和上传目录，支持图片历史
+- 分类：在 Items Edit 的 Ancient Artifact 单选框中维护；`No` 表示不进入 Ancient Artifacts 列表，其他选项使用系统固定列表，不在管理端配置：
   - Lost Relics (L)
   - Lost Relics (S)
   - Fossils
@@ -692,16 +697,7 @@ Ancient Artifacts 列表功能：
 - 列表移动端保持常规卡片布局，展示图片 / 默认 Ancient Artifact 标记、名称和分类。
 - 列表不展示编辑元信息。
 
-Ancient Artifacts 详情页展示：
-
-- 名称
-- 图片；未配置图片时展示默认 Ancient Artifact 标记
-- 介绍
-- 分类
-- 标签
-- 最后编辑信息
-- 讨论
-- 编辑历史
+Ancient Artifacts 详情页使用同一套 Item Details 视图展示同一条 `items` 记录；顶部、图片、基础信息、Base Price、物品分类、用途、入手方式、客制化、标签、材料单关联、讨论和编辑历史均按物品详情页规则展示，并额外展示 Ancient Artifact 分类。通过 `/ancient-artifacts/:id` 打开的普通非 Ancient Artifact 物品会回到对应 `/items/:id`。
 
 ## 材料单
 
@@ -1000,6 +996,7 @@ API 暴露边界：
   - `/ancient-artifacts/:id/edit`
   - `/recipes/new`
   - `/recipes/:id/edit`
+- `/ancient-artifacts/new` 和 `/ancient-artifacts/:id/edit` 使用 Items 编辑器与 Items create/update 权限；保存的是同一条 `items` 记录。
 - Life 使用信息流顶部 New Post / 编辑按钮打开普通 Modal 发布与编辑，不使用路由驱动 Modal。
 - 进入或关闭编辑 Modal 时应保留底层页面上下文，不进行不必要的滚动跳转。
 - 用户界面不得展示内部字段名、调试数据、计划说明或“已修改某字段”一类实现说明。
@@ -1053,7 +1050,7 @@ API 暴露边界：
 - `GET /api/pokemon/:id`
 - `GET /api/habitats`：支持 `isEventItem=true|false` 按普通栖息地 / Event Habitats 拆分列表；未传时返回全部栖息地以兼容管理端和实体选择器
 - `GET /api/habitats/:id`
-- `GET /api/items`：支持 `isEventItem=true|false` 按普通 Items / Event Items 拆分列表；未传时返回全部 Items 以兼容管理端和实体选择器
+- `GET /api/items`：支持 `isEventItem=true|false` 按普通 Items / Event Items 拆分列表；默认返回所有物品，包括已配置 Ancient Artifact 分类的物品；传入 `ancientArtifactCategoryId` 时可额外筛选对应 Ancient Artifact 分类下的物品
 - `GET /api/items/:id`
 - `GET /api/ancient-artifacts`：支持 `search`、`categoryId` 和 `tagIds` 筛选
 - `GET /api/ancient-artifacts/:id`

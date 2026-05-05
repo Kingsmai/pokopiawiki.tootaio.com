@@ -258,6 +258,7 @@ export interface Item extends EditInfo {
   details: string;
   baseDetails?: string;
   basePrice: number | null;
+  ancientArtifactCategory: NamedEntity | null;
   isEventItem: boolean;
   translations?: TranslationMap;
   image: EntityImage | null;
@@ -791,6 +792,7 @@ export interface ItemPayload {
   name: string;
   details: string;
   basePrice: number | null;
+  ancientArtifactCategoryId: number | null;
   translations?: TranslationMap;
   categoryId: number;
   usageId: number | null;

@@ -11,7 +11,7 @@ import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconArtifact } from '../icons';
 import { api, getAuthToken, type AncientArtifact, type AuthUser, type Options } from '../services/api';
-import AncientArtifactEdit from './AncientArtifactEdit.vue';
+import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -37,7 +37,7 @@ const artifactQuery = computed(() => ({
   tagIds: tagIds.value.join(',')
 }));
 const showEditor = computed(() => route.name === 'ancient-artifact-new');
-const canCreateArtifact = computed(() => currentUser.value?.permissions.includes('ancient-artifacts.create') === true);
+const canCreateArtifact = computed(() => currentUser.value?.permissions.includes('items.create') === true);
 
 function artifactCardImage(artifact: AncientArtifact) {
   return artifact.image ? { src: artifact.image.url, alt: t('media.imageAlt', { name: artifact.name }) } : undefined;
@@ -139,6 +139,6 @@ watch(artifactQuery, loadArtifacts);
       />
     </div>
 
-    <AncientArtifactEdit v-if="showEditor" />
+    <ItemEdit v-if="showEditor" />
   </section>
 </template>

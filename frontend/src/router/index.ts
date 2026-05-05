@@ -7,7 +7,6 @@ import HabitatDetail from '../views/HabitatDetail.vue';
 import ItemsList from '../views/ItemsList.vue';
 import ItemDetail from '../views/ItemDetail.vue';
 import AncientArtifactList from '../views/AncientArtifactList.vue';
-import AncientArtifactDetail from '../views/AncientArtifactDetail.vue';
 import RecipeList from '../views/RecipeList.vue';
 import RecipeDetail from '../views/RecipeDetail.vue';
 import DailyChecklistView from '../views/DailyChecklistView.vue';
@@ -200,7 +199,7 @@ export const router = createRouter({
       name: 'ancient-artifact-new',
       component: AncientArtifactList,
       meta: {
-        requiredPermission: 'ancient-artifacts.create',
+        requiredPermission: 'items.create',
         editorModal: true,
         seo: seo({
           titleKey: 'pages.ancientArtifacts.newTitle',
@@ -213,9 +212,9 @@ export const router = createRouter({
     {
       path: '/ancient-artifacts/:id/edit',
       name: 'ancient-artifact-edit',
-      component: AncientArtifactDetail,
+      component: ItemDetail,
       meta: {
-        requiredPermission: 'ancient-artifacts.update',
+        requiredPermission: 'items.update',
         editorModal: true,
         seo: seo({
           titleKey: 'pages.ancientArtifacts.editKicker',
@@ -228,7 +227,7 @@ export const router = createRouter({
     {
       path: '/ancient-artifacts/:id',
       name: 'ancient-artifact-detail',
-      component: AncientArtifactDetail,
+      component: ItemDetail,
       meta: { seo: seo({ titleKey: 'pages.ancientArtifacts.detailKicker', descriptionKey: 'pages.ancientArtifacts.subtitle' }) }
     },
     { path: '/recipes', name: 'recipe-list', component: RecipeList, meta: { seo: seo({ titleKey: 'pages.recipes.title', descriptionKey: 'pages.recipes.subtitle' }) } },

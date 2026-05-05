@@ -83,6 +83,7 @@ import {
   getRecipe,
   globalSearch,
   importAdminData,
+  importAdminHabitatsCsv,
   importAdminItemsCsv,
   isConfigType,
   listAncientArtifacts,
@@ -2155,6 +2156,11 @@ app.post('/api/admin/data-tools/import', async (request, reply) => {
 app.post('/api/admin/data-tools/import-items-csv', async (request, reply) => {
   const user = await requirePermissionWithRateLimits(request, reply, 'admin.data.import', 'adminWrite');
   return user ? importAdminItemsCsv(request.body as Record<string, unknown>, user.id) : undefined;
+});
+
+app.post('/api/admin/data-tools/import-habitats-csv', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.data.import', 'adminWrite');
+  return user ? importAdminHabitatsCsv(request.body as Record<string, unknown>, user.id) : undefined;
 });
 
 app.post('/api/admin/data-tools/wipe', async (request, reply) => {

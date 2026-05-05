@@ -1195,6 +1195,7 @@ export const api = {
   exportDataTools: (scopes: DataToolScope[]) => sendJson<DataToolsBundle>('/api/admin/data-tools/export', 'POST', { scopes }),
   importDataTools: (bundle: DataToolsBundle) => sendJson<DataToolsSummary>('/api/admin/data-tools/import', 'POST', { bundle }),
   importItemsCsvDataTools: (csv: string) => sendJson<DataToolsSummary>('/api/admin/data-tools/import-items-csv', 'POST', { csv }),
+  importHabitatsCsvDataTools: (csv: string) => sendJson<DataToolsSummary>('/api/admin/data-tools/import-habitats-csv', 'POST', { csv }),
   wipeDataTools: (scopes: DataToolScope[]) => sendJson<DataToolsSummary>('/api/admin/data-tools/wipe', 'POST', { scopes }),
   register: (payload: RegisterPayload) => sendJson<{ message: string }>('/api/auth/register', 'POST', payload),
   verifyEmail: (token: string) =>

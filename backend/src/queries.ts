@@ -628,6 +628,7 @@ const lifeReactionTypes = ['like', 'helpful', 'fun', 'thanks'] as const;
 const pokemonTypeIconIds = new Set(Array.from({ length: 19 }, (_value, index) => index + 1));
 const pokemonSpriteBaseUrl = 'https://pokesprite.tootaio.com';
 const itemStaticImagePathPrefix = '/pokopia/items/';
+const habitatStaticImagePathPrefix = '/pokopia/habitats/';
 const pokemonSpriteRequestTimeoutMs = 2500;
 const pokemonStatLabels: Array<{ key: keyof PokemonStats; label: string }> = [
   { key: 'hp', label: 'HP' },
@@ -731,7 +732,8 @@ function sqlLiteral(value: string): string {
 function uploadedImageJson(pathExpression: string): string {
   return `
     CASE
-      WHEN ${pathExpression} LIKE ${sqlLiteral(`${itemStaticImagePathPrefix}%`)} THEN json_build_object(
+      WHEN ${pathExpression} LIKE ${sqlLiteral(`${itemStaticImagePathPrefix}%`)}
+        OR ${pathExpression} LIKE ${sqlLiteral(`${habitatStaticImagePathPrefix}%`)} THEN json_build_object(
         'path', ${pathExpression},
         'url', ${sqlLiteral(pokemonSpriteBaseUrl)} || ${pathExpression}
       )
@@ -1061,15 +1063,25 @@ function cleanOptionalText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function isItemStaticImagePath(value: string): boolean {
-  const fileName = value.startsWith(itemStaticImagePathPrefix) ? value.slice(itemStaticImagePathPrefix.length) : '';
+function isStaticImageFileName(fileName: string): boolean {
   return Boolean(fileName) && !fileName.includes('/') && !fileName.includes('\\') && !fileName.includes('..') && /^[A-Za-z0-9._()-]+$/.test(fileName);
+}
+
+function isItemStaticImagePath(value: string): boolean {
+  return isStaticImageFileName(value.startsWith(itemStaticImagePathPrefix) ? value.slice(itemStaticImagePathPrefix.length) : '');
+}
+
+function isHabitatStaticImagePath(value: string): boolean {
+  return isStaticImageFileName(value.startsWith(habitatStaticImagePathPrefix) ? value.slice(habitatStaticImagePathPrefix.length) : '');
 }
 
 function cleanUploadImagePath(value: unknown, entityType: 'items' | 'habitats' | 'ancient-artifacts'): string {
   const imagePath = cleanOptionalText(value);
   if (imagePath === '') {
     return '';
+  }
+  if (entityType === 'habitats' && isHabitatStaticImagePath(imagePath)) {
+    return imagePath;
   }
   if (!isUploadImagePath(imagePath) || !imagePath.startsWith(`${entityType}/`)) {
     throw validationError('server.validation.imagePathInvalid');
@@ -8028,6 +8040,7 @@ const itemsCsvColumns = [
   'not_registered_in_collection',
   'cannot_grow_again_today'
 ] as const;
+const habitatsCsvColumns = ['id', 'name', 'image_file_name'] as const;
 const itemsCsvCategoryAliases = new Map<string, string>(
   itemCategoryOptions.flatMap((option) => [
     [option.key, option.key],
@@ -8086,6 +8099,27 @@ function itemsCsvImagePath(value: string): string {
   return imagePath;
 }
 
+function habitatsCsvId(value: string): { normalizedId: string; isEventItem: boolean } {
+  const id = value.trim();
+  const eventMatch = id.match(/^E-?(\d+)$/i);
+  if (eventMatch) {
+    return { normalizedId: `E${eventMatch[1]}`, isEventItem: true };
+  }
+  if (!/^\d+$/.test(id)) {
+    throw validationError('server.validation.dataToolHabitatsCsvInvalid');
+  }
+  return { normalizedId: id, isEventItem: false };
+}
+
+function habitatsCsvImagePath(value: string): string {
+  const fileName = value.trim();
+  const imagePath = `${habitatStaticImagePathPrefix}${fileName}`;
+  if (!isHabitatStaticImagePath(imagePath)) {
+    throw validationError('server.validation.dataToolHabitatsCsvInvalid');
+  }
+  return imagePath;
+}
+
 function cleanItemsCsvRows(value: unknown): CsvRow[] {
   if (typeof value !== 'string' || value.trim() === '') {
     throw validationError('server.validation.dataToolItemsCsvInvalid');
@@ -8102,6 +8136,32 @@ function cleanItemsCsvRows(value: unknown): CsvRow[] {
     if (!name || names.has(name)) {
       throw validationError('server.validation.dataToolItemsCsvInvalid');
     }
+    names.add(name);
+  }
+
+  return rows;
+}
+
+function cleanHabitatsCsvRows(value: unknown): CsvRow[] {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw validationError('server.validation.dataToolHabitatsCsvInvalid');
+  }
+
+  const rows = parseCsv(value, 'habitats.csv');
+  if (!rows.length || rows.some((row) => habitatsCsvColumns.some((column) => !(column in row)))) {
+    throw validationError('server.validation.dataToolHabitatsCsvInvalid');
+  }
+
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  for (const row of rows) {
+    const id = habitatsCsvId(csvText(row, 'id')).normalizedId;
+    const name = csvText(row, 'name');
+    habitatsCsvImagePath(csvText(row, 'image_file_name'));
+    if (ids.has(id) || !name || names.has(name)) {
+      throw validationError('server.validation.dataToolHabitatsCsvInvalid');
+    }
+    ids.add(id);
     names.add(name);
   }
 
@@ -8625,6 +8685,49 @@ export async function importAdminItemsCsv(payload: Record<string, unknown>, user
     }
 
     await resetIdentity(client, 'items');
+  });
+
+  return getAdminDataToolsSummary();
+}
+
+export async function importAdminHabitatsCsv(payload: Record<string, unknown>, userId: number): Promise<{ scopes: DataToolScopeSummary[] }> {
+  const rows = cleanHabitatsCsvRows(payload.csv);
+  const names = rows.map((row) => csvText(row, 'name'));
+
+  await withTransaction(async (client) => {
+    const existing = await client.query<{ name: string }>('SELECT name FROM habitats WHERE name = ANY($1::text[])', [names]);
+    if (existing.rowCount && existing.rowCount > 0) {
+      throw validationError('server.validation.dataToolHabitatsCsvInvalid');
+    }
+
+    const firstSortOrder = await nextSortOrder(client, 'habitats');
+    for (const [index, row] of rows.entries()) {
+      const { isEventItem } = habitatsCsvId(csvText(row, 'id'));
+      const result = await client.query<{ id: number }>(
+        `
+          INSERT INTO habitats (
+            name,
+            is_event_item,
+            image_path,
+            sort_order,
+            created_by_user_id,
+            updated_by_user_id
+          )
+          VALUES ($1, $2, $3, $4, $5, $5)
+          RETURNING id
+        `,
+        [
+          csvText(row, 'name'),
+          isEventItem,
+          habitatsCsvImagePath(csvText(row, 'image_file_name')),
+          firstSortOrder + index * 10,
+          userId
+        ]
+      );
+      await recordEditLog(client, 'habitats', result.rows[0].id, 'create', userId);
+    }
+
+    await resetIdentity(client, 'habitats');
   });
 
   return getAdminDataToolsSummary();

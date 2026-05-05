@@ -237,7 +237,11 @@
   - Items CSV 的 `category` 必须匹配系统固定物品分类；支持 `Misc.` 匹配内置 `Misc`，其他值按固定分类英文名匹配。
   - Items CSV 导入时，`description` 写入物品介绍；若 `not_registered_in_collection` 为 true，追加 `Note: Not registered in collection`；若 `cannot_grow_again_today` 为 true，追加 `Note: Cannot have Grow used on it again today`；原介绍非空时 Note 前使用换行分隔。
   - Items CSV 导入时，图片路径保存为 `/pokopia/items/{image_file_name}`，API 对外图片 URL 解析为 `https://pokesprite.tootaio.com/pokopia/items/{image_file_name}`。
-  - 前端 JSON bundle Import 和 Wipe 必须使用确认 Modal，并要求输入固定确认词后才能执行；Items CSV 导入只新增物品，不执行删除，可直接从 CSV 文件选择触发。
+  - Data Tools 额外支持 Habitats CSV 导入，用于在 Wipe Habitats 后按 CSV 顺序批量新增 Habitats；CSV 导入只新增 Habitats，不自动 Wipe，不创建配方项、Pokemon 出现配置或翻译。
+  - Habitats CSV 必须包含 `id`、`name`、`image_file_name` 列。
+  - Habitats CSV 的 `id` 仅用于识别导入行与 Event 标记，不写入数据库主键；`id` 前缀为 `E` 或 `E-` 时导入为 Event Habitat，否则导入为 Main Game Habitat。
+  - Habitats CSV 导入时，图片路径保存为 `/pokopia/habitats/{image_file_name}`，API 对外图片 URL 解析为 `https://pokesprite.tootaio.com/pokopia/habitats/{image_file_name}`。
+  - 前端 JSON bundle Import 和 Wipe 必须使用确认 Modal，并要求输入固定确认词后才能执行；Items CSV 和 Habitats CSV 导入只新增对应内容，不执行删除，可直接从 CSV 文件选择触发。
 
 ## Referral
 

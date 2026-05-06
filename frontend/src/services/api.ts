@@ -1460,7 +1460,6 @@ export const api = {
   updatePokemon: (id: string | number, payload: PokemonPayload) =>
     sendJson<PokemonDetail>(`/api/pokemon/${id}`, 'PUT', payload),
   deletePokemon: (id: string | number) => deleteJson(`/api/pokemon/${id}`),
-  reorderPokemon: (ids: number[]) => sendJson<Pokemon[]>('/api/admin/pokemon/order', 'PUT', { ids }),
   habitats: (params: Record<string, string | number | boolean | undefined> = {}) =>
     getJson<Habitat[]>(`/api/habitats${buildQuery(params)}`),
   habitatsPage: (params: PublicListQueryParams = {}) =>

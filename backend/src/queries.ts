@@ -108,7 +108,7 @@ type ConfigDefinition = {
   hasRateable?: boolean;
   hasChangeLog?: boolean;
 };
-type SortableContentType = 'pokemon' | 'items' | 'ancient-artifacts' | 'recipes' | 'habitats';
+type SortableContentType = 'items' | 'ancient-artifacts' | 'recipes' | 'habitats';
 type SortableContentDefinition = {
   table: string;
   entityType: SortableContentType;
@@ -691,7 +691,6 @@ const configDefinitions: Record<ConfigType, ConfigDefinition> = {
 };
 
 const sortableContentDefinitions: Record<SortableContentType, SortableContentDefinition> = {
-  pokemon: { table: 'pokemon', entityType: 'pokemon' },
   items: { table: 'items', entityType: 'items' },
   'ancient-artifacts': { table: 'items', entityType: 'ancient-artifacts' },
   recipes: { table: 'recipes', entityType: 'recipes' },
@@ -2809,7 +2808,7 @@ export async function globalSearch(paramsQuery: QueryParams = {}, locale = defau
           ${pokemonImageJson('p')} AS image
         FROM pokemon p
         WHERE ${pokemonName} ILIKE $1
-        ORDER BY ${orderByEntity('p')}
+        ORDER BY p.id
         LIMIT $2
       `,
       [pattern, limit]
@@ -5746,11 +5745,6 @@ async function reorderContent(type: SortableContentType, payload: Record<string,
   });
 }
 
-export async function reorderPokemon(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
-  await reorderContent('pokemon', payload, userId);
-  return listPokemon({}, locale);
-}
-
 export async function reorderItems(payload: Record<string, unknown>, userId: number, locale = defaultLocale) {
   await reorderContent('items', payload, userId);
   return listItems({}, locale);
@@ -5822,7 +5816,7 @@ export async function listPokemon(paramsQuery: QueryParams, locale = defaultLoca
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return queryMaybePaged(`${pokemonProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('p')}`, params, paramsQuery);
+  return queryMaybePaged(`${pokemonProjection(locale)} ${whereClause} ORDER BY p.id`, params, paramsQuery);
 }
 
 export async function getPokemon(id: number, locale = defaultLocale) {
@@ -5927,7 +5921,6 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         scored_pokemon AS (
           SELECT
             related_pokemon.id,
-            related_pokemon.sort_order,
             (related_pokemon.environment_id = current_pokemon.environment_id) AS "environmentMatches",
             COUNT(current_favourites.favorite_thing_id)::integer AS "favoriteThingMatchCount"
           FROM current_pokemon
@@ -5936,7 +5929,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
             ON related_pokemon_favourite.pokemon_id = related_pokemon.id
           LEFT JOIN current_favourites
             ON current_favourites.favorite_thing_id = related_pokemon_favourite.favorite_thing_id
-          GROUP BY related_pokemon.id, related_pokemon.sort_order, related_pokemon.environment_id, current_pokemon.environment_id
+          GROUP BY related_pokemon.id, related_pokemon.environment_id, current_pokemon.environment_id
           HAVING related_pokemon.environment_id = current_pokemon.environment_id
             OR COUNT(current_favourites.favorite_thing_id) > 0
         )
@@ -5981,7 +5974,7 @@ export async function getPokemon(id: number, locale = defaultLocale) {
         FROM scored_pokemon
         JOIN pokemon related_pokemon ON related_pokemon.id = scored_pokemon.id
         JOIN environments related_environment ON related_environment.id = related_pokemon.environment_id
-        ORDER BY scored_pokemon."environmentMatches" DESC, scored_pokemon."favoriteThingMatchCount" DESC, scored_pokemon.sort_order, related_pokemon.id
+        ORDER BY scored_pokemon."environmentMatches" DESC, scored_pokemon."favoriteThingMatchCount" DESC, related_pokemon.id
       `,
       [id]
     ),
@@ -6369,10 +6362,10 @@ export async function listHabitats(paramsQuery: QueryParams = {}, locale = defau
             'name', pokemon_rows.name,
             'isEventItem', pokemon_rows.is_event_item
           )
-          ORDER BY pokemon_rows.sort_order, pokemon_rows.id
+          ORDER BY pokemon_rows.id
         )
         FROM (
-          SELECT DISTINCT p.id, p.display_id, ${pokemonName} AS name, p.is_event_item, p.sort_order
+          SELECT DISTINCT p.id, p.display_id, ${pokemonName} AS name, p.is_event_item
           FROM habitat_pokemon hp
           JOIN pokemon p ON p.id = hp.pokemon_id
           WHERE hp.habitat_id = h.id
@@ -6443,7 +6436,7 @@ export async function getHabitat(id: number, locale = defaultLocale) {
         JOIN pokemon p ON p.id = hp.pokemon_id
         JOIN maps m ON m.id = hp.map_id
         WHERE hp.habitat_id = $1
-        ORDER BY hp.rarity, ${orderByEntity('p')}, ${orderByEntity('m')}
+        ORDER BY hp.rarity, p.id, ${orderByEntity('m')}
       `,
       [id]
     ),
@@ -6855,7 +6848,7 @@ export async function getItem(id: number, locale = defaultLocale) {
         JOIN skills s ON s.id = psid.skill_id
         WHERE psid.item_id = $1
           AND s.has_item_drop = true
-        ORDER BY ${orderByEntity('p')}, ${orderByEntity('s')}
+        ORDER BY p.id, ${orderByEntity('s')}
       `,
       [id]
     ),
@@ -6893,7 +6886,7 @@ export async function getItem(id: number, locale = defaultLocale) {
             WHERE ps.pokemon_id = p.id
               AND trading_skill.has_trading = true
           )
-        ORDER BY pti.preference DESC, ${orderByEntity('p')}
+        ORDER BY pti.preference DESC, p.id
       `,
       [id]
     ),
@@ -8493,7 +8486,7 @@ async function exportGenericScopeData(client: DbClient, entityType: string, incl
 async function exportScopeData(client: DbClient, scope: DataToolScope): Promise<DataToolScopeData> {
   if (scope === 'pokemon') {
     return {
-      pokemon: await tableRows(client, 'SELECT * FROM pokemon ORDER BY sort_order, id'),
+      pokemon: await tableRows(client, 'SELECT * FROM pokemon ORDER BY id'),
       pokemonTypeLinks: await tableRows(client, 'SELECT * FROM pokemon_pokemon_types ORDER BY pokemon_id, slot_order'),
       pokemonSkills: await tableRows(client, 'SELECT * FROM pokemon_skills ORDER BY pokemon_id, skill_id'),
       pokemonFavoriteThings: await tableRows(client, 'SELECT * FROM pokemon_favorite_things ORDER BY pokemon_id, favorite_thing_id'),

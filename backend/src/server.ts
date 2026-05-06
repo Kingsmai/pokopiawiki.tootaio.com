@@ -111,7 +111,6 @@ import {
   reorderHabitats,
   reorderItems,
   reorderLanguages,
-  reorderPokemon,
   reorderRecipes,
   retryEntityDiscussionCommentModeration,
   retryLifeCommentModeration,
@@ -2090,11 +2089,6 @@ app.delete('/api/admin/daily-checklist/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
   const deleted = await deleteDailyChecklistItem(Number(id), user.id);
   return deleted ? reply.code(204).send() : notFound(reply, request);
-});
-
-app.put('/api/admin/pokemon/order', async (request, reply) => {
-  const user = await requirePermissionWithRateLimits(request, reply, 'pokemon.order', 'wikiWrite');
-  return user ? reorderPokemon(request.body as Record<string, unknown>, user.id, requestLocale(request)) : undefined;
 });
 
 app.put('/api/admin/items/order', async (request, reply) => {

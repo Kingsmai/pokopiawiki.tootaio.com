@@ -231,7 +231,6 @@ VALUES
   ('pokemon.create', 'Create Pokemon', 'Create Pokemon records.', 'Pokemon', true),
   ('pokemon.update', 'Update Pokemon', 'Edit Pokemon records.', 'Pokemon', true),
   ('pokemon.delete', 'Delete Pokemon', 'Delete Pokemon records.', 'Pokemon', true),
-  ('pokemon.order', 'Order Pokemon', 'Reorder Pokemon records.', 'Pokemon', true),
   ('pokemon.fetch', 'Fetch Pokemon data', 'Fetch Pokemon data and sprite candidates.', 'Pokemon', true),
   ('pokemon.upload', 'Upload Pokemon images', 'Upload Pokemon images.', 'Pokemon', true),
   ('habitats.create', 'Create habitats', 'Create habitat records.', 'Habitats', true),
@@ -274,6 +273,9 @@ VALUES
   ('discussions.comments.delete-any', 'Delete any discussion comment', 'Delete any entity discussion comment.', 'Discussions', true),
   ('discussions.comments.like', 'Like discussion comments', 'Like and unlike entity discussion comments.', 'Discussions', true)
 ON CONFLICT (key) DO NOTHING;
+
+DELETE FROM permissions
+WHERE key = 'pokemon.order';
 
 INSERT INTO roles (key, name, description, level, enabled, system_role)
 VALUES
@@ -329,7 +331,6 @@ JOIN permissions p ON p.key = ANY (ARRAY[
   'pokemon.create',
   'pokemon.update',
   'pokemon.delete',
-  'pokemon.order',
   'pokemon.fetch',
   'pokemon.upload',
   'habitats.create',
@@ -411,7 +412,6 @@ JOIN permissions p ON p.key = ANY (ARRAY[
   'checklist.order',
   'pokemon.create',
   'pokemon.update',
-  'pokemon.order',
   'pokemon.fetch',
   'pokemon.upload',
   'habitats.create',

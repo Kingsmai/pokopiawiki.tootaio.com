@@ -27,7 +27,7 @@
 - 全局搜索 API 只返回公开浏览所需的最小结果字段：结果类型、ID、展示标题、目标 URL、可选摘要和可选图片；用户搜索结果只使用公开 Profile 所需的 `id`、`displayName` 和目标 URL，不返回邮箱、角色、权限、Referral、编辑审计、审核原因、token/hash、内部字段或调试信息。
 - 用户界面只展示业务数据和设计内的文案，不展示提示词、计划、调试信息、字段内部名或修改说明。
 - 可编辑 Wiki 内容必须记录创建者、最后编辑者、创建时间、最后编辑时间和编辑历史。
-- 列表顺序由 `sort_order` 控制，默认按创建时间旧到新初始化，排序值按 10 递增以便后续插入和拖拽排序。
+- 除 Pokemon 外，列表顺序由 `sort_order` 控制，默认按创建时间旧到新初始化，排序值按 10 递增以便后续插入和拖拽排序；Pokemon 列表按内部 `id` 升序展示，不提供手动排序。
 
 ## 国际化
 
@@ -358,7 +358,7 @@
   - `created_at`
 - 详情页展示最后编辑者、最后编辑时间和编辑历史面板。
 - 编辑历史中的用户信息只展示必要署名，不暴露邮箱、token、hash 或内部元数据。
-- 排序操作仍更新列表顺序、最后编辑者和最后编辑时间，但 `sort_order` / Sort order 字段变更不写入或展示在详情页编辑历史面板中。
+- 非 Pokemon 列表排序操作仍更新列表顺序、最后编辑者和最后编辑时间，但 `sort_order` / Sort order 字段变更不写入或展示在详情页编辑历史面板中。
 - 编辑署名、编辑历史署名、Life 作者和讨论作者可链接到对应公开 Profile。
 
 ## Wiki 图片上传
@@ -529,7 +529,6 @@ Pokemon 可配置：
   - Speed
 - 出现的栖息地：由栖息地出现配置反向展示
 - 翻译
-- 排序
 
 普通 Pokemon 与 Event Pokemon 分开展示：
 
@@ -586,7 +585,7 @@ Pokemon 列表功能：
 - 按喜欢的东西筛选：
   - 满足任意条件
   - 满足全部条件
-- 按自定义排序展示
+- 按 Pokemon 内部 `id` 升序展示
 - 列表首屏只读取一页数据；滚动到列表底部时继续读取下一页，不一次性加载全部 Pokemon。
 - Pokemon 列表卡片只展示 Pokemon 图片和下方的 `#ID 名称`；不展示喜欢的环境、属性、特长、喜欢的东西或编辑元信息。
 - Pokemon 卡片在已配置图片时展示所选图片缩略图；未配置图片时保留默认 Poké Ball 标记。
@@ -1005,7 +1004,7 @@ API 暴露边界：
 - 全局主导航使用 `AppShell` 侧边栏；移动端通过导航按钮打开侧边栏抽屉。
 - 管理入口在全局侧边栏中保持单一 Admin 入口，`/admin` 内部使用页面内二级菜单分组组织管理模块：
   - 配置：System config。
-  - 内容：Daily CheckList、Pokemon、物品、材料单、栖息地的维护、排序或删除入口，以及 Data Tools。
+  - 内容：Daily CheckList、Pokemon、物品、材料单、栖息地的维护、排序或删除入口，以及 Data Tools；Pokemon 在 Admin 中可删除但不提供手动排序。
   - 内容管理包含 Items、Event Items 与 Ancient Artifacts；Items / Event Items 使用同一物品数据模型，通过 `is_event_item` 拆分入口。
   - 本地化：Languages、System wordings。
   - 访问权限：Users、Roles、Permissions、Rate limits。
@@ -1190,7 +1189,7 @@ API 暴露边界：
   - `GET /api/admin/ai-moderation`
   - `PUT /api/admin/ai-moderation`
 - `PUT /api/admin/system-wordings/:key`
-- Pokemon、物品、材料单、栖息地的列表排序需要对应实体的 `order` 权限。
+- 物品、材料单、栖息地的列表排序需要对应实体的 `order` 权限；Pokemon 按内部 `id` 排序，不提供列表排序 API 或 Admin 手动排序入口。
 
 ## 开发与验证
 

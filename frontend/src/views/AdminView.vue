@@ -156,7 +156,7 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
       label: t('pages.admin.contentGroup'),
       items: [
         { key: 'checklist', label: t('pages.admin.checklist'), permission: ['checklist.create', 'checklist.update', 'checklist.delete', 'checklist.order'] },
-        { key: 'pokemon', label: t('pages.admin.pokemonList'), permission: ['pokemon.order', 'pokemon.delete'] },
+        { key: 'pokemon', label: t('pages.admin.pokemonList'), permission: 'pokemon.delete' },
         { key: 'items', label: t('pages.admin.itemList'), permission: ['items.order', 'items.delete'] },
         {
           key: 'ancientArtifacts',
@@ -502,8 +502,6 @@ const languageKey = (item: Language) => item.code;
 const languageLabel = (item: Language) => item.name;
 const configKey = (item: EditableConfig) => item.id;
 const configLabel = (item: EditableConfig) => item.name;
-const pokemonKey = (item: Pokemon) => item.id;
-const pokemonLabel = (item: Pokemon) => `#${item.displayId} ${item.name}`;
 const itemKey = (item: Item) => item.id;
 const itemLabel = (item: Item) => item.name;
 const ancientArtifactKey = (item: AncientArtifact) => item.id;
@@ -932,10 +930,6 @@ function previewConfigOrder(rows: EditableConfig[]) {
   configRows.value = rows;
 }
 
-function previewPokemonOrder(rows: Pokemon[]) {
-  pokemonRows.value = rows;
-}
-
 function previewItemOrder(rows: Item[]) {
   itemRows.value = rows;
 }
@@ -999,18 +993,6 @@ async function persistConfigOrder(nextRows: EditableConfig[], fallbackRows: Edit
       configRows.value = (await api.reorderConfig(activeConfigType.value, nextRows.map((item) => item.id))) as EditableConfig[];
     } catch (error) {
       configRows.value = fallbackRows;
-      throw error;
-    }
-  });
-}
-
-async function persistPokemonOrder(nextRows: Pokemon[], fallbackRows: Pokemon[]) {
-  pokemonRows.value = nextRows;
-  await run(async () => {
-    try {
-      pokemonRows.value = await api.reorderPokemon(nextRows.map((item) => item.id));
-    } catch (error) {
-      pokemonRows.value = fallbackRows;
       throw error;
     }
   });
@@ -2319,20 +2301,8 @@ onMounted(() => {
 
     <section v-else-if="canEdit && activeTab === 'pokemon'" class="detail-section">
       <h2>{{ t('pages.admin.pokemonList') }}</h2>
-      <ReorderableList
-        v-if="pokemonRows.length"
-        :items="pokemonRows"
-        :item-key="pokemonKey"
-        :item-label="pokemonLabel"
-        list-key-prefix="pokemon"
-        :disabled="busy || !can('pokemon.order')"
-        :handle-label="dragSortLabel"
-        :handle-title="t('pages.admin.dragSortTitle')"
-        @preview="previewPokemonOrder"
-        @cancel="previewPokemonOrder"
-        @reorder="persistPokemonOrder"
-      >
-        <template #default="{ item }">
+      <ul v-if="pokemonRows.length" class="row-list">
+        <li v-for="item in pokemonRows" :key="item.id">
           <RouterLink :to="`/pokemon/${item.id}`">#{{ item.displayId }} {{ item.name }}</RouterLink>
           <span class="row-actions">
             <button v-if="can('pokemon.delete')" type="button" :disabled="busy" @click="removePokemon(item.id)">
@@ -2340,8 +2310,8 @@ onMounted(() => {
               {{ t('common.delete') }}
             </button>
           </span>
-        </template>
-      </ReorderableList>
+        </li>
+      </ul>
       <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 

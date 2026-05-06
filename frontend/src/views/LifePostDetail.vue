@@ -40,6 +40,7 @@ import {
   type LifeReactionType,
   type ModerationUpdateDetail
 } from '../services/api';
+import { resolvedSeoHead, resolveSeo } from '../seo';
 
 const { locale, t } = useI18n();
 const route = useRoute();
@@ -101,6 +102,15 @@ function routePostId() {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function summaryText(value: string, maxLength: number) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
+}
+
 async function loadCurrentUser() {
   if (!getAuthToken()) {
     currentUser.value = null;
@@ -133,6 +143,41 @@ function resetCommentsFromPost(nextPost: LifePost) {
   commentErrors.value = {};
 }
 
+const { data: initialPost } = await useAsyncData<LifePost | null>(
+  `life-post-detail:${String(routePostId())}:${locale.value}`,
+  async () => {
+    const id = routePostId();
+    if (!id) {
+      return null;
+    }
+
+    try {
+      return await api.lifePost(id);
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+if (initialPost.value) {
+  post.value = initialPost.value;
+  resetCommentsFromPost(initialPost.value);
+}
+const initialPostLoaded = ref(initialPost.value !== null);
+loading.value = !initialPostLoaded.value;
+const postSeo = computed(() =>
+  post.value
+    ? resolveSeo({
+        title: `${summaryText(post.value.body, 64) || t('pages.life.detailTitle')} - ${t('pages.life.title')}`,
+        description: summaryText(post.value.body, 155) || t('pages.life.detailSubtitle'),
+        canonicalPath: `/life/${post.value.id}`
+      })
+    : null
+);
+
+useHead(() => (postSeo.value ? resolvedSeoHead(postSeo.value) : {}));
+
 async function loadPost() {
   const id = routePostId();
   if (!id) {
@@ -147,9 +192,11 @@ async function loadPost() {
     const nextPost = await api.lifePost(id);
     post.value = nextPost;
     resetCommentsFromPost(nextPost);
+    initialPostLoaded.value = true;
     void loadComments(true);
   } catch (error) {
     loadError.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
+    initialPostLoaded.value = true;
   } finally {
     loading.value = false;
   }
@@ -793,8 +840,13 @@ onMounted(() => {
   document.addEventListener('click', closeReactionPickerFromDocument);
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
   window.addEventListener(moderationUpdateEvent, handleModerationUpdate);
-  void loadCurrentUser();
-  void loadPost();
+  const hadAuthToken = getAuthToken() !== null;
+  void (async () => {
+    await loadCurrentUser();
+    if (!initialPostLoaded.value || hadAuthToken) {
+      await loadPost();
+    }
+  })();
   removeAuthListener = onAuthTokenChange(() => {
     void loadCurrentUser();
     void loadPost();

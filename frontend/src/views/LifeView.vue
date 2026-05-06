@@ -47,6 +47,7 @@ import {
   type LifeCategory,
   type LifeComment,
   type LifePost,
+  type LifePostsPage,
   type LifeReactionType,
   type ModerationUpdateDetail
 } from '../services/api';
@@ -123,6 +124,47 @@ const loadMorePaused = ref(false);
 const allCategoryValue = 'all';
 const allLanguageValue = 'all';
 const allGameVersionValue = 'all';
+
+type LifeInitialData = {
+  options: { lifeCategories: LifeCategory[]; gameVersions: GameVersion[] } | null;
+  languages: Language[] | null;
+  posts: LifePostsPage | null;
+};
+
+const { data: initialData } = await useAsyncData<LifeInitialData>(
+  `life-feed-initial:${locale.value}`,
+  async () => {
+    const [optionsResult, languagesResult, postsResult] = await Promise.allSettled([
+      api.options(),
+      api.languages(),
+      api.lifePosts({
+        limit: lifePostPageSize,
+        sort: 'latest'
+      })
+    ]);
+
+    return {
+      options:
+        optionsResult.status === 'fulfilled'
+          ? { lifeCategories: optionsResult.value.lifeCategories, gameVersions: optionsResult.value.gameVersions }
+          : null,
+      languages: languagesResult.status === 'fulfilled' ? languagesResult.value.filter((language) => language.enabled) : null,
+      posts: postsResult.status === 'fulfilled' ? postsResult.value : null
+    };
+  },
+  { default: () => ({ options: null, languages: null, posts: null }) }
+);
+
+lifeCategories.value = initialData.value.options?.lifeCategories ?? [];
+gameVersions.value = initialData.value.options?.gameVersions ?? [];
+languages.value = initialData.value.languages ?? [];
+posts.value = initialData.value.posts?.items ?? [];
+nextCursor.value = initialData.value.posts?.nextCursor ?? null;
+hasMorePosts.value = initialData.value.posts?.hasMore ?? false;
+const initialOptionsLoaded = ref(initialData.value.options !== null);
+const initialLanguagesLoaded = ref(initialData.value.languages !== null);
+const initialPostsLoaded = ref(initialData.value.posts !== null);
+loading.value = !initialPostsLoaded.value;
 
 const reactionOptions = [
   { type: 'like', icon: iconReactionLike, labelKey: 'pages.life.reactionLike' },
@@ -1334,10 +1376,22 @@ onMounted(() => {
   document.addEventListener('click', closeReactionPickerFromDocument);
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
   window.addEventListener(moderationUpdateEvent, handleModerationUpdate);
-  void loadCurrentUser();
-  void loadLanguages();
-  void loadLifeCategories();
-  void loadPosts();
+  const hadAuthToken = getAuthToken() !== null;
+  void (async () => {
+    await loadCurrentUser();
+    if (!initialLanguagesLoaded.value) {
+      await loadLanguages();
+      initialLanguagesLoaded.value = true;
+    }
+    if (!initialOptionsLoaded.value) {
+      await loadLifeCategories();
+      initialOptionsLoaded.value = true;
+    }
+    if (!initialPostsLoaded.value || hadAuthToken) {
+      await loadPosts();
+      initialPostsLoaded.value = true;
+    }
+  })();
   removeAuthListener = onAuthTokenChange(() => {
     void (async () => {
       await loadCurrentUser();

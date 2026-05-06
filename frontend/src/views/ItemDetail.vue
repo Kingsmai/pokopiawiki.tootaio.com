@@ -12,7 +12,7 @@ import PokeBallMark from '../components/PokeBallMark.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconAdd, iconBack, iconEdit, iconHabitat, iconItem } from '../icons';
-import { applySeo } from '../seo';
+import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type ItemDetail } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
@@ -73,6 +73,34 @@ const possibleTagEvidenceSections = computed(() => [
   { key: 'neutral', title: t('pages.pokemon.tradingNeutral'), rows: item.value?.possibleTags?.evidence.neutral ?? [] }
 ]);
 
+const { data: initialItem } = await useAsyncData<ItemDetail | null>(
+  `item-detail:${String(route.name)}:${String(route.params.id)}:${locale.value}`,
+  async () => {
+    try {
+      const nextItem = await api.itemDetail(String(route.params.id));
+      return isAncientArtifactRoute.value && !nextItem.ancientArtifactCategory ? null : nextItem;
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+item.value = initialItem.value;
+const initialItemLoaded = ref(initialItem.value !== null);
+const itemSeo = computed(() =>
+  item.value && route.meta.editorModal !== true
+    ? resolveSeo({
+        title: `${item.value.name} - ${t(detailTitleKey.value)}`,
+        description: t(detailDescriptionKey.value, { name: item.value.name }),
+        canonicalPath: detailCanonicalPath.value,
+        image: item.value.image?.url
+      })
+    : null
+);
+
+useHead(() => (itemSeo.value ? resolvedSeoHead(itemSeo.value) : {}));
+
 const customization = computed(() => {
   if (!item.value) {
     return [];
@@ -86,22 +114,28 @@ const customization = computed(() => {
 });
 
 async function loadItemDetail() {
-  const nextItem = await api.itemDetail(String(route.params.id));
+  try {
+    const nextItem = await api.itemDetail(String(route.params.id));
 
-  if (isAncientArtifactRoute.value && !nextItem.ancientArtifactCategory) {
-    await router.replace(route.name === 'ancient-artifact-edit' ? `/items/${nextItem.id}/edit` : `/items/${nextItem.id}`);
-    return;
-  }
+    if (isAncientArtifactRoute.value && !nextItem.ancientArtifactCategory) {
+      await router.replace(route.name === 'ancient-artifact-edit' ? `/items/${nextItem.id}/edit` : `/items/${nextItem.id}`);
+      return;
+    }
 
-  item.value = nextItem;
+    item.value = nextItem;
+    initialItemLoaded.value = true;
 
-  if (route.meta.editorModal !== true) {
-    applySeo({
-      title: `${nextItem.name} - ${t(detailTitleKey.value)}`,
-      description: t(detailDescriptionKey.value, { name: nextItem.name }),
-      canonicalPath: detailCanonicalPath.value,
-      image: nextItem.image?.url
-    });
+    if (route.meta.editorModal !== true) {
+      applySeo({
+        title: `${nextItem.name} - ${t(detailTitleKey.value)}`,
+        description: t(detailDescriptionKey.value, { name: nextItem.name }),
+        canonicalPath: detailCanonicalPath.value,
+        image: nextItem.image?.url
+      });
+    }
+  } catch {
+    item.value = null;
+    initialItemLoaded.value = true;
   }
 }
 
@@ -117,7 +151,9 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  await loadItemDetail();
+  if (!initialItemLoaded.value) {
+    await loadItemDetail();
+  }
 });
 
 watch(

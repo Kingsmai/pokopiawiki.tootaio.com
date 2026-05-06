@@ -15,12 +15,12 @@ import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconAdd, iconBack, iconCancel, iconCheck, iconEdit, iconHabitat, iconItem } from '../icons';
-import { applySeo } from '../seo';
+import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type Item, type PokemonDetail, type PokemonPayload, type TradingPreference } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const route = useRoute();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const pokemon = ref<PokemonDetail | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const itemCategoryTab = ref('');
@@ -39,6 +39,34 @@ const tradingDraftItems = ref<Array<{ itemId: number; preference: TradingPrefere
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const relatedPokemonLimit = 6;
+
+const { data: initialPokemon } = await useAsyncData<PokemonDetail | null>(
+  `pokemon-detail:${String(route.params.id)}:${locale.value}`,
+  async () => {
+    try {
+      return await api.pokemonDetail(String(route.params.id));
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+pokemon.value = initialPokemon.value;
+relatedHabitatTab.value = initialPokemon.value ? habitatTabValue(initialPokemon.value.environment.id) : '';
+const initialPokemonLoaded = ref(initialPokemon.value !== null);
+const pokemonSeo = computed(() =>
+  pokemon.value && route.meta.editorModal !== true
+    ? resolveSeo({
+        title: `${pokemon.value.name} - ${t(pokemon.value.isEventItem ? 'pages.eventPokemon.title' : 'pages.pokemon.title')}`,
+        description: t('seo.pokemonDetailDescription', { name: pokemon.value.name }),
+        canonicalPath: `/pokemon/${pokemon.value.id}`,
+        image: pokemon.value.image?.url
+      })
+    : null
+);
+
+useHead(() => (pokemonSeo.value ? resolvedSeoHead(pokemonSeo.value) : {}));
 
 type HabitatRow = {
   id: number;
@@ -411,17 +439,24 @@ async function saveTradingItems() {
 }
 
 async function loadPokemonDetail() {
-  const nextPokemon = await api.pokemonDetail(String(route.params.id));
-  pokemon.value = nextPokemon;
-  relatedHabitatTab.value = habitatTabValue(nextPokemon.environment.id);
+  try {
+    const nextPokemon = await api.pokemonDetail(String(route.params.id));
+    pokemon.value = nextPokemon;
+    relatedHabitatTab.value = habitatTabValue(nextPokemon.environment.id);
+    initialPokemonLoaded.value = true;
 
-  if (route.meta.editorModal !== true) {
-    applySeo({
-      title: `${nextPokemon.name} - ${t(nextPokemon.isEventItem ? 'pages.eventPokemon.title' : 'pages.pokemon.title')}`,
-      description: t('seo.pokemonDetailDescription', { name: nextPokemon.name }),
-      canonicalPath: `/pokemon/${nextPokemon.id}`,
-      image: nextPokemon.image?.url
-    });
+    if (route.meta.editorModal !== true) {
+      applySeo({
+        title: `${nextPokemon.name} - ${t(nextPokemon.isEventItem ? 'pages.eventPokemon.title' : 'pages.pokemon.title')}`,
+        description: t('seo.pokemonDetailDescription', { name: nextPokemon.name }),
+        canonicalPath: `/pokemon/${nextPokemon.id}`,
+        image: nextPokemon.image?.url
+      });
+    }
+  } catch {
+    pokemon.value = null;
+    relatedHabitatTab.value = '';
+    initialPokemonLoaded.value = true;
   }
 }
 
@@ -433,7 +468,9 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  await loadPokemonDetail();
+  if (!initialPokemonLoaded.value) {
+    await loadPokemonDetail();
+  }
 });
 
 watch(

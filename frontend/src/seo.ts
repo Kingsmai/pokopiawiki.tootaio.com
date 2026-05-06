@@ -143,6 +143,39 @@ export function resolveSeo(config: SeoConfig = {}): ResolvedSeoConfig {
   };
 }
 
+export function resolvedSeoHead(seo: ResolvedSeoConfig) {
+  return {
+    title: seo.title,
+    htmlAttrs: {
+      lang: seo.locale
+    },
+    meta: [
+      { key: 'description', name: 'description', content: seo.description },
+      { key: 'robots', name: 'robots', content: seo.robots },
+      { key: 'twitter-card', name: 'twitter:card', content: 'summary_large_image' },
+      { key: 'twitter-title', name: 'twitter:title', content: seo.title },
+      { key: 'twitter-description', name: 'twitter:description', content: seo.description },
+      { key: 'twitter-image', name: 'twitter:image', content: seo.imageUrl },
+      { key: 'og-site-name', property: 'og:site_name', content: siteName },
+      { key: 'og-type', property: 'og:type', content: 'website' },
+      { key: 'og-title', property: 'og:title', content: seo.title },
+      { key: 'og-description', property: 'og:description', content: seo.description },
+      { key: 'og-url', property: 'og:url', content: seo.canonicalUrl },
+      { key: 'og-image', property: 'og:image', content: seo.imageUrl },
+      { key: 'og-locale', property: 'og:locale', content: seo.locale === 'en' ? 'en_US' : seo.locale.replace('-', '_') }
+    ],
+    link: [{ key: 'canonical', rel: 'canonical', href: seo.canonicalUrl }],
+    script: [
+      {
+        key: 'pokopia-structured-data',
+        id: 'pokopia-structured-data',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(seo.structuredData).replace(/</g, '\\u003C')
+      }
+    ]
+  };
+}
+
 export function routeSeoConfig(route: RouteLocationNormalizedLoaded, translator?: Translator): SeoConfig {
   const routeSeo = route.meta.seo as RouteSeoConfig | undefined;
   const canonicalPath =

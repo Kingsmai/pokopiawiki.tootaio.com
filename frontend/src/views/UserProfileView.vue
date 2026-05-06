@@ -32,6 +32,7 @@ import {
   type AuthUser,
   type DiscussionEntityType,
   type LifePost,
+  type LifePostsPage,
   type LifeReactionType,
   type ProfileCommentSource,
   type PublicUserProfile,
@@ -39,6 +40,7 @@ import {
   type UserCommentActivity,
   type UserReactionActivity
 } from '../services/api';
+import { resolvedSeoHead, resolveSeo } from '../seo';
 
 type ProfileTab = 'feeds' | 'contributions' | 'reactions' | 'comments' | 'account';
 type PrimaryContributionFilter = 'pokemon' | 'items' | 'ancient-artifacts' | 'recipes' | 'habitats' | 'daily-checklist';
@@ -199,6 +201,48 @@ const socialStats = computed(() => {
     { label: t('pages.profile.friends'), value: social?.friendCount ?? 0 }
   ];
 });
+
+type PublicProfileInitialData = {
+  profile: PublicUserProfile | null;
+  feeds: LifePostsPage | null;
+};
+
+const { data: initialPublicProfile } = await useAsyncData<PublicProfileInitialData>(
+  `public-profile:${String(routeProfileId.value ?? '')}:${locale.value}`,
+  async () => {
+    const targetId = routeProfileId.value;
+    if (!targetId) {
+      return { profile: null, feeds: null };
+    }
+
+    const profileResult = await Promise.allSettled([api.publicProfile(targetId), api.userLifePosts(targetId, { limit: activityLimit })]);
+    return {
+      profile: profileResult[0].status === 'fulfilled' ? profileResult[0].value.profile : null,
+      feeds: profileResult[1].status === 'fulfilled' ? profileResult[1].value : null
+    };
+  },
+  { default: () => ({ profile: null, feeds: null }) }
+);
+
+profile.value = initialPublicProfile.value.profile;
+feeds.value = initialPublicProfile.value.feeds?.items ?? [];
+feedsCursor.value = initialPublicProfile.value.feeds?.nextCursor ?? null;
+feedsHasMore.value = initialPublicProfile.value.feeds?.hasMore ?? false;
+const initialPublicProfileLoaded = ref(initialPublicProfile.value.profile !== null);
+const initialFeedsLoaded = ref(initialPublicProfile.value.feeds !== null);
+loading.value = !initialPublicProfileLoaded.value;
+const profileSeo = computed(() =>
+  profile.value && !isAccountRoute.value
+    ? resolveSeo({
+        title: `${profile.value.user.displayName} - ${t('pages.profile.title')}`,
+        description: t('pages.profile.publicSubtitle'),
+        canonicalPath: `/profile/${profile.value.user.id}`
+      })
+    : null
+);
+
+useHead(() => (profileSeo.value ? resolvedSeoHead(profileSeo.value) : {}));
+
 const filteredContributions = computed(() => {
   const items = profile.value?.contributions ?? [];
   if (contributionFilter.value === 'all') {
@@ -679,7 +723,11 @@ function commentTargetTitle(comment: UserCommentActivity): string {
 }
 
 onMounted(() => {
-  void loadProfile();
+  if (isAccountRoute.value || getAuthToken() || !initialPublicProfileLoaded.value) {
+    void loadProfile();
+  } else if (!initialFeedsLoaded.value) {
+    void loadFeeds(true);
+  }
 });
 </script>
 

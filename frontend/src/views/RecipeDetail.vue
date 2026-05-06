@@ -11,12 +11,12 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconRecipe } from '../icons';
-import { applySeo } from '../seo';
+import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type RecipeDetail } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
 const route = useRoute();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const recipe = ref<RecipeDetail | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
@@ -42,17 +42,50 @@ const recipeSubtitle = computed(() => {
   return categoryName ?? t('pages.recipes.detailSubtitle');
 });
 
-async function loadRecipeDetail() {
-  const nextRecipe = await api.recipeDetail(String(route.params.id));
-  recipe.value = nextRecipe;
+const { data: initialRecipe } = await useAsyncData<RecipeDetail | null>(
+  `recipe-detail:${String(route.params.id)}:${locale.value}`,
+  async () => {
+    try {
+      return await api.recipeDetail(String(route.params.id));
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
 
-  if (route.meta.editorModal !== true) {
-    applySeo({
-      title: `${nextRecipe.name} - ${t('pages.recipes.title')}`,
-      description: t('seo.recipeDetailDescription', { name: nextRecipe.name }),
-      canonicalPath: `/recipes/${nextRecipe.id}`,
-      image: nextRecipe.item.image?.url
-    });
+recipe.value = initialRecipe.value;
+const initialRecipeLoaded = ref(initialRecipe.value !== null);
+const recipeSeo = computed(() =>
+  recipe.value && route.meta.editorModal !== true
+    ? resolveSeo({
+        title: `${recipe.value.name} - ${t('pages.recipes.title')}`,
+        description: t('seo.recipeDetailDescription', { name: recipe.value.name }),
+        canonicalPath: `/recipes/${recipe.value.id}`,
+        image: recipe.value.item.image?.url
+      })
+    : null
+);
+
+useHead(() => (recipeSeo.value ? resolvedSeoHead(recipeSeo.value) : {}));
+
+async function loadRecipeDetail() {
+  try {
+    const nextRecipe = await api.recipeDetail(String(route.params.id));
+    recipe.value = nextRecipe;
+    initialRecipeLoaded.value = true;
+
+    if (route.meta.editorModal !== true) {
+      applySeo({
+        title: `${nextRecipe.name} - ${t('pages.recipes.title')}`,
+        description: t('seo.recipeDetailDescription', { name: nextRecipe.name }),
+        canonicalPath: `/recipes/${nextRecipe.id}`,
+        image: nextRecipe.item.image?.url
+      });
+    }
+  } catch {
+    recipe.value = null;
+    initialRecipeLoaded.value = true;
   }
 }
 
@@ -64,7 +97,9 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  await loadRecipeDetail();
+  if (!initialRecipeLoaded.value) {
+    await loadRecipeDetail();
+  }
 });
 
 watch(

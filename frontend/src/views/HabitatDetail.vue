@@ -12,12 +12,12 @@ import PokeBallMark from '../components/PokeBallMark.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconHabitat } from '../icons';
-import { applySeo } from '../seo';
+import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
 import { api, getAuthToken, type AuthUser, type HabitatDetail } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
 const route = useRoute();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const habitat = ref<HabitatDetail | null>(null);
 const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
@@ -32,6 +32,33 @@ const detailTabs = computed<TabOption[]>(() => [
   { value: 'discussion', label: t('discussion.title') },
   { value: 'history', label: t('history.editHistory') }
 ]);
+
+const { data: initialHabitat } = await useAsyncData<HabitatDetail | null>(
+  `habitat-detail:${String(route.params.id)}:${locale.value}`,
+  async () => {
+    try {
+      return await api.habitatDetail(String(route.params.id));
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+habitat.value = initialHabitat.value;
+const initialHabitatLoaded = ref(initialHabitat.value !== null);
+const habitatSeo = computed(() =>
+  habitat.value && route.meta.editorModal !== true
+    ? resolveSeo({
+        title: `${habitat.value.name} - ${t(habitat.value.isEventItem ? 'pages.eventHabitats.title' : 'pages.habitats.title')}`,
+        description: t('seo.habitatDetailDescription', { name: habitat.value.name }),
+        canonicalPath: `/habitats/${habitat.value.id}`,
+        image: habitat.value.image?.url
+      })
+    : null
+);
+
+useHead(() => (habitatSeo.value ? resolvedSeoHead(habitatSeo.value) : {}));
 
 type PokemonRow = {
   id: number;
@@ -119,16 +146,22 @@ const pokemonRows = computed<PokemonRow[]>(() => {
 });
 
 async function loadHabitatDetail() {
-  const nextHabitat = await api.habitatDetail(String(route.params.id));
-  habitat.value = nextHabitat;
+  try {
+    const nextHabitat = await api.habitatDetail(String(route.params.id));
+    habitat.value = nextHabitat;
+    initialHabitatLoaded.value = true;
 
-  if (route.meta.editorModal !== true) {
-    applySeo({
-      title: `${nextHabitat.name} - ${t(nextHabitat.isEventItem ? 'pages.eventHabitats.title' : 'pages.habitats.title')}`,
-      description: t('seo.habitatDetailDescription', { name: nextHabitat.name }),
-      canonicalPath: `/habitats/${nextHabitat.id}`,
-      image: nextHabitat.image?.url
-    });
+    if (route.meta.editorModal !== true) {
+      applySeo({
+        title: `${nextHabitat.name} - ${t(nextHabitat.isEventItem ? 'pages.eventHabitats.title' : 'pages.habitats.title')}`,
+        description: t('seo.habitatDetailDescription', { name: nextHabitat.name }),
+        canonicalPath: `/habitats/${nextHabitat.id}`,
+        image: nextHabitat.image?.url
+      });
+    }
+  } catch {
+    habitat.value = null;
+    initialHabitatLoaded.value = true;
   }
 }
 
@@ -140,7 +173,9 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  await loadHabitatDetail();
+  if (!initialHabitatLoaded.value) {
+    await loadHabitatDetail();
+  }
 });
 
 watch(

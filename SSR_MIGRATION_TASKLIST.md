@@ -99,7 +99,9 @@ Keep this file aligned with implementation progress while the SSR migration is i
   - [x] Home and Project Updates SSR-load the public project update preview/feed.
 - [ ] For each SSR-enabled public route, render title, description, canonical URL, robots value, Open Graph, Twitter card, and structured data from public business data and system wording only.
   - [x] Route-level SEO output now owns dynamic title, description, canonical, robots, Open Graph, Twitter card, and valid inline JSON-LD without duplicate static Nuxt head metadata.
+  - [x] Public detail pages can now override route-level head from SSR-loaded public business data when the corresponding API read succeeds.
 - [ ] For detail pages, use entity names, public images, localized public fields, and canonical detail URLs after public API data loads server-side.
+  - [x] Pokemon, Habitat, Item, Ancient Artifact, Recipe, Life Post, and public Profile detail routes SSR-load public data and bind detail-specific head tags.
 - [ ] Preserve `noindex` on auth, admin, new, edit, and in-development routes.
   - [x] SEO resolver defaults authenticated, verified, and permissioned routes to `noindex`, while existing route metadata continues to mark auth, edit/create modal, and in-development pages as `noindex`.
 - [ ] Keep `robots.txt` and `sitemap.xml` generated from the same stable public route set documented in `DESIGN.md`.
@@ -113,6 +115,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - Pokemon list SSR API failures are contained to null initial data so rendered HTML falls back to the existing skeleton/empty behavior without exposing backend stack traces, raw errors, or internal fields.
 - Public Pokemon list SSR data does not request `api.me()` or forward cookies; create actions remain client-hydrated from the current user after mount.
 - Habitat/Event Habitat, Items/Event Items, Ancient Artifacts, Recipes, Daily CheckList, Dish, Home, and Project Updates now use contained `useAsyncData` public reads for SSR initial content. Client-side auth reads, editor-only options, filters, infinite loading, ordering, and route-backed modals remain hydrated after mount.
+- Pokemon, Habitat, Item, Ancient Artifact, Recipe, Life Post, and public Profile detail views now use contained SSR public reads for initial content and detail-specific SEO head output. Auth-only permissions, profile account data, reactions, comments, follow state, editor controls, and moderation actions remain client-hydrated.
 - The static fallback SEO tags in Nuxt config were reduced to non-route-specific defaults so route-level SSR SEO is the single source for canonical, robots, social metadata, and JSON-LD.
 
 ## Phase 6: Browser-Only UI Isolation
@@ -159,6 +162,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - 2026-05-06: After SSR auth cookie forwarding and Pokemon/Event Pokemon first-page SSR data, `pnpm --filter @pokopia/frontend typecheck`, `pnpm --filter @pokopia/frontend lint`, and `pnpm --filter @pokopia/frontend build` passed. The current `lint` script runs `nuxt typecheck`.
 - 2026-05-06: After SEO foundation updates, `pnpm --filter @pokopia/frontend typecheck`, `pnpm --filter @pokopia/frontend lint`, and `pnpm --filter @pokopia/frontend build` passed. Local built-server smoke on port `20116` verified `/pokemon` route-level canonical/meta/JSON-LD, `sitemap.xml`, and `robots.txt`.
 - 2026-05-06: After the first public list SSR data expansion, `pnpm --filter @pokopia/frontend typecheck`, `pnpm --filter @pokopia/frontend lint`, and `pnpm --filter @pokopia/frontend build` passed. The build completed with existing Nuxt/Nitro warnings only.
+- 2026-05-06: After public detail SSR data and head expansion, `pnpm --filter @pokopia/frontend typecheck`, `pnpm --filter @pokopia/frontend lint`, and `pnpm --filter @pokopia/frontend build` passed. Local built-server smoke on port `20117` verified `robots.txt` and `sitemap.xml`; business-data HTML verification still needs Docker/backend runtime because the local Nuxt server could not reach `localhost:3001`.
 
 ## Phase 9: Cleanup
 

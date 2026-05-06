@@ -8,7 +8,7 @@ import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconCancel, iconDelete, iconSave } from '../icons';
-import { api, getAuthToken, type AuthUser, type ConfigType, type Item, type Options, type RecipePayload } from '../services/api';
+import { api, type AuthUser, type ConfigType, type Item, type Options, type RecipePayload } from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
@@ -105,11 +105,6 @@ async function loadOptions() {
 }
 
 async function loadCurrentUser() {
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    return;
-  }
-
   try {
     currentUser.value = (await api.me()).user;
   } catch {

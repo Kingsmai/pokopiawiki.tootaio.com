@@ -8,10 +8,8 @@ import Tabs, { type TabOption } from './Tabs.vue';
 import { iconCancel, iconComment, iconDelete, iconReactionLike, iconReply, iconWarning } from '../icons';
 import {
   api,
-  getAuthToken,
   moderationUpdateEvent,
-  onAuthTokenChange,
-  setAuthToken,
+  onAuthChange,
   type AiModerationStatus,
   type AuthUser,
   type CommentSort,
@@ -77,18 +75,11 @@ const sortOptions = computed<Array<{ value: CommentSort; label: string }>>(() =>
 async function loadCurrentUser() {
   authReady.value = false;
 
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    authReady.value = true;
-    return;
-  }
-
   try {
     const response = await api.me();
     currentUser.value = response.user;
   } catch {
     currentUser.value = null;
-    setAuthToken(null);
   } finally {
     authReady.value = true;
   }
@@ -515,7 +506,7 @@ onMounted(() => {
   void loadCurrentUser();
   void loadLanguages();
   void loadDiscussion();
-  removeAuthListener = onAuthTokenChange(() => {
+  removeAuthListener = onAuthChange(() => {
     void loadCurrentUser();
   });
 });

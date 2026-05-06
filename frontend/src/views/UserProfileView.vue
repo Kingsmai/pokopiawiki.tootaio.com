@@ -26,9 +26,7 @@ import {
 } from '../icons';
 import {
   api,
-  getAuthToken,
   notifyAuthChange,
-  setAuthToken,
   type AuthUser,
   type DiscussionEntityType,
   type LifePost,
@@ -229,7 +227,6 @@ feeds.value = initialPublicProfile.value.feeds?.items ?? [];
 feedsCursor.value = initialPublicProfile.value.feeds?.nextCursor ?? null;
 feedsHasMore.value = initialPublicProfile.value.feeds?.hasMore ?? false;
 const initialPublicProfileLoaded = ref(initialPublicProfile.value.profile !== null);
-const initialFeedsLoaded = ref(initialPublicProfile.value.feeds !== null);
 loading.value = !initialPublicProfileLoaded.value;
 const profileSeo = computed(() =>
   profile.value && !isAccountRoute.value
@@ -324,18 +321,12 @@ function resetActivity() {
 }
 
 async function loadOptionalCurrentUser() {
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    return null;
-  }
-
   try {
     const response = await api.me();
     currentUser.value = response.user;
     return response.user;
   } catch {
     currentUser.value = null;
-    setAuthToken(null);
     return null;
   }
 }
@@ -723,11 +714,7 @@ function commentTargetTitle(comment: UserCommentActivity): string {
 }
 
 onMounted(() => {
-  if (isAccountRoute.value || getAuthToken() || !initialPublicProfileLoaded.value) {
-    void loadProfile();
-  } else if (!initialFeedsLoaded.value) {
-    void loadFeeds(true);
-  }
+  void loadProfile();
 });
 </script>
 

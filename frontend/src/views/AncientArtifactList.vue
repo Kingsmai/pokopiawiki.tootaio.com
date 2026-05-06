@@ -11,7 +11,7 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconArtifact } from '../icons';
-import { api, getAuthToken, type AncientArtifact, type AuthUser, type ListPage, type Options } from '../services/api';
+import { api, type AncientArtifact, type AuthUser, type ListPage, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
@@ -150,12 +150,10 @@ function loadMoreArtifacts() {
 }
 
 onMounted(async () => {
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
   if (!options.value) {
     try {

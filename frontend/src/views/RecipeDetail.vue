@@ -12,7 +12,7 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconRecipe } from '../icons';
 import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
-import { api, getAuthToken, type AuthUser, type RecipeDetail } from '../services/api';
+import { api, type AuthUser, type RecipeDetail } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
 const route = useRoute();
@@ -96,12 +96,10 @@ async function loadRecipeDetail() {
 }
 
 onMounted(async () => {
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
   if (!initialRecipeLoaded.value) {
     await loadRecipeDetail();

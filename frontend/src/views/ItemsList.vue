@@ -11,7 +11,7 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconChevronDown, iconChevronUp, iconItem } from '../icons';
-import { api, getAuthToken, type AuthUser, type Item, type ListPage, type Options } from '../services/api';
+import { api, type AuthUser, type Item, type ListPage, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
 const props = defineProps<{
@@ -527,12 +527,10 @@ function loadMoreItems() {
 onMounted(async () => {
   document.addEventListener('pointerdown', onCreateDefaultsDocumentPointerDown);
   document.addEventListener('keydown', onDocumentKeydown);
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
   if (!options.value) {
     try {

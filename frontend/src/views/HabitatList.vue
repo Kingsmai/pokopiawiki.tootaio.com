@@ -8,7 +8,7 @@ import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { iconAdd, iconHabitat } from '../icons';
-import { api, getAuthToken, type AuthUser, type Habitat, type ListPage } from '../services/api';
+import { api, type AuthUser, type Habitat, type ListPage } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
 const props = defineProps<{
@@ -125,12 +125,10 @@ function loadMoreHabitats() {
 }
 
 onMounted(async () => {
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
   if (!initialPageLoaded.value) {
     await loadHabitats();

@@ -10,7 +10,7 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd } from '../icons';
-import { api, getAuthToken, type AuthUser, type ListPage, type Options, type Pokemon } from '../services/api';
+import { api, type AuthUser, type ListPage, type Options, type Pokemon } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const props = defineProps<{
@@ -158,12 +158,10 @@ function pokemonCardImage(item: Pokemon) {
 }
 
 onMounted(async () => {
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
   if (!options.value) {
     try {

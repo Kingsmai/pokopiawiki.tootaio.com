@@ -17,7 +17,6 @@ import {
 } from '../icons';
 import {
   api,
-  getAuthToken,
   moderationUpdateEvent,
   notificationWebSocketUrl,
   type AuthUser,
@@ -92,7 +91,7 @@ function disconnectNotifications() {
 
 function scheduleReconnect() {
   clearReconnectTimer();
-  if (stopped || !props.currentUser || !getAuthToken()) {
+  if (stopped || !props.currentUser) {
     return;
   }
 
@@ -118,7 +117,7 @@ function isNotificationWsMessage(value: unknown): value is NotificationWsMessage
 }
 
 async function connectNotifications() {
-  if (!props.currentUser || !getAuthToken() || typeof WebSocket === 'undefined') {
+  if (!props.currentUser || typeof WebSocket === 'undefined') {
     return;
   }
 

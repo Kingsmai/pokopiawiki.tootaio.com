@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '../components/PageHeader.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import { iconLogin } from '../icons';
-import { api, setAuthToken } from '../services/api';
+import { api, notifyAuthChange } from '../services/api';
 
 const route = useRoute();
 const router = useRouter();
@@ -22,12 +22,12 @@ async function submitLogin() {
   errorMessage.value = '';
 
   try {
-    const response = await api.login({
+    await api.login({
       email: email.value,
       password: password.value,
       rememberMe: rememberMe.value
     });
-    setAuthToken(response.token, { persistent: rememberMe.value });
+    notifyAuthChange();
 
     const redirect =
       typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')

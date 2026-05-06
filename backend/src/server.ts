@@ -185,7 +185,7 @@ function configuredCorsOrigin(): true | string | string[] {
 }
 
 await app.register(cors, {
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Locale'],
+  allowedHeaders: ['Content-Type', 'X-Locale'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   origin: configuredCorsOrigin()
@@ -247,11 +247,6 @@ app.get('/api/search', async (request) =>
   globalSearch(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
 );
 
-function getBearerToken(authorization: string | undefined): string | null {
-  const [scheme, token] = authorization?.split(' ') ?? [];
-  return scheme === 'Bearer' && token ? token : null;
-}
-
 function getCookieValue(cookieHeader: string | undefined, name: string): string | null {
   if (!cookieHeader) {
     return null;
@@ -272,7 +267,7 @@ function getCookieValue(cookieHeader: string | undefined, name: string): string 
 }
 
 function getSessionToken(request: FastifyRequest): string | null {
-  return getCookieValue(request.headers.cookie, sessionCookieName) ?? getBearerToken(request.headers.authorization);
+  return getCookieValue(request.headers.cookie, sessionCookieName);
 }
 
 function sessionCookieSecure(): boolean {
@@ -1038,7 +1033,7 @@ app.post('/api/auth/login', async (request, reply) => {
   const payload = request.body as Record<string, unknown>;
   const response = await loginUser(payload, requestLocale(request));
   setSessionCookie(reply, response.token, payload.rememberMe === true);
-  return response;
+  return { user: response.user };
 });
 
 app.post('/api/auth/request-password-reset', async (request, reply) => {

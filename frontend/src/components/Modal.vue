@@ -4,7 +4,7 @@ let openModalCount = 0;
 
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref, useId, watch } from 'vue';
 import { iconClose } from '../icons';
 
 const props = withDefaults(
@@ -29,7 +29,7 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const titleId = `modal-title-${Math.random().toString(36).slice(2)}`;
+const titleId = useId();
 const dialog = ref<HTMLElement | null>(null);
 const modalBody = ref<HTMLElement | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);

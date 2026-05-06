@@ -2,7 +2,6 @@ import { getCurrentLocale } from '../i18n';
 
 let browserApiBaseUrl = 'http://localhost:3001';
 let serverApiBaseUrl = 'http://localhost:3001';
-const authTokenKey = 'pokopia_auth_token';
 const authChangeEvent = 'pokopia-auth-change';
 
 export interface ApiRequestOptions {
@@ -807,7 +806,6 @@ export interface RegisterPayload extends LoginPayload {
 }
 
 export interface AuthResponse {
-  token: string;
   user: AuthUser;
 }
 
@@ -1061,40 +1059,7 @@ export function buildQuery(params: Record<string, string | number | boolean | nu
   return query ? `?${query}` : '';
 }
 
-function authStorage(type: 'local' | 'session'): Storage | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  return type === 'local' ? window.localStorage : window.sessionStorage;
-}
-
-export function getAuthToken(): string | null {
-  const sessionToken = authStorage('session')?.getItem(authTokenKey);
-  return sessionToken ?? authStorage('local')?.getItem(authTokenKey) ?? null;
-}
-
-export function setAuthToken(token: string | null, options: { persistent?: boolean } = {}): void {
-  const local = authStorage('local');
-  const session = authStorage('session');
-
-  if (token) {
-    if (options.persistent === false) {
-      session?.setItem(authTokenKey, token);
-      local?.removeItem(authTokenKey);
-    } else {
-      local?.setItem(authTokenKey, token);
-      session?.removeItem(authTokenKey);
-    }
-  } else {
-    local?.removeItem(authTokenKey);
-    session?.removeItem(authTokenKey);
-  }
-
-  notifyAuthChange();
-}
-
-export function onAuthTokenChange(callback: () => void): () => void {
+export function onAuthChange(callback: () => void): () => void {
   if (typeof window === 'undefined') {
     return () => {};
   }
@@ -1111,12 +1076,7 @@ export function notifyAuthChange(): void {
 
 function requestHeaders(extraHeaders?: HeadersInit): Headers {
   const headers = new Headers(extraHeaders);
-  const token = getAuthToken();
   headers.set('X-Locale', headers.get('X-Locale') ?? getCurrentLocale());
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
   return headers;
 }
 

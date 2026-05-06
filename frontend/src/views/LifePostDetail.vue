@@ -28,10 +28,8 @@ import {
 } from '../icons';
 import {
   api,
-  getAuthToken,
   moderationUpdateEvent,
-  onAuthTokenChange,
-  setAuthToken,
+  onAuthChange,
   type AiModerationStatus,
   type AuthUser,
   type CommentSort,
@@ -112,17 +110,11 @@ function summaryText(value: string, maxLength: number) {
 }
 
 async function loadCurrentUser() {
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    return;
-  }
-
   try {
     const response = await api.me();
     currentUser.value = response.user;
   } catch {
     currentUser.value = null;
-    setAuthToken(null);
   }
 }
 
@@ -840,14 +832,13 @@ onMounted(() => {
   document.addEventListener('click', closeReactionPickerFromDocument);
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
   window.addEventListener(moderationUpdateEvent, handleModerationUpdate);
-  const hadAuthToken = getAuthToken() !== null;
   void (async () => {
     await loadCurrentUser();
-    if (!initialPostLoaded.value || hadAuthToken) {
+    if (!initialPostLoaded.value || currentUser.value) {
       await loadPost();
     }
   })();
-  removeAuthListener = onAuthTokenChange(() => {
+  removeAuthListener = onAuthChange(() => {
     void loadCurrentUser();
     void loadPost();
   });

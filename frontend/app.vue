@@ -21,7 +21,7 @@ import {
   type AppIcon
 } from './src/icons';
 import { getCurrentLocale, loadSystemWordings, onLocaleChange, setCurrentLocale } from './src/i18n';
-import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser, type Language } from './src/services/api';
+import { api, notifyAuthChange, onAuthChange, type AuthUser, type Language } from './src/services/api';
 
 const { t, locale } = useI18n();
 const router = useRouter();
@@ -117,9 +117,6 @@ async function loadCurrentUser() {
     currentUser.value = response.user;
   } catch {
     currentUser.value = null;
-    if (getAuthToken()) {
-      setAuthToken(null);
-    }
   }
 }
 
@@ -131,7 +128,7 @@ async function logout() {
   }
 
   currentUser.value = null;
-  setAuthToken(null);
+  notifyAuthChange();
   await router.push('/');
 }
 
@@ -160,7 +157,7 @@ async function updateLocale(value: string) {
 onMounted(() => {
   void loadLanguages();
   void loadCurrentUser();
-  removeAuthListener = onAuthTokenChange(() => {
+  removeAuthListener = onAuthChange(() => {
     void loadCurrentUser();
   });
   removeLocaleListener = onLocaleChange(() => {

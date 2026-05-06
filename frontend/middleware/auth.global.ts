@@ -1,4 +1,4 @@
-import { api, setAuthToken } from '../src/services/api';
+import { api } from '../src/services/api';
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const requiredPermissions = to.matched
@@ -30,7 +30,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
       return navigateTo('/pokemon');
     }
   } catch {
-    setAuthToken(null);
     return navigateTo({ path: '/login', query: { redirect: to.fullPath } });
   }
 });

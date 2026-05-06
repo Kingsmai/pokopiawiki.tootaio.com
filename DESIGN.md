@@ -123,12 +123,13 @@
 - 登录页提供 Remember me：
   - 未勾选时 session 有效期为 1 天。
   - 勾选时 session 有效期为 30 天。
-- SSR 迁移期认证使用 hybrid session model：
+- SSR 认证使用 HTTP-only cookie session：
   - 登录成功后后端设置 HTTP-only `pokopia_session` cookie；cookie 只保存明文 session token，数据库只保存 session token hash。
-  - 迁移期登录响应仍返回明文 session token，前端继续按 Remember me 语义保存到 `sessionStorage` 或 `localStorage` 的 `pokopia_auth_token`，用于保持现有 SPA 客户端流程兼容。
-  - 受保护 API 优先接受 HTTP-only cookie session，并继续兼容 `Authorization: Bearer` legacy token。
+  - 登录响应只返回当前用户必要字段，不返回明文 session token、session token hash 或内部 session 元数据。
+  - Remember me 通过 HTTP-only session cookie 有效期实现：未勾选时有效期为 1 天，勾选时有效期为 30 天。
+  - 受保护 API 只接受 HTTP-only cookie session，不接受前端 JavaScript 保存的 legacy Bearer token。
   - 前端 API 请求携带 credentials，以便浏览器自动发送 HTTP-only session cookie；JavaScript 不读取该 cookie。
-- 用户可退出登录，退出时删除对应 session、清除 HTTP-only session cookie，并清理前端 legacy token storage。
+- 用户可退出登录，退出时删除对应 session 并清除 HTTP-only session cookie。
 - 对外用户字段只包含必要信息：
   - 当前用户：`id`、`email`、`displayName`、`emailVerified`
   - 编辑署名：`id`、`displayName`
@@ -1041,7 +1042,7 @@ API 暴露边界：
   - `favicon.ico`
   - 默认社交分享图
   - 品牌 Logo 素材
-- `NUXT_PUBLIC_SITE_URL` 定义 canonical、Open Graph URL、robots sitemap 地址和 sitemap URL 的站点根地址；当前公开站点为 `https://pokopiawiki.tootaio.com`，本地前端端口默认使用 `http://localhost:20015`。Nuxt 配置仍兼容读取旧的 `VITE_SITE_URL` 作为 fallback。
+- `NUXT_PUBLIC_SITE_URL` 定义 canonical、Open Graph URL、robots sitemap 地址和 sitemap URL 的站点根地址；当前公开站点为 `https://pokopiawiki.tootaio.com`，本地前端端口默认使用 `http://localhost:20015`。
 - 前端 Nuxt app head 配置提供默认 title、description、robots、canonical、Open Graph、Twitter card 和 favicon；路由 metadata 与详情页公开业务数据通过 Nuxt `useHead` 更新页面 metadata，避免直接操作 `document.head`。
 - 主要公开浏览入口可索引：
   - `/pokemon`
@@ -1066,7 +1067,7 @@ API 暴露边界：
 ## 部署与升级维护
 
 - Docker 部署时公开前端端口由 `frontend_gateway` 承载，正常流量代理到 `frontend` 服务。
-- 前端浏览器 API base URL 由 `NUXT_PUBLIC_API_BASE_URL` 提供；Nuxt 配置仍兼容读取旧的 `VITE_API_BASE_URL` 作为 fallback。
+- 前端浏览器 API base URL 由 `NUXT_PUBLIC_API_BASE_URL` 提供。
 - Nuxt 服务端 API base URL 由 `NUXT_SERVER_API_BASE_URL` 提供；在 Docker 内默认使用 `http://backend:3001`，本地非 Docker 运行可使用 `http://localhost:3001`。服务端公开数据读取使用该内部地址，浏览器请求继续使用 `NUXT_PUBLIC_API_BASE_URL`。
 - 前端 Docker 构建使用 Nuxt server output，`frontend` 服务通过 Node 运行 `.output/server/index.mjs`；Nuxt SSR server 监听容器内 `0.0.0.0:20015`，公开流量仍由 `frontend_gateway` 代理。
 - `frontend` 因 `docker compose up -d --build` 重建、启动中或临时不可达时，`frontend_gateway` 返回静态升级维护页并保持公开端口可访问；后端 `/health` 不可用时，前端网关也返回同一维护页，避免用户看到静态页面后遇到 API 不可用。

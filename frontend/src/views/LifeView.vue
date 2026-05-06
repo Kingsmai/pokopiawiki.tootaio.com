@@ -35,10 +35,8 @@ import {
 } from '../icons';
 import {
   api,
-  getAuthToken,
   moderationUpdateEvent,
-  onAuthTokenChange,
-  setAuthToken,
+  onAuthChange,
   type AiModerationStatus,
   type AuthUser,
   type CommentSort,
@@ -252,20 +250,12 @@ const submitLabel = computed(() => {
 async function loadCurrentUser() {
   authReady.value = false;
 
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    activeFeedScope.value = 'all';
-    authReady.value = true;
-    return;
-  }
-
   try {
     const response = await api.me();
     currentUser.value = response.user;
   } catch {
     currentUser.value = null;
     activeFeedScope.value = 'all';
-    setAuthToken(null);
   } finally {
     authReady.value = true;
   }
@@ -1376,7 +1366,6 @@ onMounted(() => {
   document.addEventListener('click', closeReactionPickerFromDocument);
   document.addEventListener('keydown', closeReactionPickerFromKeyboard);
   window.addEventListener(moderationUpdateEvent, handleModerationUpdate);
-  const hadAuthToken = getAuthToken() !== null;
   void (async () => {
     await loadCurrentUser();
     if (!initialLanguagesLoaded.value) {
@@ -1387,12 +1376,12 @@ onMounted(() => {
       await loadLifeCategories();
       initialOptionsLoaded.value = true;
     }
-    if (!initialPostsLoaded.value || hadAuthToken) {
+    if (!initialPostsLoaded.value || currentUser.value) {
       await loadPosts();
       initialPostsLoaded.value = true;
     }
   })();
-  removeAuthListener = onAuthTokenChange(() => {
+  removeAuthListener = onAuthChange(() => {
     void (async () => {
       await loadCurrentUser();
       await loadPosts();

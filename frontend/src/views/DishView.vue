@@ -13,7 +13,6 @@ import TranslationFields from '../components/TranslationFields.vue';
 import { iconAdd, iconCancel, iconDelete, iconDish, iconEdit, iconItem, iconSave } from '../icons';
 import {
   api,
-  getAuthToken,
   type AuthUser,
   type Dish,
   type DishCategory,
@@ -301,12 +300,10 @@ async function loadEditorOptions() {
 
 async function loadPage() {
   loading.value = true;
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
   await Promise.all([initialCategoriesLoaded.value ? Promise.resolve() : loadDish(), loadEditorOptions()]);
 }

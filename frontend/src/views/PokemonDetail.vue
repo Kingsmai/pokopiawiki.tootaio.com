@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import DetailSection from '../components/DetailSection.vue';
@@ -36,6 +36,7 @@ const tradingCategoryId = ref('');
 const tradingDefaultPreference = ref<TradingPreference>('like');
 const tradingItemChoices = ref<Item[]>([]);
 const tradingDraftItems = ref<Array<{ itemId: number; preference: TradingPreference }>>([]);
+const tradingActiveItemIndex = ref(0);
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const relatedPokemonLimit = 6;
@@ -198,20 +199,58 @@ const tradingCategoryOptions = computed(() => {
   return [{ value: '', label: t('common.all') }, ...[...categories.entries()].map(([value, label]) => ({ value, label }))];
 });
 const tradingDraftPreferenceByItemId = computed(() => new Map(tradingDraftItems.value.map((item) => [String(item.itemId), item.preference])));
-const filteredTradingItems = computed(() => {
-  const search = tradingSearch.value.trim().toLocaleLowerCase();
+function normalizedTradingValue(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
 
-  return tradingItemChoices.value.filter((item) => {
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function tradingSearchScore(item: Item, search: string) {
+  const name = normalizedTradingValue(item.name);
+  const category = normalizedTradingValue(item.category.name);
+  const usage = normalizedTradingValue(item.usage?.name ?? '');
+
+  if (name === search) {
+    return 0;
+  }
+  if (name.startsWith(search)) {
+    return 1;
+  }
+  if (new RegExp(`(^|\\s)${escapeRegExp(search)}`).test(name)) {
+    return 2;
+  }
+  if (name.includes(search)) {
+    return 3;
+  }
+  if (category.includes(search)) {
+    return 4;
+  }
+  if (usage.includes(search)) {
+    return 5;
+  }
+
+  return -1;
+}
+
+const filteredTradingItems = computed(() => {
+  const search = normalizedTradingValue(tradingSearch.value);
+
+  const rows = tradingItemChoices.value.flatMap((item, index) => {
     if (tradingCategoryId.value && String(item.category.id) !== tradingCategoryId.value) {
-      return false;
+      return [];
     }
 
     if (!search) {
-      return true;
+      return [{ item, index, score: 0 }];
     }
 
-    return [item.name, item.category.name, item.usage?.name ?? ''].some((value) => value.toLocaleLowerCase().includes(search));
+    const score = tradingSearchScore(item, search);
+    return score >= 0 ? [{ item, index, score }] : [];
   });
+
+  return rows.sort((a, b) => a.score - b.score || a.index - b.index).map((row) => row.item);
 });
 const tradingDraftGroups = computed(() => {
   const itemsById = new Map(tradingItemChoices.value.map((item) => [item.id, item]));
@@ -392,6 +431,7 @@ function resetTradingDraft() {
   tradingDefaultPreference.value = 'like';
   tradingSearch.value = '';
   tradingCategoryId.value = '';
+  tradingActiveItemIndex.value = 0;
   tradingMessage.value = '';
 }
 
@@ -399,13 +439,72 @@ function isTradingItemSelected(itemId: string | number) {
   return tradingDraftPreferenceByItemId.value.has(String(itemId));
 }
 
-function addTradingItem(item: Item) {
+function firstAddableTradingItemIndex(items = filteredTradingItems.value, startIndex = 0, direction: -1 | 1 = 1) {
+  if (!items.length) {
+    return 0;
+  }
+
+  const start = Math.min(Math.max(startIndex, 0), items.length - 1);
+  for (let offset = 0; offset < items.length; offset += 1) {
+    const index = (start + direction * offset + items.length) % items.length;
+    if (!isTradingItemSelected(items[index].id)) {
+      return index;
+    }
+  }
+
+  return start;
+}
+
+function setTradingActiveItemIndex(index: number) {
+  const maxIndex = filteredTradingItems.value.length - 1;
+  tradingActiveItemIndex.value = maxIndex >= 0 ? Math.min(Math.max(index, 0), maxIndex) : 0;
+}
+
+function moveTradingActiveItem(direction: -1 | 1) {
+  const items = filteredTradingItems.value;
+  if (!items.length) {
+    tradingActiveItemIndex.value = 0;
+    return;
+  }
+
+  const startIndex = Math.min(Math.max(tradingActiveItemIndex.value, 0), items.length - 1);
+  for (let offset = 1; offset <= items.length; offset += 1) {
+    const index = (startIndex + direction * offset + items.length) % items.length;
+    if (!isTradingItemSelected(items[index].id)) {
+      tradingActiveItemIndex.value = index;
+      return;
+    }
+  }
+
+  tradingActiveItemIndex.value = startIndex;
+}
+
+function activeTradingItemId() {
+  const item = filteredTradingItems.value[tradingActiveItemIndex.value];
+  return item ? `pokemon-trading-item-${item.id}` : undefined;
+}
+
+function scrollActiveTradingItemIntoView() {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  nextTick(() => {
+    const activeId = activeTradingItemId();
+    if (activeId) {
+      document.getElementById(activeId)?.scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
+function addTradingItem(item: Item, index = tradingActiveItemIndex.value) {
   const itemId = String(item.id);
   if (isTradingItemSelected(itemId)) {
     return;
   }
 
   tradingDraftItems.value.push({ itemId: item.id, preference: tradingDefaultPreference.value });
+  tradingActiveItemIndex.value = firstAddableTradingItemIndex(filteredTradingItems.value, index, 1);
 }
 
 function removeTradingItem(itemId: string | number) {
@@ -420,6 +519,61 @@ function setTradingPreference(itemId: string | number, preference: TradingPrefer
     row.preference = preference;
   }
 }
+
+function handleTradingSearchKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    moveTradingActiveItem(1);
+    return;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    moveTradingActiveItem(-1);
+    return;
+  }
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    tradingDefaultPreference.value = 'like';
+    return;
+  }
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    tradingDefaultPreference.value = 'neutral';
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const item = filteredTradingItems.value[tradingActiveItemIndex.value];
+    if (item) {
+      addTradingItem(item, tradingActiveItemIndex.value);
+    }
+  }
+}
+
+watch([tradingSearch, tradingCategoryId], () => {
+  tradingActiveItemIndex.value = firstAddableTradingItemIndex(filteredTradingItems.value, 0, 1);
+  scrollActiveTradingItemIntoView();
+});
+
+watch([filteredTradingItems, tradingDraftPreferenceByItemId], () => {
+  const items = filteredTradingItems.value;
+  if (!items.length) {
+    tradingActiveItemIndex.value = 0;
+    return;
+  }
+
+  const currentIndex = Math.min(Math.max(tradingActiveItemIndex.value, 0), items.length - 1);
+  tradingActiveItemIndex.value = isTradingItemSelected(items[currentIndex].id)
+    ? firstAddableTradingItemIndex(items, currentIndex, 1)
+    : currentIndex;
+  scrollActiveTradingItemIntoView();
+});
+
+watch(tradingActiveItemIndex, scrollActiveTradingItemIntoView);
 
 async function openTradingModal() {
   if (!pokemon.value) {
@@ -877,7 +1031,13 @@ watch(initialPokemon, applyInitialPokemon, { immediate: true });
               id="pokemon-trading-search"
               v-model="tradingSearch"
               type="search"
+              autocomplete="off"
+              role="combobox"
+              :aria-expanded="filteredTradingItems.length > 0"
+              aria-controls="pokemon-trading-results"
+              :aria-activedescendant="activeTradingItemId()"
               :placeholder="t('pages.pokemon.searchItems')"
+              @keydown="handleTradingSearchKeydown"
             />
           </div>
 
@@ -909,14 +1069,19 @@ watch(initialPokemon, applyInitialPokemon, { immediate: true });
               <Skeleton variant="box" height="58px" />
             </li>
           </ul>
-          <ul v-else-if="filteredTradingItems.length" class="trading-item-list">
-            <li v-for="item in filteredTradingItems" :key="item.id">
+          <ul v-else-if="filteredTradingItems.length" id="pokemon-trading-results" class="trading-item-list">
+            <li v-for="(item, index) in filteredTradingItems" :id="`pokemon-trading-item-${item.id}`" :key="item.id">
               <button
                 type="button"
                 class="trading-pick-row"
-                :class="{ 'trading-pick-row--selected': isTradingItemSelected(item.id) }"
+                :class="{
+                  'trading-pick-row--active': tradingActiveItemIndex === index,
+                  'trading-pick-row--selected': isTradingItemSelected(item.id)
+                }"
                 :disabled="isTradingItemSelected(item.id)"
-                @click="addTradingItem(item)"
+                @mouseenter="setTradingActiveItemIndex(index)"
+                @focus="setTradingActiveItemIndex(index)"
+                @click="addTradingItem(item, index)"
               >
                 <span class="related-entity-media related-entity-media--inline" aria-hidden="true">
                   <img v-if="item.image" :src="item.image.url" alt="" loading="lazy" />

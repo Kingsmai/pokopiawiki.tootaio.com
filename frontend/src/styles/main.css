@@ -5143,6 +5143,14 @@ button:disabled,
   flex-wrap: wrap;
 }
 
+.trading-detail-list {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .trading-manager {
   min-height: 640px;
   display: grid;
@@ -5232,6 +5240,11 @@ button:disabled,
   background: var(--surface-soft);
 }
 
+.trading-pick-row--active {
+  border-color: var(--pokemon-blue);
+  box-shadow: 0 0 0 2px rgba(42, 117, 187, .16);
+}
+
 .trading-pick-row__copy,
 .trading-selected-list__copy {
   min-width: 0;
@@ -5318,6 +5331,10 @@ button:disabled,
 
   .trading-selected-list {
     max-height: 240px;
+  }
+
+  .trading-detail-list {
+    max-height: 280px;
   }
 
   .trading-preference-toggle,

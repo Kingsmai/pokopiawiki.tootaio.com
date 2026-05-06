@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import FilterPanel from '../components/FilterPanel.vue';
 import LifeRatingControl from '../components/LifeRatingControl.vue';
 import LifeReactionUsersModal from '../components/LifeReactionUsersModal.vue';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -2015,17 +2016,11 @@ onUnmounted(() => {
 
               <p v-else class="life-comments__empty">{{ t('pages.life.noComments') }}</p>
 
-              <div v-if="commentPage(post).hasMore && !commentPage(post).loading" class="life-feed__retry">
-                <button
-                  class="ui-button ui-button--ghost ui-button--small"
-                  type="button"
-                  :disabled="commentPage(post).loadingMore"
-                  @click="loadComments(post)"
-                >
-                  <Icon :icon="iconChevronDown" class="ui-icon" aria-hidden="true" />
-                  {{ commentPage(post).loadingMore ? t('common.loading') : t('pages.life.loadMoreComments') }}
-                </button>
-              </div>
+              <LoadMoreSentinel
+                :active="commentPage(post).hasMore && !commentPage(post).loading"
+                :disabled="commentPage(post).loadingMore"
+                @load="loadComments(post)"
+              />
             </section>
           </article>
 

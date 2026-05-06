@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import LoadMoreSentinel from './LoadMoreSentinel.vue';
 import StatusBadge from './StatusBadge.vue';
 import Tabs, { type TabOption } from './Tabs.vue';
 import { iconCancel, iconComment, iconDelete, iconReactionLike, iconReply, iconWarning } from '../icons';
@@ -776,17 +777,7 @@ onUnmounted(() => {
         </div>
       </article>
 
-      <div v-if="hasMoreComments" class="life-feed__retry">
-        <button
-          class="ui-button ui-button--ghost ui-button--small"
-          type="button"
-          :disabled="loadingMore"
-          @click="loadDiscussion(false)"
-        >
-          <Icon :icon="iconComment" class="ui-icon" aria-hidden="true" />
-          {{ loadingMore ? t('common.loading') : t('discussion.loadMore') }}
-        </button>
-      </div>
+      <LoadMoreSentinel :active="hasMoreComments" :disabled="loading || loadingMore" @load="loadDiscussion(false)" />
     </div>
 
     <div v-else class="entity-discussion-empty">

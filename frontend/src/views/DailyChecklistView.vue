@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { api, type DailyChecklistItem } from '../services/api';
@@ -16,8 +17,13 @@ const stateRefreshIntervalMs = 60_000;
 const checklistItems = ref<DailyChecklistItem[]>([]);
 const checkedTaskIds = ref<Set<number>>(new Set());
 const loading = ref(true);
+const loadingMore = ref(false);
+const nextCursor = ref<string | null>(null);
+const hasMoreItems = ref(false);
 const skeletonRows = 5;
+const listPageSize = 20;
 let stateRefreshTimer: number | null = null;
+let loadRequestId = 0;
 
 function todayKey() {
   const today = new Date();
@@ -85,14 +91,52 @@ function handleTaskChange(id: number, event: Event) {
   toggleTask(id, checkbox?.checked === true);
 }
 
-async function loadDailyChecklist() {
-  loading.value = true;
-  try {
-    checklistItems.value = await api.dailyChecklist();
-    syncChecklistState();
-  } finally {
-    loading.value = false;
+async function loadDailyChecklist(reset = true) {
+  if (!reset && (loading.value || loadingMore.value || !hasMoreItems.value)) {
+    return;
   }
+
+  const requestId = ++loadRequestId;
+  if (reset) {
+    loading.value = true;
+    loadingMore.value = false;
+    nextCursor.value = null;
+    hasMoreItems.value = false;
+  } else {
+    loadingMore.value = true;
+  }
+
+  try {
+    const page = await api.dailyChecklistPage({
+      cursor: reset ? null : nextCursor.value,
+      limit: listPageSize
+    });
+
+    if (requestId !== loadRequestId) {
+      return;
+    }
+
+    if (reset) {
+      checklistItems.value = page.items;
+    } else {
+      const existingIds = new Set(checklistItems.value.map((item) => item.id));
+      checklistItems.value = [...checklistItems.value, ...page.items.filter((item) => !existingIds.has(item.id))];
+    }
+    nextCursor.value = page.nextCursor;
+    hasMoreItems.value = page.hasMore;
+    if (!page.hasMore) {
+      syncChecklistState();
+    }
+  } finally {
+    if (requestId === loadRequestId) {
+      loading.value = false;
+      loadingMore.value = false;
+    }
+  }
+}
+
+function loadMoreDailyChecklist() {
+  void loadDailyChecklist(false);
 }
 
 onMounted(() => {
@@ -135,9 +179,14 @@ onUnmounted(() => {
             <span>{{ item.title }}</span>
           </label>
         </li>
+        <li v-for="index in loadingMore ? 2 : 0" :key="`checklist-more-${index}`" class="checklist-item checklist-check" aria-hidden="true">
+          <Skeleton variant="box" width="34px" height="34px" />
+          <Skeleton :width="index % 2 === 0 ? '220px' : '160px'" />
+        </li>
       </ul>
 
       <p v-else class="meta-line">{{ t('pages.checklist.empty') }}</p>
+      <LoadMoreSentinel :active="hasMoreItems" :disabled="loading || loadingMore" @load="loadMoreDailyChecklist" />
     </section>
   </section>
 </template>

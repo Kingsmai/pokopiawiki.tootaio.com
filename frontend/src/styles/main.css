@@ -2946,6 +2946,10 @@ button:disabled,
   min-height: 1px;
 }
 
+.load-more-sentinel {
+  min-height: 1px;
+}
+
 .life-feed__retry {
   display: flex;
   justify-content: center;

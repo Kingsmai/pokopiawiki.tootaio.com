@@ -11,7 +11,7 @@ import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PoolClient } from 'pg';
+import type { PoolClient, QueryResultRow } from 'pg';
 import {
   requestAiModerationReview,
   type AiModerationStatus
@@ -21,6 +21,11 @@ import { createLifePostReactionNotification, createUserFollowNotification } from
 type QueryValue = string | string[] | undefined;
 
 type QueryParams = Record<string, QueryValue>;
+type ListPage<T> = {
+  items: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
 
 type DbClient = PoolClient;
 type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'artifacts' | 'recipes' | 'checklist';
@@ -705,6 +710,67 @@ let pokemonCsvDataCache: Promise<PokemonCsvData> | null = null;
 
 function asString(value: QueryValue): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+const defaultPublicListLimit = 24;
+const maxPublicListLimit = 72;
+
+function isPagedListRequest(paramsQuery: QueryParams): boolean {
+  return asString(paramsQuery.limit) !== undefined || asString(paramsQuery.cursor) !== undefined;
+}
+
+function cleanPublicListLimit(value: QueryValue): number {
+  const limit = Number(asString(value));
+  return Number.isInteger(limit) && limit > 0 ? Math.min(limit, maxPublicListLimit) : defaultPublicListLimit;
+}
+
+function encodeOffsetCursor(offset: number): string {
+  return Buffer.from(JSON.stringify({ offset }), 'utf8').toString('base64url');
+}
+
+function decodeOffsetCursor(value: QueryValue): number {
+  const rawValue = asString(value);
+  if (!rawValue) {
+    return 0;
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(rawValue, 'base64url').toString('utf8')) as { offset?: unknown };
+    const offset = Number(payload.offset);
+    return Number.isInteger(offset) && offset >= 0 ? offset : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function queryMaybePaged<T extends QueryResultRow>(
+  sql: string,
+  params: unknown[],
+  paramsQuery: QueryParams
+): Promise<T[] | ListPage<T>> {
+  if (!isPagedListRequest(paramsQuery)) {
+    return query<T>(sql, params);
+  }
+
+  const limit = cleanPublicListLimit(paramsQuery.limit);
+  const offset = decodeOffsetCursor(paramsQuery.cursor);
+  const pagedParams = [...params, limit + 1, offset];
+  const rows = await query<T>(
+    `
+      ${sql}
+      LIMIT $${pagedParams.length - 1}
+      OFFSET $${pagedParams.length}
+    `,
+    pagedParams
+  );
+  const items = rows.slice(0, limit);
+  const nextOffset = offset + items.length;
+
+  return {
+    items,
+    nextCursor: rows.length > limit ? encodeOffsetCursor(nextOffset) : null,
+    hasMore: rows.length > limit
+  };
 }
 
 export function cleanLocale(value: unknown): string {
@@ -2698,14 +2764,16 @@ function cleanDailyChecklistPayload(payload: Record<string, unknown>): DailyChec
   };
 }
 
-export async function listDailyChecklistItems(locale = defaultLocale) {
+export async function listDailyChecklistItems(paramsQuery: QueryParams = {}, locale = defaultLocale) {
   const title = localizedField('daily-checklist-items', 'c.id', 'c.title', 'title', locale);
-  return query(
+  return queryMaybePaged(
     `
       SELECT c.id, ${title} AS title, c.title AS "baseTitle", ${translationsSelect('daily-checklist-items', 'c.id')} AS translations
       FROM daily_checklist_items c
       ORDER BY c.sort_order, c.id
-    `
+    `,
+    [],
+    paramsQuery
   );
 }
 
@@ -3007,7 +3075,7 @@ export async function reorderDailyChecklistItems(payload: Record<string, unknown
     }
   });
 
-  return listDailyChecklistItems(locale);
+  return listDailyChecklistItems({}, locale);
 }
 
 export async function deleteDailyChecklistItem(id: number, userId: number) {
@@ -5754,7 +5822,7 @@ export async function listPokemon(paramsQuery: QueryParams, locale = defaultLoca
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${pokemonProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('p')}`, params);
+  return queryMaybePaged(`${pokemonProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('p')}`, params, paramsQuery);
 }
 
 export async function getPokemon(id: number, locale = defaultLocale) {
@@ -6278,7 +6346,7 @@ export async function listHabitats(paramsQuery: QueryParams = {}, locale = defau
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  return query(`
+  return queryMaybePaged(`
     SELECT
       h.id,
       ${habitatName} AS name,
@@ -6314,7 +6382,7 @@ export async function listHabitats(paramsQuery: QueryParams = {}, locale = defau
     ${auditJoins('h', 'habitat_created_user', 'habitat_updated_user')}
     ${whereClause}
     ORDER BY ${orderByEntity('h')}
-  `, params);
+  `, params, paramsQuery);
 }
 
 export async function getHabitat(id: number, locale = defaultLocale) {
@@ -6633,7 +6701,7 @@ export async function listItems(paramsQuery: QueryParams, locale = defaultLocale
   const orderClause = recipeOrder
     ? `ORDER BY CASE WHEN item_recipe.id IS NULL THEN 1 ELSE 0 END, item_recipe.sort_order, item_recipe.id, ${orderByEntity('i')}`
     : `ORDER BY ${orderByEntity('i')}`;
-  return query(`${itemProjection(locale)} ${whereClause} ${orderClause}`, params);
+  return queryMaybePaged(`${itemProjection(locale)} ${whereClause} ${orderClause}`, params, paramsQuery);
 }
 
 export async function getItem(id: number, locale = defaultLocale) {
@@ -7135,7 +7203,7 @@ export async function listAncientArtifacts(paramsQuery: QueryParams = {}, locale
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`${ancientArtifactProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('i')}`, params);
+  return queryMaybePaged(`${ancientArtifactProjection(locale)} ${whereClause} ORDER BY ${orderByEntity('i')}`, params, paramsQuery);
 }
 
 export async function getAncientArtifact(id: number, locale = defaultLocale) {
@@ -7278,7 +7346,7 @@ export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaul
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  return query(`
+  return queryMaybePaged(`
     SELECT
       r.id,
       ${resultItemName} AS name,
@@ -7294,7 +7362,7 @@ export async function listRecipes(paramsQuery: QueryParams = {}, locale = defaul
     ${auditJoins('r', 'recipe_created_user', 'recipe_updated_user')}
     ${whereClause}
     ORDER BY ${orderByEntity('r')}
-  `, params);
+  `, params, paramsQuery);
 }
 
 export async function getRecipe(id: number, locale = defaultLocale) {

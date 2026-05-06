@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import LifeRatingControl from '../components/LifeRatingControl.vue';
 import LifeReactionUsersModal from '../components/LifeReactionUsersModal.vue';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -1279,17 +1280,7 @@ onUnmounted(() => {
 
           <p v-else class="life-comments__empty">{{ t('pages.life.noComments') }}</p>
 
-          <div v-if="commentsHasMore && !commentsLoading" class="life-feed__retry">
-            <button
-              class="ui-button ui-button--ghost ui-button--small"
-              type="button"
-              :disabled="commentsLoadingMore"
-              @click="loadComments(false)"
-            >
-              <Icon :icon="iconChevronDown" class="ui-icon" aria-hidden="true" />
-              {{ commentsLoadingMore ? t('common.loading') : t('pages.life.loadMoreComments') }}
-            </button>
-          </div>
+          <LoadMoreSentinel :active="commentsHasMore && !commentsLoading" :disabled="commentsLoadingMore" @load="loadComments(false)" />
         </section>
       </article>
 

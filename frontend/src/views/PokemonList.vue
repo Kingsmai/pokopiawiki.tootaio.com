@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import TagsSelect from '../components/TagsSelect.vue';
@@ -22,6 +23,9 @@ const { t } = useI18n();
 const pokemon = ref<Pokemon[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
+const loadingMore = ref(false);
+const nextCursor = ref<string | null>(null);
+const hasMorePokemon = ref(false);
 const search = ref('');
 const environmentId = ref('');
 const skillIds = ref<string[]>([]);
@@ -30,6 +34,8 @@ const favoriteThingIds = ref<string[]>([]);
 const favoriteThingMode = ref<'any' | 'all'>('any');
 const filterSkeletonWidths = ['52px', '92px', '48px', '72px'];
 const skeletonCardCount = 6;
+const listPageSize = 24;
+let loadRequestId = 0;
 
 const query = computed(() => ({
   search: search.value,
@@ -48,10 +54,50 @@ const pageKicker = computed(() => t(props.eventOnly ? 'pages.eventPokemon.kicker
 const newPokemonPath = computed(() => (props.eventOnly ? '/event-pokemon/new' : '/pokemon/new'));
 const loadingListLabel = computed(() => t(props.eventOnly ? 'pages.eventPokemon.loadingList' : 'pages.pokemon.loadingList'));
 
-async function loadPokemon() {
-  loading.value = true;
-  pokemon.value = await api.pokemon(query.value);
-  loading.value = false;
+async function loadPokemon(reset = true) {
+  if (!reset && (loading.value || loadingMore.value || !hasMorePokemon.value)) {
+    return;
+  }
+
+  const requestId = ++loadRequestId;
+  if (reset) {
+    loading.value = true;
+    loadingMore.value = false;
+    nextCursor.value = null;
+    hasMorePokemon.value = false;
+  } else {
+    loadingMore.value = true;
+  }
+
+  try {
+    const page = await api.pokemonPage({
+      ...query.value,
+      cursor: reset ? null : nextCursor.value,
+      limit: listPageSize
+    });
+
+    if (requestId !== loadRequestId) {
+      return;
+    }
+
+    if (reset) {
+      pokemon.value = page.items;
+    } else {
+      const existingIds = new Set(pokemon.value.map((item) => item.id));
+      pokemon.value = [...pokemon.value, ...page.items.filter((item) => !existingIds.has(item.id))];
+    }
+    nextCursor.value = page.nextCursor;
+    hasMorePokemon.value = page.hasMore;
+  } finally {
+    if (requestId === loadRequestId) {
+      loading.value = false;
+      loadingMore.value = false;
+    }
+  }
+}
+
+function loadMorePokemon() {
+  void loadPokemon(false);
 }
 
 function pokemonCardImage(item: Pokemon) {
@@ -70,7 +116,9 @@ onMounted(async () => {
   await loadPokemon();
 });
 
-watch(query, loadPokemon);
+watch(query, () => {
+  void loadPokemon();
+});
 </script>
 
 <template>
@@ -158,6 +206,15 @@ watch(query, loadPokemon);
         :image="pokemonCardImage(item)"
       />
     </div>
+    <div v-if="loadingMore" class="entity-grid pokemon-list-grid" aria-hidden="true">
+      <article v-for="index in 2" :key="`pokemon-more-${index}`" class="entity-card entity-card--skeleton">
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
+        <div class="entity-card__content">
+          <Skeleton width="128px" height="24px" />
+        </div>
+      </article>
+    </div>
+    <LoadMoreSentinel :active="hasMorePokemon" :disabled="loading || loadingMore" @load="loadMorePokemon" />
 
     <PokemonEdit v-if="showEditor" />
   </section>

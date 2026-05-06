@@ -109,6 +109,19 @@ export interface ProjectUpdatesParams {
   limit?: number;
 }
 
+export interface ListPage<T> {
+  items: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface PublicListParams {
+  cursor?: string | null;
+  limit?: number;
+}
+
+export type PublicListQueryParams = Record<string, string | number | boolean | null | undefined> & PublicListParams;
+
 export interface EntityImage {
   path: string;
   url: string;
@@ -997,11 +1010,11 @@ export interface RateLimitSettingsPayload {
   policies: Record<RateLimitPolicyKey, RateLimitPolicySettings>;
 }
 
-export function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
+export function buildQuery(params: Record<string, string | number | boolean | null | undefined>): string {
   const search = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') {
+    if (value !== undefined && value !== null && value !== '') {
       search.set(key, String(value));
     }
   });
@@ -1279,6 +1292,13 @@ export const api = {
   deletePermission: (id: string | number) => deleteJson(`/api/admin/permissions/${id}`),
   options: () => getJson<Options>('/api/options'),
   dailyChecklist: () => getJson<DailyChecklistItem[]>('/api/daily-checklist'),
+  dailyChecklistPage: (params: PublicListParams = {}) =>
+    getJson<ListPage<DailyChecklistItem>>(
+      `/api/daily-checklist${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   lifePosts: (params: LifePostsParams = {}) =>
     getJson<LifePostsPage>(
       `/api/life-posts${buildQuery({
@@ -1395,6 +1415,14 @@ export const api = {
   deleteConfig: (type: ConfigType, id: number) => deleteJson(`/api/admin/config/${type}/${id}`),
   pokemon: (params: Record<string, string | number | boolean | undefined>) =>
     getJson<Pokemon[]>(`/api/pokemon${buildQuery(params)}`),
+  pokemonPage: (params: PublicListQueryParams) =>
+    getJson<ListPage<Pokemon>>(
+      `/api/pokemon${buildQuery({
+        ...params,
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   pokemonDetail: (id: string | number) => getJson<PokemonDetail>(`/api/pokemon/${id}`),
   pokemonFetchOptions: (search: string, signal?: AbortSignal, all = false) =>
     getJson<PokemonFetchOption[]>(
@@ -1411,6 +1439,14 @@ export const api = {
   reorderPokemon: (ids: number[]) => sendJson<Pokemon[]>('/api/admin/pokemon/order', 'PUT', { ids }),
   habitats: (params: Record<string, string | number | boolean | undefined> = {}) =>
     getJson<Habitat[]>(`/api/habitats${buildQuery(params)}`),
+  habitatsPage: (params: PublicListQueryParams = {}) =>
+    getJson<ListPage<Habitat>>(
+      `/api/habitats${buildQuery({
+        ...params,
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   habitatDetail: (id: string | number) => getJson<HabitatDetail>(`/api/habitats/${id}`),
   createHabitat: (payload: HabitatPayload) => sendJson<HabitatDetail>('/api/habitats', 'POST', payload),
   updateHabitat: (id: string | number, payload: HabitatPayload) =>
@@ -1419,6 +1455,14 @@ export const api = {
   reorderHabitats: (ids: number[]) => sendJson<Habitat[]>('/api/admin/habitats/order', 'PUT', { ids }),
   items: (params: Record<string, string | number | boolean | undefined>) =>
     getJson<Item[]>(`/api/items${buildQuery(params)}`),
+  itemsPage: (params: PublicListQueryParams) =>
+    getJson<ListPage<Item>>(
+      `/api/items${buildQuery({
+        ...params,
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   itemDetail: (id: string | number) => getJson<ItemDetail>(`/api/items/${id}`),
   createItem: (payload: ItemPayload) => sendJson<ItemDetail>('/api/items', 'POST', payload),
   updateItem: (id: string | number, payload: ItemPayload) => sendJson<ItemDetail>(`/api/items/${id}`, 'PUT', payload),
@@ -1426,6 +1470,14 @@ export const api = {
   reorderItems: (ids: number[]) => sendJson<Item[]>('/api/admin/items/order', 'PUT', { ids }),
   ancientArtifacts: (params: Record<string, string | number | undefined> = {}) =>
     getJson<AncientArtifact[]>(`/api/ancient-artifacts${buildQuery(params)}`),
+  ancientArtifactsPage: (params: PublicListQueryParams = {}) =>
+    getJson<ListPage<AncientArtifact>>(
+      `/api/ancient-artifacts${buildQuery({
+        ...params,
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   ancientArtifactDetail: (id: string | number) => getJson<AncientArtifactDetail>(`/api/ancient-artifacts/${id}`),
   createAncientArtifact: (payload: AncientArtifactPayload) =>
     sendJson<AncientArtifactDetail>('/api/ancient-artifacts', 'POST', payload),
@@ -1436,6 +1488,14 @@ export const api = {
     sendJson<AncientArtifact[]>('/api/admin/ancient-artifacts/order', 'PUT', { ids }),
   recipes: (params: Record<string, string | number | undefined> = {}) =>
     getJson<Recipe[]>(`/api/recipes${buildQuery(params)}`),
+  recipesPage: (params: PublicListQueryParams = {}) =>
+    getJson<ListPage<Recipe>>(
+      `/api/recipes${buildQuery({
+        ...params,
+        cursor: params.cursor ?? undefined,
+        limit: params.limit
+      })}`
+    ),
   recipeDetail: (id: string | number) => getJson<RecipeDetail>(`/api/recipes/${id}`),
   createRecipe: (payload: RecipePayload) => sendJson<RecipeDetail>('/api/recipes', 'POST', payload),
   updateRecipe: (id: string | number, payload: RecipePayload) =>

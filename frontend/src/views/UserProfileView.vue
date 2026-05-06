@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import LifeReactionUsersModal from '../components/LifeReactionUsersModal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
@@ -829,11 +830,7 @@ onMounted(() => {
             </div>
           </article>
 
-          <div v-if="feedsHasMore" class="profile-load-more">
-            <button class="ui-button ui-button--blue" type="button" :disabled="feedsLoading" @click="loadFeeds(false)">
-              {{ feedsLoading ? t('common.loading') : t('pages.profile.loadMore') }}
-            </button>
-          </div>
+          <LoadMoreSentinel :active="feedsHasMore" :disabled="feedsLoading" @load="loadFeeds(false)" />
         </div>
 
         <div v-else class="profile-empty">
@@ -969,11 +966,7 @@ onMounted(() => {
             </div>
           </article>
 
-          <div v-if="reactionsHasMore" class="profile-load-more">
-            <button class="ui-button ui-button--blue" type="button" :disabled="reactionsLoading" @click="loadReactions(false)">
-              {{ reactionsLoading ? t('common.loading') : t('pages.profile.loadMore') }}
-            </button>
-          </div>
+          <LoadMoreSentinel :active="reactionsHasMore" :disabled="reactionsLoading" @load="loadReactions(false)" />
         </div>
 
         <div v-else class="profile-empty">
@@ -1018,11 +1011,7 @@ onMounted(() => {
             <p v-if="comment.target.excerpt" class="profile-comment-excerpt">{{ comment.target.excerpt }}</p>
           </article>
 
-          <div v-if="commentsHasMore" class="profile-load-more">
-            <button class="ui-button ui-button--blue" type="button" :disabled="commentsLoading" @click="loadComments(false)">
-              {{ commentsLoading ? t('common.loading') : t('pages.profile.loadMore') }}
-            </button>
-          </div>
+          <LoadMoreSentinel :active="commentsHasMore" :disabled="commentsLoading" @load="loadComments(false)" />
         </div>
 
         <div v-else class="profile-empty">

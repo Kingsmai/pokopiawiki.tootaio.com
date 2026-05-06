@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import EntityCard from '../components/EntityCard.vue';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { iconAdd, iconHabitat } from '../icons';
@@ -19,7 +20,12 @@ const currentUser = ref<AuthUser | null>(null);
 const route = useRoute();
 const { t } = useI18n();
 const loading = ref(true);
+const loadingMore = ref(false);
+const nextCursor = ref<string | null>(null);
+const hasMoreHabitats = ref(false);
 const skeletonCardCount = 6;
+const listPageSize = 24;
+let loadRequestId = 0;
 const query = computed(() => ({
   isEventItem: props.eventOnly ? 'true' : 'false'
 }));
@@ -35,10 +41,50 @@ function habitatCardImage(item: Habitat) {
   return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : undefined;
 }
 
-async function loadHabitats() {
-  loading.value = true;
-  habitats.value = await api.habitats(query.value);
-  loading.value = false;
+async function loadHabitats(reset = true) {
+  if (!reset && (loading.value || loadingMore.value || !hasMoreHabitats.value)) {
+    return;
+  }
+
+  const requestId = ++loadRequestId;
+  if (reset) {
+    loading.value = true;
+    loadingMore.value = false;
+    nextCursor.value = null;
+    hasMoreHabitats.value = false;
+  } else {
+    loadingMore.value = true;
+  }
+
+  try {
+    const page = await api.habitatsPage({
+      ...query.value,
+      cursor: reset ? null : nextCursor.value,
+      limit: listPageSize
+    });
+
+    if (requestId !== loadRequestId) {
+      return;
+    }
+
+    if (reset) {
+      habitats.value = page.items;
+    } else {
+      const existingIds = new Set(habitats.value.map((item) => item.id));
+      habitats.value = [...habitats.value, ...page.items.filter((item) => !existingIds.has(item.id))];
+    }
+    nextCursor.value = page.nextCursor;
+    hasMoreHabitats.value = page.hasMore;
+  } finally {
+    if (requestId === loadRequestId) {
+      loading.value = false;
+      loadingMore.value = false;
+    }
+  }
+}
+
+function loadMoreHabitats() {
+  void loadHabitats(false);
 }
 
 onMounted(async () => {
@@ -52,7 +98,9 @@ onMounted(async () => {
   await loadHabitats();
 });
 
-watch(query, loadHabitats);
+watch(query, () => {
+  void loadHabitats();
+});
 </script>
 
 <template>
@@ -85,6 +133,15 @@ watch(query, loadHabitats);
         :image="habitatCardImage(item)"
       />
     </div>
+    <div v-if="loadingMore" class="entity-grid pokemon-list-grid" aria-hidden="true">
+      <article v-for="index in 2" :key="`habitat-more-${index}`" class="entity-card entity-card--skeleton">
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
+        <div class="entity-card__content">
+          <Skeleton width="128px" height="24px" />
+        </div>
+      </article>
+    </div>
+    <LoadMoreSentinel :active="hasMoreHabitats" :disabled="loading || loadingMore" @load="loadMoreHabitats" />
 
     <HabitatEdit v-if="showEditor" />
   </section>

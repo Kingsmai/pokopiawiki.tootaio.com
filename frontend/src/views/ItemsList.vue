@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
@@ -24,6 +25,9 @@ const { t } = useI18n();
 const items = ref<Item[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
+const loadingMore = ref(false);
+const nextCursor = ref<string | null>(null);
+const hasMoreItems = ref(false);
 const ordering = ref(false);
 const search = ref('');
 const categoryId = ref('');
@@ -71,6 +75,8 @@ const itemCreateDefaults = ref<ItemCreateDefaults>(readItemCreateDefaults());
 const categorySkeletonWidths = ['64px', '92px', '78px', '104px', '86px'];
 const filterSkeletonWidths = ['52px', '48px', '48px'];
 const skeletonCardCount = 6;
+const listPageSize = 36;
+let loadRequestId = 0;
 const pageTitle = computed(() => (props.eventOnly ? t('pages.eventItems.title') : t('pages.items.title')));
 const pageSubtitle = computed(() => (props.eventOnly ? t('pages.eventItems.subtitle') : t('pages.items.subtitle')));
 const pageKicker = computed(() => (props.eventOnly ? t('pages.eventItems.kicker') : t('pages.items.kicker')));
@@ -80,7 +86,7 @@ const hasActiveFilters = computed(
   () => search.value.trim() !== '' || usageId.value !== '' || tagIds.value.length > 0 || categoryId.value !== ''
 );
 const itemSortingAllowed = computed(
-  () => isAllView.value && !hasActiveFilters.value && currentUser.value?.permissions.includes('items.order') === true
+  () => isAllView.value && !hasActiveFilters.value && !hasMoreItems.value && currentUser.value?.permissions.includes('items.order') === true
 );
 const itemInsertionAllowed = computed(
   () => itemSortingAllowed.value && currentUser.value?.permissions.includes('items.create') === true
@@ -394,7 +400,7 @@ async function dropItem(targetItem: Item, event: DragEvent) {
   suppressNextItemClick.value = true;
   try {
     await api.reorderItems(nextItems.map((item) => item.id));
-    items.value = await api.items(itemQuery.value);
+    await loadItems();
   } catch {
     items.value = previousItems;
   } finally {
@@ -418,10 +424,50 @@ function handleItemClick(event: MouseEvent) {
   suppressNextItemClick.value = false;
 }
 
-async function loadItems() {
-  loading.value = true;
-  items.value = await api.items(itemQuery.value);
-  loading.value = false;
+async function loadItems(reset = true) {
+  if (!reset && (loading.value || loadingMore.value || !hasMoreItems.value)) {
+    return;
+  }
+
+  const requestId = ++loadRequestId;
+  if (reset) {
+    loading.value = true;
+    loadingMore.value = false;
+    nextCursor.value = null;
+    hasMoreItems.value = false;
+  } else {
+    loadingMore.value = true;
+  }
+
+  try {
+    const page = await api.itemsPage({
+      ...itemQuery.value,
+      cursor: reset ? null : nextCursor.value,
+      limit: listPageSize
+    });
+
+    if (requestId !== loadRequestId) {
+      return;
+    }
+
+    if (reset) {
+      items.value = page.items;
+    } else {
+      const existingIds = new Set(items.value.map((item) => item.id));
+      items.value = [...items.value, ...page.items.filter((item) => !existingIds.has(item.id))];
+    }
+    nextCursor.value = page.nextCursor;
+    hasMoreItems.value = page.hasMore;
+  } finally {
+    if (requestId === loadRequestId) {
+      loading.value = false;
+      loadingMore.value = false;
+    }
+  }
+}
+
+function loadMoreItems() {
+  void loadItems(false);
 }
 
 onMounted(async () => {
@@ -444,7 +490,9 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onDocumentKeydown);
 });
 
-watch(itemQuery, loadItems);
+watch(itemQuery, () => {
+  void loadItems();
+});
 watch(itemCreateDefaults, persistItemCreateDefaults, { deep: true });
 watch(showEditor, () => {
   closeCreateDefaultsMenu();
@@ -641,6 +689,20 @@ watch(itemSortingAllowed, (allowed) => {
         />
       </div>
     </TransitionGroup>
+    <div v-if="loadingMore" class="entity-grid catalog-card-grid collections-card-grid" aria-hidden="true">
+      <article
+        v-for="index in 2"
+        :key="`item-more-${index}`"
+        class="entity-card entity-card--skeleton entity-card--collection-compact item-grid-card"
+      >
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
+        <div class="entity-card__content">
+          <Skeleton width="128px" height="24px" />
+          <Skeleton width="92px" />
+        </div>
+      </article>
+    </div>
+    <LoadMoreSentinel :active="hasMoreItems" :disabled="loading || loadingMore || ordering" @load="loadMoreItems" />
 
     <div
       v-if="itemContextMenu"

@@ -581,6 +581,7 @@ Pokemon 列表功能：
   - 满足任意条件
   - 满足全部条件
 - 按自定义排序展示
+- 列表首屏只读取一页数据；滚动到列表底部时继续读取下一页，不一次性加载全部 Pokemon。
 - Pokemon 列表卡片只展示 Pokemon 图片和下方的 `#ID 名称`；不展示喜欢的环境、属性、特长、喜欢的东西或编辑元信息。
 - Pokemon 卡片在已配置图片时展示所选图片缩略图；未配置图片时保留默认 Poké Ball 标记。
 - Event Pokemon 列表功能与 Pokemon 列表相同，但只展示 `is_event_item = true` 的 Pokemon；Pokemon 列表只展示 `is_event_item = false` 的 Pokemon。
@@ -663,6 +664,7 @@ Items 与 Event Items 使用相同数据模型：
 - 按用途筛选
 - 按标签筛选
 - 按自定义排序展示
+- 公开列表首屏只读取一页数据；滚动到列表底部时继续读取下一页，不一次性加载全部 Items 或 Event Items。
 - All 视图在满足写入权限时支持对 Grid Item 右键插入新物品到前/后，并支持直接拖曳 Item 调整排序；插入与拖曳只作用于当前展示的 Items 列表，不影响 Event Items 入口。
 - 新增物品入口支持当前浏览器 Session 的默认值菜单；用户可为新建物品预设分类、用途、客制化勾选项和入手方式。默认值只影响 `/items/new` 与 `/event-items/new` 的新建表单初始值，不影响编辑已有物品，不改变 API、数据库模型、权限或审计行为；Event Items 仍由 `/event-items/new` 入口决定 `is_event_item`。
 - 物品列表桌面端使用 12 列紧凑 Grid，每个格子只展示物品图标；有用途的物品在卡片左上角以斜 Ribbon 展示用途名称；物品名称通过 hover / focus Tooltip 展示。
@@ -1071,16 +1073,16 @@ API 暴露边界：
 - `GET /api/system-wordings`
 - `GET /api/options`
 - `GET /api/project-updates`：读取站点项目公开更新信息；支持 `cursor` / `limit` 分页读取最近提交；仅返回净化后的仓库、最近提交和发布版本展示字段。
-- `GET /api/daily-checklist`
-- `GET /api/pokemon`：支持 `isEventItem=true|false` 按普通 Pokemon / Event Pokemon 拆分列表；未传时返回全部 Pokemon 以兼容管理端和实体选择器
+- `GET /api/daily-checklist`：公开页面支持 `cursor` / `limit` 分页读取；未传分页参数时返回完整数组以兼容管理端排序。
+- `GET /api/pokemon`：支持 `isEventItem=true|false` 按普通 Pokemon / Event Pokemon 拆分列表；公开页面支持 `cursor` / `limit` 分页读取；未传分页参数时返回全部 Pokemon 以兼容管理端和实体选择器。
 - `GET /api/pokemon/:id`
-- `GET /api/habitats`：支持 `isEventItem=true|false` 按普通栖息地 / Event Habitats 拆分列表；未传时返回全部栖息地以兼容管理端和实体选择器
+- `GET /api/habitats`：支持 `isEventItem=true|false` 按普通栖息地 / Event Habitats 拆分列表；公开页面支持 `cursor` / `limit` 分页读取；未传分页参数时返回全部栖息地以兼容管理端和实体选择器。
 - `GET /api/habitats/:id`
-- `GET /api/items`：支持 `isEventItem=true|false` 按普通 Items / Event Items 拆分列表；默认返回所有物品，包括已配置 Ancient Artifact 分类的物品；传入 `ancientArtifactCategoryId` 时可额外筛选对应 Ancient Artifact 分类下的物品
+- `GET /api/items`：支持 `isEventItem=true|false` 按普通 Items / Event Items 拆分列表；默认返回所有物品，包括已配置 Ancient Artifact 分类的物品；传入 `ancientArtifactCategoryId` 时可额外筛选对应 Ancient Artifact 分类下的物品；公开页面支持 `cursor` / `limit` 分页读取；未传分页参数时返回完整数组以兼容管理端、实体选择器和排序。
 - `GET /api/items/:id`
-- `GET /api/ancient-artifacts`：支持 `search`、`categoryId` 和 `tagIds` 筛选
+- `GET /api/ancient-artifacts`：支持 `search`、`categoryId` 和 `tagIds` 筛选；公开页面支持 `cursor` / `limit` 分页读取；未传分页参数时返回完整数组以兼容排序。
 - `GET /api/ancient-artifacts/:id`
-- `GET /api/recipes`
+- `GET /api/recipes`：公开页面支持 `cursor` / `limit` 分页读取；未传分页参数时返回完整数组以兼容排序。
 - `GET /api/recipes/:id`
 - `GET /api/dish`
 - `GET /api/life-posts`：支持 `cursor` / `limit` 分页读取；支持 `search` 按 Life Post 正文搜索；支持 `categoryId` 按 Life Category 筛选；支持 `language` 按审核语言区筛选，`all` 表示全部语言区；支持 `gameVersionId` 按 Game Version 筛选；支持 `rateable` 按可评分 Category 筛选；支持 `sort` 为 `latest`、`oldest` 或 `top-rated`。

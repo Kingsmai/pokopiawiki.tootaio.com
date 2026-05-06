@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import EntityCard from '../components/EntityCard.vue';
 import FilterPanel from '../components/FilterPanel.vue';
+import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
@@ -19,6 +20,9 @@ const options = ref<Options | null>(null);
 const artifacts = ref<AncientArtifact[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
+const loadingMore = ref(false);
+const nextCursor = ref<string | null>(null);
+const hasMoreArtifacts = ref(false);
 const search = ref('');
 const categoryId = ref('');
 const tagIds = ref<string[]>([]);
@@ -26,6 +30,8 @@ const tagIds = ref<string[]>([]);
 const categorySkeletonWidths = ['64px', '132px', '132px', '86px'];
 const filterSkeletonWidths = ['52px', '36px'];
 const skeletonCardCount = 6;
+const listPageSize = 24;
+let loadRequestId = 0;
 
 const categoryTabs = computed<TabOption[]>(() => [
   { value: '', label: t('common.all') },
@@ -43,10 +49,50 @@ function artifactCardImage(artifact: AncientArtifact) {
   return artifact.image ? { src: artifact.image.url, alt: t('media.imageAlt', { name: artifact.name }) } : undefined;
 }
 
-async function loadArtifacts() {
-  loading.value = true;
-  artifacts.value = await api.ancientArtifacts(artifactQuery.value);
-  loading.value = false;
+async function loadArtifacts(reset = true) {
+  if (!reset && (loading.value || loadingMore.value || !hasMoreArtifacts.value)) {
+    return;
+  }
+
+  const requestId = ++loadRequestId;
+  if (reset) {
+    loading.value = true;
+    loadingMore.value = false;
+    nextCursor.value = null;
+    hasMoreArtifacts.value = false;
+  } else {
+    loadingMore.value = true;
+  }
+
+  try {
+    const page = await api.ancientArtifactsPage({
+      ...artifactQuery.value,
+      cursor: reset ? null : nextCursor.value,
+      limit: listPageSize
+    });
+
+    if (requestId !== loadRequestId) {
+      return;
+    }
+
+    if (reset) {
+      artifacts.value = page.items;
+    } else {
+      const existingIds = new Set(artifacts.value.map((item) => item.id));
+      artifacts.value = [...artifacts.value, ...page.items.filter((item) => !existingIds.has(item.id))];
+    }
+    nextCursor.value = page.nextCursor;
+    hasMoreArtifacts.value = page.hasMore;
+  } finally {
+    if (requestId === loadRequestId) {
+      loading.value = false;
+      loadingMore.value = false;
+    }
+  }
+}
+
+function loadMoreArtifacts() {
+  void loadArtifacts(false);
 }
 
 onMounted(async () => {
@@ -61,7 +107,9 @@ onMounted(async () => {
   await loadArtifacts();
 });
 
-watch(artifactQuery, loadArtifacts);
+watch(artifactQuery, () => {
+  void loadArtifacts();
+});
 </script>
 
 <template>
@@ -138,6 +186,20 @@ watch(artifactQuery, loadArtifacts);
         compact-tooltip
       />
     </div>
+    <div v-if="loadingMore" class="entity-grid catalog-card-grid collections-card-grid" aria-hidden="true">
+      <article
+        v-for="index in 2"
+        :key="`artifact-more-${index}`"
+        class="entity-card entity-card--skeleton entity-card--collection-compact"
+      >
+        <Skeleton variant="box" width="92px" height="92px" class="skeleton-entity-mark" />
+        <div class="entity-card__content">
+          <Skeleton width="128px" height="24px" />
+          <Skeleton width="92px" />
+        </div>
+      </article>
+    </div>
+    <LoadMoreSentinel :active="hasMoreArtifacts" :disabled="loading || loadingMore" @load="loadMoreArtifacts" />
 
     <ItemEdit v-if="showEditor" />
   </section>

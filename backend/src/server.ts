@@ -1198,7 +1198,9 @@ app.get('/api/project-updates', async (request) =>
   getProjectUpdates(request.query as Record<string, string | string[] | undefined>)
 );
 
-app.get('/api/daily-checklist', async (request) => listDailyChecklistItems(requestLocale(request)));
+app.get('/api/daily-checklist', async (request) =>
+  listDailyChecklistItems(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
+);
 
 app.get('/api/users/:id/profile', async (request, reply) => {
   const { id } = request.params as { id: string };

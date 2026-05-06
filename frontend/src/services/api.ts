@@ -5,6 +5,11 @@ let serverApiBaseUrl = 'http://localhost:3001';
 const authTokenKey = 'pokopia_auth_token';
 const authChangeEvent = 'pokopia-auth-change';
 
+export interface ApiRequestOptions {
+  signal?: AbortSignal;
+  headers?: HeadersInit;
+}
+
 export type TranslationField = 'name' | 'title' | 'details' | 'genus' | 'effect' | 'mosslaxEffect';
 export type TranslationMap = Record<string, Partial<Record<TranslationField, string>>>;
 
@@ -1104,12 +1109,15 @@ export function notifyAuthChange(): void {
   }
 }
 
-function requestHeaders(): HeadersInit {
+function requestHeaders(extraHeaders?: HeadersInit): Headers {
+  const headers = new Headers(extraHeaders);
   const token = getAuthToken();
-  return {
-    'X-Locale': getCurrentLocale(),
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  };
+  headers.set('X-Locale', headers.get('X-Locale') ?? getCurrentLocale());
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return headers;
 }
 
 export function notificationWebSocketUrl(ticket: string): string {
@@ -1134,11 +1142,24 @@ async function getErrorMessage(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+function normalizeRequestOptions(options?: AbortSignal | ApiRequestOptions): ApiRequestOptions {
+  if (!options) {
+    return {};
+  }
+
+  if ('aborted' in options && 'addEventListener' in options) {
+    return { signal: options };
+  }
+
+  return options;
+}
+
+async function getJson<T>(path: string, options?: AbortSignal | ApiRequestOptions): Promise<T> {
+  const requestOptions = normalizeRequestOptions(options);
   const response = await fetch(apiUrl(path), {
     credentials: 'include',
-    headers: requestHeaders(),
-    signal
+    headers: requestHeaders(requestOptions.headers),
+    signal: requestOptions.signal
   });
 
   if (!response.ok) {
@@ -1149,13 +1170,13 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body: unknown): Promise<T> {
+  const headers = requestHeaders();
+  headers.set('Content-Type', 'application/json');
+
   const response = await fetch(apiUrl(path), {
     credentials: 'include',
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...requestHeaders()
-    },
+    headers,
     body: JSON.stringify(body)
   });
 
@@ -1261,7 +1282,7 @@ export const api = {
     sendJson<{ message: string }>('/api/auth/request-password-reset', 'POST', payload),
   resetPassword: (payload: { token: string; password: string }) =>
     sendJson<{ message: string }>('/api/auth/reset-password', 'POST', payload),
-  me: () => getJson<{ user: AuthUser }>('/api/auth/me'),
+  me: (options?: ApiRequestOptions) => getJson<{ user: AuthUser }>('/api/auth/me', options),
   updateMe: (payload: UserProfilePayload) => sendJson<{ user: AuthUser }>('/api/auth/me', 'PATCH', payload),
   changePassword: (payload: ChangePasswordPayload) =>
     sendJson<{ message: string }>('/api/auth/me/password', 'PATCH', payload),

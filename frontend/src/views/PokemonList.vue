@@ -10,22 +10,15 @@ import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd } from '../icons';
-import { api, getAuthToken, type AuthUser, type Options, type Pokemon } from '../services/api';
+import { api, getAuthToken, type AuthUser, type ListPage, type Options, type Pokemon } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const props = defineProps<{
   eventOnly?: boolean;
 }>();
 
-const options = ref<Options | null>(null);
 const route = useRoute();
-const { t } = useI18n();
-const pokemon = ref<Pokemon[]>([]);
-const currentUser = ref<AuthUser | null>(null);
-const loading = ref(true);
-const loadingMore = ref(false);
-const nextCursor = ref<string | null>(null);
-const hasMorePokemon = ref(false);
+const { t, locale } = useI18n();
 const search = ref('');
 const environmentId = ref('');
 const skillIds = ref<string[]>([]);
@@ -37,6 +30,11 @@ const skeletonCardCount = 6;
 const listPageSize = 24;
 let loadRequestId = 0;
 
+type PokemonListInitialData = {
+  options: Options | null;
+  page: ListPage<Pokemon> | null;
+};
+
 const query = computed(() => ({
   search: search.value,
   isEventItem: props.eventOnly ? 'true' : 'false',
@@ -46,6 +44,36 @@ const query = computed(() => ({
   favoriteThingIds: favoriteThingIds.value.join(','),
   favoriteThingMode: favoriteThingMode.value
 }));
+
+const { data: initialData } = await useAsyncData<PokemonListInitialData>(
+  `${props.eventOnly ? 'event-pokemon-list-initial' : 'pokemon-list-initial'}:${locale.value}`,
+  async () => {
+    const [optionsResult, pokemonResult] = await Promise.allSettled([
+      api.options(),
+      api.pokemonPage({
+        ...query.value,
+        cursor: null,
+        limit: listPageSize
+      })
+    ]);
+
+    return {
+      options: optionsResult.status === 'fulfilled' ? optionsResult.value : null,
+      page: pokemonResult.status === 'fulfilled' ? pokemonResult.value : null
+    };
+  },
+  { default: () => ({ options: null, page: null }) }
+);
+
+const initialPage = initialData.value?.page ?? null;
+const options = ref<Options | null>(initialData.value?.options ?? null);
+const pokemon = ref<Pokemon[]>(initialPage?.items ?? []);
+const currentUser = ref<AuthUser | null>(null);
+const initialPageLoaded = ref(initialPage !== null);
+const loading = ref(!initialPageLoaded.value);
+const loadingMore = ref(false);
+const nextCursor = ref<string | null>(initialPage?.nextCursor ?? null);
+const hasMorePokemon = ref(initialPage?.hasMore ?? false);
 const showEditor = computed(() => route.name === 'pokemon-new' || route.name === 'event-pokemon-new');
 const canCreatePokemon = computed(() => currentUser.value?.permissions.includes('pokemon.create') === true);
 const pageTitle = computed(() => t(props.eventOnly ? 'pages.eventPokemon.title' : 'pages.pokemon.title'));
@@ -88,6 +116,14 @@ async function loadPokemon(reset = true) {
     }
     nextCursor.value = page.nextCursor;
     hasMorePokemon.value = page.hasMore;
+    initialPageLoaded.value = true;
+  } catch {
+    if (requestId === loadRequestId && reset) {
+      pokemon.value = [];
+      nextCursor.value = null;
+      hasMorePokemon.value = false;
+      initialPageLoaded.value = true;
+    }
   } finally {
     if (requestId === loadRequestId) {
       loading.value = false;
@@ -112,8 +148,16 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  options.value = await api.options();
-  await loadPokemon();
+  if (!options.value) {
+    try {
+      options.value = await api.options();
+    } catch {
+      options.value = null;
+    }
+  }
+  if (!initialPageLoaded.value) {
+    await loadPokemon();
+  }
 });
 
 watch(query, () => {

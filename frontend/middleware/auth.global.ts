@@ -17,7 +17,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   try {
-    const response = await api.me();
+    const response = await api.me(import.meta.server ? { headers: useRequestHeaders(['cookie']) } : undefined);
     if (requiresVerified && !response.user.emailVerified) {
       return navigateTo({ path: '/login', query: { redirect: to.fullPath } });
     }

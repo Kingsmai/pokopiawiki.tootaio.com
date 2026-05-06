@@ -37,6 +37,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - [x] Add a small SSR-safe fetch wrapper or adapt `frontend/src/services/api.ts` so public reads can be called from server-side setup without depending on `window`, storage, or DOM APIs.
 - [x] Keep frontend API response types consistent with `frontend/src/services/api.ts`.
 - [ ] Ensure API errors used for SSR public routes degrade to intended empty/error states without leaking stack traces or internal fields into rendered HTML.
+  - [x] Pokemon and Event Pokemon list SSR reads degrade to null initial data and existing skeleton/empty UI without rendering raw backend errors.
 
 ## Phase 3: Authentication And Session Model
 
@@ -47,7 +48,9 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - [x] Preserve email verification as the base requirement for protected writes.
 - [ ] Ensure current-user SSR reads expose only the allowed current-user fields defined in `DESIGN.md`.
 - [ ] Update route middleware so server-side redirects for authenticated and permissioned routes match current client-side behavior.
+  - [x] Server-side route middleware forwards the incoming HTTP-only session cookie to `api.me()` for authenticated, verified, and permissioned route checks.
 - [ ] Ensure public SSR pages never render private current-user data into HTML meant for anonymous users.
+  - [x] Pokemon and Event Pokemon list SSR reads do not call `api.me()` or forward cookies; create actions remain client-hydrated after mount.
 - [x] Add a clear logout flow that clears both server cookies and any legacy client storage during the transition.
 
 ### Phase 3 Auth Notes
@@ -56,6 +59,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - Protected backend reads and writes accept the HTTP-only cookie first and remain compatible with `Authorization: Bearer` tokens.
 - Frontend API requests use `credentials: 'include'` so browser requests can carry the cookie without exposing it to JavaScript.
 - Login still stores the legacy token according to Remember me semantics; logout deletes the server session, clears the cookie, and clears legacy frontend storage.
+- Server-side auth middleware forwards the incoming SSR request cookie only for `api.me()` checks, allowing HTTP-only session cookies to participate in SSR route redirects without adding private auth headers to public page data requests.
 
 ## Phase 4: Nuxt SSR Enablement
 
@@ -88,12 +92,19 @@ Keep this file aligned with implementation progress while the SSR migration is i
 ## Phase 5: Server-Side Data And SEO
 
 - [ ] Implement SSR data loading for stable public routes in small groups, starting with low-risk public pages.
+  - [x] Pokemon and Event Pokemon list routes SSR-load shared options and the first public list page.
 - [ ] For each SSR-enabled public route, render title, description, canonical URL, robots value, Open Graph, Twitter card, and structured data from public business data and system wording only.
 - [ ] For detail pages, use entity names, public images, localized public fields, and canonical detail URLs after public API data loads server-side.
 - [ ] Preserve `noindex` on auth, admin, new, edit, and in-development routes.
 - [ ] Keep `robots.txt` and `sitemap.xml` generated from the same stable public route set documented in `DESIGN.md`.
 - [ ] Avoid serializing private auth state, raw permissions, internal audit payloads, or unneeded API payload fields into Nuxt payloads.
 - [ ] Confirm localized reads follow the fallback order in `DESIGN.md`: requested locale, default-language translation, base field.
+
+### Phase 5 Public Data Notes
+
+- Pokemon and Event Pokemon list routes now SSR-load the shared options payload and first public list page through `useAsyncData`; filter changes, infinite loading, and route-backed create modals continue to use the existing client behavior.
+- Pokemon list SSR API failures are contained to null initial data so rendered HTML falls back to the existing skeleton/empty behavior without exposing backend stack traces, raw errors, or internal fields.
+- Public Pokemon list SSR data does not request `api.me()` or forward cookies; create actions remain client-hydrated from the current user after mount.
 
 ## Phase 6: Browser-Only UI Isolation
 
@@ -133,6 +144,10 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - [ ] Verify logged-in flows still work after hydration: login, logout, Remember me, Profile, notifications, create/edit modals, uploads, comments, reactions, and admin access.
 - [ ] Verify generated HTML and Nuxt payloads do not contain forbidden internal data.
 - [ ] Verify `robots.txt`, `sitemap.xml`, canonical URLs, noindex routes, and public detail metadata.
+
+### Phase 8 Validation Notes
+
+- 2026-05-06: After SSR auth cookie forwarding and Pokemon/Event Pokemon first-page SSR data, `pnpm --filter @pokopia/frontend typecheck`, `pnpm --filter @pokopia/frontend lint`, and `pnpm --filter @pokopia/frontend build` passed. The current `lint` script runs `nuxt typecheck`.
 
 ## Phase 9: Cleanup
 

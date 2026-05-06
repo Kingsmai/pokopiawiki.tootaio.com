@@ -62,10 +62,16 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - [ ] Change Nuxt config from `ssr: false` to `ssr: true` only after browser-only usage and auth strategy are ready.
 - [ ] Split plugins by runtime where needed: `.client.ts` for DOM/event/storage logic, `.server.ts` for SSR-only initialization, and universal plugins only for code safe in both contexts.
 - [ ] Ensure Vue I18n is installed safely for SSR and does not share mutable per-request state across users.
-- [ ] Move direct `document.head` SEO mutation to Nuxt `useHead` / `useSeoMeta` or another SSR-aware head strategy.
-- [ ] Ensure route metadata remains the source for default SEO, required auth, required permission, editor modal behavior, and noindex rules.
+- [x] Move direct `document.head` SEO mutation to Nuxt `useHead` / `useSeoMeta` or another SSR-aware head strategy.
+- [x] Ensure route metadata remains the source for default SEO, required auth, required permission, editor modal behavior, and noindex rules.
 - [ ] Confirm route-backed modal pages still preserve underlying page context and avoid unwanted scroll jumps.
 - [ ] Keep UI business text localized through Vue I18n/system wordings; do not add implementation notes or debug text to the UI.
+
+### Phase 4 SEO Notes
+
+- `frontend/src/seo.ts` now resolves SEO state without mutating `document.head` or `document.title`.
+- `frontend/plugins/02-seo.ts` is a universal Nuxt plugin that binds route metadata and client-side detail overrides to `useHead`.
+- The Nuxt config analytics script is declarative and no longer injects a script with `document.head.appendChild`.
 
 ## Phase 5: Server-Side Data And SEO
 

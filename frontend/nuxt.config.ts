@@ -62,8 +62,9 @@ export default defineNuxtConfig({
       ],
       script: [
         {
-          innerHTML:
-            '(function(){const s=document.createElement("script");s.async=true;s.src="https://umami.tootaio.com/script.js";s.setAttribute("data-website-id","6c00a2e5-dc72-41f3-9d5d-aac93aaaf1cb");document.head.appendChild(s);})();'
+          async: true,
+          src: 'https://umami.tootaio.com/script.js',
+          'data-website-id': '6c00a2e5-dc72-41f3-9d5d-aac93aaaf1cb'
         }
       ]
     }

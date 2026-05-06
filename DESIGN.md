@@ -1041,7 +1041,7 @@ API 暴露边界：
   - 默认社交分享图
   - 品牌 Logo 素材
 - `NUXT_PUBLIC_SITE_URL` 定义 canonical、Open Graph URL、robots sitemap 地址和 sitemap URL 的站点根地址；当前公开站点为 `https://pokopiawiki.tootaio.com`，本地前端端口默认使用 `http://localhost:20015`。Nuxt 配置仍兼容读取旧的 `VITE_SITE_URL` 作为 fallback。
-- 前端 Nuxt app head 配置提供默认 title、description、robots、canonical、Open Graph、Twitter card 和 favicon；客户端路由切换后根据当前路由更新页面 metadata。
+- 前端 Nuxt app head 配置提供默认 title、description、robots、canonical、Open Graph、Twitter card 和 favicon；路由 metadata 与详情页公开业务数据通过 Nuxt `useHead` 更新页面 metadata，避免直接操作 `document.head`。
 - 主要公开浏览入口可索引：
   - `/pokemon`
   - `/event-pokemon`

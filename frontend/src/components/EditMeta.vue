@@ -2,9 +2,15 @@
 import { useI18n } from 'vue-i18n';
 import type { EditInfo } from '../services/api';
 
-defineProps<{
-  entity: EditInfo;
-}>();
+withDefaults(
+  defineProps<{
+    entity: EditInfo;
+    showLabel?: boolean;
+  }>(),
+  {
+    showLabel: true
+  }
+);
 
 const { locale, t } = useI18n();
 
@@ -18,11 +24,11 @@ function formatDateTime(value: string): string {
 
 <template>
   <p class="edit-meta">
-    {{ t('history.lastEdited') }}:
+    <template v-if="showLabel">{{ t('history.lastEdited') }}: </template>
     <RouterLink v-if="entity.updatedBy" class="user-profile-link" :to="`/profile/${entity.updatedBy.id}`">
       {{ entity.updatedBy.displayName }}
     </RouterLink>
     <span v-else>{{ t('common.system') }}</span>
-    / {{ formatDateTime(entity.updatedAt) }}
+    / <time :datetime="entity.updatedAt">{{ formatDateTime(entity.updatedAt) }}</time>
   </p>
 </template>

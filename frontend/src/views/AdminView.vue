@@ -7,6 +7,8 @@ import PageHeader from '../components/PageHeader.vue';
 import ReorderableList from '../components/ReorderableList.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import SwitchGroup, { type SwitchGroupOption } from '../components/SwitchGroup.vue';
+import TagsSelect, { type TagsSelectOption } from '../components/TagsSelect.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TranslationFields from '../components/TranslationFields.vue';
 import {
@@ -369,6 +371,31 @@ const dishModalTitle = computed(() => (dishForm.value.id ? t('pages.dish.editDis
 const dishRows = computed(() => dishCategoryRows.value.flatMap((category) => category.dishes));
 const selectedDishFormCategory = computed(() => dishCategoryRows.value.find((category) => String(category.id) === dishForm.value.categoryId) ?? null);
 const dishAllowsSecondSecondaryMaterial = computed(() => (selectedDishFormCategory.value?.totalMaterialQuantity ?? 0) > 2);
+const dishItemSelectOptions = computed<TagsSelectOption[]>(() => dishItemRows.value.map((item) => ({ id: item.id, name: item.name })));
+const optionalDishItemSelectOptions = computed<TagsSelectOption[]>(() => [{ id: '', name: t('common.none') }, ...dishItemSelectOptions.value]);
+const dishCategorySelectOptions = computed<TagsSelectOption[]>(() =>
+  dishCategoryRows.value.map((category) => ({ id: category.id, name: category.name }))
+);
+const dishFlavorSelectOptions = computed<TagsSelectOption[]>(() => dishFlavorRows.value.map((flavor) => ({ id: flavor.id, name: flavor.name })));
+const optionalDishSkillSelectOptions = computed<TagsSelectOption[]>(() => [
+  { id: '', name: t('common.none') },
+  ...dishSkillRows.value.map((skill) => ({ id: skill.id, name: skill.name }))
+]);
+const dishCategoryFormValid = computed(
+  () =>
+    dishCategoryForm.value.name.trim() !== '' &&
+    dishCategoryForm.value.effect.trim() !== '' &&
+    dishCategoryForm.value.cookwareItemId !== '' &&
+    dishCategoryForm.value.mainMaterialItemId !== '' &&
+    Number(dishCategoryForm.value.totalMaterialQuantity) >= 2
+);
+const dishFormValid = computed(
+  () =>
+    dishForm.value.categoryId !== '' &&
+    dishForm.value.itemId !== '' &&
+    dishForm.value.flavorId !== '' &&
+    dishForm.value.mosslaxEffect.trim() !== ''
+);
 const languageModalTitle = computed(() => (editingLanguageCode.value ? t('pages.admin.editLanguage') : t('pages.admin.newLanguage')));
 const wordingModalTitle = computed(() => t('pages.admin.editWording'));
 const roleModalTitle = computed(() => (roleForm.value.id ? t('pages.admin.editRole') : t('pages.admin.newRole')));
@@ -385,6 +412,26 @@ const permissionGroups = computed(() => {
     groups.set(permission.category, [...(groups.get(permission.category) ?? []), permission]);
   }
   return [...groups.entries()].map(([category, permissions]) => ({ category, permissions }));
+});
+const userRoleSwitchOptions = computed<SwitchGroupOption[]>(() =>
+  roleRows.value.map((role) => ({
+    value: role.id,
+    label: role.name,
+    description: role.description,
+    disabled: busy.value || !role.enabled
+  }))
+);
+const userRoleSwitchValue = computed<Array<string | number>>({
+  get: () => userRoleForm.value.roleIds,
+  set: (values) => {
+    userRoleForm.value.roleIds = values.map((value) => Number(value)).sort((a, b) => a - b);
+  }
+});
+const rolePermissionSwitchValue = computed<Array<string | number>>({
+  get: () => rolePermissionForm.value.permissionIds,
+  set: (values) => {
+    rolePermissionForm.value.permissionIds = values.map((value) => Number(value)).sort((a, b) => a - b);
+  }
 });
 const wordingLocaleOptions = computed(() =>
   languageRows.value.length
@@ -525,24 +572,13 @@ function rolePermissionCount(role: RoleDetail) {
   return t('pages.admin.permissionCount', { count: role.permissionIds.length });
 }
 
-function toggleUserRole(roleId: number) {
-  const roleIds = new Set(userRoleForm.value.roleIds);
-  if (roleIds.has(roleId)) {
-    roleIds.delete(roleId);
-  } else {
-    roleIds.add(roleId);
-  }
-  userRoleForm.value.roleIds = [...roleIds].sort((a, b) => a - b);
-}
-
-function toggleRolePermission(permissionId: number) {
-  const permissionIds = new Set(rolePermissionForm.value.permissionIds);
-  if (permissionIds.has(permissionId)) {
-    permissionIds.delete(permissionId);
-  } else {
-    permissionIds.add(permissionId);
-  }
-  rolePermissionForm.value.permissionIds = [...permissionIds].sort((a, b) => a - b);
+function permissionSwitchOptions(permissions: Permission[]): SwitchGroupOption[] {
+  return permissions.map((permission) => ({
+    value: permission.id,
+    label: permission.name,
+    description: permission.key,
+    disabled: busy.value || !permission.enabled
+  }));
 }
 
 function errorText(error: unknown, fallback: string) {
@@ -1129,6 +1165,10 @@ function dishPayloadForSave() {
 }
 
 async function saveDishCategory() {
+  if (!dishCategoryFormValid.value) {
+    return;
+  }
+
   await run(async () => {
     const payload = dishCategoryPayloadForSave();
     if (dishCategoryForm.value.id) {
@@ -1142,6 +1182,10 @@ async function saveDishCategory() {
 }
 
 async function saveDish() {
+  if (!dishFormValid.value) {
+    return;
+  }
+
   await run(async () => {
     const payload = dishPayloadForSave();
     if (dishForm.value.id) {
@@ -2537,20 +2581,7 @@ onMounted(() => {
           <strong>{{ editingUser.displayName }}</strong>
           <span class="meta-line">{{ editingUser.email }}</span>
         </div>
-        <div class="permission-grid" role="group" :aria-label="t('pages.admin.roles')">
-          <label v-for="role in roleRows" :key="role.id" class="permission-toggle">
-            <input
-              type="checkbox"
-              :checked="userRoleForm.roleIds.includes(role.id)"
-              :disabled="busy || !role.enabled"
-              @change="toggleUserRole(role.id)"
-            />
-            <span>
-              <strong>{{ role.name }}</strong>
-              <small>{{ role.description }}</small>
-            </span>
-          </label>
-        </div>
+        <SwitchGroup id="admin-user-roles" v-model="userRoleSwitchValue" :label="t('pages.admin.roles')" :options="userRoleSwitchOptions" layout="grid" />
       </form>
 
       <template #footer>
@@ -2607,22 +2638,14 @@ onMounted(() => {
           <span class="meta-line">{{ editingRole.description }}</span>
         </div>
         <div class="permission-groups">
-          <section v-for="group in permissionGroups" :key="group.category" class="permission-group">
-            <h3>{{ group.category }}</h3>
-            <div class="permission-grid" role="group" :aria-label="group.category">
-              <label v-for="permission in group.permissions" :key="permission.id" class="permission-toggle">
-                <input
-                  type="checkbox"
-                  :checked="rolePermissionForm.permissionIds.includes(permission.id)"
-                  :disabled="busy || !permission.enabled"
-                  @change="toggleRolePermission(permission.id)"
-                />
-                <span>
-                  <strong>{{ permission.name }}</strong>
-                  <small>{{ permission.key }}</small>
-                </span>
-              </label>
-            </div>
+          <section v-for="(group, index) in permissionGroups" :key="group.category" class="permission-group">
+            <SwitchGroup
+              :id="`admin-role-permissions-${index}`"
+              v-model="rolePermissionSwitchValue"
+              :label="group.category"
+              :options="permissionSwitchOptions(group.permissions)"
+              layout="grid"
+            />
           </section>
         </div>
       </form>
@@ -2713,10 +2736,14 @@ onMounted(() => {
           />
           <div class="field">
             <label for="dish-category-cookware">{{ t('pages.dish.cookware') }}</label>
-            <select id="dish-category-cookware" v-model="dishCategoryForm.cookwareItemId" required>
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`cookware-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-category-cookware"
+              v-model="dishCategoryForm.cookwareItemId"
+              :options="dishItemSelectOptions"
+              :multiple="false"
+              :placeholder="t('common.select')"
+              :search-placeholder="t('pages.pokemon.searchItems')"
+            />
           </div>
           <div class="field">
             <label for="dish-category-total-material-quantity">{{ t('pages.dish.totalMaterialQuantity') }}</label>
@@ -2724,10 +2751,14 @@ onMounted(() => {
           </div>
           <div class="field">
             <label for="dish-category-main-material">{{ t('pages.dish.mainMaterial') }}</label>
-            <select id="dish-category-main-material" v-model="dishCategoryForm.mainMaterialItemId" required>
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`category-main-material-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-category-main-material"
+              v-model="dishCategoryForm.mainMaterialItemId"
+              :options="dishItemSelectOptions"
+              :multiple="false"
+              :placeholder="t('common.select')"
+              :search-placeholder="t('pages.pokemon.searchItems')"
+            />
           </div>
         </div>
         <TranslationFields
@@ -2742,7 +2773,7 @@ onMounted(() => {
       </form>
 
       <template #footer>
-        <button type="submit" form="admin-dish-category-form" class="link-button" :disabled="busy">
+        <button type="submit" form="admin-dish-category-form" class="link-button" :disabled="busy || !dishCategoryFormValid">
           <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>
@@ -2758,47 +2789,71 @@ onMounted(() => {
         <div class="dish-form-row dish-form-row--3">
           <div class="field">
             <label for="dish-category">{{ t('pages.dish.category') }}</label>
-            <select id="dish-category" v-model="dishForm.categoryId" required>
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="category in dishCategoryRows" :key="`dish-category-option-${category.id}`" :value="String(category.id)">{{ category.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-category"
+              v-model="dishForm.categoryId"
+              :options="dishCategorySelectOptions"
+              :multiple="false"
+              :placeholder="t('common.select')"
+              :search-placeholder="t('pages.dish.category')"
+            />
           </div>
           <div class="field">
             <label for="dish-item">{{ t('pages.dish.dishItem') }}</label>
-            <select id="dish-item" v-model="dishForm.itemId" required>
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`dish-item-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-item"
+              v-model="dishForm.itemId"
+              :options="dishItemSelectOptions"
+              :multiple="false"
+              :placeholder="t('common.select')"
+              :search-placeholder="t('pages.pokemon.searchItems')"
+            />
           </div>
           <div class="field">
             <label for="dish-flavor">{{ t('pages.dish.flavor') }}</label>
-            <select id="dish-flavor" v-model="dishForm.flavorId" required>
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="flavor in dishFlavorRows" :key="`dish-flavor-${flavor.id}`" :value="String(flavor.id)">{{ flavor.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-flavor"
+              v-model="dishForm.flavorId"
+              :options="dishFlavorSelectOptions"
+              :multiple="false"
+              :placeholder="t('common.select')"
+              :search-placeholder="t('pages.dish.flavor')"
+            />
           </div>
         </div>
         <div class="dish-form-row dish-form-row--3">
           <div class="field">
             <label for="dish-secondary-material-1">{{ t('pages.dish.secondaryMaterial') }}</label>
-            <select id="dish-secondary-material-1" v-model="dishForm.secondaryMaterialItemIds[0]">
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`dish-secondary-material-1-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-secondary-material-1"
+              v-model="dishForm.secondaryMaterialItemIds[0]"
+              :options="optionalDishItemSelectOptions"
+              :multiple="false"
+              :placeholder="t('common.none')"
+              :search-placeholder="t('pages.pokemon.searchItems')"
+            />
           </div>
           <div v-if="dishAllowsSecondSecondaryMaterial" class="field">
             <label for="dish-secondary-material-2">{{ t('pages.dish.secondSecondaryMaterial') }}</label>
-            <select id="dish-secondary-material-2" v-model="dishForm.secondaryMaterialItemIds[1]">
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="item in dishItemRows" :key="`dish-secondary-material-2-${item.id}`" :value="String(item.id)">{{ item.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-secondary-material-2"
+              v-model="dishForm.secondaryMaterialItemIds[1]"
+              :options="optionalDishItemSelectOptions"
+              :multiple="false"
+              :placeholder="t('common.none')"
+              :search-placeholder="t('pages.pokemon.searchItems')"
+            />
           </div>
           <div class="field">
             <label for="dish-pokemon-skill">{{ t('pages.dish.pokemonSkill') }}</label>
-            <select id="dish-pokemon-skill" v-model="dishForm.pokemonSkillId">
-              <option value="">{{ t('common.none') }}</option>
-              <option v-for="skill in dishSkillRows" :key="`dish-skill-${skill.id}`" :value="String(skill.id)">{{ skill.name }}</option>
-            </select>
+            <TagsSelect
+              id="dish-pokemon-skill"
+              v-model="dishForm.pokemonSkillId"
+              :options="optionalDishSkillSelectOptions"
+              :multiple="false"
+              :placeholder="t('common.none')"
+              :search-placeholder="t('pages.dish.pokemonSkill')"
+            />
           </div>
         </div>
         <TranslationFields
@@ -2813,7 +2868,7 @@ onMounted(() => {
       </form>
 
       <template #footer>
-        <button type="submit" form="admin-dish-form" class="link-button" :disabled="busy">
+        <button type="submit" form="admin-dish-form" class="link-button" :disabled="busy || !dishFormValid">
           <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>

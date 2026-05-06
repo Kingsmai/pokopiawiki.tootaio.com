@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import EditMeta from './EditMeta.vue';
 import type { EditHistoryAction, EditHistoryEntry, EditInfo, UserSummary } from '../services/api';
 
 const props = defineProps<{
@@ -169,11 +170,7 @@ function formatDateTime(value: string): string {
       <div>
         <dt>{{ t('history.lastEdited') }}</dt>
         <dd>
-          <RouterLink v-if="props.entity.updatedBy" class="user-profile-link" :to="`/profile/${props.entity.updatedBy.id}`">
-            {{ props.entity.updatedBy.displayName }}
-          </RouterLink>
-          <strong v-else>{{ displayName(props.entity.updatedBy) }}</strong>
-          <time :datetime="props.entity.updatedAt">{{ formatDateTime(props.entity.updatedAt) }}</time>
+          <EditMeta :entity="props.entity" :show-label="false" />
         </dd>
       </div>
     </dl>

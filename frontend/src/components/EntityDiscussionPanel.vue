@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import ConfirmDialog from './ConfirmDialog.vue';
 import LoadMoreSentinel from './LoadMoreSentinel.vue';
 import StatusBadge from './StatusBadge.vue';
 import Tabs, { type TabOption } from './Tabs.vue';
@@ -52,6 +53,8 @@ let removeAuthListener: (() => void) | null = null;
 const nextCursor = ref<string | null>(null);
 const hasMoreComments = ref(false);
 const commentTotal = ref(0);
+const pendingDeleteComment = ref<EntityDiscussionComment | null>(null);
+const deleteConfirmBusy = ref(false);
 
 function can(permissionKey: string) {
   return currentUser.value?.permissions.includes(permissionKey) === true;
@@ -462,11 +465,34 @@ function markCommentDeleted(rows: EntityDiscussionComment[], id: number): boolea
   return false;
 }
 
-async function deleteComment(comment: EntityDiscussionComment) {
-  if (!window.confirm(t('discussion.deleteConfirm'))) {
+function requestDeleteComment(comment: EntityDiscussionComment) {
+  pendingDeleteComment.value = comment;
+}
+
+function closeDeleteConfirm() {
+  if (deleteConfirmBusy.value) {
     return;
   }
 
+  pendingDeleteComment.value = null;
+}
+
+async function confirmDeleteComment() {
+  const comment = pendingDeleteComment.value;
+  if (!comment) {
+    return;
+  }
+
+  deleteConfirmBusy.value = true;
+  try {
+    await deleteComment(comment);
+    pendingDeleteComment.value = null;
+  } finally {
+    deleteConfirmBusy.value = false;
+  }
+}
+
+async function deleteComment(comment: EntityDiscussionComment) {
   const key = commentKey(comment.id);
   clearCommentError(key);
 
@@ -648,7 +674,7 @@ onUnmounted(() => {
               class="life-icon-button life-icon-button--flat life-icon-button--danger"
               type="button"
               :aria-label="t('discussion.deleteComment')"
-              @click="deleteComment(comment)"
+              @click="requestDeleteComment(comment)"
             >
               <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
               <span class="life-action-tooltip" role="tooltip">{{ t('discussion.deleteComment') }}</span>
@@ -750,7 +776,7 @@ onUnmounted(() => {
                     class="life-icon-button life-icon-button--flat life-icon-button--danger"
                     type="button"
                     :aria-label="t('discussion.deleteComment')"
-                    @click="deleteComment(reply)"
+                    @click="requestDeleteComment(reply)"
                   >
                     <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                     <span class="life-action-tooltip" role="tooltip">{{ t('discussion.deleteComment') }}</span>
@@ -778,5 +804,17 @@ onUnmounted(() => {
         <p>{{ t('discussion.emptyHint') }}</p>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="pendingDeleteComment"
+      :title="t('discussion.deleteComment')"
+      :message="t('discussion.deleteConfirm')"
+      :confirm-label="t('common.delete')"
+      :cancel-label="t('common.cancel')"
+      :close-label="t('common.close')"
+      :busy="deleteConfirmBusy"
+      @cancel="closeDeleteConfirm"
+      @confirm="confirmDeleteComment"
+    />
   </section>
 </template>

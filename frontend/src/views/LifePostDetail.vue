@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import LifeRatingControl from '../components/LifeRatingControl.vue';
 import LifeReactionUsersModal from '../components/LifeReactionUsersModal.vue';
 import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
@@ -68,6 +69,8 @@ const ratingErrors = ref<Record<number, string>>({});
 const moderationBusyPostId = ref<number | null>(null);
 const moderationErrors = ref<Record<number, string>>({});
 const reactionUsersModal = ref<{ postId: number; reactionType: LifeReactionType | null } | null>(null);
+const pendingDeleteComment = ref<LifeComment | null>(null);
+const deleteConfirmBusy = ref(false);
 const lifeCommentPageSize = 20;
 const commentMaxLength = 1000;
 let removeAuthListener: (() => void) | null = null;
@@ -707,10 +710,6 @@ function markOwnCommentDeleted(items: LifeComment[], id: number): boolean {
 }
 
 async function deleteComment(comment: LifeComment) {
-  if (!window.confirm(t('pages.life.deleteCommentConfirm'))) {
-    return;
-  }
-
   const key = replyKey(comment.id);
   clearCommentError(key);
 
@@ -734,6 +733,33 @@ async function deleteComment(comment: LifeComment) {
     }
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.deleteCommentFailed'));
+  }
+}
+
+function requestDeleteComment(comment: LifeComment) {
+  pendingDeleteComment.value = comment;
+}
+
+function closeDeleteConfirm() {
+  if (deleteConfirmBusy.value) {
+    return;
+  }
+
+  pendingDeleteComment.value = null;
+}
+
+async function confirmDeleteComment() {
+  const comment = pendingDeleteComment.value;
+  if (!comment) {
+    return;
+  }
+
+  deleteConfirmBusy.value = true;
+  try {
+    await deleteComment(comment);
+    pendingDeleteComment.value = null;
+  } finally {
+    deleteConfirmBusy.value = false;
   }
 }
 
@@ -1160,7 +1186,7 @@ onUnmounted(() => {
                       class="life-icon-button life-icon-button--flat life-icon-button--danger"
                       type="button"
                       :aria-label="t('pages.life.deleteComment')"
-                      @click="deleteComment(comment)"
+                      @click="requestDeleteComment(comment)"
                     >
                       <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                       <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
@@ -1277,7 +1303,7 @@ onUnmounted(() => {
                             class="life-icon-button life-icon-button--flat life-icon-button--danger"
                             type="button"
                             :aria-label="t('pages.life.deleteComment')"
-                            @click="deleteComment(reply)"
+                            @click="requestDeleteComment(reply)"
                           >
                             <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                             <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
@@ -1333,6 +1359,18 @@ onUnmounted(() => {
           <h2>{{ t('pages.life.empty') }}</h2>
         </div>
       </div>
+
+      <ConfirmDialog
+        v-if="pendingDeleteComment"
+        :title="t('pages.life.deleteComment')"
+        :message="t('pages.life.deleteCommentConfirm')"
+        :confirm-label="t('common.delete')"
+        :cancel-label="t('common.cancel')"
+        :close-label="t('common.close')"
+        :busy="deleteConfirmBusy"
+        @cancel="closeDeleteConfirm"
+        @confirm="confirmDeleteComment"
+      />
     </div>
   </section>
 </template>

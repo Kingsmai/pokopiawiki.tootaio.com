@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FilterPanel from '../components/FilterPanel.vue';
 import LifeRatingControl from '../components/LifeRatingControl.vue';
 import LifeReactionUsersModal from '../components/LifeReactionUsersModal.vue';
@@ -63,6 +64,7 @@ type LifeCommentPageState = {
 
 type LifePostSort = 'latest' | 'oldest' | 'top-rated';
 type LifeFeedScope = 'all' | 'following';
+type PendingLifeDelete = { type: 'post'; post: LifePost } | { type: 'comment'; post: LifePost; comment: LifeComment };
 
 const { locale, t } = useI18n();
 const posts = ref<LifePost[]>([]);
@@ -105,6 +107,8 @@ const ratingErrors = ref<Record<number, string>>({});
 const moderationBusyPostId = ref<number | null>(null);
 const moderationErrors = ref<Record<number, string>>({});
 const reactionUsersModal = ref<{ postId: number; reactionType: LifeReactionType | null } | null>(null);
+const pendingDelete = ref<PendingLifeDelete | null>(null);
+const deleteConfirmBusy = ref(false);
 const bodyInput = ref<HTMLTextAreaElement | null>(null);
 const loadMoreSentinel = ref<HTMLElement | null>(null);
 const lifePostPageSize = 20;
@@ -122,6 +126,12 @@ const loadMorePaused = ref(false);
 const allCategoryValue = 'all';
 const allLanguageValue = 'all';
 const allGameVersionValue = 'all';
+const deleteConfirmTitle = computed(() =>
+  pendingDelete.value?.type === 'comment' ? t('pages.life.deleteComment') : t('pages.life.deletePost')
+);
+const deleteConfirmMessage = computed(() =>
+  pendingDelete.value?.type === 'comment' ? t('pages.life.deleteCommentConfirm') : t('pages.life.deleteConfirm')
+);
 
 type LifeInitialData = {
   options: { lifeCategories: LifeCategory[]; gameVersions: GameVersion[] } | null;
@@ -1049,10 +1059,6 @@ function startEdit(post: LifePost) {
 }
 
 async function deletePost(post: LifePost) {
-  if (!window.confirm(t('pages.life.deleteConfirm'))) {
-    return;
-  }
-
   loadError.value = '';
 
   try {
@@ -1065,6 +1071,10 @@ async function deletePost(post: LifePost) {
   } catch (error) {
     loadError.value = error instanceof Error && error.message ? error.message : t('pages.life.deleteFailed');
   }
+}
+
+function requestDeletePost(post: LifePost) {
+  pendingDelete.value = { type: 'post', post };
 }
 
 function startReply(comment: LifeComment) {
@@ -1191,10 +1201,6 @@ function markOwnCommentDeleted(comments: LifeComment[], id: number): boolean {
 }
 
 async function deleteComment(post: LifePost, comment: LifeComment) {
-  if (!window.confirm(t('pages.life.deleteCommentConfirm'))) {
-    return;
-  }
-
   const key = replyKey(comment.id);
   clearCommentError(key);
 
@@ -1223,6 +1229,37 @@ async function deleteComment(post: LifePost, comment: LifeComment) {
     }
   } catch (error) {
     setCommentError(key, error instanceof Error && error.message ? error.message : t('pages.life.deleteCommentFailed'));
+  }
+}
+
+function requestDeleteComment(post: LifePost, comment: LifeComment) {
+  pendingDelete.value = { type: 'comment', post, comment };
+}
+
+function closeDeleteConfirm() {
+  if (deleteConfirmBusy.value) {
+    return;
+  }
+
+  pendingDelete.value = null;
+}
+
+async function confirmDelete() {
+  const target = pendingDelete.value;
+  if (!target) {
+    return;
+  }
+
+  deleteConfirmBusy.value = true;
+  try {
+    if (target.type === 'post') {
+      await deletePost(target.post);
+    } else {
+      await deleteComment(target.post, target.comment);
+    }
+    pendingDelete.value = null;
+  } finally {
+    deleteConfirmBusy.value = false;
   }
 }
 
@@ -1601,7 +1638,7 @@ onUnmounted(() => {
                   class="life-icon-button life-icon-button--danger"
                   type="button"
                   :aria-label="t('pages.life.deletePost')"
-                  @click="deletePost(post)"
+                  @click="requestDeletePost(post)"
                 >
                   <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                   <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deletePost') }}</span>
@@ -1896,7 +1933,7 @@ onUnmounted(() => {
                           class="life-icon-button life-icon-button--flat life-icon-button--danger"
                           type="button"
                           :aria-label="t('pages.life.deleteComment')"
-                          @click="deleteComment(post, comment)"
+                          @click="requestDeleteComment(post, comment)"
                         >
                           <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                           <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
@@ -2013,7 +2050,7 @@ onUnmounted(() => {
                                 class="life-icon-button life-icon-button--flat life-icon-button--danger"
                                 type="button"
                                 :aria-label="t('pages.life.deleteComment')"
-                                @click="deleteComment(post, reply)"
+                                @click="requestDeleteComment(post, reply)"
                               >
                                 <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
                                 <span class="life-action-tooltip" role="tooltip">{{ t('pages.life.deleteComment') }}</span>
@@ -2104,6 +2141,18 @@ onUnmounted(() => {
             {{ t('pages.life.newPost') }}
           </button>
         </div>
+
+        <ConfirmDialog
+          v-if="pendingDelete"
+          :title="deleteConfirmTitle"
+          :message="deleteConfirmMessage"
+          :confirm-label="t('common.delete')"
+          :cancel-label="t('common.cancel')"
+          :close-label="t('common.close')"
+          :busy="deleteConfirmBusy"
+          @cancel="closeDeleteConfirm"
+          @confirm="confirmDelete"
+        />
     </section>
   </section>
 </template>

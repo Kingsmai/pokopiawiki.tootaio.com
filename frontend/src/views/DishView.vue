@@ -25,7 +25,7 @@ import {
   type TranslationMap
 } from '../services/api';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const categories = ref<DishCategory[]>([]);
 const activeCategoryId = ref('');
 const loading = ref(true);
@@ -95,6 +95,24 @@ const dishFormValid = computed(
     dishForm.value.flavorId !== '' &&
     dishForm.value.mosslaxEffect.trim() !== ''
 );
+
+const { data: initialData } = await useAsyncData<DishCategory[] | null>(
+  `dish-initial:${locale.value}`,
+  async () => {
+    try {
+      return await api.dish();
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+const initialCategories = initialData.value;
+categories.value = initialCategories ?? [];
+activeCategoryId.value = categories.value[0] ? String(categories.value[0].id) : '';
+const initialCategoriesLoaded = ref(initialCategories !== null);
+loading.value = !initialCategoriesLoaded.value;
 
 function itemImage(item: ItemLink) {
   return item.image ? { src: item.image.url, alt: t('media.imageAlt', { name: item.name }) } : null;
@@ -221,6 +239,7 @@ async function loadDish(showSkeleton = false) {
   }
   categories.value = await api.dish();
   activeCategoryId.value = categories.value[0] ? String(categories.value[0].id) : '';
+  initialCategoriesLoaded.value = true;
   loading.value = false;
 }
 
@@ -289,7 +308,7 @@ async function loadPage() {
       currentUser.value = null;
     }
   }
-  await Promise.all([loadDish(), loadEditorOptions()]);
+  await Promise.all([initialCategoriesLoaded.value ? Promise.resolve() : loadDish(), loadEditorOptions()]);
 }
 
 watch(categories, (nextCategories) => {

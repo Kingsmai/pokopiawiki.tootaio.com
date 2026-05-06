@@ -11,7 +11,7 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconChevronDown, iconChevronUp, iconItem } from '../icons';
-import { api, getAuthToken, type AuthUser, type Item, type Options } from '../services/api';
+import { api, getAuthToken, type AuthUser, type Item, type ListPage, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
 const props = defineProps<{
@@ -21,7 +21,7 @@ const props = defineProps<{
 const options = ref<Options | null>(null);
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const items = ref<Item[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
@@ -104,6 +104,40 @@ const itemQuery = computed(() => ({
   tagIds: tagIds.value.join(','),
   isEventItem: props.eventOnly
 }));
+
+type ItemListInitialData = {
+  options: Options | null;
+  page: ListPage<Item> | null;
+};
+
+const { data: initialData } = await useAsyncData<ItemListInitialData>(
+  `${props.eventOnly ? 'event-item-list-initial' : 'item-list-initial'}:${locale.value}`,
+  async () => {
+    const [optionsResult, itemsResult] = await Promise.allSettled([
+      api.options(),
+      api.itemsPage({
+        ...itemQuery.value,
+        cursor: null,
+        limit: listPageSize
+      })
+    ]);
+
+    return {
+      options: optionsResult.status === 'fulfilled' ? optionsResult.value : null,
+      page: itemsResult.status === 'fulfilled' ? itemsResult.value : null
+    };
+  },
+  { default: () => ({ options: null, page: null }) }
+);
+
+const initialPage = initialData.value?.page ?? null;
+options.value = initialData.value?.options ?? null;
+items.value = initialPage?.items ?? [];
+const initialPageLoaded = ref(initialPage !== null);
+loading.value = !initialPageLoaded.value;
+nextCursor.value = initialPage?.nextCursor ?? null;
+hasMoreItems.value = initialPage?.hasMore ?? false;
+
 const showEditor = computed(() => route.name === 'item-new' || route.name === 'event-item-new');
 const canCreateItem = computed(() => currentUser.value?.permissions.includes('items.create') === true);
 const hasItemCreateDefaults = computed(
@@ -458,6 +492,14 @@ async function loadItems(reset = true) {
     }
     nextCursor.value = page.nextCursor;
     hasMoreItems.value = page.hasMore;
+    initialPageLoaded.value = true;
+  } catch {
+    if (requestId === loadRequestId && reset) {
+      items.value = [];
+      nextCursor.value = null;
+      hasMoreItems.value = false;
+      initialPageLoaded.value = true;
+    }
   } finally {
     if (requestId === loadRequestId) {
       loading.value = false;
@@ -480,9 +522,17 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  options.value = await api.options();
+  if (!options.value) {
+    try {
+      options.value = await api.options();
+    } catch {
+      options.value = null;
+    }
+  }
   sanitizeItemCreateDefaults();
-  await loadItems();
+  if (!initialPageLoaded.value) {
+    await loadItems();
+  }
 });
 
 onBeforeUnmount(() => {

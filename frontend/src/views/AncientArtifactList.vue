@@ -11,11 +11,11 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconArtifact } from '../icons';
-import { api, getAuthToken, type AncientArtifact, type AuthUser, type Options } from '../services/api';
+import { api, getAuthToken, type AncientArtifact, type AuthUser, type ListPage, type Options } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const options = ref<Options | null>(null);
 const artifacts = ref<AncientArtifact[]>([]);
 const currentUser = ref<AuthUser | null>(null);
@@ -42,6 +42,40 @@ const artifactQuery = computed(() => ({
   categoryId: categoryId.value,
   tagIds: tagIds.value.join(',')
 }));
+
+type AncientArtifactListInitialData = {
+  options: Options | null;
+  page: ListPage<AncientArtifact> | null;
+};
+
+const { data: initialData } = await useAsyncData<AncientArtifactListInitialData>(
+  `ancient-artifact-list-initial:${locale.value}`,
+  async () => {
+    const [optionsResult, artifactsResult] = await Promise.allSettled([
+      api.options(),
+      api.ancientArtifactsPage({
+        ...artifactQuery.value,
+        cursor: null,
+        limit: listPageSize
+      })
+    ]);
+
+    return {
+      options: optionsResult.status === 'fulfilled' ? optionsResult.value : null,
+      page: artifactsResult.status === 'fulfilled' ? artifactsResult.value : null
+    };
+  },
+  { default: () => ({ options: null, page: null }) }
+);
+
+const initialPage = initialData.value?.page ?? null;
+options.value = initialData.value?.options ?? null;
+artifacts.value = initialPage?.items ?? [];
+const initialPageLoaded = ref(initialPage !== null);
+loading.value = !initialPageLoaded.value;
+nextCursor.value = initialPage?.nextCursor ?? null;
+hasMoreArtifacts.value = initialPage?.hasMore ?? false;
+
 const showEditor = computed(() => route.name === 'ancient-artifact-new');
 const canCreateArtifact = computed(() => currentUser.value?.permissions.includes('items.create') === true);
 
@@ -83,6 +117,14 @@ async function loadArtifacts(reset = true) {
     }
     nextCursor.value = page.nextCursor;
     hasMoreArtifacts.value = page.hasMore;
+    initialPageLoaded.value = true;
+  } catch {
+    if (requestId === loadRequestId && reset) {
+      artifacts.value = [];
+      nextCursor.value = null;
+      hasMoreArtifacts.value = false;
+      initialPageLoaded.value = true;
+    }
   } finally {
     if (requestId === loadRequestId) {
       loading.value = false;
@@ -103,8 +145,16 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  options.value = await api.options();
-  await loadArtifacts();
+  if (!options.value) {
+    try {
+      options.value = await api.options();
+    } catch {
+      options.value = null;
+    }
+  }
+  if (!initialPageLoaded.value) {
+    await loadArtifacts();
+  }
 });
 
 watch(artifactQuery, () => {

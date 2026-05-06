@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
-import { api, type DailyChecklistItem } from '../services/api';
+import { api, type DailyChecklistItem, type ListPage } from '../services/api';
 
 type ChecklistState = {
   date: string;
@@ -12,7 +12,7 @@ type ChecklistState = {
 };
 
 const checklistStateKey = 'pokopia_daily_checklist_state';
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const stateRefreshIntervalMs = 60_000;
 const checklistItems = ref<DailyChecklistItem[]>([]);
 const checkedTaskIds = ref<Set<number>>(new Set());
@@ -24,6 +24,28 @@ const skeletonRows = 5;
 const listPageSize = 20;
 let stateRefreshTimer: number | null = null;
 let loadRequestId = 0;
+
+const { data: initialData } = await useAsyncData<ListPage<DailyChecklistItem> | null>(
+  `daily-checklist-initial:${locale.value}`,
+  async () => {
+    try {
+      return await api.dailyChecklistPage({
+        cursor: null,
+        limit: listPageSize
+      });
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+const initialPage = initialData.value;
+checklistItems.value = initialPage?.items ?? [];
+const initialPageLoaded = ref(initialPage !== null);
+loading.value = !initialPageLoaded.value;
+nextCursor.value = initialPage?.nextCursor ?? null;
+hasMoreItems.value = initialPage?.hasMore ?? false;
 
 function todayKey() {
   const today = new Date();
@@ -124,8 +146,16 @@ async function loadDailyChecklist(reset = true) {
     }
     nextCursor.value = page.nextCursor;
     hasMoreItems.value = page.hasMore;
+    initialPageLoaded.value = true;
     if (!page.hasMore) {
       syncChecklistState();
+    }
+  } catch {
+    if (requestId === loadRequestId && reset) {
+      checklistItems.value = [];
+      nextCursor.value = null;
+      hasMoreItems.value = false;
+      initialPageLoaded.value = true;
     }
   } finally {
     if (requestId === loadRequestId) {
@@ -141,8 +171,13 @@ function loadMoreDailyChecklist() {
 
 onMounted(() => {
   loadChecklistState();
+  if (initialPageLoaded.value && !hasMoreItems.value) {
+    syncChecklistState();
+  }
   stateRefreshTimer = window.setInterval(loadChecklistState, stateRefreshIntervalMs);
-  void loadDailyChecklist();
+  if (!initialPageLoaded.value) {
+    void loadDailyChecklist();
+  }
 });
 
 onUnmounted(() => {

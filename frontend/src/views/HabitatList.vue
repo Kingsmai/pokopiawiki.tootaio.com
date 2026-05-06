@@ -8,7 +8,7 @@ import LoadMoreSentinel from '../components/LoadMoreSentinel.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import { iconAdd, iconHabitat } from '../icons';
-import { api, getAuthToken, type AuthUser, type Habitat } from '../services/api';
+import { api, getAuthToken, type AuthUser, type Habitat, type ListPage } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
 const props = defineProps<{
@@ -18,8 +18,7 @@ const props = defineProps<{
 const habitats = ref<Habitat[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const route = useRoute();
-const { t } = useI18n();
-const loading = ref(true);
+const { t, locale } = useI18n();
 const loadingMore = ref(false);
 const nextCursor = ref<string | null>(null);
 const hasMoreHabitats = ref(false);
@@ -29,6 +28,30 @@ let loadRequestId = 0;
 const query = computed(() => ({
   isEventItem: props.eventOnly ? 'true' : 'false'
 }));
+
+const { data: initialData } = await useAsyncData<ListPage<Habitat> | null>(
+  `${props.eventOnly ? 'event-habitat-list-initial' : 'habitat-list-initial'}:${locale.value}`,
+  async () => {
+    try {
+      return await api.habitatsPage({
+        ...query.value,
+        cursor: null,
+        limit: listPageSize
+      });
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+const initialPage = initialData.value;
+habitats.value = initialPage?.items ?? [];
+const initialPageLoaded = ref(initialPage !== null);
+const loading = ref(!initialPageLoaded.value);
+nextCursor.value = initialPage?.nextCursor ?? null;
+hasMoreHabitats.value = initialPage?.hasMore ?? false;
+
 const showEditor = computed(() => route.name === 'habitat-new' || route.name === 'event-habitat-new');
 const canCreateHabitat = computed(() => currentUser.value?.permissions.includes('habitats.create') === true);
 const pageTitle = computed(() => t(props.eventOnly ? 'pages.eventHabitats.title' : 'pages.habitats.title'));
@@ -75,6 +98,14 @@ async function loadHabitats(reset = true) {
     }
     nextCursor.value = page.nextCursor;
     hasMoreHabitats.value = page.hasMore;
+    initialPageLoaded.value = true;
+  } catch {
+    if (requestId === loadRequestId && reset) {
+      habitats.value = [];
+      nextCursor.value = null;
+      hasMoreHabitats.value = false;
+      initialPageLoaded.value = true;
+    }
   } finally {
     if (requestId === loadRequestId) {
       loading.value = false;
@@ -95,7 +126,9 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  await loadHabitats();
+  if (!initialPageLoaded.value) {
+    await loadHabitats();
+  }
 });
 
 watch(query, () => {

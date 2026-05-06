@@ -11,12 +11,12 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import TagsSelect from '../components/TagsSelect.vue';
 import { iconAdd, iconNoRecipe, iconRecipe } from '../icons';
-import { api, getAuthToken, type AuthUser, type Item, type Options } from '../services/api';
+import { api, getAuthToken, type AuthUser, type Item, type ListPage, type Options } from '../services/api';
 import RecipeEdit from './RecipeEdit.vue';
 
 const options = ref<Options | null>(null);
 const route = useRoute();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const items = ref<Item[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
@@ -46,6 +46,40 @@ const itemQuery = computed(() => ({
   tagIds: tagIds.value.join(','),
   recipeOrder: 1
 }));
+
+type RecipeListInitialData = {
+  options: Options | null;
+  page: ListPage<Item> | null;
+};
+
+const { data: initialData } = await useAsyncData<RecipeListInitialData>(
+  `recipe-list-initial:${locale.value}`,
+  async () => {
+    const [optionsResult, itemsResult] = await Promise.allSettled([
+      api.options(),
+      api.itemsPage({
+        ...itemQuery.value,
+        cursor: null,
+        limit: listPageSize
+      })
+    ]);
+
+    return {
+      options: optionsResult.status === 'fulfilled' ? optionsResult.value : null,
+      page: itemsResult.status === 'fulfilled' ? itemsResult.value : null
+    };
+  },
+  { default: () => ({ options: null, page: null }) }
+);
+
+const initialPage = initialData.value?.page ?? null;
+options.value = initialData.value?.options ?? null;
+items.value = initialPage?.items ?? [];
+const initialPageLoaded = ref(initialPage !== null);
+loading.value = !initialPageLoaded.value;
+nextCursor.value = initialPage?.nextCursor ?? null;
+hasMoreItems.value = initialPage?.hasMore ?? false;
+
 const showEditor = computed(() => route.name === 'recipe-new');
 const canCreateRecipe = computed(() => currentUser.value?.permissions.includes('recipes.create') === true);
 
@@ -103,6 +137,14 @@ async function loadItems(reset = true) {
     }
     nextCursor.value = page.nextCursor;
     hasMoreItems.value = page.hasMore;
+    initialPageLoaded.value = true;
+  } catch {
+    if (requestId === loadRequestId && reset) {
+      items.value = [];
+      nextCursor.value = null;
+      hasMoreItems.value = false;
+      initialPageLoaded.value = true;
+    }
   } finally {
     if (requestId === loadRequestId) {
       loading.value = false;
@@ -123,8 +165,16 @@ onMounted(async () => {
       currentUser.value = null;
     }
   }
-  options.value = await api.options();
-  await loadItems();
+  if (!options.value) {
+    try {
+      options.value = await api.options();
+    } catch {
+      options.value = null;
+    }
+  }
+  if (!initialPageLoaded.value) {
+    await loadItems();
+  }
 });
 
 watch(itemQuery, () => {

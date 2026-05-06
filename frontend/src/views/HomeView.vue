@@ -63,8 +63,27 @@ const showProjectUpdates = computed(
 const showProjectUpdatesViewAll = computed(() => projectCommits.value.length > 0 || latestReleases.value.length > 0);
 const repositoryUpdatedAt = computed(() => formatDateTime(projectUpdates.value?.repository.updatedAt ?? null));
 
+const { data: initialProjectUpdates } = await useAsyncData<ProjectUpdates | null>(
+  `home-project-updates:${locale.value}`,
+  async () => {
+    try {
+      return await api.projectUpdates({ limit: projectCommitPageSize });
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+projectUpdates.value = initialProjectUpdates.value;
+projectCommits.value = initialProjectUpdates.value?.commits.items ?? [];
+const initialProjectUpdatesLoaded = ref(initialProjectUpdates.value !== null);
+projectUpdatesLoading.value = !initialProjectUpdatesLoaded.value;
+
 onMounted(() => {
-  void loadProjectUpdates();
+  if (!initialProjectUpdatesLoaded.value) {
+    void loadProjectUpdates();
+  }
 });
 
 function sectionTitleKey(key: string) {
@@ -81,9 +100,11 @@ async function loadProjectUpdates(): Promise<void> {
     const updates = await api.projectUpdates({ limit: projectCommitPageSize });
     projectUpdates.value = updates;
     projectCommits.value = updates.commits.items;
+    initialProjectUpdatesLoaded.value = true;
   } catch {
     projectUpdates.value = null;
     projectCommits.value = [];
+    initialProjectUpdatesLoaded.value = true;
   } finally {
     projectUpdatesLoading.value = false;
   }

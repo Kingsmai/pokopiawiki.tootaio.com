@@ -27,11 +27,33 @@ const loadMoreSentinel = ref<HTMLElement | null>(null);
 const expandedCommitShas = ref<Set<string>>(new Set());
 let projectUpdatesObserver: IntersectionObserver | null = null;
 
+const { data: initialData } = await useAsyncData<ProjectUpdates | null>(
+  `project-updates-initial:${locale.value}`,
+  async () => {
+    try {
+      return await api.projectUpdates({ limit: projectCommitPageSize });
+    } catch {
+      return null;
+    }
+  },
+  { default: () => null }
+);
+
+const initialUpdates = initialData.value;
+projectUpdates.value = initialUpdates;
+projectCommits.value = initialUpdates?.commits.items ?? [];
+projectCommitCursor.value = initialUpdates?.commits.nextCursor ?? null;
+projectHasMoreCommits.value = initialUpdates?.commits.hasMore ?? false;
+const initialUpdatesLoaded = ref(initialUpdates !== null);
+loading.value = !initialUpdatesLoaded.value;
+
 const releases = computed(() => projectUpdates.value?.releases ?? []);
 const repositoryUpdatedAt = computed(() => formatDateTime(projectUpdates.value?.repository.updatedAt ?? null));
 
 onMounted(() => {
-  void loadProjectUpdates();
+  if (!initialUpdatesLoaded.value) {
+    void loadProjectUpdates();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -53,9 +75,11 @@ async function loadProjectUpdates(): Promise<void> {
     projectCommits.value = updates.commits.items;
     projectCommitCursor.value = updates.commits.nextCursor;
     projectHasMoreCommits.value = updates.commits.hasMore;
+    initialUpdatesLoaded.value = true;
   } catch {
     projectUpdates.value = null;
     projectCommits.value = [];
+    initialUpdatesLoaded.value = true;
     loadError.value = true;
   } finally {
     loading.value = false;

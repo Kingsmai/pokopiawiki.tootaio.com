@@ -7,8 +7,6 @@ const defaultCanonicalPath = '/';
 const defaultImagePath = '/seo/pokopia-hero.jpg';
 const fallbackSiteUrl = 'https://pokopiawiki.tootaio.com';
 let runtimeSiteUrl: string | null = null;
-let currentSeo = resolveSeo();
-const seoListeners = new Set<(seo: ResolvedSeoConfig) => void>();
 
 type TranslationValues = Record<string, string | number>;
 type Translator = (key: string, values?: TranslationValues) => string;
@@ -43,6 +41,8 @@ export type ResolvedSeoConfig = {
 
 const messages = systemWordingMessages as unknown as Record<string, SystemWordingTree>;
 let activeTranslator: Translator | null = null;
+let currentSeo: ResolvedSeoConfig | null = null;
+const seoListeners = new Set<(seo: ResolvedSeoConfig) => void>();
 
 export function setSeoTranslator(translator: Translator): void {
   activeTranslator = translator;
@@ -165,7 +165,7 @@ export function resolveRouteSeo(route: RouteLocationNormalizedLoaded, translator
 
 export function onSeoChange(callback: (seo: ResolvedSeoConfig) => void): () => void {
   seoListeners.add(callback);
-  callback(currentSeo);
+  callback(currentSeo ?? resolveSeo());
   return () => seoListeners.delete(callback);
 }
 

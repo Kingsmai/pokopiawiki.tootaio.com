@@ -19,12 +19,12 @@ RUN pnpm --filter @pokopia/frontend build
 FROM node:22-alpine
 
 ENV NODE_ENV=production
+ENV HOST=0.0.0.0
 ENV PORT=20015
 
 WORKDIR /app
 COPY --from=build /app/frontend/.output ./.output
-COPY frontend/static-server.mjs ./static-server.mjs
 
 USER node
 EXPOSE 20015
-CMD ["node", "static-server.mjs"]
+CMD ["node", ".output/server/index.mjs"]

@@ -5,7 +5,7 @@ function normalizeSiteUrl(value: string | undefined): string {
 }
 
 export default defineNuxtConfig({
-  ssr: false,
+  ssr: true,
   devtools: { enabled: false },
   css: ['~/src/styles/main.css'],
   compatibilityDate: '2026-05-06',

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "nuxt dev --host 0.0.0.0 --port 20015",
-    "build": "nuxt generate",
+    "build": "nuxt build",
     "lint": "nuxt typecheck",
     "typecheck": "nuxt typecheck",
     "test": "vitest run"

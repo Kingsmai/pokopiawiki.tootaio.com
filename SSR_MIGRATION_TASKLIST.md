@@ -6,7 +6,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 
 ## Target State
 
-- [ ] Nuxt runs with `ssr: true` for production.
+- [x] Nuxt runs with `ssr: true` for production.
 - [ ] Public browsing routes render meaningful HTML on the server, including localized metadata and public business data where practical.
 - [ ] Authenticated, management, edit, and modal workflows remain functionally equivalent to the current SPA behavior.
 - [ ] No password hashes, session token hashes, verification/reset token hashes, role internals, permission internals, audit payloads, debug fields, or implementation notes are exposed through SSR payloads, API responses, generated HTML, metadata, logs, or UI.
@@ -59,7 +59,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 
 ## Phase 4: Nuxt SSR Enablement
 
-- [ ] Change Nuxt config from `ssr: false` to `ssr: true` only after browser-only usage and auth strategy are ready.
+- [x] Change Nuxt config from `ssr: false` to `ssr: true` only after browser-only usage and auth strategy are ready.
 - [ ] Split plugins by runtime where needed: `.client.ts` for DOM/event/storage logic, `.server.ts` for SSR-only initialization, and universal plugins only for code safe in both contexts.
 - [x] Ensure Vue I18n is installed safely for SSR and does not share mutable per-request state across users.
 - [x] Move direct `document.head` SEO mutation to Nuxt `useHead` / `useSeoMeta` or another SSR-aware head strategy.
@@ -78,6 +78,12 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - `frontend/src/i18n.ts` now exports a Vue I18n factory instead of a module-level singleton.
 - `frontend/plugins/01-i18n.ts` creates and installs one I18n instance per Nuxt app/request; only the browser instance is registered for legacy helpers that need localStorage and locale-change events.
 - SEO route metadata translation uses the current Nuxt app's I18n translator instead of importing a shared global I18n instance.
+
+### Phase 4 SSR Config Notes
+
+- `frontend/nuxt.config.ts` now uses `ssr: true`.
+- `pnpm --filter @pokopia/frontend build` completed with Nuxt SSR enabled and generated Nuxt server output at `.output/server/index.mjs`.
+- Production container now targets the Nuxt server entry point; Docker runtime validation remains tracked in Phase 8.
 
 ## Phase 5: Server-Side Data And SEO
 
@@ -100,18 +106,26 @@ Keep this file aligned with implementation progress while the SSR migration is i
 
 ## Phase 7: Docker And Deployment
 
-- [ ] Update frontend Docker image from static `.output/public` serving to Nuxt server output when SSR is enabled.
+- [x] Update frontend Docker image from static `.output/public` serving to Nuxt server output when SSR is enabled.
 - [ ] Run the production container with the Nuxt server entry point rather than the current static server.
-- [ ] Update `frontend_gateway` proxy behavior if SSR server health, fallback, or cache behavior changes.
-- [ ] Document required environment variables, including public browser API URL, internal server API URL, site URL, and any cookie/session settings.
-- [ ] Keep the upgrade maintenance page independent from Nuxt, backend API, and database.
-- [ ] Preserve public frontend port `20015` unless `DESIGN.md` and compose configuration are intentionally updated together.
+- [x] Update `frontend_gateway` proxy behavior if SSR server health, fallback, or cache behavior changes.
+- [x] Document required environment variables, including public browser API URL, internal server API URL, site URL, and any cookie/session settings.
+- [x] Keep the upgrade maintenance page independent from Nuxt, backend API, and database.
+- [x] Preserve public frontend port `20015` unless `DESIGN.md` and compose configuration are intentionally updated together.
+
+### Phase 7 Deployment Notes
+
+- `frontend/package.json` now uses `nuxt build` so the production build emits Nitro server output.
+- `frontend/Dockerfile` now runs `node .output/server/index.mjs` with `HOST=0.0.0.0` and `PORT=20015`; the obsolete lightweight static server file was removed.
+- `frontend_gateway` continues to proxy `frontend:20015` and keep the backend health-gated maintenance fallback independent from Nuxt.
+- `DESIGN.md` now documents the Nuxt server output deployment model and the existing browser API, server API, site URL, origin, and proxy environment variables.
+- A local smoke check of `node frontend/.output/server/index.mjs` on port `20115` returned SSR HTML for `/` and `200` for `/robots.txt`; Docker compose runtime validation is still pending.
 
 ## Phase 8: Validation
 
-- [ ] Run `pnpm --filter @pokopia/frontend typecheck`.
-- [ ] Run `pnpm --filter @pokopia/frontend lint`.
-- [ ] Run `pnpm --filter @pokopia/frontend build`.
+- [x] Run `pnpm --filter @pokopia/frontend typecheck`.
+- [x] Run `pnpm --filter @pokopia/frontend lint`.
+- [x] Run `pnpm --filter @pokopia/frontend build`.
 - [ ] Do not run tests in WSL unless explicitly requested.
 - [ ] Ask the user to run `docker compose up --build` for runtime validation, then fix any pasted Docker output in follow-up passes.
 - [ ] Verify anonymous SSR HTML for public routes includes meaningful public content and metadata.
@@ -123,7 +137,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 ## Phase 9: Cleanup
 
 - [ ] Remove legacy SPA-only compatibility paths once SSR behavior is stable and no longer needed.
-- [ ] Remove obsolete static server usage if the production frontend container runs the Nuxt server.
+- [x] Remove obsolete static server usage if the production frontend container runs the Nuxt server.
 - [ ] Remove obsolete `VITE_*` fallback support only after deployment configuration has fully moved to `NUXT_PUBLIC_*` or documented replacement variables.
 - [ ] Update `DESIGN.md` from "Nuxt SPA mode" to the final SSR deployment model.
 - [ ] Update `AGENTS.md` frontend stack and workflow notes to the final SSR state.

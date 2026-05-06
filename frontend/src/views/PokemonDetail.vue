@@ -16,7 +16,7 @@ import StatusMessage from '../components/StatusMessage.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconAdd, iconBack, iconCancel, iconCheck, iconEdit, iconHabitat, iconItem } from '../icons';
 import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
-import { api, getAuthToken, type AuthUser, type Item, type PokemonDetail, type PokemonPayload, type TradingPreference } from '../services/api';
+import { api, type AuthUser, type Item, type PokemonDetail, type PokemonPayload, type TradingPreference } from '../services/api';
 import PokemonEdit from './PokemonEdit.vue';
 
 const route = useRoute();
@@ -39,12 +39,18 @@ const tradingDraftItems = ref<Array<{ itemId: number; preference: TradingPrefere
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
 const relatedPokemonLimit = 6;
+const pokemonDetailRouteNames = new Set(['pokemon-detail', 'pokemon-edit']);
 
 const { data: initialPokemon } = await useAsyncData<PokemonDetail | null>(
-  `pokemon-detail:${String(route.params.id)}:${locale.value}`,
+  `pokemon-detail:${activePokemonRouteId() ?? 'none'}:${locale.value}`,
   async () => {
+    const routeId = activePokemonRouteId();
+    if (!routeId) {
+      return null;
+    }
+
     try {
-      return await api.pokemonDetail(String(route.params.id));
+      return await api.pokemonDetail(routeId);
     } catch {
       return null;
     }
@@ -91,6 +97,15 @@ function sortByOrder(values: Set<string>, order: string[]) {
 
 function habitatTabValue(id: number): string {
   return `habitat-${id}`;
+}
+
+function activePokemonRouteId(): string | null {
+  return typeof route.name === 'string' &&
+    pokemonDetailRouteNames.has(route.name) &&
+    typeof route.params.id === 'string' &&
+    route.params.id.trim() !== ''
+    ? route.params.id
+    : null;
 }
 
 function timeLabel(value: string): string {
@@ -439,8 +454,14 @@ async function saveTradingItems() {
 }
 
 async function loadPokemonDetail() {
+  const routeId = activePokemonRouteId();
+  if (!routeId) {
+    initialPokemonLoaded.value = true;
+    return;
+  }
+
   try {
-    const nextPokemon = await api.pokemonDetail(String(route.params.id));
+    const nextPokemon = await api.pokemonDetail(routeId);
     pokemon.value = nextPokemon;
     relatedHabitatTab.value = habitatTabValue(nextPokemon.environment.id);
     initialPokemonLoaded.value = true;
@@ -461,13 +482,12 @@ async function loadPokemonDetail() {
 }
 
 onMounted(async () => {
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
+
   if (!initialPokemonLoaded.value) {
     await loadPokemonDetail();
   }
@@ -485,6 +505,10 @@ watch(
 watch(
   () => route.params.id,
   () => {
+    if (!activePokemonRouteId()) {
+      return;
+    }
+
     pokemon.value = null;
     relatedHabitatTab.value = '';
     detailTab.value = 'details';

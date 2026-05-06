@@ -13,7 +13,6 @@ import TranslationFields from '../components/TranslationFields.vue';
 import { iconAdd, iconCancel, iconDelete, iconPokemon, iconSave } from '../icons';
 import {
   api,
-  getAuthToken,
   type AuthUser,
   type ConfigType,
   type EntityImage,
@@ -156,11 +155,6 @@ function habitatNameForSave() {
 }
 
 async function loadCurrentUser() {
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    return;
-  }
-
   try {
     currentUser.value = (await api.me()).user;
   } catch {

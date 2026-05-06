@@ -14,7 +14,6 @@ import TranslationFields from '../components/TranslationFields.vue';
 import { iconCancel, iconSave, iconSearch } from '../icons';
 import {
   api,
-  getAuthToken,
   type AuthUser,
   type ConfigType,
   type EntityImage,
@@ -195,11 +194,6 @@ async function loadOptions() {
 }
 
 async function loadCurrentUser() {
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    return;
-  }
-
   try {
     currentUser.value = (await api.me()).user;
   } catch {

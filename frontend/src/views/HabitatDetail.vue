@@ -13,7 +13,7 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconBack, iconEdit, iconHabitat } from '../icons';
 import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
-import { api, getAuthToken, type AuthUser, type HabitatDetail } from '../services/api';
+import { api, type AuthUser, type HabitatDetail } from '../services/api';
 import HabitatEdit from './HabitatEdit.vue';
 
 const route = useRoute();
@@ -23,6 +23,7 @@ const currentUser = ref<AuthUser | null>(null);
 const detailTab = ref('details');
 const timeOfDays = ['早晨', '中午', '傍晚', '晚上'];
 const weathers = ['晴天', '阴天', '雨天'];
+const habitatDetailRouteNames = new Set(['habitat-detail', 'habitat-edit']);
 const showEditor = computed(() => route.name === 'habitat-edit');
 const canUpdateHabitat = computed(() => currentUser.value?.permissions.includes('habitats.update') === true);
 const listPath = computed(() => (habitat.value?.isEventItem ? '/event-habitats' : '/habitats'));
@@ -34,10 +35,15 @@ const detailTabs = computed<TabOption[]>(() => [
 ]);
 
 const { data: initialHabitat } = await useAsyncData<HabitatDetail | null>(
-  `habitat-detail:${String(route.params.id)}:${locale.value}`,
+  `habitat-detail:${activeHabitatRouteId() ?? 'none'}:${locale.value}`,
   async () => {
+    const routeId = activeHabitatRouteId();
+    if (!routeId) {
+      return null;
+    }
+
     try {
-      return await api.habitatDetail(String(route.params.id));
+      return await api.habitatDetail(routeId);
     } catch {
       return null;
     }
@@ -100,6 +106,15 @@ function weatherLabel(value: string): string {
   return labels[value] ?? value;
 }
 
+function activeHabitatRouteId(): string | null {
+  return typeof route.name === 'string' &&
+    habitatDetailRouteNames.has(route.name) &&
+    typeof route.params.id === 'string' &&
+    route.params.id.trim() !== ''
+    ? route.params.id
+    : null;
+}
+
 const pokemonRows = computed<PokemonRow[]>(() => {
   if (!habitat.value) return [];
 
@@ -146,8 +161,14 @@ const pokemonRows = computed<PokemonRow[]>(() => {
 });
 
 async function loadHabitatDetail() {
+  const routeId = activeHabitatRouteId();
+  if (!routeId) {
+    initialHabitatLoaded.value = true;
+    return;
+  }
+
   try {
-    const nextHabitat = await api.habitatDetail(String(route.params.id));
+    const nextHabitat = await api.habitatDetail(routeId);
     habitat.value = nextHabitat;
     initialHabitatLoaded.value = true;
 
@@ -166,13 +187,12 @@ async function loadHabitatDetail() {
 }
 
 onMounted(async () => {
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
+
   if (!initialHabitatLoaded.value) {
     await loadHabitatDetail();
   }
@@ -190,6 +210,10 @@ watch(
 watch(
   () => route.params.id,
   () => {
+    if (!activeHabitatRouteId()) {
+      return;
+    }
+
     habitat.value = null;
     detailTab.value = 'details';
     void loadHabitatDetail();

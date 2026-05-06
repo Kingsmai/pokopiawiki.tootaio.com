@@ -13,7 +13,7 @@ import Skeleton from '../components/Skeleton.vue';
 import Tabs, { type TabOption } from '../components/Tabs.vue';
 import { iconAdd, iconBack, iconEdit, iconHabitat, iconItem } from '../icons';
 import { applySeo, resolvedSeoHead, resolveSeo } from '../seo';
-import { api, getAuthToken, type AuthUser, type ItemDetail } from '../services/api';
+import { api, type AuthUser, type ItemDetail } from '../services/api';
 import ItemEdit from './ItemEdit.vue';
 
 const route = useRoute();
@@ -74,10 +74,15 @@ const possibleTagEvidenceSections = computed(() => [
 ]);
 
 const { data: initialItem } = await useAsyncData<ItemDetail | null>(
-  `item-detail:${String(route.name)}:${String(route.params.id)}:${locale.value}`,
+  `item-detail:${String(route.name)}:${activeItemRouteId() ?? 'none'}:${locale.value}`,
   async () => {
+    const routeId = activeItemRouteId();
+    if (!routeId) {
+      return null;
+    }
+
     try {
-      const nextItem = await api.itemDetail(String(route.params.id));
+      const nextItem = await api.itemDetail(routeId);
       return isAncientArtifactRoute.value && !nextItem.ancientArtifactCategory ? null : nextItem;
     } catch {
       return null;
@@ -114,8 +119,14 @@ const customization = computed(() => {
 });
 
 async function loadItemDetail() {
+  const routeId = activeItemRouteId();
+  if (!routeId) {
+    initialItemLoaded.value = true;
+    return;
+  }
+
   try {
-    const nextItem = await api.itemDetail(String(route.params.id));
+    const nextItem = await api.itemDetail(routeId);
 
     if (isAncientArtifactRoute.value && !nextItem.ancientArtifactCategory) {
       await router.replace(route.name === 'ancient-artifact-edit' ? `/items/${nextItem.id}/edit` : `/items/${nextItem.id}`);
@@ -143,14 +154,19 @@ function isItemDetailRouteName(value: unknown) {
   return typeof value === 'string' && itemDetailRouteNames.has(value);
 }
 
+function activeItemRouteId(): string | null {
+  return isItemDetailRouteName(route.name) && typeof route.params.id === 'string' && route.params.id.trim() !== ''
+    ? route.params.id
+    : null;
+}
+
 onMounted(async () => {
-  if (getAuthToken()) {
-    try {
-      currentUser.value = (await api.me()).user;
-    } catch {
-      currentUser.value = null;
-    }
+  try {
+    currentUser.value = (await api.me()).user;
+  } catch {
+    currentUser.value = null;
   }
+
   if (!initialItemLoaded.value) {
     await loadItemDetail();
   }
@@ -170,6 +186,10 @@ watch(
 watch(
   () => route.params.id,
   () => {
+    if (!activeItemRouteId()) {
+      return;
+    }
+
     item.value = null;
     detailTab.value = 'details';
     void loadItemDetail();

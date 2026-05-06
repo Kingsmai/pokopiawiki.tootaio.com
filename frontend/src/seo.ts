@@ -149,13 +149,20 @@ export function routeSeoConfig(route: RouteLocationNormalizedLoaded, translator?
     typeof routeSeo?.canonicalPath === 'function'
       ? routeSeo.canonicalPath(route)
       : routeSeo?.canonicalPath ?? route.path ?? defaultCanonicalPath;
+  const requiresPrivateAccess = route.matched.some(
+    (record) =>
+      record.meta.requiresAuth === true ||
+      record.meta.requiresVerified === true ||
+      typeof record.meta.requiredPermission === 'string' ||
+      (Array.isArray(record.meta.requiredAnyPermission) && record.meta.requiredAnyPermission.length > 0)
+  );
 
   return {
     title: routeSeo?.titleKey ? translateSeo(routeSeo.titleKey, undefined, translator) : routeSeo?.title,
     description: routeSeo?.descriptionKey ? translateSeo(routeSeo.descriptionKey, undefined, translator) : routeSeo?.description,
     canonicalPath,
     image: routeSeo?.image,
-    noindex: routeSeo?.noindex
+    noindex: routeSeo?.noindex === true || requiresPrivateAccess
   };
 }
 

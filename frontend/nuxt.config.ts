@@ -30,35 +30,10 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1.0' },
-        {
-          name: 'description',
-          content:
-            'Browse Pokopia Wiki for Pokemon, Event Pokemon, habitats, Event Habitats, items, Event Items, Ancient Artifacts, recipes, daily tasks, and Life community posts for Pokemon Pokopia.'
-        },
-        { name: 'robots', content: 'index, follow' },
-        { name: 'theme-color', content: '#6ccf32' },
-        { property: 'og:site_name', content: 'Pokopia Wiki' },
-        { property: 'og:type', content: 'website' },
-        { property: 'og:title', content: 'Pokopia Wiki - Pokemon Pokopia Guide' },
-        {
-          property: 'og:description',
-          content:
-            'Browse Pokopia Wiki for Pokemon, Event Pokemon, habitats, Event Habitats, items, Event Items, Ancient Artifacts, recipes, daily tasks, and Life community posts for Pokemon Pokopia.'
-        },
-        { property: 'og:image', content: `${normalizeSiteUrl(process.env.NUXT_PUBLIC_SITE_URL ?? process.env.VITE_SITE_URL)}/seo/pokopia-hero.jpg` },
-        { property: 'og:locale', content: 'en_US' },
-        { name: 'twitter:card', content: 'summary_large_image' },
-        { name: 'twitter:title', content: 'Pokopia Wiki - Pokemon Pokopia Guide' },
-        {
-          name: 'twitter:description',
-          content:
-            'Browse Pokopia Wiki for Pokemon, Event Pokemon, habitats, Event Habitats, items, Event Items, Ancient Artifacts, recipes, daily tasks, and Life community posts for Pokemon Pokopia.'
-        },
-        { name: 'twitter:image', content: `${normalizeSiteUrl(process.env.NUXT_PUBLIC_SITE_URL ?? process.env.VITE_SITE_URL)}/seo/pokopia-hero.jpg` }
+        { name: 'theme-color', content: '#6ccf32' }
       ],
       link: [
-        { rel: 'icon', href: '/favicon.ico', sizes: '32x32' },
-        { rel: 'canonical', href: `${normalizeSiteUrl(process.env.NUXT_PUBLIC_SITE_URL ?? process.env.VITE_SITE_URL)}/pokemon` }
+        { rel: 'icon', href: '/favicon.ico', sizes: '32x32' }
       ],
       script: [
         {

@@ -8,6 +8,7 @@ export default defineNuxtPlugin(() => {
   const t = (nuxtApp.$pokopiaI18n as { global: { t: (key: string, values?: Record<string, string | number>) => string } }).global.t;
   const dynamicSeo = ref<ResolvedSeoConfig | null>(null);
   const activeSeo = computed(() => dynamicSeo.value ?? resolveRouteSeo(router.currentRoute.value, t));
+  const structuredDataJson = computed(() => JSON.stringify(activeSeo.value.structuredData).replace(/</g, '\\u003C'));
 
   useHead(() => ({
     title: activeSeo.value.title,
@@ -35,7 +36,7 @@ export default defineNuxtPlugin(() => {
         key: 'pokopia-structured-data',
         id: 'pokopia-structured-data',
         type: 'application/ld+json',
-        children: JSON.stringify(activeSeo.value.structuredData)
+        innerHTML: structuredDataJson.value
       }
     ]
   }));

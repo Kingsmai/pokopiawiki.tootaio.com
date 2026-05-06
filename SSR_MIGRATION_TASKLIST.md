@@ -94,9 +94,12 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - [ ] Implement SSR data loading for stable public routes in small groups, starting with low-risk public pages.
   - [x] Pokemon and Event Pokemon list routes SSR-load shared options and the first public list page.
 - [ ] For each SSR-enabled public route, render title, description, canonical URL, robots value, Open Graph, Twitter card, and structured data from public business data and system wording only.
+  - [x] Route-level SEO output now owns dynamic title, description, canonical, robots, Open Graph, Twitter card, and valid inline JSON-LD without duplicate static Nuxt head metadata.
 - [ ] For detail pages, use entity names, public images, localized public fields, and canonical detail URLs after public API data loads server-side.
 - [ ] Preserve `noindex` on auth, admin, new, edit, and in-development routes.
+  - [x] SEO resolver defaults authenticated, verified, and permissioned routes to `noindex`, while existing route metadata continues to mark auth, edit/create modal, and in-development pages as `noindex`.
 - [ ] Keep `robots.txt` and `sitemap.xml` generated from the same stable public route set documented in `DESIGN.md`.
+  - [x] Sitemap includes Home, public index sections, Project Updates, and legal pages; robots keeps auth, admin, edit/create, and in-development routes disallowed.
 - [ ] Avoid serializing private auth state, raw permissions, internal audit payloads, or unneeded API payload fields into Nuxt payloads.
 - [ ] Confirm localized reads follow the fallback order in `DESIGN.md`: requested locale, default-language translation, base field.
 
@@ -105,6 +108,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - Pokemon and Event Pokemon list routes now SSR-load the shared options payload and first public list page through `useAsyncData`; filter changes, infinite loading, and route-backed create modals continue to use the existing client behavior.
 - Pokemon list SSR API failures are contained to null initial data so rendered HTML falls back to the existing skeleton/empty behavior without exposing backend stack traces, raw errors, or internal fields.
 - Public Pokemon list SSR data does not request `api.me()` or forward cookies; create actions remain client-hydrated from the current user after mount.
+- The static fallback SEO tags in Nuxt config were reduced to non-route-specific defaults so route-level SSR SEO is the single source for canonical, robots, social metadata, and JSON-LD.
 
 ## Phase 6: Browser-Only UI Isolation
 
@@ -148,6 +152,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 ### Phase 8 Validation Notes
 
 - 2026-05-06: After SSR auth cookie forwarding and Pokemon/Event Pokemon first-page SSR data, `pnpm --filter @pokopia/frontend typecheck`, `pnpm --filter @pokopia/frontend lint`, and `pnpm --filter @pokopia/frontend build` passed. The current `lint` script runs `nuxt typecheck`.
+- 2026-05-06: After SEO foundation updates, `pnpm --filter @pokopia/frontend typecheck`, `pnpm --filter @pokopia/frontend lint`, and `pnpm --filter @pokopia/frontend build` passed. Local built-server smoke on port `20116` verified `/pokemon` route-level canonical/meta/JSON-LD, `sitemap.xml`, and `robots.txt`.
 
 ## Phase 9: Cleanup
 

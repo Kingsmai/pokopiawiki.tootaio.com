@@ -1,6 +1,7 @@
 const fallbackSiteUrl = 'https://pokopiawiki.tootaio.com';
 
 const sitemapPaths = [
+  '/',
   '/pokemon',
   '/event-pokemon',
   '/habitats',
@@ -11,7 +12,11 @@ const sitemapPaths = [
   '/recipes',
   '/dish',
   '/checklist',
-  '/life'
+  '/life',
+  '/project-updates',
+  '/privacy-policy',
+  '/terms-of-service',
+  '/disclaimers'
 ];
 
 const robotsDisallowPaths = [

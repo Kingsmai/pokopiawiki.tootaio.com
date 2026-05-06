@@ -1,4 +1,4 @@
-import { api, getAuthToken, setAuthToken } from '../src/services/api';
+import { api, setAuthToken } from '../src/services/api';
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const requiredPermissions = to.matched
@@ -14,10 +14,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (!requiresAuth) {
     return;
-  }
-
-  if (!getAuthToken()) {
-    return navigateTo({ path: '/login', query: { redirect: to.fullPath } });
   }
 
   try {

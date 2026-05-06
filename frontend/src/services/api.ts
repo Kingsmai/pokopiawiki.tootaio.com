@@ -1136,6 +1136,7 @@ async function getErrorMessage(response: Response): Promise<string> {
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(apiUrl(path), {
+    credentials: 'include',
     headers: requestHeaders(),
     signal
   });
@@ -1149,6 +1150,7 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body: unknown): Promise<T> {
   const response = await fetch(apiUrl(path), {
+    credentials: 'include',
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -1166,6 +1168,7 @@ async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body:
 
 async function sendFormData<T>(path: string, body: FormData): Promise<T> {
   const response = await fetch(apiUrl(path), {
+    credentials: 'include',
     method: 'POST',
     headers: requestHeaders(),
     body
@@ -1180,6 +1183,7 @@ async function sendFormData<T>(path: string, body: FormData): Promise<T> {
 
 async function postEmpty(path: string): Promise<void> {
   const response = await fetch(apiUrl(path), {
+    credentials: 'include',
     method: 'POST',
     headers: requestHeaders()
   });
@@ -1191,6 +1195,7 @@ async function postEmpty(path: string): Promise<void> {
 
 async function deleteJson(path: string): Promise<void> {
   const response = await fetch(apiUrl(path), {
+    credentials: 'include',
     method: 'DELETE',
     headers: requestHeaders()
   });
@@ -1202,6 +1207,7 @@ async function deleteJson(path: string): Promise<void> {
 
 async function deleteAndGetJson<T>(path: string): Promise<T> {
   const response = await fetch(apiUrl(path), {
+    credentials: 'include',
     method: 'DELETE',
     headers: requestHeaders()
   });

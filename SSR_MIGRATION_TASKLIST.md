@@ -35,20 +35,27 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - [x] Define separate public/browser API origin and internal server API origin if Docker networking requires different URLs for server-side fetches and browser fetches.
 - [x] Ensure every server-side API read sends the correct `X-Locale` and never sends browser-only bearer tokens unless a secure SSR auth mechanism is implemented.
 - [x] Add a small SSR-safe fetch wrapper or adapt `frontend/src/services/api.ts` so public reads can be called from server-side setup without depending on `window`, storage, or DOM APIs.
-- [ ] Keep frontend API response types consistent with `frontend/src/services/api.ts`.
+- [x] Keep frontend API response types consistent with `frontend/src/services/api.ts`.
 - [ ] Ensure API errors used for SSR public routes degrade to intended empty/error states without leaking stack traces or internal fields into rendered HTML.
 
 ## Phase 3: Authentication And Session Model
 
-- [ ] Decide and document the SSR-compatible auth model in `DESIGN.md` before implementation.
-- [ ] Migrate auth from `localStorage` / `sessionStorage` bearer-token-only behavior to an HTTP-only cookie/session model, or explicitly document a hybrid model if Remember me must preserve current storage behavior.
-- [ ] Update backend login/logout/session endpoints to support the chosen cookie/session model without exposing session token hashes or internal session metadata.
-- [ ] Preserve Remember me semantics: 1 day for non-remembered sessions, 30 days for remembered sessions.
-- [ ] Preserve email verification as the base requirement for protected writes.
+- [x] Decide and document the SSR-compatible auth model in `DESIGN.md` before implementation.
+- [x] Migrate auth from `localStorage` / `sessionStorage` bearer-token-only behavior to an HTTP-only cookie/session model, or explicitly document a hybrid model if Remember me must preserve current storage behavior.
+- [x] Update backend login/logout/session endpoints to support the chosen cookie/session model without exposing session token hashes or internal session metadata.
+- [x] Preserve Remember me semantics: 1 day for non-remembered sessions, 30 days for remembered sessions.
+- [x] Preserve email verification as the base requirement for protected writes.
 - [ ] Ensure current-user SSR reads expose only the allowed current-user fields defined in `DESIGN.md`.
 - [ ] Update route middleware so server-side redirects for authenticated and permissioned routes match current client-side behavior.
 - [ ] Ensure public SSR pages never render private current-user data into HTML meant for anonymous users.
-- [ ] Add a clear logout flow that clears both server cookies and any legacy client storage during the transition.
+- [x] Add a clear logout flow that clears both server cookies and any legacy client storage during the transition.
+
+### Phase 3 Auth Notes
+
+- The migration now uses a hybrid session model: backend login sets an HTTP-only `pokopia_session` cookie and still returns the legacy bearer token so existing SPA storage behavior keeps working during the transition.
+- Protected backend reads and writes accept the HTTP-only cookie first and remain compatible with `Authorization: Bearer` tokens.
+- Frontend API requests use `credentials: 'include'` so browser requests can carry the cookie without exposing it to JavaScript.
+- Login still stores the legacy token according to Remember me semantics; logout deletes the server session, clears the cookie, and clears legacy frontend storage.
 
 ## Phase 4: Nuxt SSR Enablement
 

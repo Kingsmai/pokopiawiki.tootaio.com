@@ -166,6 +166,9 @@ const app = Fastify({
   logger: true,
   trustProxy: process.env.TRUST_PROXY === 'true'
 });
+const sessionCookieName = 'pokopia_session';
+const rememberedSessionDays = 30;
+const sessionOnlySessionDays = 1;
 
 function configuredCorsOrigin(): true | string | string[] {
   const rawOrigin = process.env.FRONTEND_ORIGIN?.trim();
@@ -183,7 +186,8 @@ function configuredCorsOrigin(): true | string | string[] {
 
 await app.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type', 'X-Locale'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   origin: configuredCorsOrigin()
 });
 
@@ -246,6 +250,54 @@ app.get('/api/search', async (request) =>
 function getBearerToken(authorization: string | undefined): string | null {
   const [scheme, token] = authorization?.split(' ') ?? [];
   return scheme === 'Bearer' && token ? token : null;
+}
+
+function getCookieValue(cookieHeader: string | undefined, name: string): string | null {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const cookiePart of cookieHeader.split(';')) {
+    const [rawName, ...rawValue] = cookiePart.trim().split('=');
+    if (rawName === name) {
+      try {
+        return decodeURIComponent(rawValue.join('='));
+      } catch {
+        return rawValue.join('=');
+      }
+    }
+  }
+
+  return null;
+}
+
+function getSessionToken(request: FastifyRequest): string | null {
+  return getCookieValue(request.headers.cookie, sessionCookieName) ?? getBearerToken(request.headers.authorization);
+}
+
+function sessionCookieSecure(): boolean {
+  const origin = process.env.APP_ORIGIN ?? process.env.FRONTEND_ORIGIN ?? '';
+  return origin.split(',').some((value) => value.trim().startsWith('https://'));
+}
+
+function sessionCookie(value: string, maxAgeSeconds: number): string {
+  return [
+    `${sessionCookieName}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+    ...(sessionCookieSecure() ? ['Secure'] : [])
+  ].join('; ');
+}
+
+function setSessionCookie(reply: FastifyReply, token: string, rememberMe: boolean): void {
+  const sessionDays = rememberMe ? rememberedSessionDays : sessionOnlySessionDays;
+  reply.header('Set-Cookie', sessionCookie(token, sessionDays * 24 * 60 * 60));
+}
+
+function clearSessionCookie(reply: FastifyReply): void {
+  reply.header('Set-Cookie', `${sessionCookie('', 0)}; Expires=Thu, 01 Jan 1970 00:00:00 GMT`);
 }
 
 function requestLocale(request: FastifyRequest): string {
@@ -868,7 +920,7 @@ async function requireVerifiedUser(request: FastifyRequest, reply: FastifyReply)
     return null;
   }
 
-  const token = getBearerToken(request.headers.authorization);
+  const token = getSessionToken(request);
   const user = token ? await getUserBySessionToken(token) : null;
   const locale = requestLocale(request);
 
@@ -950,7 +1002,7 @@ async function requireAnyPermissionWithRateLimits(
 }
 
 async function optionalUser(request: FastifyRequest): Promise<AuthUser | null> {
-  const token = getBearerToken(request.headers.authorization);
+  const token = getSessionToken(request);
   if (!token) {
     return null;
   }
@@ -983,7 +1035,10 @@ app.post('/api/auth/login', async (request, reply) => {
     return;
   }
 
-  return loginUser(request.body as Record<string, unknown>, requestLocale(request));
+  const payload = request.body as Record<string, unknown>;
+  const response = await loginUser(payload, requestLocale(request));
+  setSessionCookie(reply, response.token, payload.rememberMe === true);
+  return response;
 });
 
 app.post('/api/auth/request-password-reset', async (request, reply) => {
@@ -1007,7 +1062,7 @@ app.get('/api/auth/me', async (request, reply) => {
     return;
   }
 
-  const token = getBearerToken(request.headers.authorization);
+  const token = getSessionToken(request);
   const user = token ? await getUserBySessionToken(token) : null;
 
   if (!user) {
@@ -1022,7 +1077,7 @@ app.patch('/api/auth/me', async (request, reply) => {
     return;
   }
 
-  const token = getBearerToken(request.headers.authorization);
+  const token = getSessionToken(request);
   const user = token ? await getUserBySessionToken(token) : null;
 
   if (!user) {
@@ -1042,7 +1097,7 @@ app.patch('/api/auth/me/password', async (request, reply) => {
     return;
   }
 
-  const token = getBearerToken(request.headers.authorization);
+  const token = getSessionToken(request);
   const user = token ? await getUserBySessionToken(token) : null;
 
   if (!user || !token) {
@@ -1062,7 +1117,7 @@ app.get('/api/auth/referral', async (request, reply) => {
     return;
   }
 
-  const token = getBearerToken(request.headers.authorization);
+  const token = getSessionToken(request);
   const user = token ? await getUserBySessionToken(token) : null;
 
   if (!user) {
@@ -1099,11 +1154,12 @@ app.post('/api/notifications/:id/read', async (request, reply) => {
 });
 
 app.post('/api/auth/logout', async (request, reply) => {
-  const token = getBearerToken(request.headers.authorization);
+  const token = getSessionToken(request);
   if (token) {
     await logoutSession(token);
   }
 
+  clearSessionCookie(reply);
   return reply.code(204).send();
 });
 

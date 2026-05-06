@@ -112,17 +112,14 @@ const navItems = computed<NavItem[]>(() => {
 });
 
 async function loadCurrentUser() {
-  if (!getAuthToken()) {
-    currentUser.value = null;
-    return;
-  }
-
   try {
     const response = await api.me();
     currentUser.value = response.user;
   } catch {
     currentUser.value = null;
-    setAuthToken(null);
+    if (getAuthToken()) {
+      setAuthToken(null);
+    }
   }
 }
 

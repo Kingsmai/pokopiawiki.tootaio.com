@@ -120,10 +120,14 @@
   - 重置 token 只保存 hash，并带过期时间和使用状态。
   - 密码重置成功后不自动登录，并删除该用户已有 session。
 - 登录页提供 Remember me：
-  - 未勾选时前端将登录 token 保存在 `sessionStorage` 的 `pokopia_auth_token`，服务端 session 有效期为 1 天。
-  - 勾选时前端将登录 token 保存在 `localStorage` 的 `pokopia_auth_token`，服务端 session 有效期为 30 天。
-- 登录成功后返回明文 session token 给前端；数据库只保存 session token hash。
-- 用户可退出登录，退出时删除对应 session。
+  - 未勾选时 session 有效期为 1 天。
+  - 勾选时 session 有效期为 30 天。
+- SSR 迁移期认证使用 hybrid session model：
+  - 登录成功后后端设置 HTTP-only `pokopia_session` cookie；cookie 只保存明文 session token，数据库只保存 session token hash。
+  - 迁移期登录响应仍返回明文 session token，前端继续按 Remember me 语义保存到 `sessionStorage` 或 `localStorage` 的 `pokopia_auth_token`，用于保持现有 SPA 客户端流程兼容。
+  - 受保护 API 优先接受 HTTP-only cookie session，并继续兼容 `Authorization: Bearer` legacy token。
+  - 前端 API 请求携带 credentials，以便浏览器自动发送 HTTP-only session cookie；JavaScript 不读取该 cookie。
+- 用户可退出登录，退出时删除对应 session、清除 HTTP-only session cookie，并清理前端 legacy token storage。
 - 对外用户字段只包含必要信息：
   - 当前用户：`id`、`email`、`displayName`、`emailVerified`
   - 编辑署名：`id`、`displayName`

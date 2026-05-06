@@ -48,7 +48,7 @@ type AncientArtifactListInitialData = {
   page: ListPage<AncientArtifact> | null;
 };
 
-const { data: initialData } = await useAsyncData<AncientArtifactListInitialData>(
+const { data: initialData } = useAsyncData<AncientArtifactListInitialData>(
   `ancient-artifact-list-initial:${locale.value}`,
   async () => {
     const [optionsResult, artifactsResult] = await Promise.allSettled([
@@ -68,13 +68,25 @@ const { data: initialData } = await useAsyncData<AncientArtifactListInitialData>
   { default: () => ({ options: null, page: null }) }
 );
 
-const initialPage = initialData.value?.page ?? null;
-options.value = initialData.value?.options ?? null;
-artifacts.value = initialPage?.items ?? [];
-const initialPageLoaded = ref(initialPage !== null);
-loading.value = !initialPageLoaded.value;
-nextCursor.value = initialPage?.nextCursor ?? null;
-hasMoreArtifacts.value = initialPage?.hasMore ?? false;
+const initialPageLoaded = ref(false);
+
+function applyInitialData(data: AncientArtifactListInitialData | null | undefined) {
+  if (!data) return;
+
+  if (!options.value && data.options) {
+    options.value = data.options;
+  }
+
+  if (initialPageLoaded.value || !data.page) {
+    return;
+  }
+
+  artifacts.value = data.page.items;
+  nextCursor.value = data.page.nextCursor;
+  hasMoreArtifacts.value = data.page.hasMore;
+  initialPageLoaded.value = true;
+  loading.value = false;
+}
 
 const showEditor = computed(() => route.name === 'ancient-artifact-new');
 const canCreateArtifact = computed(() => currentUser.value?.permissions.includes('items.create') === true);
@@ -160,6 +172,8 @@ onMounted(async () => {
 watch(artifactQuery, () => {
   void loadArtifacts();
 });
+
+watch(initialData, applyInitialData, { immediate: true });
 </script>
 
 <template>

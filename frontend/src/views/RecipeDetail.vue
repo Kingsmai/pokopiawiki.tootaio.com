@@ -42,7 +42,7 @@ const recipeSubtitle = computed(() => {
   return categoryName ?? t('pages.recipes.detailSubtitle');
 });
 
-const { data: initialRecipe } = await useAsyncData<RecipeDetail | null>(
+const { data: initialRecipe } = useAsyncData<RecipeDetail | null>(
   `recipe-detail:${String(route.params.id)}:${locale.value}`,
   async () => {
     try {
@@ -54,8 +54,7 @@ const { data: initialRecipe } = await useAsyncData<RecipeDetail | null>(
   { default: () => null }
 );
 
-recipe.value = initialRecipe.value;
-const initialRecipeLoaded = ref(initialRecipe.value !== null);
+const initialRecipeLoaded = ref(false);
 const recipeSeo = computed(() =>
   recipe.value && route.meta.editorModal !== true
     ? resolveSeo({
@@ -68,6 +67,13 @@ const recipeSeo = computed(() =>
 );
 
 useHead(() => (recipeSeo.value ? resolvedSeoHead(recipeSeo.value) : {}));
+
+function applyInitialRecipe(value: RecipeDetail | null | undefined) {
+  if (!value || initialRecipeLoaded.value) return;
+
+  recipe.value = value;
+  initialRecipeLoaded.value = true;
+}
 
 async function loadRecipeDetail() {
   try {
@@ -119,6 +125,8 @@ watch(
     void loadRecipeDetail();
   }
 );
+
+watch(initialRecipe, applyInitialRecipe, { immediate: true });
 </script>
 
 <template>

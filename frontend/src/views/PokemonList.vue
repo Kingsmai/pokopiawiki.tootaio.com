@@ -45,7 +45,7 @@ const query = computed(() => ({
   favoriteThingMode: favoriteThingMode.value
 }));
 
-const { data: initialData } = await useAsyncData<PokemonListInitialData>(
+const { data: initialData } = useAsyncData<PokemonListInitialData>(
   `${props.eventOnly ? 'event-pokemon-list-initial' : 'pokemon-list-initial'}:${locale.value}`,
   async () => {
     const [optionsResult, pokemonResult] = await Promise.allSettled([
@@ -65,15 +65,14 @@ const { data: initialData } = await useAsyncData<PokemonListInitialData>(
   { default: () => ({ options: null, page: null }) }
 );
 
-const initialPage = initialData.value?.page ?? null;
-const options = ref<Options | null>(initialData.value?.options ?? null);
-const pokemon = ref<Pokemon[]>(initialPage?.items ?? []);
+const options = ref<Options | null>(null);
+const pokemon = ref<Pokemon[]>([]);
 const currentUser = ref<AuthUser | null>(null);
-const initialPageLoaded = ref(initialPage !== null);
-const loading = ref(!initialPageLoaded.value);
+const initialPageLoaded = ref(false);
+const loading = ref(true);
 const loadingMore = ref(false);
-const nextCursor = ref<string | null>(initialPage?.nextCursor ?? null);
-const hasMorePokemon = ref(initialPage?.hasMore ?? false);
+const nextCursor = ref<string | null>(null);
+const hasMorePokemon = ref(false);
 const showEditor = computed(() => route.name === 'pokemon-new' || route.name === 'event-pokemon-new');
 const canCreatePokemon = computed(() => currentUser.value?.permissions.includes('pokemon.create') === true);
 const pageTitle = computed(() => t(props.eventOnly ? 'pages.eventPokemon.title' : 'pages.pokemon.title'));
@@ -81,6 +80,24 @@ const pageSubtitle = computed(() => t(props.eventOnly ? 'pages.eventPokemon.subt
 const pageKicker = computed(() => t(props.eventOnly ? 'pages.eventPokemon.kicker' : 'pages.pokemon.listKicker'));
 const newPokemonPath = computed(() => (props.eventOnly ? '/event-pokemon/new' : '/pokemon/new'));
 const loadingListLabel = computed(() => t(props.eventOnly ? 'pages.eventPokemon.loadingList' : 'pages.pokemon.loadingList'));
+
+function applyInitialData(data: PokemonListInitialData | null | undefined) {
+  if (!data) return;
+
+  if (!options.value && data.options) {
+    options.value = data.options;
+  }
+
+  if (initialPageLoaded.value || !data.page) {
+    return;
+  }
+
+  pokemon.value = data.page.items;
+  nextCursor.value = data.page.nextCursor;
+  hasMorePokemon.value = data.page.hasMore;
+  initialPageLoaded.value = true;
+  loading.value = false;
+}
 
 async function loadPokemon(reset = true) {
   if (!reset && (loading.value || loadingMore.value || !hasMorePokemon.value)) {
@@ -163,6 +180,8 @@ onMounted(async () => {
 watch(query, () => {
   void loadPokemon();
 });
+
+watch(initialData, applyInitialData, { immediate: true });
 </script>
 
 <template>

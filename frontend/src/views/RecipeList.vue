@@ -52,7 +52,7 @@ type RecipeListInitialData = {
   page: ListPage<Item> | null;
 };
 
-const { data: initialData } = await useAsyncData<RecipeListInitialData>(
+const { data: initialData } = useAsyncData<RecipeListInitialData>(
   `recipe-list-initial:${locale.value}`,
   async () => {
     const [optionsResult, itemsResult] = await Promise.allSettled([
@@ -72,13 +72,25 @@ const { data: initialData } = await useAsyncData<RecipeListInitialData>(
   { default: () => ({ options: null, page: null }) }
 );
 
-const initialPage = initialData.value?.page ?? null;
-options.value = initialData.value?.options ?? null;
-items.value = initialPage?.items ?? [];
-const initialPageLoaded = ref(initialPage !== null);
-loading.value = !initialPageLoaded.value;
-nextCursor.value = initialPage?.nextCursor ?? null;
-hasMoreItems.value = initialPage?.hasMore ?? false;
+const initialPageLoaded = ref(false);
+
+function applyInitialData(data: RecipeListInitialData | null | undefined) {
+  if (!data) return;
+
+  if (!options.value && data.options) {
+    options.value = data.options;
+  }
+
+  if (initialPageLoaded.value || !data.page) {
+    return;
+  }
+
+  items.value = data.page.items;
+  nextCursor.value = data.page.nextCursor;
+  hasMoreItems.value = data.page.hasMore;
+  initialPageLoaded.value = true;
+  loading.value = false;
+}
 
 const showEditor = computed(() => route.name === 'recipe-new');
 const canCreateRecipe = computed(() => currentUser.value?.permissions.includes('recipes.create') === true);
@@ -180,6 +192,8 @@ onMounted(async () => {
 watch(itemQuery, () => {
   void loadItems();
 });
+
+watch(initialData, applyInitialData, { immediate: true });
 </script>
 
 <template>

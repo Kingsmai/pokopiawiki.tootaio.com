@@ -34,7 +34,7 @@ const detailTabs = computed<TabOption[]>(() => [
   { value: 'history', label: t('history.editHistory') }
 ]);
 
-const { data: initialHabitat } = await useAsyncData<HabitatDetail | null>(
+const { data: initialHabitat } = useAsyncData<HabitatDetail | null>(
   `habitat-detail:${activeHabitatRouteId() ?? 'none'}:${locale.value}`,
   async () => {
     const routeId = activeHabitatRouteId();
@@ -51,8 +51,7 @@ const { data: initialHabitat } = await useAsyncData<HabitatDetail | null>(
   { default: () => null }
 );
 
-habitat.value = initialHabitat.value;
-const initialHabitatLoaded = ref(initialHabitat.value !== null);
+const initialHabitatLoaded = ref(false);
 const habitatSeo = computed(() =>
   habitat.value && route.meta.editorModal !== true
     ? resolveSeo({
@@ -65,6 +64,13 @@ const habitatSeo = computed(() =>
 );
 
 useHead(() => (habitatSeo.value ? resolvedSeoHead(habitatSeo.value) : {}));
+
+function applyInitialHabitat(value: HabitatDetail | null | undefined) {
+  if (!value || initialHabitatLoaded.value) return;
+
+  habitat.value = value;
+  initialHabitatLoaded.value = true;
+}
 
 type PokemonRow = {
   id: number;
@@ -219,6 +225,8 @@ watch(
     void loadHabitatDetail();
   }
 );
+
+watch(initialHabitat, applyInitialHabitat, { immediate: true });
 </script>
 
 <template>

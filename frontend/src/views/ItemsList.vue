@@ -110,7 +110,7 @@ type ItemListInitialData = {
   page: ListPage<Item> | null;
 };
 
-const { data: initialData } = await useAsyncData<ItemListInitialData>(
+const { data: initialData } = useAsyncData<ItemListInitialData>(
   `${props.eventOnly ? 'event-item-list-initial' : 'item-list-initial'}:${locale.value}`,
   async () => {
     const [optionsResult, itemsResult] = await Promise.allSettled([
@@ -130,13 +130,25 @@ const { data: initialData } = await useAsyncData<ItemListInitialData>(
   { default: () => ({ options: null, page: null }) }
 );
 
-const initialPage = initialData.value?.page ?? null;
-options.value = initialData.value?.options ?? null;
-items.value = initialPage?.items ?? [];
-const initialPageLoaded = ref(initialPage !== null);
-loading.value = !initialPageLoaded.value;
-nextCursor.value = initialPage?.nextCursor ?? null;
-hasMoreItems.value = initialPage?.hasMore ?? false;
+const initialPageLoaded = ref(false);
+
+function applyInitialData(data: ItemListInitialData | null | undefined) {
+  if (!data) return;
+
+  if (!options.value && data.options) {
+    options.value = data.options;
+  }
+
+  if (initialPageLoaded.value || !data.page) {
+    return;
+  }
+
+  items.value = data.page.items;
+  nextCursor.value = data.page.nextCursor;
+  hasMoreItems.value = data.page.hasMore;
+  initialPageLoaded.value = true;
+  loading.value = false;
+}
 
 const showEditor = computed(() => route.name === 'item-new' || route.name === 'event-item-new');
 const canCreateItem = computed(() => currentUser.value?.permissions.includes('items.create') === true);
@@ -543,6 +555,8 @@ onBeforeUnmount(() => {
 watch(itemQuery, () => {
   void loadItems();
 });
+
+watch(initialData, applyInitialData, { immediate: true });
 watch(itemCreateDefaults, persistItemCreateDefaults, { deep: true });
 watch(showEditor, () => {
   closeCreateDefaultsMenu();

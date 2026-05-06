@@ -73,7 +73,7 @@ const possibleTagEvidenceSections = computed(() => [
   { key: 'neutral', title: t('pages.pokemon.tradingNeutral'), rows: item.value?.possibleTags?.evidence.neutral ?? [] }
 ]);
 
-const { data: initialItem } = await useAsyncData<ItemDetail | null>(
+const { data: initialItem } = useAsyncData<ItemDetail | null>(
   `item-detail:${String(route.name)}:${activeItemRouteId() ?? 'none'}:${locale.value}`,
   async () => {
     const routeId = activeItemRouteId();
@@ -91,8 +91,7 @@ const { data: initialItem } = await useAsyncData<ItemDetail | null>(
   { default: () => null }
 );
 
-item.value = initialItem.value;
-const initialItemLoaded = ref(initialItem.value !== null);
+const initialItemLoaded = ref(false);
 const itemSeo = computed(() =>
   item.value && route.meta.editorModal !== true
     ? resolveSeo({
@@ -105,6 +104,13 @@ const itemSeo = computed(() =>
 );
 
 useHead(() => (itemSeo.value ? resolvedSeoHead(itemSeo.value) : {}));
+
+function applyInitialItem(value: ItemDetail | null | undefined) {
+  if (!value || initialItemLoaded.value) return;
+
+  item.value = value;
+  initialItemLoaded.value = true;
+}
 
 const customization = computed(() => {
   if (!item.value) {
@@ -195,6 +201,8 @@ watch(
     void loadItemDetail();
   }
 );
+
+watch(initialItem, applyInitialItem, { immediate: true });
 </script>
 
 <template>

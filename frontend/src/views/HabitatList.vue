@@ -29,7 +29,7 @@ const query = computed(() => ({
   isEventItem: props.eventOnly ? 'true' : 'false'
 }));
 
-const { data: initialData } = await useAsyncData<ListPage<Habitat> | null>(
+const { data: initialData } = useAsyncData<ListPage<Habitat> | null>(
   `${props.eventOnly ? 'event-habitat-list-initial' : 'habitat-list-initial'}:${locale.value}`,
   async () => {
     try {
@@ -45,12 +45,18 @@ const { data: initialData } = await useAsyncData<ListPage<Habitat> | null>(
   { default: () => null }
 );
 
-const initialPage = initialData.value;
-habitats.value = initialPage?.items ?? [];
-const initialPageLoaded = ref(initialPage !== null);
-const loading = ref(!initialPageLoaded.value);
-nextCursor.value = initialPage?.nextCursor ?? null;
-hasMoreHabitats.value = initialPage?.hasMore ?? false;
+const initialPageLoaded = ref(false);
+const loading = ref(true);
+
+function applyInitialData(page: ListPage<Habitat> | null | undefined) {
+  if (!page || initialPageLoaded.value) return;
+
+  habitats.value = page.items;
+  nextCursor.value = page.nextCursor;
+  hasMoreHabitats.value = page.hasMore;
+  initialPageLoaded.value = true;
+  loading.value = false;
+}
 
 const showEditor = computed(() => route.name === 'habitat-new' || route.name === 'event-habitat-new');
 const canCreateHabitat = computed(() => currentUser.value?.permissions.includes('habitats.create') === true);
@@ -134,6 +140,8 @@ onMounted(async () => {
 watch(query, () => {
   void loadHabitats();
 });
+
+watch(initialData, applyInitialData, { immediate: true });
 </script>
 
 <template>

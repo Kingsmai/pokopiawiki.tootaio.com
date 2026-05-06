@@ -41,7 +41,7 @@ const weathers = ['晴天', '阴天', '雨天'];
 const relatedPokemonLimit = 6;
 const pokemonDetailRouteNames = new Set(['pokemon-detail', 'pokemon-edit']);
 
-const { data: initialPokemon } = await useAsyncData<PokemonDetail | null>(
+const { data: initialPokemon } = useAsyncData<PokemonDetail | null>(
   `pokemon-detail:${activePokemonRouteId() ?? 'none'}:${locale.value}`,
   async () => {
     const routeId = activePokemonRouteId();
@@ -58,9 +58,7 @@ const { data: initialPokemon } = await useAsyncData<PokemonDetail | null>(
   { default: () => null }
 );
 
-pokemon.value = initialPokemon.value;
-relatedHabitatTab.value = initialPokemon.value ? habitatTabValue(initialPokemon.value.environment.id) : '';
-const initialPokemonLoaded = ref(initialPokemon.value !== null);
+const initialPokemonLoaded = ref(false);
 const pokemonSeo = computed(() =>
   pokemon.value && route.meta.editorModal !== true
     ? resolveSeo({
@@ -73,6 +71,14 @@ const pokemonSeo = computed(() =>
 );
 
 useHead(() => (pokemonSeo.value ? resolvedSeoHead(pokemonSeo.value) : {}));
+
+function applyInitialPokemon(value: PokemonDetail | null | undefined) {
+  if (!value || initialPokemonLoaded.value) return;
+
+  pokemon.value = value;
+  relatedHabitatTab.value = habitatTabValue(value.environment.id);
+  initialPokemonLoaded.value = true;
+}
 
 type HabitatRow = {
   id: number;
@@ -518,6 +524,8 @@ watch(
     void loadPokemonDetail();
   }
 );
+
+watch(initialPokemon, applyInitialPokemon, { immediate: true });
 </script>
 
 <template>

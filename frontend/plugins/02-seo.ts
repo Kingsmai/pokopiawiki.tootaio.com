@@ -1,11 +1,13 @@
 import { computed, ref } from 'vue';
 import { onLocaleChange } from '../src/i18n';
-import { applyRouteSeo, onSeoChange, resolveRouteSeo, type ResolvedSeoConfig } from '../src/seo';
+import { applyRouteSeo, onSeoChange, resolveRouteSeo, setSeoTranslator, type ResolvedSeoConfig } from '../src/seo';
 
 export default defineNuxtPlugin(() => {
   const router = useRouter();
+  const nuxtApp = useNuxtApp();
+  const t = (nuxtApp.$pokopiaI18n as { global: { t: (key: string, values?: Record<string, string | number>) => string } }).global.t;
   const dynamicSeo = ref<ResolvedSeoConfig | null>(null);
-  const activeSeo = computed(() => dynamicSeo.value ?? resolveRouteSeo(router.currentRoute.value));
+  const activeSeo = computed(() => dynamicSeo.value ?? resolveRouteSeo(router.currentRoute.value, t));
 
   useHead(() => ({
     title: activeSeo.value.title,
@@ -42,6 +44,7 @@ export default defineNuxtPlugin(() => {
     return;
   }
 
+  setSeoTranslator(t);
   onSeoChange((seo) => {
     dynamicSeo.value = seo;
   });

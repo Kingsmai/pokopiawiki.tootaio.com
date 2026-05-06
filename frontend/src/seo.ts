@@ -1,5 +1,6 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
-import { getCurrentLocale, i18n } from './i18n';
+import { getCurrentLocale } from './i18n';
+import { defaultLocale, systemWordingMessages, type SystemWordingTree } from '../../system-wordings';
 
 const siteName = 'Pokopia Wiki';
 const defaultCanonicalPath = '/';
@@ -10,6 +11,7 @@ let currentSeo = resolveSeo();
 const seoListeners = new Set<(seo: ResolvedSeoConfig) => void>();
 
 type TranslationValues = Record<string, string | number>;
+type Translator = (key: string, values?: TranslationValues) => string;
 
 export type RouteSeoConfig = {
   title?: string;
@@ -39,7 +41,12 @@ export type ResolvedSeoConfig = {
   structuredData: Record<string, unknown>;
 };
 
-const translate = i18n.global.t as (key: string, values?: TranslationValues) => string;
+const messages = systemWordingMessages as unknown as Record<string, SystemWordingTree>;
+let activeTranslator: Translator | null = null;
+
+export function setSeoTranslator(translator: Translator): void {
+  activeTranslator = translator;
+}
 
 export function setConfiguredSiteUrl(value: unknown): void {
   if (typeof value === 'string' && value.trim() !== '') {
@@ -86,7 +93,24 @@ function metaTitle(title?: string): string {
 }
 
 function metaDescription(description?: string): string {
-  return description?.trim() || translate('seo.siteDescription');
+  return description?.trim() || translateSeo('seo.siteDescription');
+}
+
+function builtInTranslate(key: string, values: TranslationValues = {}): string {
+  let message: SystemWordingTree[string] | undefined = messages[defaultLocale];
+  for (const part of key.split('.')) {
+    message = typeof message === 'object' && message !== null ? message[part] : undefined;
+  }
+
+  if (typeof message !== 'string') {
+    return key;
+  }
+
+  return Object.entries(values).reduce((nextMessage, [name, value]) => nextMessage.replaceAll(`{${name}}`, String(value)), message);
+}
+
+function translateSeo(key: string, values?: TranslationValues, translator = activeTranslator): string {
+  return translator ? translator(key, values) : builtInTranslate(key, values);
 }
 
 export function resolveSeo(config: SeoConfig = {}): ResolvedSeoConfig {
@@ -119,7 +143,7 @@ export function resolveSeo(config: SeoConfig = {}): ResolvedSeoConfig {
   };
 }
 
-export function routeSeoConfig(route: RouteLocationNormalizedLoaded): SeoConfig {
+export function routeSeoConfig(route: RouteLocationNormalizedLoaded, translator?: Translator): SeoConfig {
   const routeSeo = route.meta.seo as RouteSeoConfig | undefined;
   const canonicalPath =
     typeof routeSeo?.canonicalPath === 'function'
@@ -127,16 +151,16 @@ export function routeSeoConfig(route: RouteLocationNormalizedLoaded): SeoConfig 
       : routeSeo?.canonicalPath ?? route.path ?? defaultCanonicalPath;
 
   return {
-    title: routeSeo?.titleKey ? translate(routeSeo.titleKey) : routeSeo?.title,
-    description: routeSeo?.descriptionKey ? translate(routeSeo.descriptionKey) : routeSeo?.description,
+    title: routeSeo?.titleKey ? translateSeo(routeSeo.titleKey, undefined, translator) : routeSeo?.title,
+    description: routeSeo?.descriptionKey ? translateSeo(routeSeo.descriptionKey, undefined, translator) : routeSeo?.description,
     canonicalPath,
     image: routeSeo?.image,
     noindex: routeSeo?.noindex
   };
 }
 
-export function resolveRouteSeo(route: RouteLocationNormalizedLoaded): ResolvedSeoConfig {
-  return resolveSeo(routeSeoConfig(route));
+export function resolveRouteSeo(route: RouteLocationNormalizedLoaded, translator?: Translator): ResolvedSeoConfig {
+  return resolveSeo(routeSeoConfig(route, translator));
 }
 
 export function onSeoChange(callback: (seo: ResolvedSeoConfig) => void): () => void {

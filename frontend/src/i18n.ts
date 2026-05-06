@@ -18,13 +18,22 @@ type SystemWordingsResponse = {
 
 export type MessageKey = keyof typeof messages.en;
 
-export const i18n = createI18n({
-  legacy: false,
-  globalInjection: true,
-  locale: readStoredLocale(),
-  fallbackLocale: defaultLocale,
-  messages
-});
+export function createPokopiaI18n(initialLocale = readStoredLocale()) {
+  return createI18n({
+    legacy: false,
+    globalInjection: true,
+    locale: initialLocale || defaultLocale,
+    fallbackLocale: defaultLocale,
+    messages
+  });
+}
+
+type PokopiaI18n = ReturnType<typeof createPokopiaI18n>;
+let activeI18n: PokopiaI18n | null = null;
+
+export function setActiveI18n(instance: PokopiaI18n): void {
+  activeI18n = instance;
+}
 
 export function setSystemWordingsApiBaseUrl(value: unknown): void {
   setSystemWordingsApiBaseUrls({ browser: value, server: value });
@@ -54,7 +63,7 @@ function activeApiBaseUrl(): string {
   return typeof window === 'undefined' ? serverApiBaseUrl : browserApiBaseUrl;
 }
 
-function readStoredLocale(): string {
+export function readStoredLocale(): string {
   if (typeof localStorage === 'undefined') {
     return defaultLocale;
   }
@@ -64,11 +73,11 @@ function readStoredLocale(): string {
 }
 
 function globalLocaleRef() {
-  return i18n.global.locale as unknown as { value: string };
+  return activeI18n?.global.locale as unknown as { value: string } | undefined;
 }
 
 export function getCurrentLocale(): string {
-  return globalLocaleRef().value || defaultLocale;
+  return globalLocaleRef()?.value || defaultLocale;
 }
 
 function isMessageTree(value: SystemWordingTree[string] | undefined): value is SystemWordingTree {
@@ -97,6 +106,11 @@ function builtInMessagesFor(locale: string): SystemWordingTree {
 }
 
 export async function loadSystemWordings(locale = getCurrentLocale(), force = false): Promise<void> {
+  if (!activeI18n) {
+    return;
+  }
+
+  const targetI18n = activeI18n;
   const targetLocale = locale || defaultLocale;
   if (!force && loadedWordingLocales.has(targetLocale)) {
     return;
@@ -116,13 +130,13 @@ export async function loadSystemWordings(locale = getCurrentLocale(), force = fa
       }
 
       const data = (await response.json()) as SystemWordingsResponse;
-      i18n.global.setLocaleMessage(
+      targetI18n.global.setLocaleMessage(
         targetLocale,
         mergeMessageTrees(messages[defaultLocale], messages[targetLocale], data.messages) as never
       );
       loadedWordingLocales.add(targetLocale);
     } catch {
-      i18n.global.setLocaleMessage(targetLocale, builtInMessagesFor(targetLocale) as never);
+      targetI18n.global.setLocaleMessage(targetLocale, builtInMessagesFor(targetLocale) as never);
     } finally {
       pendingWordingLoads.delete(targetLocale);
     }
@@ -134,7 +148,10 @@ export async function loadSystemWordings(locale = getCurrentLocale(), force = fa
 
 export function setCurrentLocale(locale: string): void {
   const nextLocale = locale || defaultLocale;
-  globalLocaleRef().value = nextLocale;
+  const localeRef = globalLocaleRef();
+  if (localeRef) {
+    localeRef.value = nextLocale;
+  }
 
   if (typeof document !== 'undefined') {
     document.documentElement.lang = nextLocale;
@@ -157,5 +174,3 @@ export function onLocaleChange(callback: () => void): () => void {
   window.addEventListener(localeChangeEvent, callback);
   return () => window.removeEventListener(localeChangeEvent, callback);
 }
-
-setCurrentLocale(getCurrentLocale());

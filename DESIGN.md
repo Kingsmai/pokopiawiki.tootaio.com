@@ -33,6 +33,7 @@
 
 - 前端使用 Vue I18n 管理界面文案，并通过 `X-Locale` 请求头告知后端当前语言。
 - 前端当前语言保存在 `localStorage` 的 `pokopia_locale`。
+- Nuxt SSR 运行时每个 Nuxt app/request 创建独立 Vue I18n 实例，避免跨请求共享 locale 或系统文案状态；服务端默认使用 `en`，客户端 hydration 后按 `pokopia_locale` 恢复用户语言。
 - 后端默认语言为 `en`。
 - 语言配置存储在 `languages`：
   - `code`

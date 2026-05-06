@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: pokopia
+      POSTGRES_USER: pokopia
+      POSTGRES_PASSWORD: pokopia
+    volumes:
+      - postgres18_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokopia -d pokopia"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  deps:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      PNPM_HOME: /pnpm
+    volumes:
+      - .:/app
+      - root_node_modules:/app/node_modules
+      - backend_node_modules:/app/backend/node_modules
+      - frontend_node_modules:/app/frontend/node_modules
+      - pnpm_store:/pnpm/store
+    command: >
+      sh -lc "corepack enable &&
+      corepack prepare pnpm@10.33.2 --activate &&
+      pnpm config set store-dir /pnpm/store &&
+      pnpm install --frozen-lockfile"
+
+  backend:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+      PNPM_HOME: /pnpm
+      DATABASE_URL: postgres://pokopia:pokopia@postgres:5432/pokopia
+      BACKEND_PORT: 3001
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:20015}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:20015}
+      UPLOAD_DIR: /app/uploads
+      BACKEND_PUBLIC_ORIGIN: ${BACKEND_PUBLIC_ORIGIN:-http://localhost:20016}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: "${EMAIL_FROM:-Pokopia Wiki <onboarding@resend.dev>}"
+      RESEND_DAILY_QUOTA_LIMIT: ${RESEND_DAILY_QUOTA_LIMIT:-100}
+      RESEND_MONTHLY_QUOTA_LIMIT: ${RESEND_MONTHLY_QUOTA_LIMIT:-3000}
+      RESEND_QUOTA_RESERVE: ${RESEND_QUOTA_RESERVE:-5}
+      RESEND_QUOTA_SNAPSHOT_TTL_MINUTES: ${RESEND_QUOTA_SNAPSHOT_TTL_MINUTES:-10}
+      AI_MODERATION_API_KEY: ${AI_MODERATION_API_KEY:-}
+    ports:
+      - "20016:3001"
+    volumes:
+      - .:/app
+      - root_node_modules:/app/node_modules
+      - backend_node_modules:/app/backend/node_modules
+      - frontend_node_modules:/app/frontend/node_modules
+      - pnpm_store:/pnpm/store
+      - backend_uploads:/app/uploads
+    command: >
+      sh -lc "corepack enable &&
+      corepack prepare pnpm@10.33.2 --activate &&
+      pnpm --filter @pokopia/backend dev"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+      PNPM_HOME: /pnpm
+      HOST: 0.0.0.0
+      PORT: 20015
+      CHOKIDAR_USEPOLLING: "true"
+      NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL:-http://localhost:20016}
+      NUXT_SERVER_API_BASE_URL: ${NUXT_SERVER_API_BASE_URL:-http://backend:3001}
+      NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-http://localhost:20015}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:20016}
+      VITE_SITE_URL: ${VITE_SITE_URL:-http://localhost:20015}
+    ports:
+      - "20015:20015"
+    volumes:
+      - .:/app
+      - root_node_modules:/app/node_modules
+      - backend_node_modules:/app/backend/node_modules
+      - frontend_node_modules:/app/frontend/node_modules
+      - pnpm_store:/pnpm/store
+    command: >
+      sh -lc "corepack enable &&
+      corepack prepare pnpm@10.33.2 --activate &&
+      pnpm --filter @pokopia/frontend dev"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
+
+volumes:
+  postgres18_data:
+  backend_uploads:
+  root_node_modules:
+  backend_node_modules:
+  frontend_node_modules:
+  pnpm_store:

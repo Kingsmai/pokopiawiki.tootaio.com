@@ -142,6 +142,7 @@ Keep this file aligned with implementation progress while the SSR migration is i
 - `frontend/Dockerfile` now runs `node .output/server/index.mjs` with `HOST=0.0.0.0` and `PORT=20015`; the obsolete lightweight static server file was removed.
 - `frontend_gateway` continues to proxy `frontend:20015` and keep the backend health-gated maintenance fallback independent from Nuxt.
 - `DESIGN.md` now documents the Nuxt server output deployment model and the existing browser API, server API, site URL, origin, and proxy environment variables.
+- `docker-compose.debug.yml` provides a separate local debug path that runs Nuxt dev server and backend `tsx watch` with bind-mounted source; default `docker compose up --build` remains the production SSR runtime validation path.
 - A local smoke check of `node frontend/.output/server/index.mjs` on port `20115` returned SSR HTML for `/` and `200` for `/robots.txt`; Docker compose runtime validation is still pending.
 
 ## Phase 8: Validation

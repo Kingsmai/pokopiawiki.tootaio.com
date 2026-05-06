@@ -1072,6 +1072,7 @@ API 暴露边界：
 - `frontend` 因 `docker compose up -d --build` 重建、启动中或临时不可达时，`frontend_gateway` 返回静态升级维护页并保持公开端口可访问；后端 `/health` 不可用时，前端网关也返回同一维护页，避免用户看到静态页面后遇到 API 不可用。
 - 升级维护页是基础设施级静态 fallback，不依赖 Vue、Vue I18n、后端 API 或数据库；页面只展示正式用户文案和品牌视觉，不展示构建日志、调试信息、内部字段或实现说明。
 - 升级维护页使用 `503`、`Retry-After: 300`、`Cache-Control: no-store` 和 `noindex`，提示用户 Pokopia Wiki 正在升级并将在约 5 分钟内恢复。
+- 本地 Docker 调试使用 `docker-compose.debug.yml`，通过 bind mount 运行 Nuxt dev server 与 backend `tsx watch`，支持前后端热重载；该调试入口不经过 `frontend_gateway` 维护页，不代表生产部署行为。
 
 ## API 概览
 
@@ -1198,3 +1199,4 @@ API 暴露边界：
   - `pnpm typecheck`
 - 不在 WSL 中运行测试作为完成任务的前置条件。
 - Docker 运行问题以用户提供的 `docker compose up --build` 输出为准进行后续修复。
+- 本地热重载调试可运行 `pnpm docker:debug` 或 `docker compose -f docker-compose.debug.yml up --build`；生产 SSR runtime 验证仍使用 `pnpm docker:prod` 或 `docker compose up --build`。

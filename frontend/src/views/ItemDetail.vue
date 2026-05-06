@@ -73,7 +73,7 @@ const possibleTagEvidenceSections = computed(() => [
   { key: 'neutral', title: t('pages.pokemon.tradingNeutral'), rows: item.value?.possibleTags?.evidence.neutral ?? [] }
 ]);
 
-const { data: initialItem } = useAsyncData<ItemDetail | null>(
+const { data: initialItem } = await useAsyncData<ItemDetail | null>(
   `item-detail:${String(route.name)}:${activeItemRouteId() ?? 'none'}:${locale.value}`,
   async () => {
     const routeId = activeItemRouteId();
@@ -92,6 +92,11 @@ const { data: initialItem } = useAsyncData<ItemDetail | null>(
 );
 
 const initialItemLoaded = ref(false);
+if (initialItem.value) {
+  item.value = initialItem.value;
+  initialItemLoaded.value = true;
+}
+
 const itemSeo = computed(() =>
   item.value && route.meta.editorModal !== true
     ? resolveSeo({

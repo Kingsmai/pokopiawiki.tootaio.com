@@ -41,7 +41,7 @@ const weathers = ['晴天', '阴天', '雨天'];
 const relatedPokemonLimit = 6;
 const pokemonDetailRouteNames = new Set(['pokemon-detail', 'pokemon-edit']);
 
-const { data: initialPokemon } = useAsyncData<PokemonDetail | null>(
+const { data: initialPokemon } = await useAsyncData<PokemonDetail | null>(
   `pokemon-detail:${activePokemonRouteId() ?? 'none'}:${locale.value}`,
   async () => {
     const routeId = activePokemonRouteId();
@@ -59,6 +59,12 @@ const { data: initialPokemon } = useAsyncData<PokemonDetail | null>(
 );
 
 const initialPokemonLoaded = ref(false);
+if (initialPokemon.value) {
+  pokemon.value = initialPokemon.value;
+  relatedHabitatTab.value = habitatTabValue(initialPokemon.value.environment.id);
+  initialPokemonLoaded.value = true;
+}
+
 const pokemonSeo = computed(() =>
   pokemon.value && route.meta.editorModal !== true
     ? resolveSeo({

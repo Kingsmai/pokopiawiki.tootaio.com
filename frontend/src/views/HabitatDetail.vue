@@ -34,7 +34,7 @@ const detailTabs = computed<TabOption[]>(() => [
   { value: 'history', label: t('history.editHistory') }
 ]);
 
-const { data: initialHabitat } = useAsyncData<HabitatDetail | null>(
+const { data: initialHabitat } = await useAsyncData<HabitatDetail | null>(
   `habitat-detail:${activeHabitatRouteId() ?? 'none'}:${locale.value}`,
   async () => {
     const routeId = activeHabitatRouteId();
@@ -52,6 +52,11 @@ const { data: initialHabitat } = useAsyncData<HabitatDetail | null>(
 );
 
 const initialHabitatLoaded = ref(false);
+if (initialHabitat.value) {
+  habitat.value = initialHabitat.value;
+  initialHabitatLoaded.value = true;
+}
+
 const habitatSeo = computed(() =>
   habitat.value && route.meta.editorModal !== true
     ? resolveSeo({

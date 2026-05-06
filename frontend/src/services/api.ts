@@ -1,6 +1,6 @@
 import { getCurrentLocale } from '../i18n';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+let apiBaseUrl = 'http://localhost:3001';
 const authTokenKey = 'pokopia_auth_token';
 const authChangeEvent = 'pokopia-auth-change';
 
@@ -13,6 +13,12 @@ export interface Language {
   enabled: boolean;
   isDefault: boolean;
   sortOrder: number;
+}
+
+export function setApiBaseUrl(value: unknown): void {
+  if (typeof value === 'string' && value.trim() !== '') {
+    apiBaseUrl = value.trim();
+  }
 }
 
 export type SystemWordingSurface = 'frontend' | 'backend' | 'email';
@@ -1057,6 +1063,10 @@ export function setAuthToken(token: string | null, options: { persistent?: boole
 }
 
 export function onAuthTokenChange(callback: () => void): () => void {
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
   window.addEventListener(authChangeEvent, callback);
   return () => window.removeEventListener(authChangeEvent, callback);
 }

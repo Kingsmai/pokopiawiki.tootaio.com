@@ -1,10 +1,11 @@
-import type { RouteLocationNormalizedLoaded, Router } from 'vue-router';
-import { getCurrentLocale, i18n, onLocaleChange } from './i18n';
+import type { RouteLocationNormalizedLoaded } from 'vue-router';
+import { getCurrentLocale, i18n } from './i18n';
 
 const siteName = 'Pokopia Wiki';
 const defaultCanonicalPath = '/';
 const defaultImagePath = '/seo/pokopia-hero.jpg';
 const fallbackSiteUrl = 'https://pokopiawiki.tootaio.com';
+let runtimeSiteUrl: string | null = null;
 
 type TranslationValues = Record<string, string | number>;
 
@@ -28,10 +29,15 @@ export type SeoConfig = {
 
 const translate = i18n.global.t as (key: string, values?: TranslationValues) => string;
 
+export function setConfiguredSiteUrl(value: unknown): void {
+  if (typeof value === 'string' && value.trim() !== '') {
+    runtimeSiteUrl = normalizeSiteUrl(value);
+  }
+}
+
 function configuredSiteUrl(): string {
-  const fromEnv = import.meta.env.VITE_SITE_URL;
-  if (typeof fromEnv === 'string' && fromEnv.trim() !== '') {
-    return normalizeSiteUrl(fromEnv);
+  if (runtimeSiteUrl) {
+    return runtimeSiteUrl;
   }
 
   if (typeof window !== 'undefined' && window.location.origin) {
@@ -167,16 +173,4 @@ export function applyRouteSeo(route: RouteLocationNormalizedLoaded): void {
     image: routeSeo?.image,
     noindex: routeSeo?.noindex
   });
-}
-
-export function setupSeo(router: Router): void {
-  router.afterEach((to) => {
-    applyRouteSeo(to);
-  });
-
-  if (typeof window !== 'undefined') {
-    onLocaleChange(() => {
-      applyRouteSeo(router.currentRoute.value);
-    });
-  }
 }

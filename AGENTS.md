@@ -15,15 +15,26 @@
 For any non-trivial task:
 
 1. **Read `DESIGN.md`**
-2. For UI, component, layout, or styling tasks, **also read `DesignGuidelines.html`**
-3. **Produce a short plan (no code)**
-4. Wait for approval
-5. Implement in small steps
-6. Run lightweight validation when practical (lint/typecheck). Do not run tests in WSL.
+2. While `SSR_MIGRATION_TASKLIST.md` exists, **also read `SSR_MIGRATION_TASKLIST.md`** and keep SSR migration work aligned with it.
+3. For UI, component, layout, or styling tasks, **also read `DesignGuidelines.html`**
+4. **Produce a short plan (no code)**
+5. Wait for approval
+6. Implement in small steps
+7. Run lightweight validation when practical (lint/typecheck). Do not run tests in WSL.
 
 Do NOT skip planning.
 
 For documentation-only tasks, still follow the planning workflow, but do not run unrelated builds or tests unless the document change depends on generated output.
+
+---
+
+## Temporary SSR Migration Workflow
+
+* `SSR_MIGRATION_TASKLIST.md` is the active task list for completing the Nuxt SSR migration.
+* Until that migration is fully implemented and validated, every task that touches frontend routing, auth, API fetching, i18n, SEO, Docker frontend deployment, Nuxt config, or SSR/client runtime behavior must read and follow `SSR_MIGRATION_TASKLIST.md`.
+* Update task checkboxes in `SSR_MIGRATION_TASKLIST.md` only when the corresponding implementation is actually complete and validated.
+* Do not delete `SSR_MIGRATION_TASKLIST.md` early. Delete it only after the project is fully migrated to the final SSR deployment model, validation is complete, and `DESIGN.md` reflects the final behavior.
+* When deleting `SSR_MIGRATION_TASKLIST.md`, also remove this Temporary SSR Migration Workflow section and the mandatory workflow step that requires reading the task list.
 
 ---
 
@@ -34,8 +45,8 @@ For documentation-only tasks, still follow the planning workflow, but do not run
 * Runtime baseline: Node.js >= 22.
 * Frontend:
 
+  * Nuxt SPA mode currently (`ssr: false`), with SSR migration tracked in `SSR_MIGRATION_TASKLIST.md`
   * Vue
-  * Vite
   * Vue Router
   * Vue I18n
   * Iconify

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
-import AppShell from './components/AppShell.vue';
+import AppShell from './src/components/AppShell.vue';
 import {
   iconAction,
   iconAdmin,
@@ -20,12 +19,11 @@ import {
   iconPokemon,
   iconRecipe,
   type AppIcon
-} from './icons';
-import { getCurrentLocale, loadSystemWordings, onLocaleChange, setCurrentLocale } from './i18n';
-import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser, type Language } from './services/api';
+} from './src/icons';
+import { getCurrentLocale, loadSystemWordings, onLocaleChange, setCurrentLocale } from './src/i18n';
+import { api, getAuthToken, onAuthTokenChange, setAuthToken, type AuthUser, type Language } from './src/services/api';
 
 const { t, locale } = useI18n();
-
 const router = useRouter();
 const currentUser = ref<AuthUser | null>(null);
 const languages = ref<Language[]>([
@@ -188,6 +186,6 @@ onUnmounted(() => {
     @logout="logout"
     @update:locale="updateLocale"
   >
-    <RouterView :key="locale" />
+    <NuxtPage :key="locale" />
   </AppShell>
 </template>

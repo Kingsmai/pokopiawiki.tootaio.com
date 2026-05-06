@@ -1,8 +1,10 @@
 {
-  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "extends": "./.nuxt/tsconfig.json",
   "compilerOptions": {
     "strict": true,
-    "types": ["vite/client", "vitest/globals"]
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": false,
+    "types": ["vitest/globals"]
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "../system-wordings.ts"]
+  "include": [".nuxt/**/*.d.ts", "**/*.d.ts", "**/*.ts", "**/*.vue", "../system-wordings.ts"]
 }

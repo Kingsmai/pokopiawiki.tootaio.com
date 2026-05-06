@@ -15,7 +15,7 @@
 ## 技术栈
 
 - Monorepo：pnpm workspace，Node.js >= 22，TypeScript。
-- 前端：Vue、Vite、Vue Router、Vue I18n、Iconify。
+- 前端：Nuxt（SPA 模式，`ssr: false`）、Vue、Vue Router、Vue I18n、Iconify。
 - 后端：Node.js、Fastify、pg、PostgreSQL。
 - 运维：Docker / docker compose。
 - 依赖版本遵循现有 `package.json`，新增依赖时优先使用当前主流稳定版本，并保持项目结构简单。
@@ -1036,8 +1036,8 @@ API 暴露边界：
   - `favicon.ico`
   - 默认社交分享图
   - 品牌 Logo 素材
-- `VITE_SITE_URL` 定义 canonical、Open Graph URL、robots sitemap 地址和 sitemap URL 的站点根地址；当前公开站点为 `https://pokopiawiki.tootaio.com`，本地前端端口默认使用 `http://localhost:20015`。
-- 前端入口 `index.html` 提供默认 title、description、robots、canonical、Open Graph、Twitter card 和 favicon；客户端路由切换后根据当前路由更新页面 metadata。
+- `NUXT_PUBLIC_SITE_URL` 定义 canonical、Open Graph URL、robots sitemap 地址和 sitemap URL 的站点根地址；当前公开站点为 `https://pokopiawiki.tootaio.com`，本地前端端口默认使用 `http://localhost:20015`。Nuxt 配置仍兼容读取旧的 `VITE_SITE_URL` 作为 fallback。
+- 前端 Nuxt app head 配置提供默认 title、description、robots、canonical、Open Graph、Twitter card 和 favicon；客户端路由切换后根据当前路由更新页面 metadata。
 - 主要公开浏览入口可索引：
   - `/pokemon`
   - `/event-pokemon`
@@ -1061,6 +1061,8 @@ API 暴露边界：
 ## 部署与升级维护
 
 - Docker 部署时公开前端端口由 `frontend_gateway` 承载，正常流量代理到 `frontend` 服务。
+- 前端 API base URL 由 `NUXT_PUBLIC_API_BASE_URL` 提供；Nuxt 配置仍兼容读取旧的 `VITE_API_BASE_URL` 作为 fallback。
+- 前端 Docker 构建使用 Nuxt static generate 输出 `.output/public`，`frontend` 服务继续通过轻量 Node 静态服务器提供 SPA fallback。
 - `frontend` 因 `docker compose up -d --build` 重建、启动中或临时不可达时，`frontend_gateway` 返回静态升级维护页并保持公开端口可访问；后端 `/health` 不可用时，前端网关也返回同一维护页，避免用户看到静态页面后遇到 API 不可用。
 - 升级维护页是基础设施级静态 fallback，不依赖 Vue、Vue I18n、后端 API 或数据库；页面只展示正式用户文案和品牌视觉，不展示构建日志、调试信息、内部字段或实现说明。
 - 升级维护页使用 `503`、`Retry-After: 300`、`Cache-Control: no-store` 和 `noindex`，提示用户 Pokopia Wiki 正在升级并将在约 5 分钟内恢复。

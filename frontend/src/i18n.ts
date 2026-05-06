@@ -2,7 +2,7 @@ import { createI18n } from 'vue-i18n';
 import { defaultLocale, systemWordingMessages, type SystemWordingTree } from '../../system-wordings';
 
 export { defaultLocale } from '../../system-wordings';
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+let apiBaseUrl = 'http://localhost:3001';
 const localeStorageKey = 'pokopia_locale';
 const localeChangeEvent = 'pokopia-locale-change';
 
@@ -24,6 +24,12 @@ export const i18n = createI18n({
   fallbackLocale: defaultLocale,
   messages
 });
+
+export function setSystemWordingsApiBaseUrl(value: unknown): void {
+  if (typeof value === 'string' && value.trim() !== '') {
+    apiBaseUrl = value.trim();
+  }
+}
 
 function readStoredLocale(): string {
   if (typeof localStorage === 'undefined') {
@@ -121,6 +127,10 @@ export function setCurrentLocale(locale: string): void {
 }
 
 export function onLocaleChange(callback: () => void): () => void {
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
   window.addEventListener(localeChangeEvent, callback);
   return () => window.removeEventListener(localeChangeEvent, callback);
 }

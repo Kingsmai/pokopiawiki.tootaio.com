@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'dist');
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '.output/public');
 const indexPath = path.join(root, 'index.html');
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number.parseInt(process.env.PORT ?? '20015', 10);

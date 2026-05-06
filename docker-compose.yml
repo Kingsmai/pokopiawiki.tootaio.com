@@ -41,9 +41,13 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL:-http://localhost:20016}
+        NUXT_SERVER_API_BASE_URL: ${NUXT_SERVER_API_BASE_URL:-http://backend:3001}
         NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-https://pokopiawiki.tootaio.com}
     environment:
       PORT: 20015
+      NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL:-http://localhost:20016}
+      NUXT_SERVER_API_BASE_URL: ${NUXT_SERVER_API_BASE_URL:-http://backend:3001}
+      NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-https://pokopiawiki.tootaio.com}
     expose:
       - "20015"
     depends_on:

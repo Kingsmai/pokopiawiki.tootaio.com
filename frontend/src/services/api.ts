@@ -1,6 +1,7 @@
 import { getCurrentLocale } from '../i18n';
 
-let apiBaseUrl = 'http://localhost:3001';
+let browserApiBaseUrl = 'http://localhost:3001';
+let serverApiBaseUrl = 'http://localhost:3001';
 const authTokenKey = 'pokopia_auth_token';
 const authChangeEvent = 'pokopia-auth-change';
 
@@ -16,9 +17,35 @@ export interface Language {
 }
 
 export function setApiBaseUrl(value: unknown): void {
-  if (typeof value === 'string' && value.trim() !== '') {
-    apiBaseUrl = value.trim();
+  setApiBaseUrls({ browser: value, server: value });
+}
+
+export function setApiBaseUrls(value: { browser?: unknown; server?: unknown }): void {
+  const browserBaseUrl = normalizeApiBaseUrl(value.browser);
+  const serverBaseUrl = normalizeApiBaseUrl(value.server);
+
+  if (browserBaseUrl) {
+    browserApiBaseUrl = browserBaseUrl;
   }
+  if (serverBaseUrl) {
+    serverApiBaseUrl = serverBaseUrl;
+  }
+}
+
+function normalizeApiBaseUrl(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value.trim().replace(/\/+$/, '');
+  }
+
+  return null;
+}
+
+function activeApiBaseUrl(): string {
+  return typeof window === 'undefined' ? serverApiBaseUrl : browserApiBaseUrl;
+}
+
+function apiUrl(path: string): string {
+  return `${activeApiBaseUrl()}${path}`;
 }
 
 export type SystemWordingSurface = 'frontend' | 'backend' | 'email';
@@ -1086,7 +1113,7 @@ function requestHeaders(): HeadersInit {
 }
 
 export function notificationWebSocketUrl(ticket: string): string {
-  const base = new URL(apiBaseUrl, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
+  const base = new URL(browserApiBaseUrl, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
   base.pathname = '/api/notifications/ws';
   base.search = '';
@@ -1108,7 +1135,7 @@ async function getErrorMessage(response: Response): Promise<string> {
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiUrl(path), {
     headers: requestHeaders(),
     signal
   });
@@ -1121,7 +1148,7 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body: unknown): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -1138,7 +1165,7 @@ async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body:
 }
 
 async function sendFormData<T>(path: string, body: FormData): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method: 'POST',
     headers: requestHeaders(),
     body
@@ -1152,7 +1179,7 @@ async function sendFormData<T>(path: string, body: FormData): Promise<T> {
 }
 
 async function postEmpty(path: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method: 'POST',
     headers: requestHeaders()
   });
@@ -1163,7 +1190,7 @@ async function postEmpty(path: string): Promise<void> {
 }
 
 async function deleteJson(path: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method: 'DELETE',
     headers: requestHeaders()
   });
@@ -1174,7 +1201,7 @@ async function deleteJson(path: string): Promise<void> {
 }
 
 async function deleteAndGetJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method: 'DELETE',
     headers: requestHeaders()
   });

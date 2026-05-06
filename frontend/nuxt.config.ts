@@ -10,6 +10,12 @@ export default defineNuxtConfig({
   css: ['~/src/styles/main.css'],
   compatibilityDate: '2026-05-06',
   runtimeConfig: {
+    serverApiBaseUrl:
+      process.env.NUXT_SERVER_API_BASE_URL ??
+      process.env.NUXT_API_BASE_URL ??
+      process.env.NUXT_PUBLIC_API_BASE_URL ??
+      process.env.VITE_API_BASE_URL ??
+      'http://localhost:3001',
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL ?? process.env.VITE_API_BASE_URL ?? 'http://localhost:3001',
       siteUrl: normalizeSiteUrl(process.env.NUXT_PUBLIC_SITE_URL ?? process.env.VITE_SITE_URL)

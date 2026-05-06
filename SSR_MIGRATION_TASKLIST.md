@@ -14,19 +14,27 @@ Keep this file aligned with implementation progress while the SSR migration is i
 
 ## Phase 1: Baseline Audit
 
-- [ ] Read `DESIGN.md`, `DesignGuidelines.html` when UI behavior is touched, `AGENTS.md`, and this task list before making SSR migration changes.
-- [ ] Inventory all browser-only access in `frontend/src`, `frontend/app.vue`, `frontend/plugins`, `frontend/middleware`, and `frontend/pages`: `window`, `document`, `localStorage`, `sessionStorage`, DOM measurement, event listeners, timers, clipboard, `confirm`, `matchMedia`, and direct head mutation.
-- [ ] Classify each browser-only usage as client-only component behavior, SSR-safe fallback behavior, or logic that must be moved into Nuxt composables/plugins.
-- [ ] Inventory route-level data loading across public list/detail pages, authenticated pages, management pages, and route-backed modal pages.
-- [ ] Identify public routes that should SSR first: Home, Pokemon/Event Pokemon lists, Habitat/Event Habitat lists, Items/Event Items lists, Ancient Artifacts, Recipes, Daily CheckList, Dish, Life list/detail, Project Updates, legal pages, and public Profile.
-- [ ] Identify routes that should remain client-only or mostly client-rendered initially: Login, Register, Forgot/Reset Password, Verify Email, Admin, `/profile`, notification UI, upload/edit forms, and route-backed edit/create modals.
+- [x] Read `DESIGN.md`, `DesignGuidelines.html` when UI behavior is touched, `AGENTS.md`, and this task list before making SSR migration changes.
+- [x] Inventory all browser-only access in `frontend/src`, `frontend/app.vue`, `frontend/plugins`, `frontend/middleware`, and `frontend/pages`: `window`, `document`, `localStorage`, `sessionStorage`, DOM measurement, event listeners, timers, clipboard, `confirm`, `matchMedia`, and direct head mutation.
+- [x] Classify each browser-only usage as client-only component behavior, SSR-safe fallback behavior, or logic that must be moved into Nuxt composables/plugins.
+- [x] Inventory route-level data loading across public list/detail pages, authenticated pages, management pages, and route-backed modal pages.
+- [x] Identify public routes that should SSR first: Home, Pokemon/Event Pokemon lists, Habitat/Event Habitat lists, Items/Event Items lists, Ancient Artifacts, Recipes, Daily CheckList, Dish, Life list/detail, Project Updates, legal pages, and public Profile.
+- [x] Identify routes that should remain client-only or mostly client-rendered initially: Login, Register, Forgot/Reset Password, Verify Email, Admin, `/profile`, notification UI, upload/edit forms, and route-backed edit/create modals.
+
+### Phase 1 Audit Notes
+
+- Browser-only access is concentrated in client interactions: modal focus/body locking, dropdown positioning, sidebar/mobile drawer behavior, search debounce, infinite-scroll sentinels, upload/download helpers, clipboard copy, local checklist state, route-backed form defaults, WebSocket notifications, moderation update events, and destructive-action `window.confirm` calls. These should stay in mounted/client-only lifecycle paths during SSR enablement.
+- SSR-safe fallback candidates already guard storage or DOM access in `frontend/src/i18n.ts`, `frontend/src/services/api.ts`, and several views with `typeof window`, `typeof document`, `typeof localStorage`, `typeof sessionStorage`, or `typeof IntersectionObserver`.
+- Logic that must move to SSR-aware Nuxt APIs in later phases: direct SEO mutation in `frontend/src/seo.ts` / `frontend/plugins/02-seo.client.ts`, global Vue I18n singleton request state, auth middleware's storage-only token model, and Nuxt config analytics script injection.
+- Current route data loading is client-mounted in views rather than route-level `useAsyncData` / `useFetch`. Public list/detail candidates load through `api.*Page`, `api.*Detail`, `api.dish`, `api.dailyChecklistPage`, `api.lifePosts`, `api.lifePost`, `api.projectUpdates`, and public profile/activity endpoints. Auth, admin, edit/create modal, notification, upload, comment/reaction, and profile account flows depend on client auth state or browser APIs and should not be first-wave SSR data routes.
+- First SSR data groups should be low-risk public reads: Home/project update preview, legal/static pages, Pokemon/Event Pokemon lists and details, Habitat/Event Habitat lists and details, Items/Event Items/Ancient Artifacts lists and details, Recipes list/details, Daily CheckList, Dish, Life public feed/detail, Project Updates, and public Profile.
 
 ## Phase 2: Runtime Config And API Layer
 
-- [ ] Replace client-only API base URL setup with an SSR-safe runtime config helper that works in server and client contexts.
-- [ ] Define separate public/browser API origin and internal server API origin if Docker networking requires different URLs for server-side fetches and browser fetches.
-- [ ] Ensure every server-side API read sends the correct `X-Locale` and never sends browser-only bearer tokens unless a secure SSR auth mechanism is implemented.
-- [ ] Add a small SSR-safe fetch wrapper or adapt `frontend/src/services/api.ts` so public reads can be called from server-side setup without depending on `window`, storage, or DOM APIs.
+- [x] Replace client-only API base URL setup with an SSR-safe runtime config helper that works in server and client contexts.
+- [x] Define separate public/browser API origin and internal server API origin if Docker networking requires different URLs for server-side fetches and browser fetches.
+- [x] Ensure every server-side API read sends the correct `X-Locale` and never sends browser-only bearer tokens unless a secure SSR auth mechanism is implemented.
+- [x] Add a small SSR-safe fetch wrapper or adapt `frontend/src/services/api.ts` so public reads can be called from server-side setup without depending on `window`, storage, or DOM APIs.
 - [ ] Keep frontend API response types consistent with `frontend/src/services/api.ts`.
 - [ ] Ensure API errors used for SSR public routes degrade to intended empty/error states without leaking stack traces or internal fields into rendered HTML.
 

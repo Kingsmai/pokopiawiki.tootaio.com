@@ -9,8 +9,10 @@ COPY frontend ./frontend
 COPY system-wordings.ts ./system-wordings.ts
 
 ARG NUXT_PUBLIC_API_BASE_URL=http://localhost:3001
+ARG NUXT_SERVER_API_BASE_URL=http://localhost:3001
 ARG NUXT_PUBLIC_SITE_URL=https://pokopiawiki.tootaio.com
 ENV NUXT_PUBLIC_API_BASE_URL=$NUXT_PUBLIC_API_BASE_URL
+ENV NUXT_SERVER_API_BASE_URL=$NUXT_SERVER_API_BASE_URL
 ENV NUXT_PUBLIC_SITE_URL=$NUXT_PUBLIC_SITE_URL
 RUN pnpm --filter @pokopia/frontend build
 

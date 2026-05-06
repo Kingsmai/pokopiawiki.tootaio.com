@@ -1,10 +1,15 @@
-import { setSystemWordingsApiBaseUrl } from '../src/i18n';
+import { setSystemWordingsApiBaseUrls } from '../src/i18n';
 import { setConfiguredSiteUrl } from '../src/seo';
-import { setApiBaseUrl } from '../src/services/api';
+import { setApiBaseUrls } from '../src/services/api';
 
 export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig();
-  setApiBaseUrl(config.public.apiBaseUrl);
-  setSystemWordingsApiBaseUrl(config.public.apiBaseUrl);
+  const apiBaseUrls = {
+    browser: config.public.apiBaseUrl,
+    server: config.serverApiBaseUrl
+  };
+
+  setApiBaseUrls(apiBaseUrls);
+  setSystemWordingsApiBaseUrls(apiBaseUrls);
   setConfiguredSiteUrl(config.public.siteUrl);
 });

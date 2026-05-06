@@ -2,7 +2,8 @@ import { createI18n } from 'vue-i18n';
 import { defaultLocale, systemWordingMessages, type SystemWordingTree } from '../../system-wordings';
 
 export { defaultLocale } from '../../system-wordings';
-let apiBaseUrl = 'http://localhost:3001';
+let browserApiBaseUrl = 'http://localhost:3001';
+let serverApiBaseUrl = 'http://localhost:3001';
 const localeStorageKey = 'pokopia_locale';
 const localeChangeEvent = 'pokopia-locale-change';
 
@@ -26,9 +27,31 @@ export const i18n = createI18n({
 });
 
 export function setSystemWordingsApiBaseUrl(value: unknown): void {
-  if (typeof value === 'string' && value.trim() !== '') {
-    apiBaseUrl = value.trim();
+  setSystemWordingsApiBaseUrls({ browser: value, server: value });
+}
+
+export function setSystemWordingsApiBaseUrls(value: { browser?: unknown; server?: unknown }): void {
+  const browserBaseUrl = normalizeApiBaseUrl(value.browser);
+  const serverBaseUrl = normalizeApiBaseUrl(value.server);
+
+  if (browserBaseUrl) {
+    browserApiBaseUrl = browserBaseUrl;
   }
+  if (serverBaseUrl) {
+    serverApiBaseUrl = serverBaseUrl;
+  }
+}
+
+function normalizeApiBaseUrl(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value.trim().replace(/\/+$/, '');
+  }
+
+  return null;
+}
+
+function activeApiBaseUrl(): string {
+  return typeof window === 'undefined' ? serverApiBaseUrl : browserApiBaseUrl;
 }
 
 function readStoredLocale(): string {
@@ -87,7 +110,7 @@ export async function loadSystemWordings(locale = getCurrentLocale(), force = fa
 
   const loadPromise = (async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/api/system-wordings?locale=${encodeURIComponent(targetLocale)}`);
+      const response = await fetch(`${activeApiBaseUrl()}/api/system-wordings?locale=${encodeURIComponent(targetLocale)}`);
       if (!response.ok) {
         throw new Error(`System wordings failed (${response.status})`);
       }

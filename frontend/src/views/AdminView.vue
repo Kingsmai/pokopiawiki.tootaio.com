@@ -371,7 +371,9 @@ const dishModalTitle = computed(() => (dishForm.value.id ? t('pages.dish.editDis
 const dishRows = computed(() => dishCategoryRows.value.flatMap((category) => category.dishes));
 const selectedDishFormCategory = computed(() => dishCategoryRows.value.find((category) => String(category.id) === dishForm.value.categoryId) ?? null);
 const dishAllowsSecondSecondaryMaterial = computed(() => (selectedDishFormCategory.value?.totalMaterialQuantity ?? 0) > 2);
-const dishItemSelectOptions = computed<TagsSelectOption[]>(() => dishItemRows.value.map((item) => ({ id: item.id, name: item.name })));
+const dishItemSelectOptions = computed<TagsSelectOption[]>(() =>
+  dishItemRows.value.map((item) => ({ id: item.id, name: item.name, thumbnailUrl: item.image?.url }))
+);
 const optionalDishItemSelectOptions = computed<TagsSelectOption[]>(() => [{ id: '', name: t('common.none') }, ...dishItemSelectOptions.value]);
 const dishCategorySelectOptions = computed<TagsSelectOption[]>(() =>
   dishCategoryRows.value.map((category) => ({ id: category.id, name: category.name }))

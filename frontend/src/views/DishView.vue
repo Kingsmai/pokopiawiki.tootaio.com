@@ -73,7 +73,7 @@ const dishCategoryModalTitle = computed(() =>
 );
 const dishModalTitle = computed(() => (dishForm.value.id ? t('pages.dish.editDish') : t('pages.dish.newDish')));
 const itemSelectOptions = computed<TagsSelectOption[]>(() =>
-  items.value.map((item) => ({ id: item.id, name: item.name }))
+  items.value.map((item) => ({ id: item.id, name: item.name, thumbnailUrl: item.image?.url }))
 );
 const optionalItemSelectOptions = computed<TagsSelectOption[]>(() => [{ id: '', name: t('common.none') }, ...itemSelectOptions.value]);
 const categorySelectOptions = computed<TagsSelectOption[]>(() => categories.value.map((category) => ({ id: category.id, name: category.name })));

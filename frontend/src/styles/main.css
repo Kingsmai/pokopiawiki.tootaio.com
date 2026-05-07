@@ -2041,10 +2041,18 @@ button:disabled,
 }
 
 .tags-select__single-value {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   color: var(--ink);
+}
+
+.tags-select__single-value span {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2054,6 +2062,7 @@ button:disabled,
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-width: 0;
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid rgba(42, 117, 187, 0.28);
@@ -2062,6 +2071,27 @@ button:disabled,
   color: var(--pokemon-blue-deep);
   font-size: 13px;
   font-weight: 850;
+}
+
+.tags-select__tag > span:first-of-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tags-select__thumb {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-soft);
+  object-fit: contain;
+}
+
+.tags-select__thumb--tag {
+  width: 20px;
+  height: 20px;
 }
 
 .tags-select__remove {
@@ -2143,6 +2173,20 @@ button:disabled,
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+}
+
+.tags-select__option-label {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tags-select__option-label span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tags-select__option:hover,

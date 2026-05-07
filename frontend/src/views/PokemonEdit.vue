@@ -9,7 +9,7 @@ import PokemonStatsFields from '../components/PokemonStatsFields.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
 import Tabs from '../components/Tabs.vue';
-import TagsSelect from '../components/TagsSelect.vue';
+import TagsSelect, { type TagsSelectOption } from '../components/TagsSelect.vue';
 import TranslationFields from '../components/TranslationFields.vue';
 import { iconCancel, iconSave, iconSearch } from '../icons';
 import {
@@ -19,7 +19,6 @@ import {
   type EntityImage,
   type EntityImageUpload,
   type Language,
-  type NamedEntity,
   type Options,
   type PokemonFetchOption,
   type PokemonFetchResult,
@@ -39,7 +38,7 @@ const route = useRoute();
 const router = useRouter();
 const { locale, t } = useI18n();
 const options = ref<Options | null>(null);
-const itemOptions = ref<NamedEntity[]>([]);
+const itemOptions = ref<TagsSelectOption[]>([]);
 const languages = ref<Language[]>([]);
 const currentUser = ref<AuthUser | null>(null);
 const loading = ref(true);
@@ -189,7 +188,7 @@ function errorText(error: unknown, fallback: string) {
 async function loadOptions() {
   const [loadedOptions, loadedItems, loadedLanguages] = await Promise.all([api.options(), api.items({}), api.languages()]);
   options.value = loadedOptions;
-  itemOptions.value = loadedItems.map((item) => ({ id: item.id, name: item.name }));
+  itemOptions.value = loadedItems.map((item) => ({ id: item.id, name: item.name, thumbnailUrl: item.image?.url }));
   languages.value = loadedLanguages;
 }
 

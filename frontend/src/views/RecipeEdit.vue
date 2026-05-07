@@ -28,11 +28,11 @@ const recipeForm = ref({
 
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
-const materialItemOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
+const materialItemOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name, thumbnailUrl: item.image?.url })));
 const resultItemOptions = computed(() =>
   itemRows.value
     .filter((item) => !item.noRecipe || String(item.id) === recipeForm.value.itemId)
-    .map((item) => ({ id: item.id, name: item.name }))
+    .map((item) => ({ id: item.id, name: item.name, thumbnailUrl: item.image?.url }))
 );
 const selectedItemName = computed(() => resultItemOptions.value.find((item) => String(item.id) === recipeForm.value.itemId)?.name ?? '');
 const pageTitle = computed(() =>

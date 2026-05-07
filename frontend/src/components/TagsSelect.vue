@@ -8,12 +8,14 @@ export type TagsSelectOption = {
   id: number | string;
   name: string;
   label?: string;
+  thumbnailUrl?: string | null;
 };
 
 type OptionRow = {
   value: string;
   label: string;
   id: string;
+  thumbnailUrl: string | null;
 };
 
 type CandidateRow = { type: 'option'; id: string; value: string; label: string } | { type: 'create'; id: string };
@@ -65,7 +67,8 @@ const optionRows = computed(() =>
   props.options.map((option, index) => ({
     value: String(option.id),
     label: option.label ?? option.name,
-    id: `${props.id}-option-${index}`
+    id: `${props.id}-option-${index}`,
+    thumbnailUrl: option.thumbnailUrl ?? null
   }))
 );
 
@@ -79,9 +82,10 @@ const maxReached = computed(() => props.multiple && props.max > 0 && modelValues
 const selectedRows = computed(() =>
   modelValues.value
     .map((value) => optionRows.value.find((option) => option.value === value))
-    .filter((option) => option !== undefined)
+    .filter((option): option is OptionRow => option !== undefined)
 );
 const selectedLabel = computed(() => selectedRows.value[0]?.label ?? '');
+const selectedThumbnailUrl = computed(() => selectedRows.value[0]?.thumbnailUrl ?? '');
 
 const filteredRows = computed(() => {
   const keyword = search.value.trim().toLowerCase();
@@ -360,6 +364,7 @@ watch(
       <span v-if="selectedRows.length" class="tags-select__selected">
         <template v-if="multiple">
           <span v-for="option in selectedRows" :key="option.value" class="tags-select__tag">
+            <img v-if="option.thumbnailUrl" class="tags-select__thumb tags-select__thumb--tag" :src="option.thumbnailUrl" alt="" loading="lazy" />
             <span>{{ option.label }}</span>
             <span
               class="tags-select__remove"
@@ -374,7 +379,10 @@ watch(
             </span>
           </span>
         </template>
-        <span v-else class="tags-select__single-value">{{ selectedLabel }}</span>
+        <span v-else class="tags-select__single-value">
+          <img v-if="selectedThumbnailUrl" class="tags-select__thumb" :src="selectedThumbnailUrl" alt="" loading="lazy" />
+          <span>{{ selectedLabel }}</span>
+        </span>
       </span>
       <span v-else class="tags-select__placeholder">{{ placeholderText }}</span>
       <Icon :icon="iconChevronDown" class="tags-select__arrow" aria-hidden="true" />
@@ -417,7 +425,10 @@ watch(
           :disabled="!selectedValues.has(option.value) && maxReached"
           @click="selectOption(option.value)"
         >
-          <span>{{ option.label }}</span>
+          <span class="tags-select__option-label">
+            <img v-if="option.thumbnailUrl" class="tags-select__thumb" :src="option.thumbnailUrl" alt="" loading="lazy" />
+            <span>{{ option.label }}</span>
+          </span>
           <span v-if="selectedValues.has(option.value)" class="tags-select__state">
             <Icon :icon="iconCheck" class="ui-icon" aria-hidden="true" />
             {{ t('common.selected') }}

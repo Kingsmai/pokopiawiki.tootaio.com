@@ -73,9 +73,9 @@ const weatherOptions = computed(() => [
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''));
 const isEditing = computed(() => routeId.value !== '');
 const isEventCreate = computed(() => route.name === 'event-habitat-new');
-const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name })));
+const itemSelectOptions = computed(() => itemRows.value.map((item) => ({ id: item.id, name: item.name, thumbnailUrl: item.image?.url })));
 const pokemonSelectOptions = computed(() =>
-  pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.displayId} ${pokemon.name}` }))
+  pokemonRows.value.map((pokemon) => ({ id: pokemon.id, name: pokemon.name, label: `#${pokemon.displayId} ${pokemon.name}`, thumbnailUrl: pokemon.image?.url }))
 );
 const pageTitle = computed(() =>
   isEditing.value

@@ -11,3 +11,4 @@ coverage/
 .DS_Store
 .agents/
 skills-lock.json
+.repomix-output.xml

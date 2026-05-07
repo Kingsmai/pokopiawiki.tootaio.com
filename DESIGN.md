@@ -1177,7 +1177,15 @@ API 暴露边界：
   - `/threads`
   - `/threads/:threadId`
   - `/project-updates`
-- `sitemap.xml` 当前只包含稳定的公开顶层浏览入口；实体详情页、Life Post 详情页、Thread 详情页和公开 Profile 依赖运行时数据与站内链接可达性，当前不静态写入 sitemap。
+- `sitemap.xml` 输出 sitemap index，并引用按公开模块拆分的全量 sitemap：
+  - `/sitemap-static.xml`：稳定公开顶层浏览入口和法律页面。
+  - `/sitemap-pokedex.xml`：Pokemon 详情页，URL 使用 canonical `/pokemon/:id`。
+  - `/sitemap-habitats.xml`：Habitat 详情页，URL 使用 canonical `/habitats/:id`。
+  - `/sitemap-collections.xml`：Items、Ancient Artifacts 和 Recipes 详情页，URL 分别使用 canonical `/items/:id`、`/ancient-artifacts/:id` 和 `/recipes/:id`；带 Ancient Artifact 分类的 item 只输出 `/ancient-artifacts/:id`，避免同一内容在 sitemap 中重复提交。
+  - `/sitemap-life.xml`：公开可见 Life Post 详情页，URL 使用 canonical `/life/:id`。
+  - `/sitemap-threads.xml`：公开 Thread 详情页，URL 使用 canonical `/threads/:threadId`。
+- Sitemap URL 条目输出 `lastmod` 和 `priority`；详情页 `lastmod` 优先使用公开列表数据中的 `updatedAt` 或活跃时间字段，缺失时回退到 `createdAt`，不得暴露编辑人、权限、审核原因、内部审计 payload 或调试信息。
+- 当前不输出公开 Profile 全量 sitemap；公开 Profile 可通过站内搜索和站内链接发现，避免将用户目录作为 sitemap 枚举面。
 - Pokemon、物品、材料单和栖息地详情页在公开详情数据加载完成后，用实体名称、公开展示图片和本地化 SEO 文案更新 title、description、canonical、Open Graph 和 Twitter card。
 - Threads 列表页使用 `/threads` canonical 并进入 sitemap；Thread 详情页在公开 Thread summary 加载完成后，用 Thread 标题、公开消息数、语言、标签、作者展示名和活跃时间更新 title、description、canonical、Open Graph 和 `DiscussionForumPosting` 结构化数据。
 - 认证、管理、新建、编辑和开发中入口必须设置 `noindex`，避免搜索引擎索引受保护、低价值或临时流程页面。

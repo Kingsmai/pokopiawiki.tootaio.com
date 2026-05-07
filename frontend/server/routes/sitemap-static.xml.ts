@@ -1,7 +1,7 @@
-import { normalizeSiteUrl, sitemapIndexXml } from '../utils/seo-files';
+import { normalizeSiteUrl, staticSitemapXml } from '../utils/seo-files';
 
 export default defineEventHandler((event) => {
   const config = useRuntimeConfig(event);
   setHeader(event, 'Content-Type', 'application/xml; charset=utf-8');
-  return sitemapIndexXml(normalizeSiteUrl(config.public.siteUrl));
+  return staticSitemapXml(normalizeSiteUrl(config.public.siteUrl));
 });

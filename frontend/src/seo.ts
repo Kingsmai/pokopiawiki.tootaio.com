@@ -9,7 +9,7 @@ const fallbackSiteUrl = 'https://pokopiawiki.tootaio.com';
 let runtimeSiteUrl: string | null = null;
 
 type TranslationValues = Record<string, string | number>;
-type Translator = (key: string, values?: TranslationValues) => string;
+export type Translator = (key: string, values?: TranslationValues) => string;
 
 export type RouteSeoConfig = {
   title?: string;
@@ -27,6 +27,8 @@ export type SeoConfig = {
   canonicalPath?: string;
   image?: string | null;
   noindex?: boolean;
+  openGraphType?: 'website' | 'article';
+  structuredData?: Record<string, unknown>;
 };
 
 export type ResolvedSeoConfig = {
@@ -36,7 +38,19 @@ export type ResolvedSeoConfig = {
   imageUrl: string;
   robots: string;
   locale: string;
+  openGraphType: 'website' | 'article';
   structuredData: Record<string, unknown>;
+};
+
+export type ThreadSeoSummary = {
+  id: number;
+  title: string;
+  languageCode: string;
+  tags: Array<{ name: string }>;
+  messageCount: number;
+  createdAt: string;
+  lastActiveAt: string;
+  author: { displayName: string } | null;
 };
 
 const messages = systemWordingMessages as unknown as Record<string, SystemWordingTree>;
@@ -120,6 +134,7 @@ export function resolveSeo(config: SeoConfig = {}): ResolvedSeoConfig {
   const imageUrl = absoluteUrl(config.image?.trim() || defaultImagePath);
   const robots = config.noindex === true ? 'noindex, nofollow' : 'index, follow';
   const locale = getCurrentLocale();
+  const openGraphType = config.openGraphType ?? 'website';
 
   return {
     title,
@@ -128,7 +143,8 @@ export function resolveSeo(config: SeoConfig = {}): ResolvedSeoConfig {
     imageUrl,
     robots,
     locale,
-    structuredData: {
+    openGraphType,
+    structuredData: config.structuredData ?? {
       '@context': 'https://schema.org',
       '@type': 'WebPage',
       name: title,
@@ -157,7 +173,7 @@ export function resolvedSeoHead(seo: ResolvedSeoConfig) {
       { key: 'twitter-description', name: 'twitter:description', content: seo.description },
       { key: 'twitter-image', name: 'twitter:image', content: seo.imageUrl },
       { key: 'og-site-name', property: 'og:site_name', content: siteName },
-      { key: 'og-type', property: 'og:type', content: 'website' },
+      { key: 'og-type', property: 'og:type', content: seo.openGraphType },
       { key: 'og-title', property: 'og:title', content: seo.title },
       { key: 'og-description', property: 'og:description', content: seo.description },
       { key: 'og-url', property: 'og:url', content: seo.canonicalUrl },
@@ -218,4 +234,40 @@ export function applySeo(config: SeoConfig = {}): void {
 
 export function applyRouteSeo(route: RouteLocationNormalizedLoaded): void {
   applySeo(routeSeoConfig(route));
+}
+
+export function threadSeoConfig(thread: ThreadSeoSummary, translator: Translator): SeoConfig {
+  const title = thread.title.trim() || translator('pages.threads.title');
+  const canonicalPath = `/threads/${thread.id}`;
+  const keywords = thread.tags.map((tag) => tag.name.trim()).filter(Boolean).join(', ');
+  const description = translator('seo.threadDetailDescription', { title, count: thread.messageCount });
+
+  return {
+    title: `${title} - ${translator('pages.threads.title')}`,
+    description,
+    canonicalPath,
+    openGraphType: 'article',
+    structuredData: {
+      '@context': 'https://schema.org',
+      '@type': 'DiscussionForumPosting',
+      headline: title,
+      description,
+      url: absoluteUrl(canonicalPath),
+      datePublished: thread.createdAt,
+      dateModified: thread.lastActiveAt,
+      inLanguage: thread.languageCode,
+      keywords: keywords || undefined,
+      author: thread.author ? { '@type': 'Person', name: thread.author.displayName } : undefined,
+      interactionStatistic: {
+        '@type': 'InteractionCounter',
+        interactionType: { '@type': 'CommentAction' },
+        userInteractionCount: thread.messageCount
+      },
+      isPartOf: {
+        '@type': 'WebPage',
+        name: translator('pages.threads.title'),
+        url: absoluteUrl('/threads')
+      }
+    }
+  };
 }

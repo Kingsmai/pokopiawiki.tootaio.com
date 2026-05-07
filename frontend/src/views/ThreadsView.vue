@@ -22,6 +22,7 @@ import {
   iconThreads,
   iconUndo
 } from '../icons';
+import { applySeo, resolvedSeoHead, resolveSeo, threadSeoConfig } from '../seo';
 import {
   api,
   threadWebSocketUrl,
@@ -158,6 +159,9 @@ const currentThreadList = computed(() => {
   });
 });
 const detailModalOpen = computed(() => activeThread.value !== null);
+const threadSeo = computed(() => (activeThread.value ? resolveSeo(threadSeoConfig(activeThread.value, t)) : null));
+
+useHead(() => (threadSeo.value ? resolvedSeoHead(threadSeo.value) : {}));
 
 const messageGroups = computed<MessageGroup[]>(() => {
   const groups: MessageGroup[] = [];
@@ -824,6 +828,12 @@ watch(activeThreadId, async () => {
   errorMessage.value = '';
   await loadActiveThread();
   await loadMessages(true);
+});
+
+watch(activeThread, (thread) => {
+  if (thread) {
+    applySeo(threadSeoConfig(thread, t));
+  }
 });
 
 onMounted(() => {

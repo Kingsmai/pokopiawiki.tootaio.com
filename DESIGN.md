@@ -1174,12 +1174,15 @@ API 暴露边界：
   - `/checklist`
   - `/life`
   - `/life/:id`
+  - `/threads`
+  - `/threads/:threadId`
   - `/project-updates`
-- `sitemap.xml` 当前只包含稳定的公开顶层浏览入口；实体详情页、Life Post 详情页和公开 Profile 依赖运行时数据与站内链接可达性，当前不静态写入 sitemap。
+- `sitemap.xml` 当前只包含稳定的公开顶层浏览入口；实体详情页、Life Post 详情页、Thread 详情页和公开 Profile 依赖运行时数据与站内链接可达性，当前不静态写入 sitemap。
 - Pokemon、物品、材料单和栖息地详情页在公开详情数据加载完成后，用实体名称、公开展示图片和本地化 SEO 文案更新 title、description、canonical、Open Graph 和 Twitter card。
+- Threads 列表页使用 `/threads` canonical 并进入 sitemap；Thread 详情页在公开 Thread summary 加载完成后，用 Thread 标题、公开消息数、语言、标签、作者展示名和活跃时间更新 title、description、canonical、Open Graph 和 `DiscussionForumPosting` 结构化数据。
 - 认证、管理、新建、编辑和开发中入口必须设置 `noindex`，避免搜索引擎索引受保护、低价值或临时流程页面。
 - 新建页面 canonical 指向对应列表页；编辑 Modal 路由 canonical 指向对应实体详情页。
-- SEO metadata 只能使用公开业务数据和系统文案；不得暴露邮箱、权限 key、token/hash、内部审计 payload、调试信息或实现说明。
+- SEO metadata 只能使用公开业务数据和系统文案；不得暴露邮箱、权限 key、token/hash、内部审计 payload、调试信息、未审核 Thread Message、审核原因或实现说明。
 - 多语言 metadata 使用当前前端语言和系统文案回退机制；当前没有语言专属 URL，因此暂不输出 `hreflang`。
 
 ## 部署与升级维护

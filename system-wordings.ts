@@ -133,6 +133,10 @@ export const systemWordingMessages = {
     seo: {
       siteDescription:
         'Browse Pokopia Wiki for Pokemon, Event Pokemon, habitats, Event Habitats, items, Event Items, Ancient Artifacts, recipes, daily tasks, and Life community posts for Pokemon Pokopia.',
+      threadsDescription:
+        'Browse Pokopia Wiki Threads for Pokemon Pokopia community discussions by channel, language, tags, and recent activity.',
+      threadDetailDescription:
+        'Read the {title} community thread in Pokopia Wiki Threads, including public discussion, channel tags, language, and {count} visible messages.',
       pokemonDetailDescription:
         'Read {name} details in Pokopia Wiki, including habitat, types, specialities, favourites, stats, related items, discussions, and edit history.',
       itemDetailDescription:
@@ -1587,6 +1591,8 @@ export const systemWordingMessages = {
     },
     seo: {
       siteDescription: '浏览 Pokopia Wiki 的 Pokemon、Event Pokemon、栖息地、Event Habitats、物品、Event Items、Ancient Artifacts、材料单、每日清单和 Life 社区动态。',
+      threadsDescription: '按频道、语言、标签和最近活跃浏览 Pokopia Wiki 讨论，查看 Pokemon Pokopia 社区帖子。',
+      threadDetailDescription: '查看 Pokopia Wiki 讨论中的 {title} 帖子，包含公开讨论、频道标签、语言和 {count} 条可见消息。',
       pokemonDetailDescription: '查看 {name} 在 Pokopia Wiki 中的栖息地、属性、特长、喜欢的东西、六维、相关物品、讨论和编辑历史。',
       itemDetailDescription: '查看 {name} 在 Pokopia Wiki 中的基础价格、分类、用途、入手方式、自定义、相关材料单、栖息地和 Pokemon 掉落。',
       ancientArtifactDetailDescription: '查看 {name} 在 Pokopia Wiki 中的分类、标签、介绍、讨论和编辑历史。',

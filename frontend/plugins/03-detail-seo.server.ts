@@ -1,4 +1,4 @@
-import { resolvedSeoHead, resolveSeo, type SeoConfig } from '../src/seo';
+import { resolvedSeoHead, resolveSeo, threadSeoConfig, type SeoConfig } from '../src/seo';
 import { api } from '../src/services/api';
 
 export default defineNuxtPlugin(async () => {
@@ -67,6 +67,11 @@ async function detailSeo(
         canonicalPath: `/recipes/${recipe.id}`,
         image: recipe.item.image?.url
       };
+    }
+
+    if (routeName === 'thread-detail') {
+      const thread = await api.thread(routeId);
+      return threadSeoConfig(thread, t);
     }
   } catch {
     return null;

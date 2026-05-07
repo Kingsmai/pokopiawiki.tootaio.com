@@ -13,6 +13,7 @@ const sitemapPaths = [
   '/dish',
   '/checklist',
   '/life',
+  '/threads',
   '/project-updates',
   '/privacy-policy',
   '/terms-of-service',

@@ -9,7 +9,7 @@ import type { ThreadMessage, ThreadReactionCounts, ThreadReactionType, ThreadSum
 export type ThreadWsMessage =
   | { type: 'threads.connected'; followedUnreadCount: number }
   | { type: 'thread.message.created'; threadId: number; message: ThreadMessage; thread: ThreadSummary }
-  | { type: 'thread.message.moderation'; threadId: number; message: ThreadMessage | null }
+  | { type: 'thread.message.moderation'; threadId: number; messageId: number; message: ThreadMessage | null }
   | {
       type: 'thread.reactions.updated';
       target: 'thread' | 'message';
@@ -311,7 +311,7 @@ export async function applyApprovedThreadMessage(messageId: number): Promise<voi
       lastActiveAt: row.lastActiveAt,
       createdAt: row.threadCreatedAt,
       author: row.threadAuthor,
-      reactionCounts: { 'thumbs-up': 0, heart: 0, laugh: 0, fire: 0, eyes: 0 },
+      reactionCounts: {},
       myReactions: [],
       followed: true,
       unread: true
@@ -326,16 +326,37 @@ export async function applyApprovedThreadMessage(messageId: number): Promise<voi
       createdAt: row.messageCreatedAt,
       updatedAt: row.messageUpdatedAt,
       author: row.messageAuthor,
-      reactionCounts: { 'thumbs-up': 0, heart: 0, laugh: 0, fire: 0, eyes: 0 },
+      reactionCounts: {},
       myReactions: []
     }
   );
 }
 
-export async function publishThreadMessageModeration(threadId: number, message: ThreadMessage | null): Promise<void> {
-  await publishToUsers([...new Set([...(await recipientUserIds(threadId)), ...connectedUserIds()])], {
+export async function publishThreadMessageModeration(
+  threadId: number,
+  messageId: number,
+  message: ThreadMessage | null
+): Promise<void> {
+  const publicUsers = new Set([...(await recipientUserIds(threadId)), ...connectedUserIds()]);
+  if (message?.author?.id) {
+    publicUsers.delete(message.author.id);
+  }
+
+  await publishToUsers([...publicUsers], {
     type: 'thread.message.moderation',
     threadId,
+    messageId,
+    message: null
+  });
+
+  if (!message?.author?.id) {
+    return;
+  }
+
+  await publishToUsers([message.author.id], {
+    type: 'thread.message.moderation',
+    threadId,
+    messageId,
     message
   });
 }

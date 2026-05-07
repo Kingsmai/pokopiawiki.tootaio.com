@@ -987,11 +987,25 @@ CREATE INDEX IF NOT EXISTS thread_messages_user_idx
 CREATE TABLE IF NOT EXISTS thread_reactions (
   thread_id integer NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
   user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  reaction_type text NOT NULL CHECK (reaction_type IN ('thumbs-up', 'heart', 'laugh', 'fire', 'eyes')),
+  reaction_type text NOT NULL CHECK (length(reaction_type) BETWEEN 1 AND 24),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (thread_id, user_id, reaction_type)
 );
+
+ALTER TABLE thread_reactions
+  DROP CONSTRAINT IF EXISTS thread_reactions_reaction_type_check,
+  ADD CONSTRAINT thread_reactions_reaction_type_check CHECK (length(reaction_type) BETWEEN 1 AND 24);
+UPDATE thread_reactions
+SET reaction_type = CASE reaction_type
+  WHEN 'thumbs-up' THEN '👍'
+  WHEN 'heart' THEN '❤️'
+  WHEN 'laugh' THEN '😂'
+  WHEN 'fire' THEN '🔥'
+  WHEN 'eyes' THEN '👀'
+  ELSE reaction_type
+END
+WHERE reaction_type IN ('thumbs-up', 'heart', 'laugh', 'fire', 'eyes');
 
 CREATE INDEX IF NOT EXISTS thread_reactions_thread_idx
   ON thread_reactions(thread_id, reaction_type);
@@ -999,11 +1013,25 @@ CREATE INDEX IF NOT EXISTS thread_reactions_thread_idx
 CREATE TABLE IF NOT EXISTS thread_message_reactions (
   message_id integer NOT NULL REFERENCES thread_messages(id) ON DELETE CASCADE,
   user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  reaction_type text NOT NULL CHECK (reaction_type IN ('thumbs-up', 'heart', 'laugh', 'fire', 'eyes')),
+  reaction_type text NOT NULL CHECK (length(reaction_type) BETWEEN 1 AND 24),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (message_id, user_id, reaction_type)
 );
+
+ALTER TABLE thread_message_reactions
+  DROP CONSTRAINT IF EXISTS thread_message_reactions_reaction_type_check,
+  ADD CONSTRAINT thread_message_reactions_reaction_type_check CHECK (length(reaction_type) BETWEEN 1 AND 24);
+UPDATE thread_message_reactions
+SET reaction_type = CASE reaction_type
+  WHEN 'thumbs-up' THEN '👍'
+  WHEN 'heart' THEN '❤️'
+  WHEN 'laugh' THEN '😂'
+  WHEN 'fire' THEN '🔥'
+  WHEN 'eyes' THEN '👀'
+  ELSE reaction_type
+END
+WHERE reaction_type IN ('thumbs-up', 'heart', 'laugh', 'fire', 'eyes');
 
 CREATE INDEX IF NOT EXISTS thread_message_reactions_message_idx
   ON thread_message_reactions(message_id, reaction_type);

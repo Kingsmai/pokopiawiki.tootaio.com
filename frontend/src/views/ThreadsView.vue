@@ -7,15 +7,20 @@ import Modal from '../components/Modal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import Skeleton from '../components/Skeleton.vue';
 import StatusMessage from '../components/StatusMessage.vue';
+import TagsSelect, { type TagsSelectOption } from '../components/TagsSelect.vue';
 import {
   iconAdd,
   iconBell,
+  iconCancel,
   iconChevronUp,
   iconComment,
   iconDelete,
+  iconEdit,
+  iconSave,
+  iconSearch,
   iconSend,
   iconThreads,
-  type AppIcon
+  iconUndo
 } from '../icons';
 import {
   api,
@@ -50,6 +55,7 @@ const selectedChannelId = ref<number | null>(null);
 const selectedTagId = ref<number | null>(null);
 const selectedLanguage = ref('all');
 const sort = ref<ThreadSort>('last-active');
+const threadSearch = ref('');
 const nextCursor = ref<string | null>(null);
 const hasMoreThreads = ref(false);
 const beforeCursor = ref<string | null>(null);
@@ -61,19 +67,19 @@ const loadingOlder = ref(false);
 const busy = ref(false);
 const errorMessage = ref('');
 const createModalOpen = ref(false);
+const editModalOpen = ref(false);
 const composerBody = ref('');
 const threadForm = ref({ title: '', body: '', languageCode: '', tagIds: [] as number[] });
+const threadEditForm = ref({ title: '', tagIds: [] as number[] });
+const editingMessageId = ref<number | null>(null);
+const editingMessageBody = ref('');
+const messageActionBusyId = ref<number | null>(null);
+const moderationBusyId = ref<number | null>(null);
 const socket = ref<WebSocket | null>(null);
 const chatScroller = ref<HTMLElement | null>(null);
 const showJump = ref(false);
 
-const reactionOptions: Array<{ type: ThreadReactionType; label: string; icon: AppIcon }> = [
-  { type: 'thumbs-up', label: '👍', icon: 'mdi:thumb-up-outline' },
-  { type: 'heart', label: '❤️', icon: 'mdi:heart-outline' },
-  { type: 'laugh', label: '😂', icon: 'mdi:emoticon-lol-outline' },
-  { type: 'fire', label: '🔥', icon: 'mdi:fire' },
-  { type: 'eyes', label: '👀', icon: 'mdi:eye-outline' }
-];
+const reactionOptions: ThreadReactionType[] = ['👍', '❤️', '😂', '🔥', '👀'];
 
 const selectedChannel = computed(() => channels.value.find((channel) => channel.id === selectedChannelId.value) ?? null);
 const activeThreadId = computed(() => {
@@ -88,13 +94,54 @@ const canReact = computed(() => currentUser.value?.permissions.includes('threads
 const canLockThreads = computed(() => currentUser.value?.permissions.includes('admin.threads.threads.lock') === true);
 const canDeleteThreads = computed(() => currentUser.value?.permissions.includes('admin.threads.threads.delete') === true);
 const canDeleteMessages = computed(() => currentUser.value?.permissions.includes('admin.threads.messages.delete') === true);
+const activeThreadChannel = computed(() => channels.value.find((channel) => channel.id === activeThread.value?.channelId) ?? selectedChannel.value);
+const editTagOptions = computed(() => activeThreadChannel.value?.tags ?? []);
+const canEditActiveThread = computed(() => {
+  const thread = activeThread.value;
+  if (!thread || !currentUser.value) return false;
+  return thread.author?.id === currentUser.value.id || canLockThreads.value || canDeleteThreads.value;
+});
 const languageOptions = computed(() => {
   const channelLanguages = selectedChannel.value?.languages ?? channels.value.flatMap((channel) => channel.languages);
   const byCode = new Map(channelLanguages.map((language) => [language.code, language]));
   return [...byCode.values()];
 });
 const tagOptions = computed(() => selectedChannel.value?.tags ?? []);
-const currentThreadList = computed(() => threads.value);
+const languageFilterOptions = computed<TagsSelectOption[]>(() => [
+  { id: 'all', name: t('pages.threads.allLanguages') },
+  ...languageOptions.value.map((language) => ({ id: language.code, name: language.name }))
+]);
+const sortOptions = computed<TagsSelectOption[]>(() => [
+  { id: 'last-active', name: t('pages.threads.sortLastActive') },
+  { id: 'latest', name: t('pages.threads.sortLatest') },
+  { id: 'most-discussed', name: t('pages.threads.sortMostDiscussed') }
+]);
+const hasThreadSearch = computed(() => threadSearch.value.trim() !== '');
+const sortModel = computed({
+  get: () => sort.value,
+  set: (value: string) => {
+    if (value === 'last-active' || value === 'latest' || value === 'most-discussed') {
+      sort.value = value;
+    }
+  }
+});
+const currentThreadList = computed(() => {
+  const keyword = threadSearch.value.trim().toLowerCase();
+  if (!keyword) return threads.value;
+
+  return threads.value.filter((thread) => {
+    const searchable = [
+      thread.title,
+      thread.author?.displayName ?? '',
+      thread.languageCode,
+      ...thread.tags.map((tag) => tag.name)
+    ]
+      .join(' ')
+      .toLowerCase();
+    return searchable.includes(keyword);
+  });
+});
+const detailModalOpen = computed(() => activeThread.value !== null);
 
 const messageGroups = computed<MessageGroup[]>(() => {
   const groups: MessageGroup[] = [];
@@ -135,6 +182,27 @@ function reactionCount(threadOrMessage: ThreadSummary | ThreadMessage, type: Thr
 
 function reactionActive(threadOrMessage: ThreadSummary | ThreadMessage, type: ThreadReactionType) {
   return threadOrMessage.myReactions.includes(type);
+}
+
+function reactionTypesFor(threadOrMessage: ThreadSummary | ThreadMessage) {
+  return [...new Set([...reactionOptions, ...Object.keys(threadOrMessage.reactionCounts), ...threadOrMessage.myReactions])];
+}
+
+function canEditMessage(message: ThreadMessage) {
+  if (!currentUser.value) return false;
+  return message.author?.id === currentUser.value.id || canDeleteMessages.value;
+}
+
+function canRetryMessageModeration(message: ThreadMessage) {
+  return message.moderationStatus !== 'approved' && message.moderationStatus !== 'reviewing' && canEditMessage(message);
+}
+
+function messageModerationLabel(message: ThreadMessage) {
+  if (message.moderationStatus === 'unreviewed') return t('pages.threads.messageUnreviewed');
+  if (message.moderationStatus === 'reviewing') return t('pages.threads.messageReviewing');
+  if (message.moderationStatus === 'failed') return t('pages.threads.messageFailedReview');
+  if (message.moderationStatus === 'rejected') return t('pages.threads.messageRejected');
+  return '';
 }
 
 function updateThreadInList(thread: ThreadSummary) {
@@ -279,10 +347,14 @@ function selectChannel(channelId: number | null) {
   void loadThreads(true);
 }
 
+function submitThreadSearch() {
+  threadSearch.value = threadSearch.value.trim();
+}
+
 function openCreateThread() {
   const channel = selectedChannel.value ?? channels.value[0];
   threadForm.value = {
-    title: '',
+    title: threadSearch.value.trim(),
     body: '',
     languageCode: channel?.languages[0]?.code ?? 'en',
     tagIds: []
@@ -294,6 +366,34 @@ function closeCreateThread() {
   createModalOpen.value = false;
 }
 
+function openEditThread() {
+  const thread = activeThread.value;
+  if (!thread) return;
+  threadEditForm.value = {
+    title: thread.title,
+    tagIds: thread.tags.map((tag) => tag.id)
+  };
+  editModalOpen.value = true;
+}
+
+function closeEditThread() {
+  editModalOpen.value = false;
+}
+
+function startEditMessage(message: ThreadMessage) {
+  editingMessageId.value = message.id;
+  editingMessageBody.value = message.body;
+}
+
+function cancelEditMessage() {
+  editingMessageId.value = null;
+  editingMessageBody.value = '';
+}
+
+async function closeThreadDetail() {
+  await router.push('/threads');
+}
+
 function toggleThreadTag(tag: ThreadChannelTag) {
   const tags = new Set(threadForm.value.tagIds);
   if (tags.has(tag.id)) {
@@ -302,6 +402,16 @@ function toggleThreadTag(tag: ThreadChannelTag) {
     tags.add(tag.id);
   }
   threadForm.value.tagIds = [...tags];
+}
+
+function toggleEditThreadTag(tag: ThreadChannelTag) {
+  const tags = new Set(threadEditForm.value.tagIds);
+  if (tags.has(tag.id)) {
+    tags.delete(tag.id);
+  } else {
+    tags.add(tag.id);
+  }
+  threadEditForm.value.tagIds = [...tags];
 }
 
 async function submitThread() {
@@ -327,9 +437,28 @@ async function submitThread() {
   }
 }
 
+async function submitThreadEdit() {
+  const thread = activeThread.value;
+  if (!thread) return;
+  busy.value = true;
+  errorMessage.value = '';
+  try {
+    const updated = await api.updateThread(thread.id, {
+      title: threadEditForm.value.title,
+      tagIds: threadEditForm.value.tagIds
+    });
+    updateThreadInList(updated);
+    closeEditThread();
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : t('pages.threads.editFailed');
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function submitMessage() {
   const id = activeThreadId.value;
-  if (!id || !composerBody.value.trim()) return;
+  if (!id || !composerBody.value.trim() || busy.value || !canCreateMessage.value || activeThread.value?.locked) return;
   busy.value = true;
   errorMessage.value = '';
   try {
@@ -342,6 +471,27 @@ async function submitMessage() {
   } finally {
     busy.value = false;
   }
+}
+
+async function submitMessageEdit(message: ThreadMessage) {
+  if (!editingMessageBody.value.trim() || messageActionBusyId.value !== null || !canEditMessage(message)) return;
+  messageActionBusyId.value = message.id;
+  errorMessage.value = '';
+  try {
+    const updated = await api.updateThreadMessage(message.id, { body: editingMessageBody.value });
+    updateMessageInList(updated);
+    cancelEditMessage();
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : t('pages.threads.messageEditFailed');
+  } finally {
+    messageActionBusyId.value = null;
+  }
+}
+
+function handleMessageKeydown(event: KeyboardEvent) {
+  if (event.isComposing || event.key !== 'Enter' || event.ctrlKey) return;
+  event.preventDefault();
+  void submitMessage();
 }
 
 async function toggleFollow() {
@@ -423,6 +573,29 @@ async function toggleMessageReaction(message: ThreadMessage, type: ThreadReactio
   }
 }
 
+async function retryMessageModeration(message: ThreadMessage) {
+  if (!canRetryMessageModeration(message) || moderationBusyId.value !== null) return;
+  moderationBusyId.value = message.id;
+  errorMessage.value = '';
+  try {
+    const updated = await api.retryThreadMessageModeration(message.id);
+    updateMessageInList(updated);
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : t('pages.threads.moderationRetryFailed');
+  } finally {
+    moderationBusyId.value = null;
+  }
+}
+
+function applyMessageModerationUpdate(message: Extract<ThreadWsMessage, { type: 'thread.message.moderation' }>) {
+  if (activeThreadId.value !== message.threadId) return;
+  if (message.message) {
+    updateMessageInList(message.message);
+    return;
+  }
+  messages.value = messages.value.filter((item) => item.id !== message.messageId);
+}
+
 function handleThreadWsMessage(message: ThreadWsMessage) {
   if (message.type === 'thread.message.created') {
     updateThreadInList(message.thread);
@@ -452,6 +625,8 @@ function handleThreadWsMessage(message: ThreadWsMessage) {
     if (thread) {
       updateThreadInList({ ...thread, unread: message.unread });
     }
+  } else if (message.type === 'thread.message.moderation') {
+    applyMessageModerationUpdate(message);
   }
 }
 
@@ -505,10 +680,6 @@ onBeforeUnmount(() => {
   <section class="page-stack threads-page">
     <PageHeader :title="t('pages.threads.title')" :subtitle="t('pages.threads.subtitle')">
       <template #kicker>{{ t('pages.threads.kicker') }}</template>
-      <button v-if="canCreateThread" type="button" class="ui-button ui-button--primary" @click="openCreateThread">
-        <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
-        {{ t('pages.threads.newThread') }}
-      </button>
     </PageHeader>
 
     <StatusMessage v-if="errorMessage" variant="warning">{{ errorMessage }}</StatusMessage>
@@ -540,21 +711,39 @@ onBeforeUnmount(() => {
       </aside>
 
       <section class="threads-list-panel">
+        <form class="thread-search-create" role="search" @submit.prevent="submitThreadSearch">
+          <label class="sr-only" for="thread-search">{{ t('pages.threads.searchOrCreate') }}</label>
+          <div class="thread-search-control">
+            <Icon :icon="iconSearch" class="ui-icon" aria-hidden="true" />
+            <input id="thread-search" v-model="threadSearch" type="search" :placeholder="t('pages.threads.searchOrCreate')" />
+          </div>
+          <button v-if="canCreateThread" type="button" class="ui-button ui-button--primary" @click="openCreateThread">
+            <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+            {{ t('pages.threads.createPost') }}
+          </button>
+        </form>
         <div class="thread-filters">
           <label>
             <span>{{ t('pages.threads.language') }}</span>
-            <select v-model="selectedLanguage">
-              <option value="all">{{ t('pages.threads.allLanguages') }}</option>
-              <option v-for="language in languageOptions" :key="language.code" :value="language.code">{{ language.name }}</option>
-            </select>
+            <TagsSelect
+              id="thread-language-filter"
+              v-model="selectedLanguage"
+              :options="languageFilterOptions"
+              :multiple="false"
+              :placeholder="t('pages.threads.allLanguages')"
+              :search-placeholder="t('pages.threads.language')"
+            />
           </label>
           <label>
             <span>{{ t('pages.threads.sort') }}</span>
-            <select v-model="sort">
-              <option value="last-active">{{ t('pages.threads.sortLastActive') }}</option>
-              <option value="latest">{{ t('pages.threads.sortLatest') }}</option>
-              <option value="most-discussed">{{ t('pages.threads.sortMostDiscussed') }}</option>
-            </select>
+            <TagsSelect
+              id="thread-sort-filter"
+              v-model="sortModel"
+              :options="sortOptions"
+              :multiple="false"
+              :placeholder="t('pages.threads.sort')"
+              :search-placeholder="t('pages.threads.sort')"
+            />
           </label>
         </div>
         <div v-if="tagOptions.length" class="thread-tag-filter" :aria-label="t('pages.threads.tags')">
@@ -604,46 +793,52 @@ onBeforeUnmount(() => {
             {{ t('pages.threads.loadMoreThreads') }}
           </button>
         </div>
-        <p v-else class="threads-empty">{{ t('pages.threads.noThreads') }}</p>
+        <p v-else class="threads-empty">{{ hasThreadSearch ? t('pages.threads.noSearchResults') : t('pages.threads.noThreads') }}</p>
       </section>
+    </div>
 
-      <section class="thread-chat-panel">
-        <template v-if="activeThread">
-          <header class="thread-chat-header">
-            <div>
-              <h2>{{ activeThread.title }}</h2>
-              <p>
-                {{ activeThread.author?.displayName ?? t('pages.life.byUnknown') }} · {{ formatDateTime(activeThread.createdAt) }}
-              </p>
-            </div>
-            <div class="thread-chat-actions">
-              <button v-if="canFollow" type="button" class="ui-button ui-button--small" :disabled="busy" @click="toggleFollow">
-                <Icon :icon="iconBell" class="ui-icon" aria-hidden="true" />
-                {{ activeThread.followed ? t('pages.threads.unfollow') : t('pages.threads.follow') }}
-              </button>
-              <button v-if="canLockThreads" type="button" class="ui-button ui-button--small" :disabled="busy" @click="toggleThreadLock">
-                {{ activeThread.locked ? t('pages.threads.unlock') : t('pages.threads.lock') }}
-              </button>
-              <button v-if="canDeleteThreads" type="button" class="ui-button ui-button--red ui-button--small" :disabled="busy" @click="removeActiveThread">
-                <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
-                {{ t('common.delete') }}
-              </button>
-              <span v-if="activeThread.locked" class="config-flag">{{ t('pages.threads.locked') }}</span>
-            </div>
-          </header>
+    <Modal
+      v-if="detailModalOpen && activeThread"
+      :title="activeThread.title"
+      :subtitle="`${activeThread.author?.displayName ?? t('pages.life.byUnknown')} · ${formatDateTime(activeThread.createdAt)}`"
+      :close-label="t('common.close')"
+      size="wide"
+      @close="closeThreadDetail"
+    >
+      <section class="thread-chat-panel thread-chat-panel--modal">
+        <header class="thread-chat-header">
+          <div class="thread-chat-actions">
+            <button v-if="canEditActiveThread" type="button" class="ui-button ui-button--small" :disabled="busy" @click="openEditThread">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('pages.threads.editPost') }}
+            </button>
+            <button v-if="canFollow" type="button" class="ui-button ui-button--small" :disabled="busy" @click="toggleFollow">
+              <Icon :icon="iconBell" class="ui-icon" aria-hidden="true" />
+              {{ activeThread.followed ? t('pages.threads.unfollow') : t('pages.threads.follow') }}
+            </button>
+            <button v-if="canLockThreads" type="button" class="ui-button ui-button--small" :disabled="busy" @click="toggleThreadLock">
+              {{ activeThread.locked ? t('pages.threads.unlock') : t('pages.threads.lock') }}
+            </button>
+            <button v-if="canDeleteThreads" type="button" class="ui-button ui-button--red ui-button--small" :disabled="busy" @click="removeActiveThread">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
+            <span v-if="activeThread.locked" class="config-flag">{{ t('pages.threads.locked') }}</span>
+          </div>
+        </header>
 
           <div class="thread-reactions">
             <button
-              v-for="option in reactionOptions"
-              :key="option.type"
+              v-for="reactionType in reactionTypesFor(activeThread)"
+              :key="reactionType"
               type="button"
               class="thread-reaction"
-              :class="{ active: reactionActive(activeThread, option.type) }"
+              :class="{ active: reactionActive(activeThread, reactionType) }"
               :disabled="!canReact"
-              @click="toggleThreadReaction(activeThread, option.type)"
+              @click="toggleThreadReaction(activeThread, reactionType)"
             >
-              <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
-              <span>{{ reactionCount(activeThread, option.type) }}</span>
+              <span class="thread-reaction__emoji">{{ reactionType }}</span>
+              <span>{{ reactionCount(activeThread, reactionType) }}</span>
             </button>
           </div>
 
@@ -673,23 +868,70 @@ onBeforeUnmount(() => {
                     <time :datetime="group.createdAt">{{ formatDateTime(group.createdAt) }}</time>
                   </div>
                   <div v-for="message in group.messages" :key="message.id" class="thread-message">
-                    <p>{{ message.body }}</p>
-                    <span v-if="message.moderationStatus === 'reviewing'" class="config-flag">{{ t('pages.threads.messageReviewing') }}</span>
-                    <span v-else-if="message.moderationStatus === 'rejected' || message.moderationStatus === 'failed'" class="config-flag">
-                      {{ t('pages.threads.messageRejected') }}
-                    </span>
+                    <form v-if="editingMessageId === message.id" class="thread-message-edit" @submit.prevent="submitMessageEdit(message)">
+                      <label class="sr-only" :for="`thread-message-edit-${message.id}`">{{ t('pages.threads.message') }}</label>
+                      <textarea
+                        :id="`thread-message-edit-${message.id}`"
+                        v-model="editingMessageBody"
+                        rows="3"
+                        required
+                        maxlength="2000"
+                        :disabled="messageActionBusyId === message.id"
+                      ></textarea>
+                      <div class="thread-message-actions">
+                        <button
+                          type="submit"
+                          class="ui-button ui-button--primary ui-button--small"
+                          :disabled="messageActionBusyId === message.id || !editingMessageBody.trim()"
+                        >
+                          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+                          {{ messageActionBusyId === message.id ? t('common.saving') : t('common.save') }}
+                        </button>
+                        <button
+                          type="button"
+                          class="ui-button ui-button--small"
+                          :disabled="messageActionBusyId === message.id"
+                          @click="cancelEditMessage"
+                        >
+                          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+                          {{ t('common.cancel') }}
+                        </button>
+                      </div>
+                    </form>
+                    <p v-else>{{ message.body }}</p>
+                    <span v-if="message.moderationStatus !== 'approved'" class="config-flag">{{ messageModerationLabel(message) }}</span>
                     <div class="thread-reactions thread-reactions--message">
                       <button
-                        v-for="option in reactionOptions"
-                        :key="option.type"
+                        v-for="reactionType in reactionTypesFor(message)"
+                        :key="reactionType"
                         type="button"
                         class="thread-reaction"
-                        :class="{ active: reactionActive(message, option.type) }"
+                        :class="{ active: reactionActive(message, reactionType) }"
                         :disabled="!canReact || message.moderationStatus !== 'approved'"
-                        @click="toggleMessageReaction(message, option.type)"
+                        @click="toggleMessageReaction(message, reactionType)"
                       >
-                        <Icon :icon="option.icon" class="ui-icon" aria-hidden="true" />
-                        <span>{{ reactionCount(message, option.type) }}</span>
+                        <span class="thread-reaction__emoji">{{ reactionType }}</span>
+                        <span>{{ reactionCount(message, reactionType) }}</span>
+                      </button>
+                      <button
+                        v-if="canEditMessage(message) && editingMessageId !== message.id"
+                        type="button"
+                        class="thread-reaction thread-reaction--action"
+                        :disabled="messageActionBusyId === message.id"
+                        @click="startEditMessage(message)"
+                      >
+                        <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+                        <span>{{ t('pages.threads.editMessage') }}</span>
+                      </button>
+                      <button
+                        v-if="canRetryMessageModeration(message)"
+                        type="button"
+                        class="thread-reaction thread-reaction--action"
+                        :disabled="moderationBusyId === message.id"
+                        @click="retryMessageModeration(message)"
+                      >
+                        <Icon :icon="iconUndo" class="ui-icon" aria-hidden="true" />
+                        <span>{{ moderationBusyId === message.id ? t('pages.threads.moderationRetrying') : t('pages.threads.moderationRetry') }}</span>
                       </button>
                       <button
                         v-if="canDeleteMessages"
@@ -713,26 +955,54 @@ onBeforeUnmount(() => {
             {{ t('pages.threads.jumpToPresent') }}
           </button>
 
-          <form class="thread-composer" @submit.prevent="submitMessage">
-            <label class="sr-only" for="thread-message-body">{{ t('pages.threads.message') }}</label>
-            <textarea
-              id="thread-message-body"
-              v-model="composerBody"
-              rows="2"
-              :disabled="busy || !canCreateMessage || activeThread.locked"
-              :placeholder="t('pages.threads.message')"
-            ></textarea>
-            <button class="ui-button ui-button--primary" type="submit" :disabled="busy || !composerBody.trim() || !canCreateMessage || activeThread.locked">
-              <Icon :icon="iconSend" class="ui-icon" aria-hidden="true" />
-              {{ busy ? t('pages.threads.sending') : t('pages.threads.send') }}
-            </button>
-          </form>
-        </template>
-        <p v-else class="threads-empty threads-empty--select">{{ t('pages.threads.selectThread') }}</p>
+        <form class="thread-composer" @submit.prevent="submitMessage">
+          <label class="sr-only" for="thread-message-body">{{ t('pages.threads.message') }}</label>
+          <textarea
+            id="thread-message-body"
+            v-model="composerBody"
+            rows="2"
+            :disabled="busy || !canCreateMessage || activeThread.locked"
+            :placeholder="t('pages.threads.message')"
+            @keydown="handleMessageKeydown"
+          ></textarea>
+          <button class="ui-button ui-button--primary" type="submit" :disabled="busy || !composerBody.trim() || !canCreateMessage || activeThread.locked">
+            <Icon :icon="iconSend" class="ui-icon" aria-hidden="true" />
+            {{ busy ? t('pages.threads.sending') : t('pages.threads.send') }}
+          </button>
+        </form>
       </section>
-    </div>
+    </Modal>
 
-    <Modal v-if="createModalOpen" :title="t('pages.threads.newThread')" :close-label="t('common.close')" @close="closeCreateThread">
+    <Modal v-if="editModalOpen" :title="t('pages.threads.editPost')" :close-label="t('common.close')" @close="closeEditThread">
+      <form class="modal-edit-form" @submit.prevent="submitThreadEdit">
+        <div class="field">
+          <label for="thread-edit-title">{{ t('pages.threads.threadTitle') }}</label>
+          <input id="thread-edit-title" v-model="threadEditForm.title" required maxlength="140" :disabled="busy" />
+        </div>
+        <div v-if="editTagOptions.length" class="field">
+          <span class="field-label">{{ t('pages.threads.tags') }}</span>
+          <div class="thread-tag-filter">
+            <button
+              v-for="tag in editTagOptions"
+              :key="tag.id"
+              type="button"
+              class="thread-chip"
+              :class="{ active: threadEditForm.tagIds.includes(tag.id) }"
+              :disabled="busy"
+              @click="toggleEditThreadTag(tag)"
+            >
+              {{ tag.name }}
+            </button>
+          </div>
+        </div>
+        <button class="ui-button ui-button--primary" type="submit" :disabled="busy || !threadEditForm.title.trim()">
+          <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+      </form>
+    </Modal>
+
+    <Modal v-if="createModalOpen" :title="t('pages.threads.createPost')" :close-label="t('common.close')" @close="closeCreateThread">
       <form class="modal-edit-form" @submit.prevent="submitThread">
         <div class="field">
           <label for="thread-title">{{ t('pages.threads.threadTitle') }}</label>

@@ -772,12 +772,47 @@ async function updateTargetStatus(
       if (status === 'approved') {
         await applyApprovedThreadMessage(target.id);
       } else {
-        const row = await queryOne<{ threadId: number }>(
-          'SELECT thread_id AS "threadId" FROM thread_messages WHERE id = $1',
+        const row = await queryOne<{
+          threadId: number;
+          body: string;
+          moderationStatus: AiModerationStatus;
+          moderationLanguageCode: string | null;
+          moderationReason: string | null;
+          createdAt: Date;
+          updatedAt: Date;
+          author: { id: number; displayName: string } | null;
+        }>(
+          `
+            SELECT
+              tm.thread_id AS "threadId",
+              tm.body,
+              tm.ai_moderation_status AS "moderationStatus",
+              tm.ai_moderation_language_code AS "moderationLanguageCode",
+              tm.ai_moderation_reason AS "moderationReason",
+              tm.created_at AS "createdAt",
+              tm.updated_at AS "updatedAt",
+              CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'displayName', u.display_name) END AS author
+            FROM thread_messages tm
+            LEFT JOIN users u ON u.id = tm.created_by_user_id
+            WHERE tm.id = $1
+              AND tm.deleted_at IS NULL
+          `,
           [target.id]
         );
         if (row) {
-          await publishThreadMessageModeration(row.threadId, null);
+          await publishThreadMessageModeration(row.threadId, target.id, {
+            id: target.id,
+            threadId: row.threadId,
+            body: row.body,
+            moderationStatus: row.moderationStatus,
+            moderationLanguageCode: row.moderationLanguageCode,
+            moderationReason: row.moderationReason,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+            author: row.author,
+            reactionCounts: {},
+            myReactions: []
+          });
         }
       }
       return;

@@ -131,6 +131,7 @@ import {
   retryEntityDiscussionCommentModeration,
   retryLifeCommentModeration,
   retryLifePostModeration,
+  retryThreadMessageModeration,
   restoreLifeComment,
   setLifePostRating,
   setLifePostReaction,
@@ -150,7 +151,9 @@ import {
   updatePokemon,
   updateRecipe,
   updateAdminThreadChannel,
+  updateThread,
   updateThreadLock,
+  updateThreadMessage,
   unfollowUser,
   unfollowThread,
   wipeAdminData
@@ -1734,6 +1737,17 @@ app.post('/api/threads', async (request, reply) => {
   return user ? reply.code(201).send(await createThread(request.body as Record<string, unknown>, user.id)) : undefined;
 });
 
+app.put('/api/threads/:id', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user || !(await enforceUserRateLimits(request, reply, user, 'communityWrite'))) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const canUpdateAny = userHasPermission(user, 'admin.threads.threads.lock') || userHasPermission(user, 'admin.threads.threads.delete');
+  const thread = await updateThread(Number(id), request.body as Record<string, unknown>, user.id, canUpdateAny);
+  return thread ? thread : notFound(reply, request);
+});
+
 app.get('/api/threads/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
   const user = await optionalUser(request);
@@ -1762,6 +1776,38 @@ app.post('/api/threads/:id/messages', async (request, reply) => {
   const { id } = request.params as { id: string };
   const message = await createThreadMessage(Number(id), request.body as Record<string, unknown>, user.id);
   return message ? reply.code(201).send(message) : notFound(reply, request);
+});
+
+app.put('/api/thread-messages/:id', async (request, reply) => {
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['threads.messages.create', 'admin.threads.messages.delete'],
+    'communityWrite'
+  );
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const canUpdateAny = userHasPermission(user, 'admin.threads.messages.delete');
+  const message = await updateThreadMessage(Number(id), request.body as Record<string, unknown>, user.id, canUpdateAny);
+  return message ? message : notFound(reply, request);
+});
+
+app.post('/api/thread-messages/:id/moderation/retry', async (request, reply) => {
+  const user = await requireAnyPermissionWithRateLimits(
+    request,
+    reply,
+    ['threads.messages.create', 'admin.threads.messages.delete'],
+    'communityWrite'
+  );
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const canRetryAny = userHasPermission(user, 'admin.threads.messages.delete');
+  const message = await retryThreadMessageModeration(Number(id), user.id, canRetryAny);
+  return message ? message : notFound(reply, request);
 });
 
 app.put('/api/threads/:id/follow', async (request, reply) => {

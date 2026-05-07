@@ -33,8 +33,8 @@ type ListPage<T> = {
   nextCursor: string | null;
   hasMore: boolean;
 };
-export type ThreadReactionType = 'thumbs-up' | 'heart' | 'laugh' | 'fire' | 'eyes';
-export type ThreadReactionCounts = Record<ThreadReactionType, number>;
+export type ThreadReactionType = string;
+export type ThreadReactionCounts = Record<string, number>;
 export type ThreadChannelTag = { id: number; name: string; sortOrder: number };
 export type ThreadChannel = {
   id: number;
@@ -1151,6 +1151,12 @@ function configSelect(definition: ConfigDefinition, locale: string): string {
 function validationError(message: string): ValidationError {
   const error = new Error(message) as ValidationError;
   error.statusCode = 400;
+  return error;
+}
+
+function forbiddenError(): ValidationError {
+  const error = new Error('server.errors.permissionDenied') as ValidationError;
+  error.statusCode = 403;
   return error;
 }
 
@@ -8891,28 +8897,31 @@ export async function importAdminHabitatsCsv(payload: Record<string, unknown>, u
   return getAdminDataToolsSummary();
 }
 
-const threadReactionTypes: ThreadReactionType[] = ['thumbs-up', 'heart', 'laugh', 'fire', 'eyes'];
 const defaultThreadLimit = 20;
 const maxThreadLimit = 50;
 const defaultThreadMessageLimit = 30;
 const maxThreadMessageLimit = 80;
+const threadEmojiReactionPattern = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator})/u;
 
 type ThreadCursor = { value: string; id: number };
 type ThreadMessageCursor = { createdAt: string; id: number };
 
 function emptyThreadReactionCounts(): ThreadReactionCounts {
-  return { 'thumbs-up': 0, heart: 0, laugh: 0, fire: 0, eyes: 0 };
-}
-
-function isThreadReactionType(value: unknown): value is ThreadReactionType {
-  return typeof value === 'string' && threadReactionTypes.includes(value as ThreadReactionType);
+  return {};
 }
 
 function cleanThreadReactionType(value: unknown): ThreadReactionType {
-  if (!isThreadReactionType(value)) {
+  const reactionType = typeof value === 'string' ? value.trim() : '';
+  if (
+    !reactionType ||
+    reactionType.length > 24 ||
+    /\s/.test(reactionType) ||
+    /[\p{Letter}\p{Number}]/u.test(reactionType) ||
+    !threadEmojiReactionPattern.test(reactionType)
+  ) {
     throw validationError('server.validation.reactionInvalid');
   }
-  return value;
+  return reactionType;
 }
 
 function cleanThreadLimit(value: QueryValue, fallback = defaultThreadLimit, max = maxThreadLimit): number {
@@ -9113,7 +9122,7 @@ async function threadReactionCounts(threadIds: number[], userId: number | null):
   );
   for (const row of countRows) {
     const item = counts.get(row.threadId);
-    if (item && isThreadReactionType(row.reactionType)) {
+    if (item) {
       item[row.reactionType] = row.count;
     }
   }
@@ -9129,7 +9138,6 @@ async function threadReactionCounts(threadIds: number[], userId: number | null):
       [userId, threadIds]
     );
     for (const row of myRows) {
-      if (!isThreadReactionType(row.reactionType)) continue;
       mine.set(row.threadId, [...(mine.get(row.threadId) ?? []), row.reactionType]);
     }
   }
@@ -9157,7 +9165,7 @@ async function threadMessageReactionCounts(messageIds: number[], userId: number 
   );
   for (const row of countRows) {
     const item = counts.get(row.messageId);
-    if (item && isThreadReactionType(row.reactionType)) {
+    if (item) {
       item[row.reactionType] = row.count;
     }
   }
@@ -9173,7 +9181,6 @@ async function threadMessageReactionCounts(messageIds: number[], userId: number 
       [userId, messageIds]
     );
     for (const row of myRows) {
-      if (!isThreadReactionType(row.reactionType)) continue;
       mine.set(row.messageId, [...(mine.get(row.messageId) ?? []), row.reactionType]);
     }
   }
@@ -9464,6 +9471,68 @@ export async function createThread(payload: Record<string, unknown>, userId: num
   return (await getThread(ids.threadId, userId)) as ThreadSummary;
 }
 
+export async function updateThread(
+  threadIdValue: number,
+  payload: Record<string, unknown>,
+  userId: number,
+  canUpdateAny = false
+): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const title = cleanThreadTitle(payload.title);
+  const tagIds = cleanThreadTagIds(payload.tagIds);
+  const thread = await queryOne<{ id: number; channelId: number; createdByUserId: number }>(
+    `
+      SELECT id, channel_id AS "channelId", created_by_user_id AS "createdByUserId"
+      FROM threads
+      WHERE id = $1
+        AND deleted_at IS NULL
+    `,
+    [threadId]
+  );
+  if (!thread) return null;
+  if (!canUpdateAny && thread.createdByUserId !== userId) {
+    throw forbiddenError();
+  }
+  await validateThreadTags(thread.channelId, tagIds);
+
+  await withTransaction(async (client) => {
+    await client.query('UPDATE threads SET title = $1, updated_by_user_id = $2, updated_at = now() WHERE id = $3', [title, userId, threadId]);
+    await client.query('DELETE FROM thread_tag_links WHERE thread_id = $1', [threadId]);
+    for (const tagId of tagIds) {
+      await client.query('INSERT INTO thread_tag_links (thread_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [threadId, tagId]);
+    }
+  });
+
+  return getThread(threadId, userId);
+}
+
+async function refreshThreadMessageAggregates(threadId: number): Promise<void> {
+  await pool.query(
+    `
+      UPDATE threads t
+      SET message_count = (
+            SELECT COUNT(*)::integer
+            FROM thread_messages tm
+            WHERE tm.thread_id = t.id
+              AND tm.deleted_at IS NULL
+              AND tm.ai_moderation_status = 'approved'
+          ),
+          last_message_id = (
+            SELECT tm.id
+            FROM thread_messages tm
+            WHERE tm.thread_id = t.id
+              AND tm.deleted_at IS NULL
+              AND tm.ai_moderation_status = 'approved'
+            ORDER BY tm.created_at DESC, tm.id DESC
+            LIMIT 1
+          ),
+          updated_at = now()
+      WHERE t.id = $1
+    `,
+    [threadId]
+  );
+}
+
 export async function createThreadMessage(threadIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadMessage | null> {
   const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
   const body = cleanThreadMessageBody(payload.body);
@@ -9486,6 +9555,87 @@ export async function createThreadMessage(threadIdValue: number, payload: Record
   if (!result) return null;
   await requestAiModerationReview({ type: 'thread-message', id: result.id }, { languageCode: thread.languageCode, resetRetries: true });
   return getThreadMessageById(result.id, userId, false);
+}
+
+export async function updateThreadMessage(
+  messageIdValue: number,
+  payload: Record<string, unknown>,
+  userId: number,
+  canUpdateAny = false
+): Promise<ThreadMessage | null> {
+  const messageId = requirePositiveInteger(messageIdValue, 'server.validation.recordInvalid');
+  const body = cleanThreadMessageBody(payload.body);
+  const message = await queryOne<{ id: number; threadId: number; languageCode: string; createdByUserId: number }>(
+    `
+      SELECT
+        tm.id,
+        tm.thread_id AS "threadId",
+        t.language_code AS "languageCode",
+        tm.created_by_user_id AS "createdByUserId"
+      FROM thread_messages tm
+      JOIN threads t ON t.id = tm.thread_id
+      WHERE tm.id = $1
+        AND tm.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+    `,
+    [messageId]
+  );
+  if (!message) return null;
+  if (!canUpdateAny && message.createdByUserId !== userId) {
+    throw forbiddenError();
+  }
+
+  const result = await queryOne<{ id: number }>(
+    `
+      UPDATE thread_messages
+      SET body = $1,
+          ai_moderation_status = 'reviewing',
+          ai_moderation_language_code = NULL,
+          ai_moderation_reason = NULL,
+          ai_moderation_content_hash = NULL,
+          ai_moderation_checked_at = NULL,
+          ai_moderation_retry_count = 0,
+          ai_moderation_updated_at = now(),
+          updated_at = now()
+      WHERE id = $2
+        AND deleted_at IS NULL
+      RETURNING id
+    `,
+    [body, messageId]
+  );
+  if (!result) return null;
+
+  await refreshThreadMessageAggregates(message.threadId);
+  await publishThreadMessageModeration(message.threadId, messageId, null);
+  await requestAiModerationReview({ type: 'thread-message', id: messageId }, { languageCode: message.languageCode, resetRetries: true });
+  return getThreadMessageById(messageId, userId, canUpdateAny);
+}
+
+export async function retryThreadMessageModeration(
+  messageIdValue: number,
+  userId: number,
+  canRetryAny = false
+): Promise<ThreadMessage | null> {
+  const messageId = requirePositiveInteger(messageIdValue, 'server.validation.recordInvalid');
+  const message = await queryOne<{ id: number; createdByUserId: number }>(
+    `
+      SELECT tm.id, tm.created_by_user_id AS "createdByUserId"
+      FROM thread_messages tm
+      JOIN threads t ON t.id = tm.thread_id
+      WHERE tm.id = $1
+        AND tm.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND tm.ai_moderation_status IN ('unreviewed', 'rejected', 'failed')
+    `,
+    [messageId]
+  );
+  if (!message) return null;
+  if (!canRetryAny && message.createdByUserId !== userId) {
+    throw forbiddenError();
+  }
+
+  await requestAiModerationReview({ type: 'thread-message', id: messageId }, { incrementRetries: true });
+  return getThreadMessageById(messageId, userId, canRetryAny);
 }
 
 export async function markThreadRead(threadIdValue: number, userId: number): Promise<ThreadSummary | null> {
@@ -9560,7 +9710,18 @@ export async function deleteThreadReaction(threadIdValue: number, payload: Recor
   const thread = await getThread(threadId, userId);
   if (!thread) return null;
   await pool.query('DELETE FROM thread_reactions WHERE thread_id = $1 AND user_id = $2 AND reaction_type = $3', [threadId, userId, reactionType]);
-  return getThread(threadId, userId);
+  const updated = await getThread(threadId, userId);
+  if (updated) {
+    await publishThreadReactionUpdated(userId, {
+      type: 'thread.reactions.updated',
+      target: 'thread',
+      threadId,
+      messageId: null,
+      reactionCounts: updated.reactionCounts,
+      myReactions: updated.myReactions
+    });
+  }
+  return updated;
 }
 
 export async function setThreadMessageReaction(messageIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadMessage | null> {
@@ -9597,7 +9758,18 @@ export async function deleteThreadMessageReaction(messageIdValue: number, payloa
   const message = await getThreadMessageById(messageId, userId);
   if (!message) return null;
   await pool.query('DELETE FROM thread_message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3', [messageId, userId, reactionType]);
-  return getThreadMessageById(messageId, userId);
+  const updated = await getThreadMessageById(messageId, userId);
+  if (updated) {
+    await publishThreadReactionUpdated(userId, {
+      type: 'thread.reactions.updated',
+      target: 'message',
+      threadId: updated.threadId,
+      messageId,
+      reactionCounts: updated.reactionCounts,
+      myReactions: updated.myReactions
+    });
+  }
+  return updated;
 }
 
 export async function applyApprovedThreadMessage(messageId: number): Promise<void> {
@@ -9629,7 +9801,7 @@ export async function applyApprovedThreadMessage(messageId: number): Promise<voi
   if (message && thread) {
     await publishThreadMessageCreated(thread, message);
   } else {
-    await publishThreadMessageModeration(row.threadId, message);
+    await publishThreadMessageModeration(row.threadId, messageId, message);
   }
 }
 

@@ -984,27 +984,33 @@ Message 可配置：
 
 - 所属 Thread
 - 正文
-- 创建者、创建时间
+- 创建者、创建时间、更新时间
 - Reaction 汇总
 - AI 审核状态和语言区
 
 前台行为：
 
 - 所有人都可以浏览已公开的 Channel、Thread 和审核通过的 Message。
-- `/threads` 展示 Threads 工作区，左侧为 Channel 列表，中间为 Thread List；桌面端 Thread 详情使用聊天布局，移动端通过详情页堆叠显示。
-- `/threads/:threadId` 打开 Thread 详情；默认进入最新消息位置。
+- `/threads` 展示 Threads 工作区，左侧为 Channel 列表，中间为 Thread List。
+- `/threads/:threadId` 通过 route-backed Modal 打开 Thread 详情；默认进入最新消息位置。
 - 用户可在 Channel 内创建 Thread；需要已注册、邮箱已验证并拥有 `threads.create` 权限，且 Channel 允许用户创建 Thread。
+- 创建 Thread 时可从 Thread List 顶部搜索框预填 Title，Title 可在创建表单中继续修改。
+- Thread 作者本人或拥有现有 Thread 管理权限的管理员可编辑 Thread 标题和 Tags；Tags 只能选择该 Channel 可用标签。
 - 已注册、邮箱已验证并拥有 `threads.messages.create` 权限的用户可以在未锁定 Thread 中发送 Message。
+- Thread Message 输入框中 Enter 发送，Ctrl + Enter 输入换行。
+- Message 作者本人或拥有 `admin.threads.messages.delete` 权限的管理用户可编辑 Message 正文；编辑后 Message 重新进入 AI 审核，审核通过前不向普通访客公开。
+- `unreviewed`、`rejected` 和 `failed` 状态的 Message 可由作者本人或拥有 `admin.threads.messages.delete` 权限的管理用户触发重新审核；`reviewing` 和 `approved` 状态不可重新审核。
 - Message 列表按创建时间正序展示，新消息出现在底部。
 - 初始读取最新一页 Message；向上滚动或点击 To Top 加载更早历史消息。
 - 有新消息且用户不在底部时显示 Jump to Present；点击后滚动到最新消息。
 - 连续 Message 在展示层自动合并：同一用户连续发送，且相邻消息时间间隔不超过 5 分钟；合并组只显示一次 Avatar、Username 和组首条 Timestamp。合并窗口默认 5 分钟，后续可由系统配置扩展。
 - Thread 支持 Follow / Unfollow；Follow 后新审核通过 Message 会让 Threads Sidebar 和 Thread List 显示未读红点或未读提示。
 - Thread 详情支持未读消息分隔线；用户进入最新位置或显式标记已读后更新 `thread_reads`。
-- Thread 和 Message 支持 Emoji Reaction，内置类型为 `thumbs-up`、`heart`、`laugh`、`fire`、`eyes`；API 只返回各类型数量和当前用户自己的 Reaction，不内嵌用户列表。
+- Thread 和 Message 支持 Emoji Reaction，当前提供默认快捷 Emoji：`👍`、`❤️`、`😂`、`🔥`、`👀`；API 只返回各类型数量和当前用户自己的 Reaction，不内嵌用户列表。
 - Thread List 支持排序：`last-active` 默认按最后活跃倒序；`latest` 按创建时间倒序；`most-discussed` 按公开消息数倒序。
 - Thread List 支持语言筛选：All languages 或指定启用语言 / Channel 可用语言。
 - Thread List 支持按 Channel 标签筛选。
+- Thread List 提供前端快速搜索，可在当前已加载列表内按 Thread 标题、作者展示名、语言和标签过滤；当前不提供后端全文搜索。
 - Thread 新消息实时更新通过 Thread WebSocket；WebSocket 使用短期一次性 ticket，不把 session token 放入 WebSocket URL。
 - Thread Message 是用户生成内容，必须经过 AI 审核；未审核通过的 Message 不向普通访客公开。作者本人和拥有 `admin.threads.messages.delete` 权限的管理用户可以看到自己的未通过/审核中 Message 状态。
 - 审核通过的 Message 才计入普通公开消息数、最后活跃排序和未读状态。
@@ -1024,7 +1030,7 @@ API 暴露边界：
 
 - Channel API 只返回展示和管理需要的 `id`、`name`、`allowUserThreads`、`tags`、`languages`、`sortOrder` 和未读摘要；不返回内部审计或调试字段。
 - Thread API 只返回 `id`、`channelId`、`title`、标签、语言、作者必要署名、创建时间、最后活跃时间、锁定状态、消息数、Reaction 汇总、当前用户 Reaction、Follow 状态和未读状态。
-- Message API 只返回 `id`、`threadId`、`body`、作者必要署名、创建时间、审核状态、语言区、必要审核原因、Reaction 汇总和当前用户 Reaction。
+- Message API 只返回 `id`、`threadId`、`body`、作者必要署名、创建时间、更新时间、审核状态、语言区、必要审核原因、Reaction 汇总和当前用户 Reaction。
 - API 不返回邮箱、角色、权限、session、token/hash、AI prompt、模型响应、内部审核错误、错误堆栈、删除时间、删除人或内部调试字段。
 - Thread 内容正文按作者输入展示，不进入 `entity_translations`；Thread 的语言用于筛选和内容区分，不改变系统 UI 语言。
 - Channel 名称和标签当前作为管理数据直接存储，不进入 `entity_translations`。
@@ -1038,11 +1044,11 @@ API 暴露边界：
 - RBAC 已包含 Thread 用户权限：`threads.create`、`threads.messages.create`、`threads.follow`、`threads.reactions.set`。
 - RBAC 已包含 Thread 管理权限：`admin.threads.channels.*`、`admin.threads.threads.delete`、`admin.threads.threads.lock`、`admin.threads.messages.delete`。
 - 公开 API 已支持读取 Channel、分页读取 Thread、读取单个 Thread、读取 Thread Message 历史。
-- 写入 API 已支持创建 Thread、发送 Message、Follow / Unfollow、标记已读、设置 / 取消 Thread Reaction、设置 / 取消 Message Reaction。
+- 写入 API 已支持创建 Thread、发送与编辑 Message、Message 重新审核、Follow / Unfollow、标记已读、设置 / 取消 Thread Reaction、设置 / 取消 Message Reaction。
 - 管理 API 已支持创建、编辑、删除 Channel，锁定 / 解锁 Thread，删除 Thread，删除 Message。
 - Thread Message 已接入 AI 审核队列；审核通过后才更新 Thread 的公开 `message_count`、`last_message_id` 和 `last_active_at`。
 - Thread WebSocket 已实现短期 ticket 连接，并可推送新审核通过 Message、Reaction 更新和当前用户 read 状态更新。
-- 前端已新增 `/threads` 和 `/threads/:threadId`，包含 Channel Sidebar、Thread List、Thread 详情聊天布局、创建 Thread、发送 Message、Follow / Unfollow、Reaction、管理员锁定 / 解锁 Thread、管理员删除 Thread 和管理员删除 Message。
+- 前端已新增 `/threads` 和 `/threads/:threadId`，包含 Channel Sidebar、Thread List、Thread 详情 Modal、创建 Thread、编辑 Thread 标题和 Tags、发送与编辑 Message、Message 重新审核、Follow / Unfollow、Reaction、管理员锁定 / 解锁 Thread、管理员删除 Thread 和管理员删除 Message。
 - 前端 Message 展示已支持同一用户 5 分钟内连续消息的合并显示。
 - 前端 Message 历史已支持点击 Load older 向上加载更早消息。
 - 前端已支持 Jump to Present：用户不在底部且收到新消息时可跳到最新。
@@ -1062,7 +1068,7 @@ API 暴露边界：
 - Thread 删除、Message 删除和锁定 / 解锁当前直接执行，尚未使用确认 Modal。
 - Thread List 的实时排序更新是基础 upsert 行为；复杂筛选条件下收到不匹配当前筛选的新 Thread / Message 时，仍可能需要后续刷新来得到完全一致的列表。
 - 移动端已使用响应式堆叠布局，但还不是独立的移动端双页导航体验；后续可优化为 Channel / Thread List / Chat 分步视图。
-- 当前没有 Thread 搜索、置顶、收藏、编辑 Thread 标题 / 标签 / 语言、编辑 Message、上传图片、@mention 或通知到全局 NotificationBell。
+- 当前没有 Thread 后端全文搜索、置顶、收藏、编辑 Thread 语言、编辑 Message、上传图片、@mention 或通知到全局 NotificationBell。
 
 ## 开发中入口
 
@@ -1292,6 +1298,8 @@ API 暴露边界：
   - `DELETE /api/discussions/comments/:id/like`
 - Thread 创建需要 `threads.create`。
   - `POST /api/threads`
+- Thread 编辑需要作者本人或现有 Thread 管理权限。
+  - `PUT /api/threads/:id`
 - Thread Message 创建需要 `threads.messages.create`。
   - `POST /api/threads/:id/messages`
 - Thread Follow 需要 `threads.follow`。

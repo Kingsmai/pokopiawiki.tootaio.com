@@ -575,8 +575,8 @@ export interface LifeReactionUsersParams {
   reactionType?: LifeReactionType;
 }
 
-export type ThreadReactionType = 'thumbs-up' | 'heart' | 'laugh' | 'fire' | 'eyes';
-export type ThreadReactionCounts = Record<ThreadReactionType, number>;
+export type ThreadReactionType = string;
+export type ThreadReactionCounts = Record<string, number>;
 export type ThreadSort = 'last-active' | 'latest' | 'most-discussed';
 
 export interface ThreadChannelTag {
@@ -660,6 +660,11 @@ export interface ThreadPayload {
   tagIds: number[];
 }
 
+export interface ThreadUpdatePayload {
+  title: string;
+  tagIds: number[];
+}
+
 export interface ThreadMessagePayload {
   body: string;
 }
@@ -672,7 +677,7 @@ export interface ThreadWsTicket {
 export type ThreadWsMessage =
   | { type: 'threads.connected'; followedUnreadCount: number }
   | { type: 'thread.message.created'; threadId: number; message: ThreadMessage; thread: ThreadSummary }
-  | { type: 'thread.message.moderation'; threadId: number; message: ThreadMessage | null }
+  | { type: 'thread.message.moderation'; threadId: number; messageId: number; message: ThreadMessage | null }
   | {
       type: 'thread.reactions.updated';
       target: 'thread' | 'message';
@@ -1490,6 +1495,7 @@ export const api = {
     ),
   thread: (id: string | number) => getJson<ThreadSummary>(`/api/threads/${id}`),
   createThread: (payload: ThreadPayload) => sendJson<ThreadSummary>('/api/threads', 'POST', payload),
+  updateThread: (id: string | number, payload: ThreadUpdatePayload) => sendJson<ThreadSummary>(`/api/threads/${id}`, 'PUT', payload),
   threadMessages: (id: string | number, params: ThreadMessagesParams = {}) =>
     getJson<ThreadMessagesPage>(
       `/api/threads/${id}/messages${buildQuery({
@@ -1499,6 +1505,10 @@ export const api = {
     ),
   createThreadMessage: (id: string | number, payload: ThreadMessagePayload) =>
     sendJson<ThreadMessage>(`/api/threads/${id}/messages`, 'POST', payload),
+  updateThreadMessage: (id: string | number, payload: ThreadMessagePayload) =>
+    sendJson<ThreadMessage>(`/api/thread-messages/${id}`, 'PUT', payload),
+  retryThreadMessageModeration: (id: string | number) =>
+    sendJson<ThreadMessage>(`/api/thread-messages/${id}/moderation/retry`, 'POST', {}),
   followThread: (id: string | number) => sendJson<ThreadSummary>(`/api/threads/${id}/follow`, 'PUT', {}),
   unfollowThread: (id: string | number) => deleteAndGetJson<ThreadSummary>(`/api/threads/${id}/follow`),
   markThreadRead: (id: string | number) => sendJson<ThreadSummary>(`/api/threads/${id}/read`, 'POST', {}),

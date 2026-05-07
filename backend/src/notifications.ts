@@ -945,7 +945,6 @@ export function setupNotificationWebSocketServer(server: Server, logger: Fastify
   server.on('upgrade', async (request, socket) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (url.pathname !== '/api/notifications/ws') {
-      socket.destroy();
       return;
     }
 

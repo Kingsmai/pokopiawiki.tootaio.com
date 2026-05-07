@@ -6,6 +6,7 @@
 - 所有人都可以浏览 Wiki 内容。
 - 已注册并完成邮箱验证且拥有对应权限的用户可以创建、编辑、删除 Wiki 内容。
 - 前台以 Home 首页、Pokedex（Main Game / Event）、Habitat Dex（Main Game / Event）、Collections（Main Game / Event / Ancient Artifacts）、材料单、每日 CheckList、Life、Automation、Dish、Events、Actions、Dream Island、Clothes 为主要浏览入口。
+- Threads 是社区讨论入口，采用 Discord Forum + 聊天室混合形态；用户按 Channel 浏览 Thread，并在 Thread 内使用聊天室式消息流讨论。
 - Home 首页路径为 `/`，用于聚合公开 Wiki 入口；Logo 导航回到 Home，用户可从 Home 进入核心资料、每日 CheckList、Life 和正在准备中的分区。
 - 桌面端使用侧边栏导航，侧边栏可折叠为图标栏；移动端继续使用抽屉式侧边栏。
 - 全局顶部导航栏承载语言切换、通知、User Profile 和登录 / 退出等账号操作；除 User Profile 可展示用户名外，顶部操作以图标按钮呈现。
@@ -302,6 +303,7 @@
 - 通知 API 不返回邮箱、角色、权限、session、token/hash、AI prompt、模型响应、内部审核错误、错误堆栈、调试字段或内部审计 payload。
 - 前端在主导航登录区展示通知入口、未读数量和通知列表；点击通知后标记已读并跳转到对应 Life Post 或 Wiki 详情页。
 - Follow 对象发布 Life Post 的动态属于 Following Feed，不进入 Notifications，不产生未读数量，也不需要标记已读。
+- Thread Follow 的未读状态在 Threads 自身侧边栏和 Thread 列表展示，不进入全局 Notifications，不影响 NotificationBell 未读数量。
 
 ## 滥用防护与限流
 
@@ -328,8 +330,8 @@
 - Wiki 内容写入（Pokemon、物品、材料单、栖息地、每日 CheckList 和排序）默认按用户 ID 限制为 120 次 / 1 小时，并有 2 秒冷却时间。
 - 上传默认按用户 ID 限制为 20 次 / 1 小时，并有 30 秒冷却时间。
 - Community 写入：
-  - Life Post、Life 评论、Wiki 讨论评论和对应删除 / 更新操作默认按用户 ID 限制为 60 次 / 1 小时，并有 5 秒冷却时间。
-  - Life reaction 写入默认按用户 ID 限制为 120 次 / 1 小时，并有 1 秒冷却时间。
+  - Life Post、Life 评论、Wiki 讨论评论、Thread / Thread Message 和对应删除 / 更新操作默认按用户 ID 限制为 60 次 / 1 小时，并有 5 秒冷却时间。
+  - Life reaction 和 Thread reaction / follow 写入默认按用户 ID 限制为 120 次 / 1 小时，并有 1 秒冷却时间。
 - Pokemon Fetch 数据和图片候选查询默认按用户 ID 限制为 60 次 / 10 分钟，并有 1 秒冷却时间。
 
 ## Community 编辑与审计
@@ -954,6 +956,114 @@ API 暴露边界：
 - API 不返回 Life Post 的 `deleted_at`、`deleted_by_user_id` 等内部软删除字段。
 - 非作者只有拥有对应 `*-any` 管理权限时才能编辑或删除其他用户的 Life Post 或 Life Comment。
 
+## Threads
+
+Threads 是社区长期讨论区，形态类似 Discord Forum + 聊天室混合系统。
+
+Channel 可配置：
+
+- 名称
+- 是否允许用户创建 Thread
+- 可用标签：每个 Channel 内唯一，按 `sort_order` 展示
+- 可用语言：使用 `languages.code`，可配置允许的语言集合；未配置时前台回退到启用语言
+- `sort_order`
+
+Thread 可配置：
+
+- 标题
+- 所属 Channel
+- 标签：多选，只能选择该 Channel 可用标签
+- 语言：只能选择该 Channel 可用语言或启用语言中的一项
+- 创建者、创建时间、最后活跃时间
+- 消息数
+- Follow 状态
+- Reaction 汇总
+- 锁定状态
+
+Message 可配置：
+
+- 所属 Thread
+- 正文
+- 创建者、创建时间
+- Reaction 汇总
+- AI 审核状态和语言区
+
+前台行为：
+
+- 所有人都可以浏览已公开的 Channel、Thread 和审核通过的 Message。
+- `/threads` 展示 Threads 工作区，左侧为 Channel 列表，中间为 Thread List；桌面端 Thread 详情使用聊天布局，移动端通过详情页堆叠显示。
+- `/threads/:threadId` 打开 Thread 详情；默认进入最新消息位置。
+- 用户可在 Channel 内创建 Thread；需要已注册、邮箱已验证并拥有 `threads.create` 权限，且 Channel 允许用户创建 Thread。
+- 已注册、邮箱已验证并拥有 `threads.messages.create` 权限的用户可以在未锁定 Thread 中发送 Message。
+- Message 列表按创建时间正序展示，新消息出现在底部。
+- 初始读取最新一页 Message；向上滚动或点击 To Top 加载更早历史消息。
+- 有新消息且用户不在底部时显示 Jump to Present；点击后滚动到最新消息。
+- 连续 Message 在展示层自动合并：同一用户连续发送，且相邻消息时间间隔不超过 5 分钟；合并组只显示一次 Avatar、Username 和组首条 Timestamp。合并窗口默认 5 分钟，后续可由系统配置扩展。
+- Thread 支持 Follow / Unfollow；Follow 后新审核通过 Message 会让 Threads Sidebar 和 Thread List 显示未读红点或未读提示。
+- Thread 详情支持未读消息分隔线；用户进入最新位置或显式标记已读后更新 `thread_reads`。
+- Thread 和 Message 支持 Emoji Reaction，内置类型为 `thumbs-up`、`heart`、`laugh`、`fire`、`eyes`；API 只返回各类型数量和当前用户自己的 Reaction，不内嵌用户列表。
+- Thread List 支持排序：`last-active` 默认按最后活跃倒序；`latest` 按创建时间倒序；`most-discussed` 按公开消息数倒序。
+- Thread List 支持语言筛选：All languages 或指定启用语言 / Channel 可用语言。
+- Thread List 支持按 Channel 标签筛选。
+- Thread 新消息实时更新通过 Thread WebSocket；WebSocket 使用短期一次性 ticket，不把 session token 放入 WebSocket URL。
+- Thread Message 是用户生成内容，必须经过 AI 审核；未审核通过的 Message 不向普通访客公开。作者本人和拥有 `admin.threads.messages.delete` 权限的管理用户可以看到自己的未通过/审核中 Message 状态。
+- 审核通过的 Message 才计入普通公开消息数、最后活跃排序和未读状态。
+- Thread 被锁定后不可新增 Message，但仍可浏览和设置 Reaction / Follow。
+- 删除 Thread 使用软删除；删除后不出现在列表，详情返回未找到。
+- 删除 Message 使用软删除；普通列表不展示已删除 Message，不暴露删除字段。
+
+管理员行为：
+
+- 拥有 `admin.threads.channels.read` 可查看 Channel 管理。
+- 拥有 `admin.threads.channels.create` / `update` / `delete` 可创建、编辑、删除 Channel，配置标签、语言和是否允许用户创建 Thread。
+- 拥有 `admin.threads.threads.delete` 可删除任意 Thread。
+- 拥有 `admin.threads.threads.lock` 可锁定 / 解锁任意 Thread。
+- 拥有 `admin.threads.messages.delete` 可删除任意 Message。
+
+API 暴露边界：
+
+- Channel API 只返回展示和管理需要的 `id`、`name`、`allowUserThreads`、`tags`、`languages`、`sortOrder` 和未读摘要；不返回内部审计或调试字段。
+- Thread API 只返回 `id`、`channelId`、`title`、标签、语言、作者必要署名、创建时间、最后活跃时间、锁定状态、消息数、Reaction 汇总、当前用户 Reaction、Follow 状态和未读状态。
+- Message API 只返回 `id`、`threadId`、`body`、作者必要署名、创建时间、审核状态、语言区、必要审核原因、Reaction 汇总和当前用户 Reaction。
+- API 不返回邮箱、角色、权限、session、token/hash、AI prompt、模型响应、内部审核错误、错误堆栈、删除时间、删除人或内部调试字段。
+- Thread 内容正文按作者输入展示，不进入 `entity_translations`；Thread 的语言用于筛选和内容区分，不改变系统 UI 语言。
+- Channel 名称和标签当前作为管理数据直接存储，不进入 `entity_translations`。
+
+当前实现状态：
+
+已实现：
+
+- 数据库已包含 `thread_channels`、`thread_channel_tags`、`thread_channel_languages`、`threads`、`thread_tag_links`、`thread_messages`、`thread_reactions`、`thread_message_reactions`、`thread_follows`、`thread_reads` 和 `thread_ws_tickets`。
+- 初始化会创建默认 Channel：General、Questions、Showcase。
+- RBAC 已包含 Thread 用户权限：`threads.create`、`threads.messages.create`、`threads.follow`、`threads.reactions.set`。
+- RBAC 已包含 Thread 管理权限：`admin.threads.channels.*`、`admin.threads.threads.delete`、`admin.threads.threads.lock`、`admin.threads.messages.delete`。
+- 公开 API 已支持读取 Channel、分页读取 Thread、读取单个 Thread、读取 Thread Message 历史。
+- 写入 API 已支持创建 Thread、发送 Message、Follow / Unfollow、标记已读、设置 / 取消 Thread Reaction、设置 / 取消 Message Reaction。
+- 管理 API 已支持创建、编辑、删除 Channel，锁定 / 解锁 Thread，删除 Thread，删除 Message。
+- Thread Message 已接入 AI 审核队列；审核通过后才更新 Thread 的公开 `message_count`、`last_message_id` 和 `last_active_at`。
+- Thread WebSocket 已实现短期 ticket 连接，并可推送新审核通过 Message、Reaction 更新和当前用户 read 状态更新。
+- 前端已新增 `/threads` 和 `/threads/:threadId`，包含 Channel Sidebar、Thread List、Thread 详情聊天布局、创建 Thread、发送 Message、Follow / Unfollow、Reaction、管理员锁定 / 解锁 Thread、管理员删除 Thread 和管理员删除 Message。
+- 前端 Message 展示已支持同一用户 5 分钟内连续消息的合并显示。
+- 前端 Message 历史已支持点击 Load older 向上加载更早消息。
+- 前端已支持 Jump to Present：用户不在底部且收到新消息时可跳到最新。
+- 前端 Thread List 已支持 Channel、标签、语言和排序筛选。
+- 前端管理端已新增 Thread Channels 管理入口，可配置 Channel 名称、是否允许用户创建 Thread、标签和语言。
+
+未实现 / 待完善：
+
+- Thread 详情中的未读消息分隔线尚未完整实现；当前已记录 read 状态并显示列表未读红点，但没有在消息流中定位并渲染 unread divider。
+- WebSocket 没有自动重连、退避重试或跨标签页连接复用；连接断开后需页面重新加载或后续操作重新进入。
+- Reaction 用户列表 Modal 尚未实现；当前只显示 Reaction 类型和数量，以及当前用户自己的 Reaction 状态。
+- Thread / Message Reaction 取消 API 当前通过 JSON body 传入 `reactionType`，前端可用；若后续需要更标准的 REST 形态，可改为 `DELETE /reaction/:reactionType`。
+- Channel 排序 UI 尚未实现；数据库已有 `sort_order`，但管理端目前不能拖拽或调整 Channel / Tag / Language 顺序。
+- Channel 名称和标签尚未进入 `entity_translations`；当前按管理数据原文展示。
+- Thread 创建后的首条 Message 如果审核失败，Thread 会存在但普通访客看不到公开 Message，前端尚未提供 Message 审核重试入口。
+- Thread Message 审核失败 / 拒绝后的重试 API 和 UI 尚未实现。
+- Thread 删除、Message 删除和锁定 / 解锁当前直接执行，尚未使用确认 Modal。
+- Thread List 的实时排序更新是基础 upsert 行为；复杂筛选条件下收到不匹配当前筛选的新 Thread / Message 时，仍可能需要后续刷新来得到完全一致的列表。
+- 移动端已使用响应式堆叠布局，但还不是独立的移动端双页导航体验；后续可优化为 Channel / Thread List / Chat 分步视图。
+- 当前没有 Thread 搜索、置顶、收藏、编辑 Thread 标题 / 标签 / 语言、编辑 Message、上传图片、@mention 或通知到全局 NotificationBell。
+
 ## 开发中入口
 
 以下前台公开入口当前仅展示“正在开发中”占位页，不提供数据模型、后端 API、编辑表单、管理入口或排序能力：
@@ -1102,6 +1212,12 @@ API 暴露边界：
 - `GET /api/life-posts/:id`：读取单条 Life Post 详情，遵守软删除和审核可见性规则。
 - `GET /api/life-posts/:id/reactions`：分页读取该 Life Post 的公开 Reaction 用户列表；支持 `cursor` / `limit` 和 `reactionType` 筛选。
 - `GET /api/life-posts/:postId/comments`：支持 `cursor` / `limit` 分页读取 Life Post 评论；支持 `language` 按审核语言区筛选；支持 `sort` 为 `oldest`、`latest`、`most-liked` 或 `most-replied`。
+- `GET /api/thread-channels`：读取公开 Channel 列表，登录用户可同时得到 Follow Thread 的未读摘要。
+- `GET /api/threads`：支持 `cursor` / `limit` 分页读取 Thread；支持 `channelId`、`language`、`tagId` 和 `sort`（`last-active`、`latest`、`most-discussed`）。
+- `GET /api/threads/:id`：读取单个 Thread 详情。
+- `GET /api/threads/:id/messages`：读取 Thread 消息；默认返回最新一页，支持 `before` / `limit` 向上加载历史。
+- `POST /api/threads/ws-ticket`：创建短期一次性 Thread WebSocket ticket；需要登录。
+- `GET /api/threads/ws?ticket=...`：Thread WebSocket 连接；只接收短期一次性 ticket。
 - `GET /api/users/:id/profile`：读取公开用户 Profile 摘要、Wiki 贡献统计、公开社区统计和公开 Follow 统计；登录用户读取时返回自己与目标用户的关系状态。
 - `GET /api/users/:id/life-posts`：分页读取该用户发布过且未删除的 Life Post。
 - `GET /api/users/:id/reactions`：分页读取该用户设置过 Reaction 且目标未删除的 Life Post。
@@ -1174,6 +1290,27 @@ API 暴露边界：
 - 实体讨论评论的点赞和取消点赞需要 `discussions.comments.like` 权限。
   - `PUT /api/discussions/comments/:id/like`
   - `DELETE /api/discussions/comments/:id/like`
+- Thread 创建需要 `threads.create`。
+  - `POST /api/threads`
+- Thread Message 创建需要 `threads.messages.create`。
+  - `POST /api/threads/:id/messages`
+- Thread Follow 需要 `threads.follow`。
+  - `PUT /api/threads/:id/follow`
+  - `DELETE /api/threads/:id/follow`
+  - `POST /api/threads/:id/read`
+- Thread 和 Message Reaction 需要 `threads.reactions.set`。
+  - `PUT /api/threads/:id/reaction`
+  - `DELETE /api/threads/:id/reaction`
+  - `PUT /api/thread-messages/:id/reaction`
+  - `DELETE /api/thread-messages/:id/reaction`
+- Thread 管理需要 `admin.threads.*` 权限。
+  - `GET /api/admin/thread-channels`
+  - `POST /api/admin/thread-channels`
+  - `PUT /api/admin/thread-channels/:id`
+  - `DELETE /api/admin/thread-channels/:id`
+  - `PUT /api/admin/threads/:id/lock`
+  - `DELETE /api/admin/threads/:id`
+  - `DELETE /api/admin/thread-messages/:id`
 - Life Reaction 的设置、替换和取消。
   - `PUT /api/life-posts/:id/reaction`
   - `DELETE /api/life-posts/:id/reaction`

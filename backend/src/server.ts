@@ -50,8 +50,13 @@ import {
   createLifePost,
   createPokemon,
   createRecipe,
+  createAdminThreadChannel,
+  createThread,
+  createThreadMessage,
+  createThreadsWsTicketForUser,
   deleteConfig,
   deleteAncientArtifact,
+  deleteAdminThreadChannel,
   deleteDailyChecklistItem,
   deleteDish,
   deleteDishCategory,
@@ -67,10 +72,15 @@ import {
   deleteLifePostReaction,
   deletePokemon,
   deleteRecipe,
+  deleteThread,
+  deleteThreadMessage,
+  deleteThreadMessageReaction,
+  deleteThreadReaction,
   exportAdminData,
   fetchPokemonData,
   fetchPokemonImageOptions,
   followUser,
+  followThread,
   getAdminDataToolsSummary,
   getAncientArtifact,
   getHabitat,
@@ -81,6 +91,7 @@ import {
   getPokemon,
   getPublicUserProfile,
   getRecipe,
+  getThread,
   globalSearch,
   importAdminData,
   importAdminHabitatsCsv,
@@ -88,6 +99,7 @@ import {
   isConfigType,
   listAncientArtifacts,
   listEntityDiscussionComments,
+  listAdminThreadChannels,
   listConfig,
   listDailyChecklistItems,
   listHabitats,
@@ -100,6 +112,9 @@ import {
   listPokemon,
   listPokemonFetchOptions,
   listRecipes,
+  listThreadChannels,
+  listThreadMessages,
+  listThreads,
   listUserCommentActivities,
   listUserLifePosts,
   listUserReactionActivities,
@@ -112,6 +127,7 @@ import {
   reorderItems,
   reorderLanguages,
   reorderRecipes,
+  markThreadRead,
   retryEntityDiscussionCommentModeration,
   retryLifeCommentModeration,
   retryLifePostModeration,
@@ -120,6 +136,8 @@ import {
   setLifePostReaction,
   setEntityDiscussionCommentLike,
   setLifeCommentLike,
+  setThreadMessageReaction,
+  setThreadReaction,
   updateConfig,
   updateAncientArtifact,
   updateDailyChecklistItem,
@@ -131,7 +149,10 @@ import {
   updateLifePost,
   updatePokemon,
   updateRecipe,
+  updateAdminThreadChannel,
+  updateThreadLock,
   unfollowUser,
+  unfollowThread,
   wipeAdminData
 } from './queries.ts';
 import {
@@ -160,6 +181,7 @@ import {
   markNotificationRead,
   setupNotificationWebSocketServer
 } from './notifications.ts';
+import { setupThreadWebSocketServer } from './threadsRealtime.ts';
 
 const app = Fastify({
   logger: true,
@@ -1689,6 +1711,129 @@ app.delete('/api/discussions/comments/:id/like', async (request, reply) => {
   return comment ? comment : notFound(reply, request);
 });
 
+app.get('/api/thread-channels', async (request) => {
+  const user = await optionalUser(request);
+  return listThreadChannels(user?.id ?? null);
+});
+
+app.get('/api/threads', async (request) => {
+  const user = await optionalUser(request);
+  return listThreads(request.query as Record<string, string | string[] | undefined>, user?.id ?? null);
+});
+
+app.post('/api/threads/ws-ticket', async (request, reply) => {
+  const user = await requireVerifiedUser(request, reply);
+  if (!user) {
+    return;
+  }
+  return createThreadsWsTicketForUser(user.id);
+});
+
+app.post('/api/threads', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.create', 'communityWrite');
+  return user ? reply.code(201).send(await createThread(request.body as Record<string, unknown>, user.id)) : undefined;
+});
+
+app.get('/api/threads/:id', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const user = await optionalUser(request);
+  const thread = await getThread(Number(id), user?.id ?? null);
+  return thread ? thread : notFound(reply, request);
+});
+
+app.get('/api/threads/:id/messages', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const user = await optionalUser(request);
+  const canViewAll = user ? userHasPermission(user, 'admin.threads.messages.delete') : false;
+  const messages = await listThreadMessages(
+    Number(id),
+    request.query as Record<string, string | string[] | undefined>,
+    user?.id ?? null,
+    canViewAll
+  );
+  return messages ? messages : notFound(reply, request);
+});
+
+app.post('/api/threads/:id/messages', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.messages.create', 'communityWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const message = await createThreadMessage(Number(id), request.body as Record<string, unknown>, user.id);
+  return message ? reply.code(201).send(message) : notFound(reply, request);
+});
+
+app.put('/api/threads/:id/follow', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.follow', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const thread = await followThread(Number(id), user.id);
+  return thread ? thread : notFound(reply, request);
+});
+
+app.delete('/api/threads/:id/follow', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.follow', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const thread = await unfollowThread(Number(id), user.id);
+  return thread ? thread : notFound(reply, request);
+});
+
+app.post('/api/threads/:id/read', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.follow', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const thread = await markThreadRead(Number(id), user.id);
+  return thread ? thread : notFound(reply, request);
+});
+
+app.put('/api/threads/:id/reaction', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.reactions.set', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const thread = await setThreadReaction(Number(id), request.body as Record<string, unknown>, user.id);
+  return thread ? thread : notFound(reply, request);
+});
+
+app.delete('/api/threads/:id/reaction', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.reactions.set', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const thread = await deleteThreadReaction(Number(id), request.body as Record<string, unknown>, user.id);
+  return thread ? thread : notFound(reply, request);
+});
+
+app.put('/api/thread-messages/:id/reaction', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.reactions.set', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const message = await setThreadMessageReaction(Number(id), request.body as Record<string, unknown>, user.id);
+  return message ? message : notFound(reply, request);
+});
+
+app.delete('/api/thread-messages/:id/reaction', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'threads.reactions.set', 'communityReaction');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const message = await deleteThreadMessageReaction(Number(id), request.body as Record<string, unknown>, user.id);
+  return message ? message : notFound(reply, request);
+});
+
 app.get('/api/pokemon', async (request) =>
   listPokemon(request.query as Record<string, string | string[] | undefined>, requestLocale(request))
 );
@@ -2215,6 +2360,69 @@ app.post('/api/admin/data-tools/wipe', async (request, reply) => {
   return user ? wipeAdminData(request.body as Record<string, unknown>) : undefined;
 });
 
+app.get('/api/admin/thread-channels', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.threads.channels.read');
+  return user ? listAdminThreadChannels() : undefined;
+});
+
+app.post('/api/admin/thread-channels', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.threads.channels.create', 'adminWrite');
+  return user
+    ? reply.code(201).send(await createAdminThreadChannel(request.body as Record<string, unknown>, user.id))
+    : undefined;
+});
+
+app.put('/api/admin/thread-channels/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.threads.channels.update', 'adminWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const channels = await updateAdminThreadChannel(Number(id), request.body as Record<string, unknown>, user.id);
+  return channels ? channels : notFound(reply, request);
+});
+
+app.delete('/api/admin/thread-channels/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.threads.channels.delete', 'adminWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteAdminThreadChannel(Number(id));
+  return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
+app.put('/api/admin/threads/:id/lock', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.threads.threads.lock', 'adminWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const payload = request.body as Record<string, unknown>;
+  const thread = await updateThreadLock(Number(id), payload.locked === true, user.id);
+  return thread ? thread : notFound(reply, request);
+});
+
+app.delete('/api/admin/threads/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.threads.threads.delete', 'adminWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteThread(Number(id), user.id);
+  return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
+app.delete('/api/admin/thread-messages/:id', async (request, reply) => {
+  const user = await requirePermissionWithRateLimits(request, reply, 'admin.threads.messages.delete', 'adminWrite');
+  if (!user) {
+    return;
+  }
+  const { id } = request.params as { id: string };
+  const deleted = await deleteThreadMessage(Number(id), user.id);
+  return deleted ? reply.code(204).send() : notFound(reply, request);
+});
+
 app.get('/api/admin/config/:type', async (request, reply) => {
   const user = await requirePermission(request, reply, 'admin.config.read');
   if (!user) {
@@ -2286,6 +2494,7 @@ try {
   await syncSystemWordingCatalog();
   await startAiModerationWorker(app.log);
   setupNotificationWebSocketServer(app.server, app.log);
+  setupThreadWebSocketServer(app.server, app.log);
   await app.listen({ host: '0.0.0.0', port });
 } catch (error) {
   app.log.error(error);

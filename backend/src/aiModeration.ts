@@ -5,9 +5,10 @@ import {
   createApprovedCommentNotification,
   createModerationResultNotification
 } from './notifications.ts';
+import { applyApprovedThreadMessage, publishThreadMessageModeration } from './threadsRealtime.ts';
 
 export type AiModerationStatus = 'unreviewed' | 'reviewing' | 'approved' | 'rejected' | 'failed';
-export type AiModerationTargetType = 'life-post' | 'life-comment' | 'discussion-comment';
+export type AiModerationTargetType = 'life-post' | 'life-comment' | 'discussion-comment' | 'thread-message';
 export type AiModerationApiFormat = 'gemini-generate-content' | 'openai-chat-completions';
 export type AiModerationAuthMode = 'query-key' | 'bearer-token';
 
@@ -239,6 +240,49 @@ const targetQueries: Record<
     `,
     updateForReview: `
       UPDATE entity_discussion_comments
+      SET ai_moderation_status = 'reviewing',
+          ai_moderation_language_code = $2,
+          ai_moderation_reason = NULL,
+          ai_moderation_content_hash = $3,
+          ai_moderation_checked_at = NULL,
+          ai_moderation_retry_count = CASE
+            WHEN $4::boolean THEN 0
+            WHEN $5::boolean THEN ai_moderation_retry_count + 1
+            ELSE ai_moderation_retry_count
+          END,
+          ai_moderation_updated_at = now()
+      WHERE id = $1
+        AND deleted_at IS NULL
+      RETURNING id
+    `
+  },
+  'thread-message': {
+    select: `
+      SELECT
+        tm.id,
+        tm.body,
+        tm.ai_moderation_status AS status,
+        tm.ai_moderation_language_code AS "languageCode",
+        tm.ai_moderation_reason AS reason,
+        tm.ai_moderation_content_hash AS "contentHash"
+      FROM thread_messages tm
+      JOIN threads t ON t.id = tm.thread_id
+      WHERE tm.id = $1
+        AND tm.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+    `,
+    updateStatus: `
+      UPDATE thread_messages
+      SET ai_moderation_status = $2,
+          ai_moderation_language_code = $3,
+          ai_moderation_reason = CASE WHEN $2 IN ('rejected', 'failed') THEN $4 ELSE NULL END,
+          ai_moderation_checked_at = now(),
+          ai_moderation_updated_at = now()
+      WHERE id = $1
+        AND deleted_at IS NULL
+    `,
+    updateForReview: `
+      UPDATE thread_messages
       SET ai_moderation_status = 'reviewing',
           ai_moderation_language_code = $2,
           ai_moderation_reason = NULL,
@@ -595,6 +639,15 @@ async function enqueuePendingAiModeration(): Promise<void> {
       WHERE deleted_at IS NULL
         AND ai_moderation_status IN ('unreviewed', 'reviewing')
 
+      UNION ALL
+
+      SELECT 'thread-message'::text AS type, tm.id
+      FROM thread_messages tm
+      JOIN threads t ON t.id = tm.thread_id
+      WHERE tm.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND tm.ai_moderation_status IN ('unreviewed', 'reviewing')
+
       LIMIT $1
     `,
     [retryScanLimit]
@@ -715,9 +768,28 @@ async function updateTargetStatus(
   }
 
   try {
-    await createModerationResultNotification(target, status);
+    if (target.type === 'thread-message') {
+      if (status === 'approved') {
+        await applyApprovedThreadMessage(target.id);
+      } else {
+        const row = await queryOne<{ threadId: number }>(
+          'SELECT thread_id AS "threadId" FROM thread_messages WHERE id = $1',
+          [target.id]
+        );
+        if (row) {
+          await publishThreadMessageModeration(row.threadId, null);
+        }
+      }
+      return;
+    }
+
+    const notificationTarget = {
+      type: target.type as Exclude<AiModerationTargetType, 'thread-message'>,
+      id: target.id
+    };
+    await createModerationResultNotification(notificationTarget, status);
     if (status === 'approved') {
-      await createApprovedCommentNotification(target);
+      await createApprovedCommentNotification(notificationTarget);
     }
   } catch (error) {
     logger?.warn(

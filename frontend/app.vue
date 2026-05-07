@@ -18,6 +18,7 @@ import {
   iconLife,
   iconPokemon,
   iconRecipe,
+  iconThreads,
   type AppIcon
 } from './src/icons';
 import { getCurrentLocale, loadSystemWordings, onLocaleChange, setCurrentLocale } from './src/i18n';
@@ -101,7 +102,8 @@ const navItems = computed<NavItem[]>(() => {
     { label: t('nav.dreamIsland'), to: '/dream-island', icon: iconDreamIsland, badge: inDevBadge() },
     { label: t('nav.clothes'), to: '/clothes', icon: iconClothes, badge: inDevBadge() },
     { label: t('nav.checklist'), to: '/checklist', icon: iconChecklist },
-    { label: t('nav.life'), to: '/life', icon: iconLife }
+    { label: t('nav.life'), to: '/life', icon: iconLife },
+    { label: t('nav.threads'), to: '/threads', icon: iconThreads }
   ];
 
   if (can('admin.access')) {

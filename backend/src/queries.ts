@@ -17,6 +17,13 @@ import {
   type AiModerationStatus
 } from './aiModeration.ts';
 import { createLifePostReactionNotification, createUserFollowNotification } from './notifications.ts';
+import {
+  createThreadWebSocketTicket,
+  publishThreadMessageCreated,
+  publishThreadMessageModeration,
+  publishThreadReactionUpdated,
+  publishThreadReadUpdated
+} from './threadsRealtime.ts';
 
 type QueryValue = string | string[] | undefined;
 
@@ -26,6 +33,53 @@ type ListPage<T> = {
   nextCursor: string | null;
   hasMore: boolean;
 };
+export type ThreadReactionType = 'thumbs-up' | 'heart' | 'laugh' | 'fire' | 'eyes';
+export type ThreadReactionCounts = Record<ThreadReactionType, number>;
+export type ThreadChannelTag = { id: number; name: string; sortOrder: number };
+export type ThreadChannel = {
+  id: number;
+  name: string;
+  allowUserThreads: boolean;
+  sortOrder: number;
+  tags: ThreadChannelTag[];
+  languages: Array<{ code: string; name: string }>;
+  unreadCount: number;
+};
+export type ThreadSummary = {
+  id: number;
+  channelId: number;
+  title: string;
+  languageCode: string;
+  tags: ThreadChannelTag[];
+  locked: boolean;
+  messageCount: number;
+  lastActiveAt: Date;
+  createdAt: Date;
+  author: { id: number; displayName: string } | null;
+  reactionCounts: ThreadReactionCounts;
+  myReactions: ThreadReactionType[];
+  followed: boolean;
+  unread: boolean;
+};
+export type ThreadMessage = {
+  id: number;
+  threadId: number;
+  body: string;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
+  moderationReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  author: { id: number; displayName: string } | null;
+  reactionCounts: ThreadReactionCounts;
+  myReactions: ThreadReactionType[];
+};
+export type ThreadMessagesPage = {
+  items: ThreadMessage[];
+  beforeCursor: string | null;
+  hasMoreBefore: boolean;
+};
+export type ThreadsPage = ListPage<ThreadSummary>;
 
 type DbClient = PoolClient;
 type DataToolScope = 'pokemon' | 'habitats' | 'items' | 'artifacts' | 'recipes' | 'checklist';
@@ -8835,6 +8889,873 @@ export async function importAdminHabitatsCsv(payload: Record<string, unknown>, u
   });
 
   return getAdminDataToolsSummary();
+}
+
+const threadReactionTypes: ThreadReactionType[] = ['thumbs-up', 'heart', 'laugh', 'fire', 'eyes'];
+const defaultThreadLimit = 20;
+const maxThreadLimit = 50;
+const defaultThreadMessageLimit = 30;
+const maxThreadMessageLimit = 80;
+
+type ThreadCursor = { value: string; id: number };
+type ThreadMessageCursor = { createdAt: string; id: number };
+
+function emptyThreadReactionCounts(): ThreadReactionCounts {
+  return { 'thumbs-up': 0, heart: 0, laugh: 0, fire: 0, eyes: 0 };
+}
+
+function isThreadReactionType(value: unknown): value is ThreadReactionType {
+  return typeof value === 'string' && threadReactionTypes.includes(value as ThreadReactionType);
+}
+
+function cleanThreadReactionType(value: unknown): ThreadReactionType {
+  if (!isThreadReactionType(value)) {
+    throw validationError('server.validation.reactionInvalid');
+  }
+  return value;
+}
+
+function cleanThreadLimit(value: QueryValue, fallback = defaultThreadLimit, max = maxThreadLimit): number {
+  const raw = Number(asString(value));
+  return Number.isInteger(raw) && raw > 0 ? Math.min(raw, max) : fallback;
+}
+
+function encodeCursor(value: unknown): string {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+}
+
+function decodeThreadCursor(value: QueryValue): ThreadCursor | null {
+  const cursor = asString(value);
+  if (!cursor) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
+    if (payload && typeof payload === 'object') {
+      const record = payload as Record<string, unknown>;
+      if (typeof record.value === 'string' && Number.isInteger(Number(record.id))) {
+        return { value: record.value, id: Number(record.id) };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function decodeThreadMessageCursor(value: QueryValue): ThreadMessageCursor | null {
+  const cursor = asString(value);
+  if (!cursor) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
+    if (payload && typeof payload === 'object') {
+      const record = payload as Record<string, unknown>;
+      if (typeof record.createdAt === 'string' && Number.isInteger(Number(record.id))) {
+        return { createdAt: record.createdAt, id: Number(record.id) };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function cleanThreadTitle(value: unknown): string {
+  const title = cleanName(value, 'server.validation.titleRequired');
+  if (title.length > 140) {
+    throw validationError('server.validation.valueTooLong');
+  }
+  return title;
+}
+
+function cleanThreadMessageBody(value: unknown): string {
+  const body = cleanName(value, 'server.validation.commentRequired');
+  if (body.length > 2000) {
+    throw validationError('server.validation.commentTooLong');
+  }
+  return body;
+}
+
+function cleanThreadLanguageCode(value: unknown): string {
+  const languageCode = cleanModerationLanguageCode(value);
+  if (!languageCode) {
+    throw validationError('server.validation.languageInvalid');
+  }
+  return languageCode;
+}
+
+function cleanThreadTagIds(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return cleanIds(value).slice(0, 8);
+}
+
+async function publicThreadChannels(userId: number | null): Promise<ThreadChannel[]> {
+  const rows = await query<{
+    id: number;
+    name: string;
+    allowUserThreads: boolean;
+    sortOrder: number;
+    tags: ThreadChannelTag[] | null;
+    languages: Array<{ code: string; name: string }> | null;
+    unreadCount: number;
+  }>(
+    `
+      SELECT
+        tc.id,
+        tc.name,
+        tc.allow_user_threads AS "allowUserThreads",
+        tc.sort_order AS "sortOrder",
+        COALESCE(tags.items, '[]'::json) AS tags,
+        COALESCE(channel_languages.items, fallback_languages.items, '[]'::json) AS languages,
+        CASE
+          WHEN $1::integer IS NULL THEN 0
+          ELSE COALESCE(unread.count, 0)
+        END AS "unreadCount"
+      FROM thread_channels tc
+      LEFT JOIN LATERAL (
+        SELECT json_agg(json_build_object('id', tct.id, 'name', tct.name, 'sortOrder', tct.sort_order) ORDER BY tct.sort_order, tct.id) AS items
+        FROM thread_channel_tags tct
+        WHERE tct.channel_id = tc.id
+      ) tags ON true
+      LEFT JOIN LATERAL (
+        SELECT json_agg(json_build_object('code', l.code, 'name', l.name) ORDER BY tcl.sort_order, l.sort_order, l.code) AS items
+        FROM thread_channel_languages tcl
+        JOIN languages l ON l.code = tcl.language_code
+        WHERE tcl.channel_id = tc.id
+          AND l.enabled = true
+      ) channel_languages ON true
+      LEFT JOIN LATERAL (
+        SELECT json_agg(json_build_object('code', l.code, 'name', l.name) ORDER BY l.sort_order, l.code) AS items
+        FROM languages l
+        WHERE l.enabled = true
+      ) fallback_languages ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::integer AS count
+        FROM thread_follows tf
+        JOIN threads t ON t.id = tf.thread_id
+        LEFT JOIN thread_reads tr ON tr.thread_id = t.id AND tr.user_id = tf.user_id
+        WHERE tf.user_id = $1::integer
+          AND t.channel_id = tc.id
+          AND t.deleted_at IS NULL
+          AND t.last_message_id IS NOT NULL
+          AND (tr.last_read_message_id IS NULL OR t.last_message_id > tr.last_read_message_id)
+      ) unread ON true
+      ORDER BY tc.sort_order, tc.id
+    `,
+    [userId]
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    allowUserThreads: row.allowUserThreads,
+    sortOrder: row.sortOrder,
+    tags: row.tags ?? [],
+    languages: row.languages ?? [],
+    unreadCount: row.unreadCount
+  }));
+}
+
+export async function listThreadChannels(userId: number | null): Promise<ThreadChannel[]> {
+  return publicThreadChannels(userId);
+}
+
+export async function listAdminThreadChannels(): Promise<ThreadChannel[]> {
+  return publicThreadChannels(null);
+}
+
+async function channelAllowsLanguage(channelId: number, languageCode: string): Promise<boolean> {
+  const row = await queryOne<{ allowed: boolean }>(
+    `
+      SELECT CASE
+        WHEN EXISTS (SELECT 1 FROM thread_channel_languages WHERE channel_id = $1) THEN EXISTS (
+          SELECT 1
+          FROM thread_channel_languages tcl
+          JOIN languages l ON l.code = tcl.language_code
+          WHERE tcl.channel_id = $1 AND tcl.language_code = $2 AND l.enabled = true
+        )
+        ELSE EXISTS (SELECT 1 FROM languages WHERE code = $2 AND enabled = true)
+      END AS allowed
+    `,
+    [channelId, languageCode]
+  );
+  return row?.allowed === true;
+}
+
+async function validateThreadTags(channelId: number, tagIds: number[]): Promise<void> {
+  if (!tagIds.length) return;
+  const rows = await query<{ id: number }>(
+    'SELECT id FROM thread_channel_tags WHERE channel_id = $1 AND id = ANY($2::integer[])',
+    [channelId, tagIds]
+  );
+  if (rows.length !== tagIds.length) {
+    throw validationError('server.validation.invalidField');
+  }
+}
+
+async function threadReactionCounts(threadIds: number[], userId: number | null): Promise<{
+  counts: Map<number, ThreadReactionCounts>;
+  mine: Map<number, ThreadReactionType[]>;
+}> {
+  const counts = new Map<number, ThreadReactionCounts>();
+  const mine = new Map<number, ThreadReactionType[]>();
+  for (const id of threadIds) counts.set(id, emptyThreadReactionCounts());
+  if (!threadIds.length) return { counts, mine };
+
+  const countRows = await query<{ threadId: number; reactionType: ThreadReactionType; count: number }>(
+    `
+      SELECT thread_id AS "threadId", reaction_type AS "reactionType", COUNT(*)::integer AS count
+      FROM thread_reactions
+      WHERE thread_id = ANY($1::integer[])
+      GROUP BY thread_id, reaction_type
+    `,
+    [threadIds]
+  );
+  for (const row of countRows) {
+    const item = counts.get(row.threadId);
+    if (item && isThreadReactionType(row.reactionType)) {
+      item[row.reactionType] = row.count;
+    }
+  }
+
+  if (userId !== null) {
+    const myRows = await query<{ threadId: number; reactionType: ThreadReactionType }>(
+      `
+        SELECT thread_id AS "threadId", reaction_type AS "reactionType"
+        FROM thread_reactions
+        WHERE user_id = $1
+          AND thread_id = ANY($2::integer[])
+      `,
+      [userId, threadIds]
+    );
+    for (const row of myRows) {
+      if (!isThreadReactionType(row.reactionType)) continue;
+      mine.set(row.threadId, [...(mine.get(row.threadId) ?? []), row.reactionType]);
+    }
+  }
+
+  return { counts, mine };
+}
+
+async function threadMessageReactionCounts(messageIds: number[], userId: number | null): Promise<{
+  counts: Map<number, ThreadReactionCounts>;
+  mine: Map<number, ThreadReactionType[]>;
+}> {
+  const counts = new Map<number, ThreadReactionCounts>();
+  const mine = new Map<number, ThreadReactionType[]>();
+  for (const id of messageIds) counts.set(id, emptyThreadReactionCounts());
+  if (!messageIds.length) return { counts, mine };
+
+  const countRows = await query<{ messageId: number; reactionType: ThreadReactionType; count: number }>(
+    `
+      SELECT message_id AS "messageId", reaction_type AS "reactionType", COUNT(*)::integer AS count
+      FROM thread_message_reactions
+      WHERE message_id = ANY($1::integer[])
+      GROUP BY message_id, reaction_type
+    `,
+    [messageIds]
+  );
+  for (const row of countRows) {
+    const item = counts.get(row.messageId);
+    if (item && isThreadReactionType(row.reactionType)) {
+      item[row.reactionType] = row.count;
+    }
+  }
+
+  if (userId !== null) {
+    const myRows = await query<{ messageId: number; reactionType: ThreadReactionType }>(
+      `
+        SELECT message_id AS "messageId", reaction_type AS "reactionType"
+        FROM thread_message_reactions
+        WHERE user_id = $1
+          AND message_id = ANY($2::integer[])
+      `,
+      [userId, messageIds]
+    );
+    for (const row of myRows) {
+      if (!isThreadReactionType(row.reactionType)) continue;
+      mine.set(row.messageId, [...(mine.get(row.messageId) ?? []), row.reactionType]);
+    }
+  }
+
+  return { counts, mine };
+}
+
+async function hydrateThreads(rows: Array<ThreadSummary & { lastActiveCursor: string }>, userId: number | null): Promise<ThreadSummary[]> {
+  const ids = rows.map((row) => row.id);
+  const tags = await query<{ threadId: number; id: number; name: string; sortOrder: number }>(
+    `
+      SELECT ttl.thread_id AS "threadId", tct.id, tct.name, tct.sort_order AS "sortOrder"
+      FROM thread_tag_links ttl
+      JOIN thread_channel_tags tct ON tct.id = ttl.tag_id
+      WHERE ttl.thread_id = ANY($1::integer[])
+      ORDER BY tct.sort_order, tct.id
+    `,
+    [ids]
+  );
+  const tagsByThread = new Map<number, ThreadChannelTag[]>();
+  for (const tag of tags) {
+    tagsByThread.set(tag.threadId, [...(tagsByThread.get(tag.threadId) ?? []), { id: tag.id, name: tag.name, sortOrder: tag.sortOrder }]);
+  }
+  const reactions = await threadReactionCounts(ids, userId);
+  return rows.map((row) => ({
+    id: row.id,
+    channelId: row.channelId,
+    title: row.title,
+    languageCode: row.languageCode,
+    tags: tagsByThread.get(row.id) ?? [],
+    locked: row.locked,
+    messageCount: row.messageCount,
+    lastActiveAt: row.lastActiveAt,
+    createdAt: row.createdAt,
+    author: row.author,
+    reactionCounts: reactions.counts.get(row.id) ?? emptyThreadReactionCounts(),
+    myReactions: reactions.mine.get(row.id) ?? [],
+    followed: row.followed,
+    unread: row.unread
+  }));
+}
+
+export async function listThreads(paramsQuery: QueryParams, userId: number | null): Promise<ThreadsPage> {
+  const limit = cleanThreadLimit(paramsQuery.limit);
+  const channelId = optionalPositiveInteger(asString(paramsQuery.channelId), 'server.validation.invalidField');
+  const tagId = optionalPositiveInteger(asString(paramsQuery.tagId), 'server.validation.invalidField');
+  const language = asString(paramsQuery.language);
+  const sort = asString(paramsQuery.sort) ?? 'last-active';
+  const cursor = decodeThreadCursor(paramsQuery.cursor);
+  const conditions = ['t.deleted_at IS NULL'];
+  const params: unknown[] = [];
+
+  if (channelId !== null) {
+    params.push(channelId);
+    conditions.push(`t.channel_id = $${params.length}`);
+  }
+  if (tagId !== null) {
+    params.push(tagId);
+    conditions.push(`EXISTS (SELECT 1 FROM thread_tag_links ttl WHERE ttl.thread_id = t.id AND ttl.tag_id = $${params.length})`);
+  }
+  if (language && language !== 'all') {
+    params.push(cleanThreadLanguageCode(language));
+    conditions.push(`t.language_code = $${params.length}`);
+  }
+
+  const orderField = sort === 'latest' ? 't.created_at' : sort === 'most-discussed' ? 't.message_count' : 't.last_active_at';
+  const orderCursorField = sort === 'latest' ? 'created_at' : sort === 'most-discussed' ? 'message_count' : 'last_active_at';
+  if (cursor) {
+    params.push(cursor.value, cursor.id);
+    conditions.push(`(${orderField}, t.id) < ($${params.length - 1}::${sort === 'most-discussed' ? 'integer' : 'timestamptz'}, $${params.length}::integer)`);
+  }
+  params.push(limit + 1, userId);
+  const limitParam = params.length - 1;
+  const userParam = params.length;
+
+  const rows = await query<ThreadSummary & { lastActiveCursor: string; createdAtCursor: string; messageCountCursor: number }>(
+    `
+      SELECT
+        t.id,
+        t.channel_id AS "channelId",
+        t.title,
+        t.language_code AS "languageCode",
+        t.locked,
+        t.message_count AS "messageCount",
+        t.last_active_at AS "lastActiveAt",
+        t.last_active_at::text AS "lastActiveCursor",
+        t.created_at AS "createdAt",
+        t.created_at::text AS "createdAtCursor",
+        t.message_count AS "messageCountCursor",
+        CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'displayName', u.display_name) END AS author,
+        ($${userParam}::integer IS NOT NULL AND tf.user_id IS NOT NULL) AS followed,
+        ($${userParam}::integer IS NOT NULL AND t.last_message_id IS NOT NULL AND (tr.last_read_message_id IS NULL OR t.last_message_id > tr.last_read_message_id)) AS unread
+      FROM threads t
+      LEFT JOIN users u ON u.id = t.created_by_user_id
+      LEFT JOIN thread_follows tf ON tf.thread_id = t.id AND tf.user_id = $${userParam}::integer
+      LEFT JOIN thread_reads tr ON tr.thread_id = t.id AND tr.user_id = $${userParam}::integer
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY ${orderField} DESC, t.id DESC
+      LIMIT $${limitParam}
+    `,
+    params
+  );
+  const items = await hydrateThreads(rows.slice(0, limit), userId);
+  const last = rows.slice(0, limit).at(-1) as (typeof rows)[number] | undefined;
+  const nextValue = last ? (sort === 'latest' ? last.createdAtCursor : sort === 'most-discussed' ? String(last.messageCountCursor) : last.lastActiveCursor) : null;
+  return {
+    items,
+    nextCursor: rows.length > limit && last && nextValue ? encodeCursor({ value: nextValue, id: last.id }) : null,
+    hasMore: rows.length > limit
+  };
+}
+
+export async function getThread(threadIdValue: number, userId: number | null): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const rows = await query<ThreadSummary & { lastActiveCursor: string }>(
+    `
+      SELECT
+        t.id,
+        t.channel_id AS "channelId",
+        t.title,
+        t.language_code AS "languageCode",
+        t.locked,
+        t.message_count AS "messageCount",
+        t.last_active_at AS "lastActiveAt",
+        t.last_active_at::text AS "lastActiveCursor",
+        t.created_at AS "createdAt",
+        CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'displayName', u.display_name) END AS author,
+        ($2::integer IS NOT NULL AND tf.user_id IS NOT NULL) AS followed,
+        ($2::integer IS NOT NULL AND t.last_message_id IS NOT NULL AND (tr.last_read_message_id IS NULL OR t.last_message_id > tr.last_read_message_id)) AS unread
+      FROM threads t
+      LEFT JOIN users u ON u.id = t.created_by_user_id
+      LEFT JOIN thread_follows tf ON tf.thread_id = t.id AND tf.user_id = $2::integer
+      LEFT JOIN thread_reads tr ON tr.thread_id = t.id AND tr.user_id = $2::integer
+      WHERE t.id = $1
+        AND t.deleted_at IS NULL
+    `,
+    [threadId, userId]
+  );
+  return (await hydrateThreads(rows, userId))[0] ?? null;
+}
+
+async function getThreadMessageById(messageId: number, userId: number | null, canViewAll = false): Promise<ThreadMessage | null> {
+  const rows = await query<ThreadMessage>(
+    `
+      SELECT
+        tm.id,
+        tm.thread_id AS "threadId",
+        tm.body,
+        tm.ai_moderation_status AS "moderationStatus",
+        tm.ai_moderation_language_code AS "moderationLanguageCode",
+        tm.ai_moderation_reason AS "moderationReason",
+        tm.created_at AS "createdAt",
+        tm.updated_at AS "updatedAt",
+        CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'displayName', u.display_name) END AS author
+      FROM thread_messages tm
+      LEFT JOIN users u ON u.id = tm.created_by_user_id
+      WHERE tm.id = $1
+        AND tm.deleted_at IS NULL
+        AND ${moderationVisibilitySql('tm', 'tm.created_by_user_id', userId, canViewAll)}
+    `,
+    [messageId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  const reactions = await threadMessageReactionCounts([row.id], userId);
+  return {
+    ...row,
+    reactionCounts: reactions.counts.get(row.id) ?? emptyThreadReactionCounts(),
+    myReactions: reactions.mine.get(row.id) ?? []
+  };
+}
+
+export async function listThreadMessages(
+  threadIdValue: number,
+  paramsQuery: QueryParams,
+  userId: number | null,
+  canViewAll = false
+): Promise<ThreadMessagesPage | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const thread = await getThread(threadId, userId);
+  if (!thread) return null;
+  const limit = cleanThreadLimit(paramsQuery.limit, defaultThreadMessageLimit, maxThreadMessageLimit);
+  const before = decodeThreadMessageCursor(paramsQuery.before);
+  const conditions = ['tm.thread_id = $1', 'tm.deleted_at IS NULL'];
+  const params: unknown[] = [threadId];
+  if (before) {
+    params.push(before.createdAt, before.id);
+    conditions.push(`(tm.created_at, tm.id) < ($${params.length - 1}::timestamptz, $${params.length}::integer)`);
+  }
+  if (!canViewAll) {
+    if (userId !== null) {
+      params.push(userId);
+      conditions.push(`(tm.ai_moderation_status = 'approved' OR tm.created_by_user_id = $${params.length})`);
+    } else {
+      conditions.push("tm.ai_moderation_status = 'approved'");
+    }
+  }
+  params.push(limit + 1);
+
+  const rows = await query<ThreadMessage & { createdAtCursor: string }>(
+    `
+      SELECT
+        tm.id,
+        tm.thread_id AS "threadId",
+        tm.body,
+        tm.ai_moderation_status AS "moderationStatus",
+        tm.ai_moderation_language_code AS "moderationLanguageCode",
+        tm.ai_moderation_reason AS "moderationReason",
+        tm.created_at AS "createdAt",
+        tm.created_at::text AS "createdAtCursor",
+        tm.updated_at AS "updatedAt",
+        CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('id', u.id, 'displayName', u.display_name) END AS author
+      FROM thread_messages tm
+      LEFT JOIN users u ON u.id = tm.created_by_user_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY tm.created_at DESC, tm.id DESC
+      LIMIT $${params.length}
+    `,
+    params
+  );
+  const pageRows = rows.slice(0, limit).reverse();
+  const reactions = await threadMessageReactionCounts(pageRows.map((row) => row.id), userId);
+  const items = pageRows.map((row) => ({
+    id: row.id,
+    threadId: row.threadId,
+    body: row.body,
+    moderationStatus: row.moderationStatus,
+    moderationLanguageCode: row.moderationLanguageCode,
+    moderationReason: row.moderationReason,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    author: row.author,
+    reactionCounts: reactions.counts.get(row.id) ?? emptyThreadReactionCounts(),
+    myReactions: reactions.mine.get(row.id) ?? []
+  }));
+  const oldest = rows.slice(0, limit).at(-1);
+  return {
+    items,
+    beforeCursor: rows.length > limit && oldest ? encodeCursor({ createdAt: oldest.createdAtCursor, id: oldest.id }) : null,
+    hasMoreBefore: rows.length > limit
+  };
+}
+
+export async function createThread(payload: Record<string, unknown>, userId: number): Promise<ThreadSummary> {
+  const channelId = requirePositiveInteger(payload.channelId, 'server.validation.invalidField');
+  const title = cleanThreadTitle(payload.title);
+  const languageCode = cleanThreadLanguageCode(payload.languageCode);
+  const tagIds = cleanThreadTagIds(payload.tagIds);
+  const messageBody = cleanThreadMessageBody(payload.body);
+  const channel = await queryOne<{ id: number; allowUserThreads: boolean }>(
+    'SELECT id, allow_user_threads AS "allowUserThreads" FROM thread_channels WHERE id = $1',
+    [channelId]
+  );
+  if (!channel || !channel.allowUserThreads) {
+    throw validationError('server.validation.invalidField');
+  }
+  if (!(await channelAllowsLanguage(channelId, languageCode))) {
+    throw validationError('server.validation.languageInvalid');
+  }
+  await validateThreadTags(channelId, tagIds);
+
+  const ids = await withTransaction(async (client) => {
+    const threadResult = await client.query<{ id: number }>(
+      `
+        INSERT INTO threads (channel_id, title, language_code, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $4, $4)
+        RETURNING id
+      `,
+      [channelId, title, languageCode, userId]
+    );
+    const threadId = threadResult.rows[0].id;
+    for (const tagId of tagIds) {
+      await client.query('INSERT INTO thread_tag_links (thread_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [threadId, tagId]);
+    }
+    const messageResult = await client.query<{ id: number }>(
+      `
+        INSERT INTO thread_messages (thread_id, body, ai_moderation_status, ai_moderation_language_code, created_by_user_id)
+        VALUES ($1, $2, 'unreviewed', $3, $4)
+        RETURNING id
+      `,
+      [threadId, messageBody, languageCode, userId]
+    );
+    await client.query('INSERT INTO thread_follows (thread_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [threadId, userId]);
+    return { threadId, messageId: messageResult.rows[0].id };
+  });
+
+  await requestAiModerationReview({ type: 'thread-message', id: ids.messageId }, { languageCode, resetRetries: true });
+  return (await getThread(ids.threadId, userId)) as ThreadSummary;
+}
+
+export async function createThreadMessage(threadIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadMessage | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const body = cleanThreadMessageBody(payload.body);
+  const thread = await queryOne<{ id: number; locked: boolean; languageCode: string }>(
+    'SELECT id, locked, language_code AS "languageCode" FROM threads WHERE id = $1 AND deleted_at IS NULL',
+    [threadId]
+  );
+  if (!thread) return null;
+  if (thread.locked) {
+    throw validationError('server.validation.invalidField');
+  }
+  const result = await queryOne<{ id: number }>(
+    `
+      INSERT INTO thread_messages (thread_id, body, ai_moderation_status, ai_moderation_language_code, created_by_user_id)
+      VALUES ($1, $2, 'unreviewed', $3, $4)
+      RETURNING id
+    `,
+    [threadId, body, thread.languageCode, userId]
+  );
+  if (!result) return null;
+  await requestAiModerationReview({ type: 'thread-message', id: result.id }, { languageCode: thread.languageCode, resetRetries: true });
+  return getThreadMessageById(result.id, userId, false);
+}
+
+export async function markThreadRead(threadIdValue: number, userId: number): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const row = await queryOne<{ lastMessageId: number | null }>(
+    'SELECT last_message_id AS "lastMessageId" FROM threads WHERE id = $1 AND deleted_at IS NULL',
+    [threadId]
+  );
+  if (!row) return null;
+  await pool.query(
+    `
+      INSERT INTO thread_reads (thread_id, user_id, last_read_message_id, last_read_at)
+      VALUES ($1, $2, $3, now())
+      ON CONFLICT (thread_id, user_id)
+      DO UPDATE SET last_read_message_id = EXCLUDED.last_read_message_id,
+                    last_read_at = now()
+    `,
+    [threadId, userId, row.lastMessageId]
+  );
+  const thread = await getThread(threadId, userId);
+  await publishThreadReadUpdated(userId, threadId, thread?.unread ?? false, 0);
+  return thread;
+}
+
+export async function followThread(threadIdValue: number, userId: number): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const thread = await getThread(threadId, userId);
+  if (!thread) return null;
+  await pool.query('INSERT INTO thread_follows (thread_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [threadId, userId]);
+  return getThread(threadId, userId);
+}
+
+export async function unfollowThread(threadIdValue: number, userId: number): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const thread = await getThread(threadId, userId);
+  if (!thread) return null;
+  await pool.query('DELETE FROM thread_follows WHERE thread_id = $1 AND user_id = $2', [threadId, userId]);
+  return getThread(threadId, userId);
+}
+
+export async function setThreadReaction(threadIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const reactionType = cleanThreadReactionType(payload.reactionType);
+  const thread = await getThread(threadId, userId);
+  if (!thread) return null;
+  await pool.query(
+    `
+      INSERT INTO thread_reactions (thread_id, user_id, reaction_type)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (thread_id, user_id, reaction_type)
+      DO UPDATE SET updated_at = now()
+    `,
+    [threadId, userId, reactionType]
+  );
+  const updated = await getThread(threadId, userId);
+  if (updated) {
+    await publishThreadReactionUpdated(userId, {
+      type: 'thread.reactions.updated',
+      target: 'thread',
+      threadId,
+      messageId: null,
+      reactionCounts: updated.reactionCounts,
+      myReactions: updated.myReactions
+    });
+  }
+  return updated;
+}
+
+export async function deleteThreadReaction(threadIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const reactionType = cleanThreadReactionType(payload.reactionType);
+  const thread = await getThread(threadId, userId);
+  if (!thread) return null;
+  await pool.query('DELETE FROM thread_reactions WHERE thread_id = $1 AND user_id = $2 AND reaction_type = $3', [threadId, userId, reactionType]);
+  return getThread(threadId, userId);
+}
+
+export async function setThreadMessageReaction(messageIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadMessage | null> {
+  const messageId = requirePositiveInteger(messageIdValue, 'server.validation.recordInvalid');
+  const reactionType = cleanThreadReactionType(payload.reactionType);
+  const message = await getThreadMessageById(messageId, userId);
+  if (!message || message.moderationStatus !== 'approved') return null;
+  await pool.query(
+    `
+      INSERT INTO thread_message_reactions (message_id, user_id, reaction_type)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (message_id, user_id, reaction_type)
+      DO UPDATE SET updated_at = now()
+    `,
+    [messageId, userId, reactionType]
+  );
+  const updated = await getThreadMessageById(messageId, userId);
+  if (updated) {
+    await publishThreadReactionUpdated(userId, {
+      type: 'thread.reactions.updated',
+      target: 'message',
+      threadId: updated.threadId,
+      messageId,
+      reactionCounts: updated.reactionCounts,
+      myReactions: updated.myReactions
+    });
+  }
+  return updated;
+}
+
+export async function deleteThreadMessageReaction(messageIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadMessage | null> {
+  const messageId = requirePositiveInteger(messageIdValue, 'server.validation.recordInvalid');
+  const reactionType = cleanThreadReactionType(payload.reactionType);
+  const message = await getThreadMessageById(messageId, userId);
+  if (!message) return null;
+  await pool.query('DELETE FROM thread_message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3', [messageId, userId, reactionType]);
+  return getThreadMessageById(messageId, userId);
+}
+
+export async function applyApprovedThreadMessage(messageId: number): Promise<void> {
+  const row = await queryOne<{ threadId: number }>(
+    `
+      UPDATE threads t
+      SET last_message_id = tm.id,
+          message_count = (
+            SELECT COUNT(*)::integer
+            FROM thread_messages visible_message
+            WHERE visible_message.thread_id = t.id
+              AND visible_message.deleted_at IS NULL
+              AND visible_message.ai_moderation_status = 'approved'
+          ),
+          last_active_at = GREATEST(t.last_active_at, tm.created_at),
+          updated_at = now()
+      FROM thread_messages tm
+      WHERE tm.id = $1
+        AND tm.thread_id = t.id
+        AND tm.deleted_at IS NULL
+        AND tm.ai_moderation_status = 'approved'
+      RETURNING t.id AS "threadId"
+    `,
+    [messageId]
+  );
+  if (!row) return;
+  const message = await getThreadMessageById(messageId, null, true);
+  const thread = await getThread(row.threadId, null);
+  if (message && thread) {
+    await publishThreadMessageCreated(thread, message);
+  } else {
+    await publishThreadMessageModeration(row.threadId, message);
+  }
+}
+
+export async function createAdminThreadChannel(payload: Record<string, unknown>, userId: number): Promise<ThreadChannel[]> {
+  const name = cleanName(payload.name, 'server.validation.nameRequired');
+  const allowUserThreads = payload.allowUserThreads !== false;
+  const tagNames = Array.isArray(payload.tags) ? payload.tags.map((tag) => cleanName(tag, 'server.validation.nameRequired')).slice(0, 20) : [];
+  const languageCodes = Array.isArray(payload.languages) ? payload.languages.map(cleanThreadLanguageCode).slice(0, 20) : [];
+  await withTransaction(async (client) => {
+    const sortOrder = await nextSortOrder(client, 'thread_channels');
+    const result = await client.query<{ id: number }>(
+      `
+        INSERT INTO thread_channels (name, allow_user_threads, sort_order, created_by_user_id, updated_by_user_id)
+        VALUES ($1, $2, $3, $4, $4)
+        RETURNING id
+      `,
+      [name, allowUserThreads, sortOrder, userId]
+    );
+    await replaceThreadChannelConfig(client, result.rows[0].id, tagNames, languageCodes);
+  });
+  return listAdminThreadChannels();
+}
+
+async function replaceThreadChannelConfig(client: DbClient, channelId: number, tagNames: string[], languageCodes: string[]): Promise<void> {
+  await client.query('DELETE FROM thread_channel_tags WHERE channel_id = $1', [channelId]);
+  await client.query('DELETE FROM thread_channel_languages WHERE channel_id = $1', [channelId]);
+  for (const [index, tagName] of [...new Set(tagNames)].entries()) {
+    await client.query('INSERT INTO thread_channel_tags (channel_id, name, sort_order) VALUES ($1, $2, $3)', [channelId, tagName, (index + 1) * 10]);
+  }
+  for (const [index, languageCode] of [...new Set(languageCodes)].entries()) {
+    await client.query('INSERT INTO thread_channel_languages (channel_id, language_code, sort_order) VALUES ($1, $2, $3)', [
+      channelId,
+      languageCode,
+      (index + 1) * 10
+    ]);
+  }
+}
+
+export async function updateAdminThreadChannel(channelIdValue: number, payload: Record<string, unknown>, userId: number): Promise<ThreadChannel[] | null> {
+  const channelId = requirePositiveInteger(channelIdValue, 'server.validation.recordInvalid');
+  const name = cleanName(payload.name, 'server.validation.nameRequired');
+  const allowUserThreads = payload.allowUserThreads !== false;
+  const tagNames = Array.isArray(payload.tags) ? payload.tags.map((tag) => cleanName(tag, 'server.validation.nameRequired')).slice(0, 20) : [];
+  const languageCodes = Array.isArray(payload.languages) ? payload.languages.map(cleanThreadLanguageCode).slice(0, 20) : [];
+  const updated = await withTransaction(async (client) => {
+    const result = await client.query(
+      `
+        UPDATE thread_channels
+        SET name = $1, allow_user_threads = $2, updated_by_user_id = $3, updated_at = now()
+        WHERE id = $4
+      `,
+      [name, allowUserThreads, userId, channelId]
+    );
+    if (!result.rowCount) return false;
+    await replaceThreadChannelConfig(client, channelId, tagNames, languageCodes);
+    return true;
+  });
+  return updated ? listAdminThreadChannels() : null;
+}
+
+export async function deleteAdminThreadChannel(channelIdValue: number): Promise<boolean> {
+  const channelId = requirePositiveInteger(channelIdValue, 'server.validation.recordInvalid');
+  const result = await pool.query('DELETE FROM thread_channels WHERE id = $1', [channelId]);
+  return Boolean(result.rowCount);
+}
+
+export async function updateThreadLock(threadIdValue: number, locked: boolean, userId: number): Promise<ThreadSummary | null> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const result = await pool.query(
+    'UPDATE threads SET locked = $1, updated_by_user_id = $2, updated_at = now() WHERE id = $3 AND deleted_at IS NULL',
+    [locked, userId, threadId]
+  );
+  return result.rowCount ? getThread(threadId, userId) : null;
+}
+
+export async function deleteThread(threadIdValue: number, userId: number): Promise<boolean> {
+  const threadId = requirePositiveInteger(threadIdValue, 'server.validation.recordInvalid');
+  const result = await pool.query(
+    'UPDATE threads SET deleted_at = now(), deleted_by_user_id = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL',
+    [userId, threadId]
+  );
+  return Boolean(result.rowCount);
+}
+
+export async function deleteThreadMessage(messageIdValue: number, userId: number): Promise<boolean> {
+  const messageId = requirePositiveInteger(messageIdValue, 'server.validation.recordInvalid');
+  const result = await pool.query<{ threadId: number }>(
+    `
+      UPDATE thread_messages
+      SET deleted_at = now(), deleted_by_user_id = $1, updated_at = now()
+      WHERE id = $2
+        AND deleted_at IS NULL
+      RETURNING thread_id AS "threadId"
+    `,
+    [userId, messageId]
+  );
+  if (!result.rowCount) return false;
+  await pool.query(
+    `
+      UPDATE threads t
+      SET message_count = (
+            SELECT COUNT(*)::integer
+            FROM thread_messages tm
+            WHERE tm.thread_id = t.id
+              AND tm.deleted_at IS NULL
+              AND tm.ai_moderation_status = 'approved'
+          ),
+          last_message_id = (
+            SELECT tm.id
+            FROM thread_messages tm
+            WHERE tm.thread_id = t.id
+              AND tm.deleted_at IS NULL
+              AND tm.ai_moderation_status = 'approved'
+            ORDER BY tm.created_at DESC, tm.id DESC
+            LIMIT 1
+          ),
+          updated_at = now()
+      WHERE t.id = $1
+    `,
+    [result.rows[0].threadId]
+  );
+  return true;
+}
+
+export async function createThreadsWsTicketForUser(userId: number): Promise<{ ticket: string; expiresAt: Date }> {
+  return createThreadWebSocketTicket(userId);
 }
 
 export async function wipeAdminData(payload: Record<string, unknown>): Promise<{ scopes: DataToolScopeSummary[] }> {

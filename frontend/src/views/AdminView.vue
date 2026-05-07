@@ -27,6 +27,7 @@ import {
   iconProfile,
   iconRecipe,
   iconSave,
+  iconThreads,
   iconTranslate,
   iconUpload,
   type AppIcon
@@ -67,6 +68,7 @@ import {
   type Skill,
   type SystemWording,
   type SystemWordingSurface,
+  type ThreadChannel,
   type TranslationMap
 } from '../services/api';
 
@@ -86,7 +88,8 @@ type AdminTab =
   | 'ancientArtifacts'
   | 'recipes'
   | 'dish'
-  | 'habitats';
+  | 'habitats'
+  | 'threadChannels';
 type AdminGroup = 'content' | 'configuration' | 'localization' | 'access';
 type AdminNavItem = { key: AdminTab; label: string; permission: string | string[] };
 type AdminNavGroup = { key: AdminGroup; label: string; items: AdminNavItem[] };
@@ -139,7 +142,8 @@ const adminTabIcons: Record<AdminTab, AppIcon> = {
   ancientArtifacts: iconArtifact,
   recipes: iconRecipe,
   dish: iconDish,
-  habitats: iconHabitat
+  habitats: iconHabitat,
+  threadChannels: iconThreads
 };
 
 const { locale, t } = useI18n();
@@ -166,6 +170,7 @@ const adminNavigationGroups = computed<AdminNavGroup[]>(() => {
         { key: 'recipes', label: t('pages.admin.recipeList'), permission: ['recipes.order', 'recipes.delete'] },
         { key: 'dish', label: t('pages.admin.dishList'), permission: ['dish.create', 'dish.update', 'dish.delete', 'dish.order'] },
         { key: 'habitats', label: t('pages.admin.habitatList'), permission: ['habitats.order', 'habitats.delete'] },
+        { key: 'threadChannels', label: t('pages.admin.threadChannels'), permission: 'admin.threads.channels.read' },
         { key: 'dataTools', label: t('pages.admin.dataTools'), permission: ['admin.data.export', 'admin.data.import'] }
       ]
     },
@@ -235,6 +240,7 @@ const dishItemRows = ref<Item[]>([]);
 const dishSkillRows = ref<Skill[]>([]);
 const dishFlavorRows = ref<NamedEntity[]>([]);
 const habitatRows = ref<Habitat[]>([]);
+const threadChannelRows = ref<ThreadChannel[]>([]);
 const wordingRows = ref<SystemWording[]>([]);
 const aiModerationSettings = ref<AiModerationSettings | null>(null);
 const rateLimitSettings = ref<RateLimitSettings | null>(null);
@@ -301,6 +307,7 @@ const userRoleForm = ref({ userId: 0, roleIds: [] as number[] });
 const roleForm = ref({ id: 0, key: '', name: '', description: '', level: 100, enabled: true });
 const rolePermissionForm = ref({ roleId: 0, permissionIds: [] as number[] });
 const permissionForm = ref({ id: 0, key: '', name: '', description: '', category: 'General', enabled: true });
+const threadChannelForm = ref({ id: 0, name: '', allowUserThreads: true, tagsText: '', languages: [] as string[] });
 const editingLanguageCode = ref('');
 const configModalOpen = ref(false);
 const checklistModalOpen = ref(false);
@@ -312,6 +319,7 @@ const userRoleModalOpen = ref(false);
 const roleModalOpen = ref(false);
 const rolePermissionsModalOpen = ref(false);
 const permissionModalOpen = ref(false);
+const threadChannelModalOpen = ref(false);
 const dataToolImportModalOpen = ref(false);
 const dataToolWipeModalOpen = ref(false);
 const wordingLocale = ref(getCurrentLocale());
@@ -403,6 +411,9 @@ const wordingModalTitle = computed(() => t('pages.admin.editWording'));
 const roleModalTitle = computed(() => (roleForm.value.id ? t('pages.admin.editRole') : t('pages.admin.newRole')));
 const permissionModalTitle = computed(() =>
   permissionForm.value.id ? t('pages.admin.editPermission') : t('pages.admin.newPermission')
+);
+const threadChannelModalTitle = computed(() =>
+  threadChannelForm.value.id ? t('pages.admin.editThreadChannel') : t('pages.admin.newThreadChannel')
 );
 const rolePermissionsModalTitle = computed(() => t('pages.admin.rolePermissions'));
 const userRoleModalTitle = computed(() => t('pages.admin.userRoles'));
@@ -693,6 +704,10 @@ function resetPermissionForm() {
   permissionForm.value = { id: 0, key: '', name: '', description: '', category: 'General', enabled: true };
 }
 
+function resetThreadChannelForm() {
+  threadChannelForm.value = { id: 0, name: '', allowUserThreads: true, tagsText: '', languages: languageRows.value.map((language) => language.code) };
+}
+
 function selectWordingModule(module: string) {
   wordingModule.value = module;
 }
@@ -860,6 +875,27 @@ function editPermission(permission: Permission) {
 function closePermissionModal() {
   permissionModalOpen.value = false;
   resetPermissionForm();
+}
+
+function openNewThreadChannel() {
+  resetThreadChannelForm();
+  threadChannelModalOpen.value = true;
+}
+
+function closeThreadChannelModal() {
+  threadChannelModalOpen.value = false;
+  resetThreadChannelForm();
+}
+
+function editThreadChannel(channel: ThreadChannel) {
+  threadChannelForm.value = {
+    id: channel.id,
+    name: channel.name,
+    allowUserThreads: channel.allowUserThreads,
+    tagsText: channel.tags.map((tag) => tag.name).join(', '),
+    languages: channel.languages.map((language) => language.code)
+  };
+  threadChannelModalOpen.value = true;
 }
 
 function editLanguage(item: Language) {
@@ -1101,6 +1137,33 @@ async function loadChecklist() {
   if (!checklistForm.value.id && checklistForm.value.title.trim() === '') {
     resetChecklistForm();
   }
+}
+
+async function loadThreadChannels() {
+  await loadLanguages();
+  threadChannelRows.value = await api.adminThreadChannels();
+}
+
+function threadChannelTagNames() {
+  return threadChannelForm.value.tagsText
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+async function saveThreadChannel() {
+  await run(async () => {
+    const payload = {
+      name: threadChannelForm.value.name,
+      allowUserThreads: threadChannelForm.value.allowUserThreads,
+      tags: threadChannelTagNames(),
+      languages: threadChannelForm.value.languages
+    };
+    threadChannelRows.value = threadChannelForm.value.id
+      ? await api.updateAdminThreadChannel(threadChannelForm.value.id, payload)
+      : await api.createAdminThreadChannel(payload);
+    closeThreadChannelModal();
+  });
 }
 
 async function saveChecklistItem() {
@@ -1414,6 +1477,7 @@ async function loadCurrentTab(showSkeleton = false) {
     if (activeTab.value === 'recipes') await loadRecipes();
     if (activeTab.value === 'dish') await loadDishAdmin();
     if (activeTab.value === 'habitats') await loadHabitats();
+    if (activeTab.value === 'threadChannels') await loadThreadChannels();
   } finally {
     if (showSkeleton) {
       contentLoading.value = false;
@@ -1482,6 +1546,16 @@ async function removeChecklistItem(id: number) {
       closeChecklistModal();
     }
     await loadChecklist();
+  });
+}
+
+async function removeThreadChannel(id: number) {
+  await run(async () => {
+    await api.deleteAdminThreadChannel(id);
+    if (threadChannelForm.value.id === id) {
+      closeThreadChannelModal();
+    }
+    await loadThreadChannels();
   });
 }
 
@@ -2035,6 +2109,39 @@ onMounted(() => {
           <p class="meta-line">{{ t('pages.admin.dataToolReplaceNote') }}</p>
         </section>
       </div>
+    </section>
+
+    <section v-else-if="canEdit && activeTab === 'threadChannels'" class="detail-section">
+      <div class="detail-section__header">
+        <h2>{{ t('pages.admin.threadChannels') }}</h2>
+        <button v-if="can('admin.threads.channels.create')" type="button" class="ui-button ui-button--primary ui-button--small" :disabled="busy" @click="openNewThreadChannel">
+          <Icon :icon="iconAdd" class="ui-icon" aria-hidden="true" />
+          {{ t('common.new') }}
+        </button>
+      </div>
+      <ul v-if="threadChannelRows.length" class="row-list access-list">
+        <li v-for="channel in threadChannelRows" :key="channel.id">
+          <span class="access-row">
+            <strong>{{ channel.name }}</strong>
+            <span class="system-wording-row__meta">
+              <span class="config-flag">{{ channel.allowUserThreads ? t('pages.admin.userThreadsAllowed') : t('pages.admin.userThreadsDisabled') }}</span>
+              <span v-for="tag in channel.tags" :key="tag.id" class="config-flag">{{ tag.name }}</span>
+              <span v-for="language in channel.languages" :key="language.code" class="config-flag">{{ language.name }}</span>
+            </span>
+          </span>
+          <span class="row-actions">
+            <button v-if="can('admin.threads.channels.update')" type="button" :disabled="busy" @click="editThreadChannel(channel)">
+              <Icon :icon="iconEdit" class="ui-icon" aria-hidden="true" />
+              {{ t('common.edit') }}
+            </button>
+            <button v-if="can('admin.threads.channels.delete')" type="button" :disabled="busy" @click="removeThreadChannel(channel.id)">
+              <Icon :icon="iconDelete" class="ui-icon" aria-hidden="true" />
+              {{ t('common.delete') }}
+            </button>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="meta-line">{{ t('common.noRecords') }}</p>
     </section>
 
     <section v-else-if="canEdit && activeTab === 'config'" class="detail-section">
@@ -2663,6 +2770,45 @@ onMounted(() => {
           {{ busy ? t('common.saving') : t('common.save') }}
         </button>
         <button type="button" class="plain-button" :disabled="busy" @click="closePermissionModal">
+          <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal v-if="threadChannelModalOpen" :title="threadChannelModalTitle" :close-label="t('common.close')" @close="closeThreadChannelModal">
+      <form id="admin-thread-channel-form" class="modal-edit-form" @submit.prevent="saveThreadChannel">
+        <div class="field">
+          <label for="thread-channel-name">{{ t('common.name') }}</label>
+          <input id="thread-channel-name" v-model="threadChannelForm.name" required maxlength="80" />
+        </div>
+        <div class="check-row">
+          <label>
+            <input v-model="threadChannelForm.allowUserThreads" type="checkbox" />
+            {{ t('pages.admin.allowUserThreads') }}
+          </label>
+        </div>
+        <div class="field">
+          <label for="thread-channel-tags">{{ t('pages.threads.tags') }}</label>
+          <input id="thread-channel-tags" v-model="threadChannelForm.tagsText" :placeholder="t('pages.admin.threadTagsPlaceholder')" />
+        </div>
+        <div class="field">
+          <span class="field-label">{{ t('pages.threads.language') }}</span>
+          <div class="permission-groups">
+            <label v-for="language in languageRows" :key="language.code" class="data-tool-scope">
+              <input v-model="threadChannelForm.languages" type="checkbox" :value="language.code" />
+              <span>{{ language.name }}</span>
+            </label>
+          </div>
+        </div>
+      </form>
+
+      <template #footer>
+        <button type="submit" form="admin-thread-channel-form" class="link-button" :disabled="busy || !threadChannelForm.name.trim()">
+          <Icon :icon="iconSave" class="ui-icon" aria-hidden="true" />
+          {{ busy ? t('common.saving') : t('common.save') }}
+        </button>
+        <button type="button" class="plain-button" :disabled="busy" @click="closeThreadChannelModal">
           <Icon :icon="iconCancel" class="ui-icon" aria-hidden="true" />
           {{ t('common.cancel') }}
         </button>

@@ -9689,10 +9689,364 @@ button:disabled,
   font-size: 14px;
 }
 
+.threads-layout {
+  min-height: min(78vh, 860px);
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(260px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.threads-sidebar,
+.threads-list-panel,
+.thread-chat-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.threads-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+}
+
+.threads-sidebar h2 {
+  margin: 0 0 6px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.thread-channel,
+.thread-list-item {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.thread-channel {
+  min-height: 44px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 8px 10px;
+  font-weight: 900;
+}
+
+.thread-channel:hover,
+.thread-channel.active,
+.thread-list-item:hover,
+.thread-list-item.active {
+  border-color: color-mix(in srgb, var(--pokemon-blue) 35%, var(--line));
+  background: color-mix(in srgb, var(--pokemon-blue) 8%, var(--surface));
+  color: var(--ink);
+}
+
+.thread-unread-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--pokemon-red);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pokemon-red) 16%, transparent);
+}
+
+.threads-list-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.thread-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.thread-filters label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.thread-filters select,
+.thread-composer textarea {
+  width: 100%;
+}
+
+.thread-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.thread-chip {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+button.thread-chip {
+  cursor: pointer;
+}
+
+.thread-chip.active,
+.thread-list-item.unread .thread-list-item__title {
+  color: var(--ink);
+}
+
+.thread-chip.active {
+  border-color: var(--pokemon-blue);
+  background: color-mix(in srgb, var(--pokemon-yellow) 26%, var(--surface));
+}
+
+.thread-list {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+}
+
+.thread-list-item {
+  padding: 12px;
+}
+
+.thread-list-item__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.thread-list-item__meta,
+.threads-empty,
+.thread-chat-header p,
+.thread-message-meta time {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.thread-list-item__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.thread-chat-panel {
+  position: relative;
+  min-height: 620px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.thread-chat-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.thread-chat-header h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.thread-chat-header p {
+  margin: 4px 0 0;
+}
+
+.thread-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.thread-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.thread-reactions--message {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.thread-reaction {
+  min-width: 44px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.thread-reaction.active {
+  border-color: var(--pokemon-blue);
+  background: color-mix(in srgb, var(--pokemon-blue) 10%, var(--surface));
+  color: var(--ink);
+}
+
+.thread-message-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface-soft) 58%, var(--surface));
+}
+
+.thread-message-list {
+  display: grid;
+  gap: 16px;
+}
+
+.thread-message-group {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.thread-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--pokemon-yellow);
+  color: var(--pokeball-black);
+  font-weight: 900;
+}
+
+.thread-message-group__body {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.thread-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.thread-message {
+  display: grid;
+  gap: 8px;
+}
+
+.thread-message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.thread-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.thread-jump-button {
+  position: absolute;
+  right: 18px;
+  bottom: 86px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--pokemon-yellow);
+  color: var(--pokeball-black);
+  font-weight: 900;
+  box-shadow: var(--shadow-control);
+}
+
+.thread-load-older {
+  width: fit-content;
+  margin: 0 auto 14px;
+}
+
+.threads-empty {
+  margin: 0;
+  padding: 18px;
+}
+
+.threads-empty--select {
+  align-self: center;
+  justify-self: center;
+}
+
+@media (max-width: 1100px) {
+  .threads-layout {
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  }
+
+  .thread-chat-panel {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 640px) {
+  .threads-layout,
   .dish-category-summary,
   .dish-card {
     grid-template-columns: 1fr;
+  }
+
+  .thread-filters,
+  .thread-composer,
+  .thread-chat-header {
+    grid-template-columns: 1fr;
+  }
+
+  .thread-chat-header {
+    display: grid;
+  }
+
+  .thread-chat-actions {
+    justify-content: flex-start;
+  }
+
+  .thread-chat-panel {
+    min-height: 70dvh;
   }
 
   .dish-form-row,

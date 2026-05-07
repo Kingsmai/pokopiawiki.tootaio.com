@@ -575,6 +575,121 @@ export interface LifeReactionUsersParams {
   reactionType?: LifeReactionType;
 }
 
+export type ThreadReactionType = 'thumbs-up' | 'heart' | 'laugh' | 'fire' | 'eyes';
+export type ThreadReactionCounts = Record<ThreadReactionType, number>;
+export type ThreadSort = 'last-active' | 'latest' | 'most-discussed';
+
+export interface ThreadChannelTag {
+  id: number;
+  name: string;
+  sortOrder: number;
+}
+
+export interface ThreadChannel {
+  id: number;
+  name: string;
+  allowUserThreads: boolean;
+  sortOrder: number;
+  tags: ThreadChannelTag[];
+  languages: Array<{ code: string; name: string }>;
+  unreadCount: number;
+}
+
+export interface ThreadSummary {
+  id: number;
+  channelId: number;
+  title: string;
+  languageCode: string;
+  tags: ThreadChannelTag[];
+  locked: boolean;
+  messageCount: number;
+  lastActiveAt: string;
+  createdAt: string;
+  author: UserSummary | null;
+  reactionCounts: ThreadReactionCounts;
+  myReactions: ThreadReactionType[];
+  followed: boolean;
+  unread: boolean;
+}
+
+export interface ThreadMessage {
+  id: number;
+  threadId: number;
+  body: string;
+  moderationStatus: AiModerationStatus;
+  moderationLanguageCode: string | null;
+  moderationReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author: UserSummary | null;
+  reactionCounts: ThreadReactionCounts;
+  myReactions: ThreadReactionType[];
+}
+
+export interface ThreadsPage {
+  items: ThreadSummary[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface ThreadMessagesPage {
+  items: ThreadMessage[];
+  beforeCursor: string | null;
+  hasMoreBefore: boolean;
+}
+
+export interface ThreadsParams {
+  cursor?: string | null;
+  limit?: number;
+  channelId?: number | string | null;
+  language?: string;
+  tagId?: number | string | null;
+  sort?: ThreadSort;
+}
+
+export interface ThreadMessagesParams {
+  before?: string | null;
+  limit?: number;
+}
+
+export interface ThreadPayload {
+  channelId: number;
+  title: string;
+  body: string;
+  languageCode: string;
+  tagIds: number[];
+}
+
+export interface ThreadMessagePayload {
+  body: string;
+}
+
+export interface ThreadWsTicket {
+  ticket: string;
+  expiresAt: string;
+}
+
+export type ThreadWsMessage =
+  | { type: 'threads.connected'; followedUnreadCount: number }
+  | { type: 'thread.message.created'; threadId: number; message: ThreadMessage; thread: ThreadSummary }
+  | { type: 'thread.message.moderation'; threadId: number; message: ThreadMessage | null }
+  | {
+      type: 'thread.reactions.updated';
+      target: 'thread' | 'message';
+      threadId: number;
+      messageId: number | null;
+      reactionCounts: ThreadReactionCounts;
+      myReactions: ThreadReactionType[];
+    }
+  | { type: 'thread.read.updated'; threadId: number; unread: boolean; unreadCount: number };
+
+export interface AdminThreadChannelPayload {
+  name: string;
+  allowUserThreads: boolean;
+  tags: string[];
+  languages: string[];
+}
+
 export interface NotificationTarget {
   type: NotificationTargetType;
   id: number;
@@ -1087,6 +1202,15 @@ export function notificationWebSocketUrl(ticket: string): string {
   return base.toString();
 }
 
+export function threadWebSocketUrl(ticket: string): string {
+  const base = new URL(browserApiBaseUrl, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
+  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  base.pathname = '/api/threads/ws';
+  base.search = '';
+  base.searchParams.set('ticket', ticket);
+  return base.toString();
+}
+
 async function getErrorMessage(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as { message?: unknown };
@@ -1127,7 +1251,7 @@ async function getJson<T>(path: string, options?: AbortSignal | ApiRequestOption
   return response.json() as Promise<T>;
 }
 
-async function sendJson<T>(path: string, method: 'PATCH' | 'POST' | 'PUT', body: unknown): Promise<T> {
+async function sendJson<T>(path: string, method: 'DELETE' | 'PATCH' | 'POST' | 'PUT', body: unknown): Promise<T> {
   const headers = requestHeaders();
   headers.set('Content-Type', 'application/json');
 
@@ -1352,6 +1476,51 @@ export const api = {
         reactionType: params.reactionType
       })}`
     ),
+  threadChannels: () => getJson<ThreadChannel[]>('/api/thread-channels'),
+  threads: (params: ThreadsParams = {}) =>
+    getJson<ThreadsPage>(
+      `/api/threads${buildQuery({
+        cursor: params.cursor ?? undefined,
+        limit: params.limit,
+        channelId: params.channelId,
+        language: params.language,
+        tagId: params.tagId,
+        sort: params.sort
+      })}`
+    ),
+  thread: (id: string | number) => getJson<ThreadSummary>(`/api/threads/${id}`),
+  createThread: (payload: ThreadPayload) => sendJson<ThreadSummary>('/api/threads', 'POST', payload),
+  threadMessages: (id: string | number, params: ThreadMessagesParams = {}) =>
+    getJson<ThreadMessagesPage>(
+      `/api/threads/${id}/messages${buildQuery({
+        before: params.before ?? undefined,
+        limit: params.limit
+      })}`
+    ),
+  createThreadMessage: (id: string | number, payload: ThreadMessagePayload) =>
+    sendJson<ThreadMessage>(`/api/threads/${id}/messages`, 'POST', payload),
+  followThread: (id: string | number) => sendJson<ThreadSummary>(`/api/threads/${id}/follow`, 'PUT', {}),
+  unfollowThread: (id: string | number) => deleteAndGetJson<ThreadSummary>(`/api/threads/${id}/follow`),
+  markThreadRead: (id: string | number) => sendJson<ThreadSummary>(`/api/threads/${id}/read`, 'POST', {}),
+  setThreadReaction: (id: string | number, reactionType: ThreadReactionType) =>
+    sendJson<ThreadSummary>(`/api/threads/${id}/reaction`, 'PUT', { reactionType }),
+  deleteThreadReaction: (id: string | number, reactionType: ThreadReactionType) =>
+    sendJson<ThreadSummary>(`/api/threads/${id}/reaction`, 'DELETE', { reactionType }),
+  setThreadMessageReaction: (id: string | number, reactionType: ThreadReactionType) =>
+    sendJson<ThreadMessage>(`/api/thread-messages/${id}/reaction`, 'PUT', { reactionType }),
+  deleteThreadMessageReaction: (id: string | number, reactionType: ThreadReactionType) =>
+    sendJson<ThreadMessage>(`/api/thread-messages/${id}/reaction`, 'DELETE', { reactionType }),
+  threadWsTicket: () => sendJson<ThreadWsTicket>('/api/threads/ws-ticket', 'POST', {}),
+  adminThreadChannels: () => getJson<ThreadChannel[]>('/api/admin/thread-channels'),
+  createAdminThreadChannel: (payload: AdminThreadChannelPayload) =>
+    sendJson<ThreadChannel[]>('/api/admin/thread-channels', 'POST', payload),
+  updateAdminThreadChannel: (id: string | number, payload: AdminThreadChannelPayload) =>
+    sendJson<ThreadChannel[]>(`/api/admin/thread-channels/${id}`, 'PUT', payload),
+  deleteAdminThreadChannel: (id: string | number) => deleteJson(`/api/admin/thread-channels/${id}`),
+  lockThread: (id: string | number, locked: boolean) =>
+    sendJson<ThreadSummary>(`/api/admin/threads/${id}/lock`, 'PUT', { locked }),
+  deleteThread: (id: string | number) => deleteJson(`/api/admin/threads/${id}`),
+  deleteThreadMessage: (id: string | number) => deleteJson(`/api/admin/thread-messages/${id}`),
   setLifeRating: (id: string | number, rating: number) =>
     sendJson<LifePost>(`/api/life-posts/${id}/rating`, 'PUT', { rating }),
   deleteLifeRating: (id: string | number) => deleteAndGetJson<LifePost>(`/api/life-posts/${id}/rating`),

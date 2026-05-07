@@ -305,7 +305,13 @@ async function loadPage() {
   } catch {
     currentUser.value = null;
   }
-  await Promise.all([initialCategoriesLoaded.value ? Promise.resolve() : loadDish(), loadEditorOptions()]);
+  try {
+    await Promise.all([initialCategoriesLoaded.value ? Promise.resolve() : loadDish(), loadEditorOptions()]);
+  } catch (error) {
+    message.value = errorText(error);
+  } finally {
+    loading.value = false;
+  }
 }
 
 watch(categories, (nextCategories) => {

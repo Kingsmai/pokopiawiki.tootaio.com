@@ -42,6 +42,19 @@ type MessageGroup = {
   messages: ThreadMessage[];
 };
 
+type ThreadListState = {
+  selectedChannelId: number | null;
+  selectedTagId: number | null;
+  selectedLanguage: string;
+  sort: ThreadSort;
+  threadSearch: string;
+  threads: ThreadSummary[];
+  nextCursor: string | null;
+  hasMoreThreads: boolean;
+  scrollTop: number;
+  savedAt: number;
+};
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -77,8 +90,11 @@ const messageActionBusyId = ref<number | null>(null);
 const moderationBusyId = ref<number | null>(null);
 const socket = ref<WebSocket | null>(null);
 const chatScroller = ref<HTMLElement | null>(null);
+const threadListScroller = ref<HTMLElement | null>(null);
 const showJump = ref(false);
+const suppressThreadListWatch = ref(false);
 
+const threadListStorageKey = 'pokopia_threads_list_state';
 const reactionOptions: ThreadReactionType[] = ['👍', '❤️', '😂', '🔥', '👀'];
 
 const selectedChannel = computed(() => channels.value.find((channel) => channel.id === selectedChannelId.value) ?? null);
@@ -159,6 +175,119 @@ const messageGroups = computed<MessageGroup[]>(() => {
   }
   return groups;
 });
+
+function queryStringValue(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === 'string' ? raw : '';
+}
+
+function queryPositiveInteger(value: unknown) {
+  const raw = Number(queryStringValue(value));
+  return Number.isInteger(raw) && raw > 0 ? raw : null;
+}
+
+function validThreadSort(value: unknown): ThreadSort | null {
+  const raw = queryStringValue(value);
+  return raw === 'last-active' || raw === 'latest' || raw === 'most-discussed' ? raw : null;
+}
+
+function threadListQuery() {
+  const query: Record<string, string> = {};
+  query.channel = selectedChannelId.value === null ? 'all' : String(selectedChannelId.value);
+  if (selectedTagId.value !== null) {
+    query.tag = String(selectedTagId.value);
+  }
+  if (selectedLanguage.value !== 'all') {
+    query.language = selectedLanguage.value;
+  }
+  if (sort.value !== 'last-active') {
+    query.sort = sort.value;
+  }
+  const search = threadSearch.value.trim();
+  if (search) {
+    query.q = search;
+  }
+  return query;
+}
+
+function applyRouteListContext() {
+  const channel = queryStringValue(route.query.channel);
+  if (channel === 'all') {
+    selectedChannelId.value = null;
+  } else {
+    const channelId = queryPositiveInteger(route.query.channel);
+    if (channelId !== null) {
+      selectedChannelId.value = channelId;
+    }
+  }
+
+  selectedTagId.value = queryPositiveInteger(route.query.tag);
+  selectedLanguage.value = queryStringValue(route.query.language) || 'all';
+  sort.value = validThreadSort(route.query.sort) ?? 'last-active';
+  threadSearch.value = queryStringValue(route.query.q).trim();
+}
+
+function syncThreadListQuery() {
+  void router.replace({ path: route.path, query: threadListQuery() });
+}
+
+function threadListMatchesState(state: ThreadListState) {
+  return (
+    state.selectedChannelId === selectedChannelId.value &&
+    state.selectedTagId === selectedTagId.value &&
+    state.selectedLanguage === selectedLanguage.value &&
+    state.sort === sort.value &&
+    state.threadSearch === threadSearch.value.trim()
+  );
+}
+
+function saveThreadListState() {
+  if (typeof sessionStorage === 'undefined') return;
+
+  const state: ThreadListState = {
+    selectedChannelId: selectedChannelId.value,
+    selectedTagId: selectedTagId.value,
+    selectedLanguage: selectedLanguage.value,
+    sort: sort.value,
+    threadSearch: threadSearch.value.trim(),
+    threads: threads.value,
+    nextCursor: nextCursor.value,
+    hasMoreThreads: hasMoreThreads.value,
+    scrollTop: threadListScroller.value?.scrollTop ?? 0,
+    savedAt: Date.now()
+  };
+  sessionStorage.setItem(threadListStorageKey, JSON.stringify(state));
+}
+
+function restoreThreadListState() {
+  if (typeof sessionStorage === 'undefined') return null;
+
+  try {
+    const raw = sessionStorage.getItem(threadListStorageKey);
+    if (!raw) return null;
+    const state = JSON.parse(raw) as ThreadListState;
+    if (!state || Date.now() - state.savedAt > 30 * 60 * 1000 || !threadListMatchesState(state)) {
+      return null;
+    }
+    threads.value = Array.isArray(state.threads) ? state.threads : [];
+    nextCursor.value = state.nextCursor;
+    hasMoreThreads.value = Boolean(state.hasMoreThreads);
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+async function restoreThreadListScroll(scrollTop: number) {
+  await nextTick();
+  if (threadListScroller.value) {
+    threadListScroller.value.scrollTop = scrollTop;
+  }
+}
+
+async function resetThreadListScroll() {
+  await restoreThreadListScroll(0);
+}
 
 function canUseThreads() {
   return currentUser.value?.emailVerified === true;
@@ -250,7 +379,12 @@ async function loadCurrentUser() {
 
 async function loadChannels() {
   channels.value = await api.threadChannels();
-  if (!selectedChannelId.value && channels.value[0]) {
+  const channelQuery = queryStringValue(route.query.channel);
+  const selectedChannelExists =
+    selectedChannelId.value === null || channels.value.some((channel) => channel.id === selectedChannelId.value);
+  if (!selectedChannelExists) {
+    selectedChannelId.value = channels.value[0]?.id ?? null;
+  } else if (selectedChannelId.value === null && channelQuery !== 'all' && channels.value[0]) {
     selectedChannelId.value = channels.value[0].id;
   }
   if (!threadForm.value.languageCode) {
@@ -272,6 +406,10 @@ async function loadThreads(reset = true) {
     threads.value = reset ? page.items : [...threads.value, ...page.items];
     nextCursor.value = page.nextCursor;
     hasMoreThreads.value = page.hasMore;
+    if (reset) {
+      await resetThreadListScroll();
+    }
+    saveThreadListState();
   } finally {
     loadingThreads.value = false;
   }
@@ -321,10 +459,18 @@ async function loadMessages(reset = true) {
 async function loadAll() {
   loading.value = true;
   errorMessage.value = '';
+  suppressThreadListWatch.value = true;
+  let restoredScrollTop: number | null = null;
   try {
+    applyRouteListContext();
     await loadCurrentUser();
     await loadChannels();
-    await loadThreads(true);
+    const restoredList = restoreThreadListState();
+    if (restoredList) {
+      restoredScrollTop = restoredList.scrollTop;
+    } else {
+      await loadThreads(true);
+    }
     if (activeThreadId.value) {
       await loadActiveThread();
       await loadMessages(true);
@@ -333,22 +479,30 @@ async function loadAll() {
   } catch (error) {
     errorMessage.value = error instanceof Error && error.message ? error.message : t('errors.loadFailed');
   } finally {
+    suppressThreadListWatch.value = false;
     loading.value = false;
+    if (restoredScrollTop !== null) {
+      await restoreThreadListScroll(restoredScrollTop);
+    }
   }
 }
 
 async function selectThread(thread: ThreadSummary) {
-  await router.push(`/threads/${thread.id}`);
+  saveThreadListState();
+  await router.push({ path: `/threads/${thread.id}`, query: threadListQuery() });
 }
 
 function selectChannel(channelId: number | null) {
   selectedChannelId.value = channelId;
   selectedTagId.value = null;
+  syncThreadListQuery();
   void loadThreads(true);
 }
 
 function submitThreadSearch() {
   threadSearch.value = threadSearch.value.trim();
+  syncThreadListQuery();
+  saveThreadListState();
 }
 
 function openCreateThread() {
@@ -391,7 +545,8 @@ function cancelEditMessage() {
 }
 
 async function closeThreadDetail() {
-  await router.push('/threads');
+  saveThreadListState();
+  await router.push({ path: '/threads', query: threadListQuery() });
 }
 
 function toggleThreadTag(tag: ThreadChannelTag) {
@@ -429,7 +584,8 @@ async function submitThread() {
     });
     closeCreateThread();
     updateThreadInList(thread);
-    await router.push(`/threads/${thread.id}`);
+    saveThreadListState();
+    await router.push({ path: `/threads/${thread.id}`, query: threadListQuery() });
   } catch (error) {
     errorMessage.value = error instanceof Error && error.message ? error.message : t('pages.threads.createFailed');
   } finally {
@@ -541,7 +697,8 @@ async function removeActiveThread() {
     threads.value = threads.value.filter((item) => item.id !== thread.id);
     activeThread.value = null;
     messages.value = [];
-    await router.push('/threads');
+    saveThreadListState();
+    await router.push({ path: '/threads', query: threadListQuery() });
   } catch (error) {
     errorMessage.value = error instanceof Error && error.message ? error.message : t('errors.operationFailed');
   } finally {
@@ -658,6 +815,8 @@ function onScroll() {
 }
 
 watch([selectedLanguage, selectedTagId, sort], () => {
+  if (suppressThreadListWatch.value) return;
+  syncThreadListQuery();
   void loadThreads(true);
 });
 
@@ -768,7 +927,7 @@ onBeforeUnmount(() => {
             <Skeleton width="45%" />
           </article>
         </div>
-        <div v-else-if="currentThreadList.length" class="thread-list">
+        <div v-else-if="currentThreadList.length" ref="threadListScroller" class="thread-list">
           <button
             v-for="thread in currentThreadList"
             :key="thread.id"

@@ -223,8 +223,7 @@ type ItemPayload = {
   categoryKey: string;
   usageId: number | null;
   usageKey: string | null;
-  dyeable: boolean;
-  dualDyeable: boolean;
+  dyeability: number;
   patternEditable: boolean;
   noRecipe: boolean;
   isEventItem: boolean;
@@ -565,7 +564,7 @@ type ItemChangeSource = {
   image: EntityImageValue | null;
   category: { name: string };
   usage: { name: string } | null;
-  customization: { dyeable: boolean; dualDyeable: boolean; patternEditable: boolean };
+  customization: { dyeability: number; patternEditable: boolean };
   noRecipe: boolean;
   acquisitionMethods: Array<{ name: string }>;
   tags: Array<{ name: string }>;
@@ -2436,8 +2435,7 @@ async function itemEditChanges(
   pushChange(changes, 'Image', imagePathLabel(before.image?.path), imagePathLabel(after.imagePath));
   pushChange(changes, 'Category', before.category.name, systemListNameByKey(itemCategoryOptions, after.categoryKey));
   pushChange(changes, 'Usage', before.usage?.name, systemListNameByKey(itemUsageOptions, after.usageKey));
-  pushChange(changes, 'Dyeable', boolValue(before.customization.dyeable), boolValue(after.dyeable));
-  pushChange(changes, 'Dual dyeable', boolValue(before.customization.dualDyeable), boolValue(after.dualDyeable));
+  pushChange(changes, 'Dyeability', dyeabilityValue(before.customization.dyeability), dyeabilityValue(after.dyeability));
   pushChange(changes, 'Pattern editable', boolValue(before.customization.patternEditable), boolValue(after.patternEditable));
   pushChange(changes, 'No recipe', boolValue(before.noRecipe), boolValue(after.noRecipe));
   pushChange(changes, 'Acquisition methods', namedListValue(before.acquisitionMethods), namesFromIds(after.acquisitionMethodIds, methodNames));
@@ -6597,8 +6595,7 @@ function itemProjection(locale: string): string {
         ELSE ${systemListJsonSql('i.usage_key', itemUsageOptions, locale)}
       END AS usage,
       json_build_object(
-        'dyeable', i.dyeable,
-        'dualDyeable', i.dual_dyeable,
+        'dyeability', i.dyeability,
         'patternEditable', i.pattern_editable
       ) AS customization,
       i.no_recipe AS "noRecipe",
@@ -6928,8 +6925,7 @@ function cleanItemPayload(payload: Record<string, unknown>): ItemPayload {
     categoryKey: category.key,
     usageId,
     usageKey: usage?.key ?? null,
-    dyeable: Boolean(payload.dyeable),
-    dualDyeable: Boolean(payload.dualDyeable),
+    dyeability: cleanDyeability(payload),
     patternEditable: Boolean(payload.patternEditable),
     noRecipe: Boolean(payload.noRecipe),
     isEventItem: Boolean(payload.isEventItem),
@@ -6947,6 +6943,38 @@ function cleanOptionalPositiveInteger(value: unknown): number | null {
   }
 
   return requirePositiveInteger(value, 'server.validation.invalidField');
+}
+
+function cleanDyeability(payload: Record<string, unknown>): number {
+  if (payload.dyeability === undefined || payload.dyeability === null || payload.dyeability === '') {
+    if (payload.dualDyeable === true) {
+      return 2;
+    }
+    if (payload.dyeable === true) {
+      return 1;
+    }
+    return 0;
+  }
+
+  const dyeability = Number(payload.dyeability);
+  if (!Number.isInteger(dyeability) || dyeability < 0 || dyeability > 3) {
+    throw validationError('server.validation.invalidField');
+  }
+
+  return dyeability;
+}
+
+function dyeabilityValue(value: number): string {
+  if (value === 3) {
+    return 'Triple dyeable';
+  }
+  if (value === 2) {
+    return 'Dual dyeable';
+  }
+  if (value === 1) {
+    return 'Dyeable';
+  }
+  return 'Not dyeable';
 }
 
 async function orderedItemIds(client: DbClient, isEventItem: boolean): Promise<number[]> {
@@ -7001,6 +7029,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           base_price,
           category_key,
           usage_key,
+          dyeability,
           dyeable,
           dual_dyeable,
           pattern_editable,
@@ -7011,7 +7040,7 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
           created_by_user_id,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
         RETURNING id
       `,
       [
@@ -7021,8 +7050,9 @@ export async function createItem(payload: Record<string, unknown>, userId: numbe
         cleanPayload.basePrice,
         cleanPayload.categoryKey,
         cleanPayload.usageKey,
-        cleanPayload.dyeable,
-        cleanPayload.dualDyeable,
+        cleanPayload.dyeability,
+        cleanPayload.dyeability >= 1,
+        cleanPayload.dyeability >= 2,
         cleanPayload.patternEditable,
         cleanPayload.noRecipe,
         cleanPayload.isEventItem,
@@ -7078,15 +7108,16 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
             base_price = $4,
             category_key = $5,
             usage_key = $6,
-            dyeable = $7,
-            dual_dyeable = $8,
-            pattern_editable = $9,
-            no_recipe = $10,
-            is_event_item = $11,
-            image_path = $12,
-            updated_by_user_id = $13,
+            dyeability = $7,
+            dyeable = $8,
+            dual_dyeable = $9,
+            pattern_editable = $10,
+            no_recipe = $11,
+            is_event_item = $12,
+            image_path = $13,
+            updated_by_user_id = $14,
             updated_at = now()
-        WHERE id = $14
+        WHERE id = $15
       `,
       [
         cleanPayload.name,
@@ -7095,8 +7126,9 @@ export async function updateItem(id: number, payload: Record<string, unknown>, u
         cleanPayload.basePrice,
         cleanPayload.categoryKey,
         cleanPayload.usageKey,
-        cleanPayload.dyeable,
-        cleanPayload.dualDyeable,
+        cleanPayload.dyeability,
+        cleanPayload.dyeability >= 1,
+        cleanPayload.dyeability >= 2,
         cleanPayload.patternEditable,
         cleanPayload.noRecipe,
         cleanPayload.isEventItem,
@@ -8041,6 +8073,7 @@ const dataToolColumns = {
     'ancient_artifact_category_key',
     'category_key',
     'usage_key',
+    'dyeability',
     'dyeable',
     'dual_dyeable',
     'pattern_editable',
@@ -8306,6 +8339,16 @@ function normalizeImportValue(value: unknown): unknown {
 }
 
 function normalizeImportColumnValue(row: Record<string, unknown>, column: string): unknown {
+  if (column === 'dyeability' && row[column] === undefined) {
+    if (row.dual_dyeable === true) {
+      return 2;
+    }
+    if (row.dyeable === true) {
+      return 1;
+    }
+    return 0;
+  }
+
   return normalizeImportValue(row[column]);
 }
 

@@ -325,8 +325,7 @@ export interface Item extends EditInfo {
   category: NamedEntity;
   usage: NamedEntity | null;
   customization: {
-    dyeable: boolean;
-    dualDyeable: boolean;
+    dyeability: number;
     patternEditable: boolean;
   };
   noRecipe: boolean;
@@ -873,8 +872,7 @@ export interface ItemPayload {
   translations?: TranslationMap;
   categoryId: number;
   usageId: number | null;
-  dyeable: boolean;
-  dualDyeable: boolean;
+  dyeability: number;
   patternEditable: boolean;
   noRecipe: boolean;
   isEventItem: boolean;

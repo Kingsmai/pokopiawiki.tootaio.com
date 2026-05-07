@@ -905,6 +905,7 @@ CREATE TABLE IF NOT EXISTS items (
   ancient_artifact_category_key text,
   category_key text NOT NULL DEFAULT 'other',
   usage_key text,
+  dyeability integer NOT NULL DEFAULT 0 CHECK (dyeability IN (0, 1, 2, 3)),
   dyeable boolean NOT NULL DEFAULT false,
   dual_dyeable boolean NOT NULL DEFAULT false,
   pattern_editable boolean NOT NULL DEFAULT false,
@@ -1276,3 +1277,15 @@ CREATE INDEX IF NOT EXISTS entity_discussion_comments_ai_moderation_language_idx
 
 ALTER TABLE skills
   ADD COLUMN IF NOT EXISTS has_trading boolean NOT NULL DEFAULT false;
+
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS dyeability integer NOT NULL DEFAULT 0 CHECK (dyeability IN (0, 1, 2, 3));
+
+UPDATE items
+SET dyeability = CASE
+  WHEN dual_dyeable THEN 2
+  WHEN dyeable THEN 1
+  ELSE 0
+END
+WHERE dyeability = 0
+  AND (dual_dyeable OR dyeable);

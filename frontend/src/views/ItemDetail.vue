@@ -117,9 +117,14 @@ const customization = computed(() => {
     return [];
   }
 
+  const dyeabilityLabels: Record<number, string> = {
+    1: t('pages.items.dyeable'),
+    2: t('pages.items.dualDyeable'),
+    3: t('pages.items.tripleDyeable')
+  };
+
   return [
-    item.value.customization.dyeable ? t('pages.items.dyeable') : '',
-    item.value.customization.dualDyeable ? t('pages.items.dualDyeable') : '',
+    dyeabilityLabels[item.value.customization.dyeability] ?? '',
     item.value.customization.patternEditable ? t('pages.items.patternEditable') : ''
   ].filter(Boolean);
 });

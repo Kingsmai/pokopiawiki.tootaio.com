@@ -34,6 +34,9 @@ const loading = ref(true);
 const busy = ref(false);
 const message = ref('');
 const creatingSelect = ref('');
+
+type Dyeability = 0 | 1 | 2 | 3;
+
 const itemForm = ref({
   name: '',
   details: '',
@@ -42,8 +45,7 @@ const itemForm = ref({
   translations: {} as TranslationMap,
   categoryId: '',
   usageId: '',
-  dyeable: false,
-  dualDyeable: false,
+  dyeability: 0 as Dyeability,
   patternEditable: false,
   noRecipe: false,
   isEventItem: false,
@@ -55,8 +57,7 @@ const itemForm = ref({
 type ItemCreateDefaults = {
   categoryId: string;
   usageId: string;
-  dyeable: boolean;
-  dualDyeable: boolean;
+  dyeability: Dyeability;
   patternEditable: boolean;
   noRecipe: boolean;
   acquisitionMethodIds: string[];
@@ -100,6 +101,12 @@ const ancientArtifactOptions = computed(() => [
   { value: '', label: t('common.no') },
   ...(options.value?.ancientArtifactCategories.map((item) => ({ value: String(item.id), label: item.name })) ?? [])
 ]);
+const dyeabilityOptions = computed<Array<{ value: Dyeability; label: string }>>(() => [
+  { value: 0, label: t('pages.items.notDyeable') },
+  { value: 1, label: t('pages.items.dyeable') },
+  { value: 2, label: t('pages.items.dualDyeable') },
+  { value: 3, label: t('pages.items.tripleDyeable') }
+]);
 const canCreateConfig = computed(() => currentUser.value?.permissions.includes('admin.config.create') === true);
 const canUploadImage = computed(() => currentUser.value?.permissions.includes('items.upload') === true);
 
@@ -117,13 +124,26 @@ function errorText(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function defaultDyeability(value: { dyeability?: unknown; dualDyeable?: unknown; dyeable?: unknown }): Dyeability {
+  const dyeability = Number(value.dyeability);
+  if (Number.isInteger(dyeability) && dyeability >= 0 && dyeability <= 3) {
+    return dyeability as Dyeability;
+  }
+  if (value.dualDyeable === true) {
+    return 2;
+  }
+  if (value.dyeable === true) {
+    return 1;
+  }
+  return 0;
+}
+
 function readItemCreateDefaults(): ItemCreateDefaults {
   if (typeof sessionStorage === 'undefined') {
     return {
       categoryId: '',
       usageId: '',
-      dyeable: false,
-      dualDyeable: false,
+      dyeability: 0,
       patternEditable: false,
       noRecipe: false,
       acquisitionMethodIds: []
@@ -136,8 +156,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
       return {
         categoryId: '',
         usageId: '',
-        dyeable: false,
-        dualDyeable: false,
+        dyeability: 0,
         patternEditable: false,
         noRecipe: false,
         acquisitionMethodIds: []
@@ -148,8 +167,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
     return {
       categoryId: typeof parsedValue.categoryId === 'string' ? parsedValue.categoryId : '',
       usageId: typeof parsedValue.usageId === 'string' ? parsedValue.usageId : '',
-      dyeable: parsedValue.dyeable === true,
-      dualDyeable: parsedValue.dualDyeable === true,
+      dyeability: defaultDyeability(parsedValue),
       patternEditable: parsedValue.patternEditable === true,
       noRecipe: parsedValue.noRecipe === true,
       acquisitionMethodIds: Array.isArray(parsedValue.acquisitionMethodIds)
@@ -160,8 +178,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
     return {
       categoryId: '',
       usageId: '',
-      dyeable: false,
-      dualDyeable: false,
+      dyeability: 0,
       patternEditable: false,
       noRecipe: false,
       acquisitionMethodIds: []
@@ -185,8 +202,7 @@ function applyItemCreateDefaults(isEventItem: boolean) {
     categoryId: categoryIds.has(defaults.categoryId) ? defaults.categoryId : '',
     usageId: usageIds.has(defaults.usageId) ? defaults.usageId : '',
     ancientArtifactCategoryId: isAncientArtifactCreate.value ? String(loadedOptions.ancientArtifactCategories[0]?.id ?? '') : '',
-    dyeable: defaults.dyeable,
-    dualDyeable: defaults.dualDyeable,
+    dyeability: defaults.dyeability,
     patternEditable: defaults.patternEditable,
     noRecipe: defaults.noRecipe,
     isEventItem,
@@ -237,8 +253,7 @@ async function loadEditor() {
         translations: item.translations ?? {},
         categoryId: String(item.category.id),
         usageId: item.usage ? String(item.usage.id) : '',
-        dyeable: item.customization.dyeable,
-        dualDyeable: item.customization.dualDyeable,
+        dyeability: defaultDyeability(item.customization),
         patternEditable: item.customization.patternEditable,
         noRecipe: item.noRecipe,
         isEventItem: item.isEventItem,
@@ -293,8 +308,7 @@ async function saveItem() {
       translations: itemForm.value.translations,
       categoryId: Number(itemForm.value.categoryId),
       usageId: itemForm.value.usageId ? Number(itemForm.value.usageId) : null,
-      dyeable: itemForm.value.dyeable,
-      dualDyeable: itemForm.value.dualDyeable,
+      dyeability: itemForm.value.dyeability,
       patternEditable: itemForm.value.patternEditable,
       noRecipe: itemForm.value.noRecipe,
       isEventItem: itemForm.value.isEventItem,
@@ -418,9 +432,19 @@ onMounted(() => {
         </fieldset>
       </div>
 
+      <div class="field">
+        <fieldset class="radio-group">
+          <legend>{{ t('pages.items.dyeability') }}</legend>
+          <div class="radio-group__options">
+            <label v-for="option in dyeabilityOptions" :key="option.value" class="radio-group__option">
+              <input v-model="itemForm.dyeability" type="radio" name="item-dyeability" :value="option.value" />
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
+        </fieldset>
+      </div>
+
       <div class="check-row">
-        <label><input v-model="itemForm.dyeable" type="checkbox" /> {{ t('pages.items.dyeable') }}</label>
-        <label><input v-model="itemForm.dualDyeable" type="checkbox" /> {{ t('pages.items.dualDyeable') }}</label>
         <label><input v-model="itemForm.patternEditable" type="checkbox" /> {{ t('pages.items.patternEditable') }}</label>
         <label><input v-model="itemForm.noRecipe" type="checkbox" :disabled="hasRecipe" /> {{ t('pages.items.noRecipe') }}</label>
         <label><input v-model="itemForm.isEventItem" type="checkbox" :disabled="isEventCreate" /> {{ t('pages.items.eventItem') }}</label>
@@ -490,46 +514,6 @@ onMounted(() => {
 
 .item-edit-row > * {
   min-width: 0;
-}
-
-.radio-group {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-  min-inline-size: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.radio-group legend {
-  padding: 0;
-  color: var(--ink-soft);
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.radio-group__options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  align-items: center;
-}
-
-.radio-group__option {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  color: var(--ink-soft);
-  font-weight: 850;
-  cursor: pointer;
-}
-
-.radio-group__option input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--pokemon-blue);
 }
 
 @media (max-width: 720px) {

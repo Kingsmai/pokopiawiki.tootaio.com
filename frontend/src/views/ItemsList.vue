@@ -48,11 +48,12 @@ const suppressNextItemClick = ref(false);
 const dragSourceItems = ref<Item[]>([]);
 const dropCommitted = ref(false);
 
+type Dyeability = 0 | 1 | 2 | 3;
+
 type ItemCreateDefaults = {
   categoryId: string;
   usageId: string;
-  dyeable: boolean;
-  dualDyeable: boolean;
+  dyeability: Dyeability;
   patternEditable: boolean;
   noRecipe: boolean;
   acquisitionMethodIds: string[];
@@ -63,8 +64,7 @@ const itemCreateDefaultsStorageKey = 'pokopia_item_create_defaults';
 const emptyItemCreateDefaults = (): ItemCreateDefaults => ({
   categoryId: '',
   usageId: '',
-  dyeable: false,
-  dualDyeable: false,
+  dyeability: 0,
   patternEditable: false,
   noRecipe: false,
   acquisitionMethodIds: []
@@ -95,6 +95,12 @@ const itemInsertionAllowed = computed(
 const categoryTabs = computed<TabOption[]>(() => [
   { value: '', label: t('common.all') },
   ...(options.value?.itemCategories.map((item) => ({ value: String(item.id), label: item.name })) ?? [])
+]);
+const dyeabilityOptions = computed<Array<{ value: Dyeability; label: string }>>(() => [
+  { value: 0, label: t('pages.items.notDyeable') },
+  { value: 1, label: t('pages.items.dyeable') },
+  { value: 2, label: t('pages.items.dualDyeable') },
+  { value: 3, label: t('pages.items.tripleDyeable') }
 ]);
 
 const itemQuery = computed(() => ({
@@ -156,8 +162,7 @@ const hasItemCreateDefaults = computed(
   () =>
     itemCreateDefaults.value.categoryId !== '' ||
     itemCreateDefaults.value.usageId !== '' ||
-    itemCreateDefaults.value.dyeable ||
-    itemCreateDefaults.value.dualDyeable ||
+    itemCreateDefaults.value.dyeability !== 0 ||
     itemCreateDefaults.value.patternEditable ||
     itemCreateDefaults.value.noRecipe ||
     itemCreateDefaults.value.acquisitionMethodIds.length > 0
@@ -218,6 +223,20 @@ function menuPositionForEvent(event: MouseEvent | KeyboardEvent) {
   return clampMenuPosition(window.innerWidth / 2, window.innerHeight / 2);
 }
 
+function defaultDyeability(value: { dyeability?: unknown; dualDyeable?: unknown; dyeable?: unknown }): Dyeability {
+  const dyeability = Number(value.dyeability);
+  if (Number.isInteger(dyeability) && dyeability >= 0 && dyeability <= 3) {
+    return dyeability as Dyeability;
+  }
+  if (value.dualDyeable === true) {
+    return 2;
+  }
+  if (value.dyeable === true) {
+    return 1;
+  }
+  return 0;
+}
+
 function readItemCreateDefaults(): ItemCreateDefaults {
   if (typeof sessionStorage === 'undefined') {
     return emptyItemCreateDefaults();
@@ -233,8 +252,7 @@ function readItemCreateDefaults(): ItemCreateDefaults {
     return {
       categoryId: typeof parsedValue.categoryId === 'string' ? parsedValue.categoryId : '',
       usageId: typeof parsedValue.usageId === 'string' ? parsedValue.usageId : '',
-      dyeable: parsedValue.dyeable === true,
-      dualDyeable: parsedValue.dualDyeable === true,
+      dyeability: defaultDyeability(parsedValue),
       patternEditable: parsedValue.patternEditable === true,
       noRecipe: parsedValue.noRecipe === true,
       acquisitionMethodIds: Array.isArray(parsedValue.acquisitionMethodIds)
@@ -638,9 +656,17 @@ watch(itemSortingAllowed, (allowed) => {
               />
             </div>
 
+            <fieldset class="radio-group">
+              <legend>{{ t('pages.items.dyeability') }}</legend>
+              <div class="radio-group__options">
+                <label v-for="option in dyeabilityOptions" :key="option.value" class="radio-group__option">
+                  <input v-model="itemCreateDefaults.dyeability" type="radio" name="item-default-dyeability" :value="option.value" />
+                  <span>{{ option.label }}</span>
+                </label>
+              </div>
+            </fieldset>
+
             <div class="check-row item-create-defaults-menu__checks">
-              <label><input v-model="itemCreateDefaults.dyeable" type="checkbox" /> {{ t('pages.items.dyeable') }}</label>
-              <label><input v-model="itemCreateDefaults.dualDyeable" type="checkbox" /> {{ t('pages.items.dualDyeable') }}</label>
               <label><input v-model="itemCreateDefaults.patternEditable" type="checkbox" /> {{ t('pages.items.patternEditable') }}</label>
               <label><input v-model="itemCreateDefaults.noRecipe" type="checkbox" /> {{ t('pages.items.noRecipe') }}</label>
             </div>
